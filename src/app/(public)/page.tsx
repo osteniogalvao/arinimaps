@@ -1,6 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Database, Grid3x3, House, MapPin, MapPinned, Ruler } from "lucide-react";
+import {
+  ArrowRight, BadgeDollarSign, Database, Eye, Grid3x3, House, MapPin, MapPinned, Ruler, Search, TrendingUp,
+} from "lucide-react";
+import CartaoRotativo, { type Quadro } from "@/components/landing/CartaoRotativo";
 import SiteHeader from "@/components/SiteHeader";
 import VitrineConsultas, { type Consulta } from "@/components/home/VitrineConsultas";
 import HeroCarrossel, { type SlideHero } from "@/components/landing/HeroCarrossel";
@@ -18,7 +21,7 @@ import {
 } from "@/components/landing/movimento";
 import { CENTRO_REGIAO } from "@/lib/map/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { lerConfiguracoes, texto } from "@/lib/settings";
+import { lerConfiguracoes, numero, texto } from "@/lib/settings";
 import { formatBRL, formatArea } from "@/lib/format";
 
 /**
@@ -58,25 +61,67 @@ async function destaques() {
   }
 }
 
+/** Imóveis de menor preço com foto: passam no 1º cartão de "Do anúncio à decisão". */
+async function oportunidades(): Promise<Quadro[]> {
+  if (!temBanco()) return [];
+  try {
+    const { data } = await supabaseAdmin()
+      .from("properties")
+      .select("codigo, titulo, valor, municipality:municipalities(nome), media:property_media(storage_path, capa, tipo)")
+      .in("status", ["publicado", "em_negociacao"])
+      .not("valor", "is", null)
+      .order("valor", { ascending: true })
+      .limit(12);
+    const quadros: Quadro[] = [];
+    for (const p of data ?? []) {
+      const fotos = ((p.media ?? []) as { storage_path: string; capa: boolean; tipo?: string | null }[])
+        .filter((m) => !m.tipo || m.tipo === "foto");
+      const capa = fotos.find((m) => m.capa) ?? fotos[0];
+      if (!capa) continue;
+      const mun = (p.municipality as unknown as { nome: string } | null)?.nome;
+      quadros.push({
+        tipo: "foto", externa: true, src: mediaUrl(capa.storage_path), alt: p.titulo, href: `/imovel/${p.codigo}`,
+        legenda: `${formatBRL(p.valor)}${mun ? ` · ${mun}` : ""}`,
+      });
+      if (quadros.length >= 6) break;
+    }
+    return quadros;
+  } catch (e) {
+    console.error("oportunidades da home falharam:", e);
+    return [];
+  }
+}
+
 /** Números reais do sistema para a faixa de credibilidade. Nunca derruba a página. */
 async function numeros() {
-  const vazio = { municipios: 0, plantas: 0, fontes: 0, imoveis: 0, lotes: 0 };
+  const vazio = { municipios: 0, plantas: 0, fontes: 0, imoveis: 0, lotes: 0, visitasMes: 0, visitasAnterior: 0, vendidosMi: 0 };
   if (!temBanco()) return vazio;
   try {
     const admin = supabaseAdmin();
-    const [mun, plantas, fontes, imoveis, lotes] = await Promise.all([
+    const dia = 86_400_000;
+    const ha30 = new Date(Date.now() - 30 * dia).toISOString();
+    const ha60 = new Date(Date.now() - 60 * dia).toISOString();
+    const [mun, plantas, fontes, imoveis, lotes, visitas, anteriores, vendas] = await Promise.all([
       admin.from("municipalities").select("id", { count: "exact", head: true }).eq("ativo", true),
       admin.from("cartography_layers").select("id", { count: "exact", head: true }).eq("status", "pronto"),
       admin.from("fontes_externas").select("id", { count: "exact", head: true }).eq("ativa", true),
       admin.from("properties").select("id", { count: "exact", head: true }).in("status", ["publicado", "em_negociacao", "vendido"]),
       admin.from("urban_lots").select("id", { count: "exact", head: true }),
+      // visualizações das páginas de imóvel nos últimos 30 dias e nos 30 anteriores
+      admin.from("property_events").select("id", { count: "exact", head: true }).eq("tipo", "visualizacao").gte("created_at", ha30),
+      admin.from("property_events").select("id", { count: "exact", head: true }).eq("tipo", "visualizacao").gte("created_at", ha60).lt("created_at", ha30),
+      admin.from("sales").select("valor_final"),
     ]);
+    const somaVendas = (vendas.data ?? []).reduce((s, v) => s + (Number((v as { valor_final: number | null }).valor_final) || 0), 0);
     return {
       municipios: mun.count ?? 0,
       plantas: plantas.count ?? 0,
       fontes: fontes.count ?? 0,
       imoveis: imoveis.count ?? 0,
       lotes: lotes.count ?? 0,
+      visitasMes: visitas.count ?? 0,
+      visitasAnterior: anteriores.count ?? 0,
+      vendidosMi: somaVendas / 1_000_000,
     };
   } catch {
     return vazio;
@@ -126,11 +171,31 @@ const CONSULTAS: Consulta[] = [
 ];
 
 const mil = (v: number) => v.toLocaleString("pt-BR");
+/** 1.9 → "1,9%" */
+const pct = (v: number) => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
 
 export default async function Home() {
-  const [imoveis, cfg, n, municipios] = await Promise.all([destaques(), lerConfiguracoes(), numeros(), municipiosAtendidos()]);
+  const [imoveis, cfg, n, municipios, baratos] = await Promise.all([
+    destaques(), lerConfiguracoes(), numeros(), municipiosAtendidos(), oportunidades(),
+  ]);
+  // 2º cartão: cartografia urbana e rural do próprio sistema, nos municípios atendidos
+  const sedes = municipios.length ? municipios : [{ nome: "Iturama", lng: CENTRO_REGIAO[0], lat: CENTRO_REGIAO[1] }];
+  const cartografia: Quadro[] = sedes.slice(0, 4).flatMap((m) => [
+    { tipo: "mapa" as const, lng: m.lng, lat: m.lat, z: 15, camada: "satelite" as const, legenda: `${m.nome} · cartografia urbana` },
+    { tipo: "mapa" as const, lng: m.lng, lat: m.lat, z: 12, camada: "relevo" as const, legenda: `${m.nome} · relevo e área rural` },
+  ]);
+  // 3º cartão: credibilidade e confiança (provisório até as fotos da Arini chegarem)
+  const confianca: Quadro[] = [
+    { tipo: "foto", src: "/img/casa-urbana.jpg", alt: "Imóvel urbano", legenda: "Anúncios conferidos pela Arini" },
+    { tipo: "foto", src: "/img/hero-fazenda.jpg", alt: "Propriedade rural", legenda: "Documentação analisada" },
+    { tipo: "foto", src: "/img/aerea-campo.jpg", alt: "Lavoura vista do alto", legenda: "Acompanhamento até a negociação" },
+  ];
+  const vitrine1: Quadro[] = baratos.length
+    ? baratos
+    : [{ tipo: "foto", src: "/img/fazenda-gado.jpg", alt: "Propriedade rural", legenda: "Oportunidades da região" }];
   const marca = texto(cfg, "nome_sistema", "Arini Imóveis Brasil");
   const siteArini = texto(cfg, "sobre_site");
+  const comissao = pct(numero(cfg, "comissao_percentual_padrao", 1.9));
   const paragrafosSobre = texto(cfg, "sobre_texto").split("\n").map((p) => p.trim()).filter(Boolean);
   const contato = {
     whatsapp: texto(cfg, "whatsapp_central") || undefined,
@@ -139,22 +204,22 @@ export default async function Home() {
     site: siteArini || undefined,
   };
 
-  const heroTitulo = texto(cfg, "hero_titulo", "O mercado imobiliário da região,");
-  const heroDestaque = texto(cfg, "hero_destaque", "visto do mapa");
+  const heroTitulo = texto(cfg, "hero_titulo", "Seu próximo negócio imobiliário,");
+  const heroDestaque = texto(cfg, "hero_destaque", "começa no mapa.");
 
   const slides: SlideHero[] = [
     {
-      id: "rural", aba: "Fazendas e sítios",
+      id: "rural", aba: "Imóveis rurais",
       eyebrow: texto(cfg, "hero_eyebrow", "Pontal do Triângulo Mineiro"),
       titulo: heroTitulo, destaque: heroDestaque,
       subtitulo: texto(cfg, "hero_subtitulo",
-        "Fazendas, sítios, lotes e casas com a divisa real da propriedade sobre o satélite, área medida, tour 3D e pontos de interesse ao redor."),
-      cta: { rotulo: "Ver fazendas e sítios", href: "/imoveis?tipo=rural" },
-      cta2: { rotulo: "Abrir o mapa", href: "/mapa" },
+        "Encontre imóveis urbanos e rurais e explore suas localizações no mapa, com os limites reais das propriedades sobre imagens de satélite, áreas medidas, tours 3D e pontos de interesse ao redor. Viva a experiência ARINI."),
+      cta: { rotulo: "Imóveis rurais", href: "/imoveis?tipo=rural" },
+      cta2: { rotulo: "Abrir mapa", href: "/mapa" },
       midia: { tipo: "mapa", cena: 0, poster: "/img/hero-fazenda.jpg" },
     },
     {
-      id: "urbano", aba: "Lotes urbanos",
+      id: "urbano", aba: "Imóveis urbanos",
       eyebrow: "Iturama, lote a lote",
       titulo: "Cada lote da cidade", destaque: "na planta oficial",
       subtitulo: n.lotes > 0
@@ -165,16 +230,16 @@ export default async function Home() {
       midia: { tipo: "mapa", cena: 1, poster: "/img/casa-urbana.jpg" },
     },
     {
-      id: "leilao", aba: "Imóveis em leilão",
+      id: "destaque", aba: "Imóveis em destaque",
       eyebrow: "Oportunidades",
-      titulo: "Imóveis em leilão,", destaque: "com a divisa conferida",
-      subtitulo: "Leilões da região reunidos num só lugar, com a área medida no satélite e as consultas ambientais prontas antes do lance.",
-      cta: { rotulo: "Ver imóveis em leilão", href: "/imoveis?tipo=leilao" },
+      titulo: "Imóveis em destaque,", destaque: "com a divisa conferida",
+      subtitulo: "As melhores oportunidades da região reunidas num só lugar, com a área medida no satélite e as consultas territoriais prontas antes da negociação.",
+      cta: { rotulo: "Ver imóveis em destaque", href: "/imoveis?ordem=menor" },
       midia: { tipo: "foto", src: "/img/fazenda-gado.jpg" },
     },
     {
-      id: "consulta", aba: "Consulta territorial",
-      eyebrow: "Fontes oficiais",
+      id: "consulta", aba: "Inteligência territorial",
+      eyebrow: "Informações oficiais",
       titulo: "Consulte a área", destaque: "antes de negociar",
       subtitulo: "CAR, embargos do IBAMA, queimadas do INPE, processos da ANM, terras indígenas e unidades de conservação cruzados com a divisa do imóvel.",
       cta: { rotulo: "Ver relatórios territoriais", href: "/relatorios" },
@@ -192,20 +257,26 @@ export default async function Home() {
     },
   ];
 
+  // faixa verde (revisão de 29/10): carrossel com os números reais do sistema;
+  // número zerado não aparece
+  const crescimento = n.visitasAnterior > 0 ? Math.round(((n.visitasMes - n.visitasAnterior) / n.visitasAnterior) * 100) : 0;
   const faixa = [
-    { icone: House, valor: n.imoveis, rotulo: "imóveis publicados" },
-    { icone: MapPinned, valor: n.municipios, rotulo: "municípios no mapa" },
-    { icone: Grid3x3, valor: n.lotes, rotulo: "lotes urbanos mapeados" },
-    { icone: Database, valor: n.fontes, rotulo: "fontes oficiais ao vivo" },
+    { icone: House, valor: n.imoveis, texto: mil(n.imoveis), rotulo: "imóveis publicados" },
+    { icone: MapPinned, valor: n.municipios, texto: mil(n.municipios), rotulo: "municípios no mapa" },
+    { icone: Grid3x3, valor: n.lotes, texto: mil(n.lotes), rotulo: "lotes urbanos mapeados" },
+    { icone: Database, valor: n.fontes, texto: mil(n.fontes), rotulo: "fontes oficiais" },
+    { icone: Eye, valor: n.visitasMes, texto: mil(n.visitasMes), rotulo: "visualizações no mês" },
+    { icone: BadgeDollarSign, valor: n.vendidosMi, texto: `R$ ${n.vendidosMi.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`, rotulo: "em imóveis vendidos" },
+    { icone: TrendingUp, valor: crescimento, texto: `+${crescimento}%`, rotulo: "de crescimento nas visualizações" },
   ].filter((f) => f.valor > 0);
 
   const porQue = [
-    n.fontes > 0 && { valor: String(n.fontes), rotulo: "fontes oficiais cruzadas com a divisa de cada imóvel" },
+    n.fontes > 0 && { valor: String(n.fontes), rotulo: "fontes oficiais" },
     n.plantas > 0
-      ? { valor: String(n.plantas), rotulo: "plantas urbanas oficiais georreferenciadas sobre o satélite" }
-      : n.lotes > 0 && { valor: mil(n.lotes), rotulo: "lotes urbanos com a medida de cada lado" },
-    { valor: "100%", rotulo: "dos anúncios conferidos pela Arini antes de ir ao ar" },
-    { valor: "1%", rotulo: "de comissão, só na venda concluída" },
+      ? { valor: String(n.plantas), rotulo: "plantas urbanas oficiais" }
+      : n.lotes > 0 && { valor: mil(n.lotes), rotulo: "lotes urbanos mapeados" },
+    { valor: "100%", rotulo: "dos anúncios gerenciados" },
+    { valor: comissao, rotulo: "de comissão" },
   ].filter(Boolean) as { valor: string; rotulo: string }[];
 
   return (
@@ -220,21 +291,22 @@ export default async function Home() {
         {/* ---------- faixa de números ---------- */}
         {faixa.length > 0 && (
           <section aria-label="A Arini em números" className="lp-escuro border-t border-white/10 bg-[#124431]">
-            <div className="lp-container grid grid-cols-2 lg:grid-cols-4">
-              {faixa.map((f, k) => (
-                <div
-                  key={f.rotulo}
-                  className={`flex flex-col items-start gap-3 py-6 md:flex-row md:items-center md:gap-4 md:py-8 ${
-                    k % 2 ? "border-l border-white/15 pl-5" : "pr-4"
-                  } ${k > 1 ? "border-t border-white/15 lg:border-t-0" : ""} ${k ? "lg:border-l lg:pl-7" : "lg:pl-0"}`}
-                >
-                  <f.icone className="size-8 shrink-0 text-ouro" strokeWidth={1.5} />
-                  <div className="min-w-0">
-                    <Counter value={mil(f.valor)} className="lp-display block text-3xl leading-none text-white md:text-[2.4rem]" />
-                    <p className="mt-2 text-base leading-snug text-white/80">{f.rotulo}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="lp-marquee-grupo relative flex overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_6%,#000_94%,transparent)]">
+              <div className="lp-marquee flex w-max shrink-0" style={{ ["--lp-marquee-dur" as string]: `${Math.max(30, faixa.length * 7)}s` }}>
+                {[0, 1].map((volta) => (
+                  <ul key={volta} className="flex shrink-0" aria-hidden={volta === 1 || undefined}>
+                    {[...faixa, ...faixa].map((f, k) => (
+                      <li key={`${f.rotulo}-${k}`} className="flex shrink-0 items-center gap-4 border-l border-white/15 px-8 py-6 md:px-10 md:py-8">
+                        <f.icone className="size-8 shrink-0 text-ouro" strokeWidth={1.5} />
+                        <div className="min-w-0">
+                          <span className="lp-display block whitespace-nowrap text-3xl leading-none text-white md:text-[2.4rem]">{f.texto}</span>
+                          <p className="mt-2 whitespace-nowrap text-base leading-snug text-white/80">{f.rotulo}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ))}
+              </div>
             </div>
           </section>
         )}
@@ -249,7 +321,7 @@ export default async function Home() {
               eyebrow="02 · Posicionamento"
               titulo="Do anúncio à decisão."
               destaque={1}
-              subtitulo="Mais do que um portal de anúncios: a Arini leva o imóvel do mapa à escritura, com o território conferido em cada etapa."
+              subtitulo="Mais do que anunciar imóveis, a ARINI conecta território, inteligência e negócios em uma única plataforma."
             />
             <Reveal delay={0.2} className="mt-6 flex flex-wrap justify-center gap-2.5">
               <PilulaPonto>Inteligência</PilulaPonto>
@@ -258,14 +330,12 @@ export default async function Home() {
             </Reveal>
             <Stagger className="mt-12 grid gap-5 md:grid-cols-3" gap={0.12} itemClassName="h-full">
               {[
-                { t: "Imóveis urbanos e rurais", d: "Lotes, casas, fazendas e sítios no mesmo mapa, cada um com a divisa real e a área medida sobre o satélite.", img: "/img/fazenda-gado.jpg", alt: "Casa em bairro residencial" },
-                { t: "Inteligência territorial", d: "CAR, embargos, queimadas e processos minerários cruzados com a divisa, com a data e a fonte de cada consulta.", img: "/img/aerea-campo.jpg", alt: "Lavoura em linhas vista do alto" },
-                { t: "Transação intermediada", d: "Todo anúncio é conferido antes de ir ao ar e todo interessado passa pela central, do primeiro contato à escritura.", img: "/img/casa-urbana.jpg", alt: "Casa iluminada ao anoitecer" },
+                { t: "Conheça o imóvel", d: "Explore propriedades urbanas e rurais, conheça sua localização e descubra suas características.", quadros: vitrine1 },
+                { t: "Amplie sua visão", d: "Acesse informações territoriais que ajudam a compreender melhor o imóvel e seu entorno.", quadros: cartografia },
+                { t: "Avance com confiança", d: "Conecte-se a oportunidades e tenha o suporte da ARINI para avançar na experiência imobiliária.", quadros: confianca },
               ].map((p, k) => (
                 <div key={p.t} className="cartao lp-lift flex h-full flex-col overflow-hidden">
-                  <div className="relative aspect-[16/10] shrink-0">
-                    <Image src={p.img} alt={p.alt} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
-                  </div>
+                  <CartaoRotativo quadros={p.quadros} atraso={k * 1400} />
                   <div className="flex-1 p-6 md:p-7">
                     <ItemNumerado numero={k + 1} titulo={p.t} className="!border-t-0 !pt-0">{p.d}</ItemNumerado>
                   </div>
@@ -283,7 +353,7 @@ export default async function Home() {
                 eyebrow="03 · A ferramenta"
                 titulo="Como você usa a Arini"
                 destaque={1}
-                subtitulo={`O ${marca} reúne num só lugar o que hoje exige dezenas de sites e visitas: a divisa do imóvel, a cartografia oficial da cidade e as consultas aos órgãos públicos.`}
+                subtitulo="A ARINI reúne em um só lugar o que hoje exige dezenas de sites e consultas: divisas de imóveis, cartografia oficial e informações de órgãos públicos. Explore propriedades, consulte informações territoriais e descubra oportunidades em um ambiente que conecta mapas, imóveis e inteligência."
               />
               <MaisLink href="/mapa">Abrir o mapa</MaisLink>
             </div>
@@ -299,7 +369,7 @@ export default async function Home() {
                 <TituloSecao
                   eyebrow="04 · Cobertura"
                   titulo="Municípios atendidos"
-                  subtitulo="O Pontal do Triângulo Mineiro inteiro no satélite, com a malha do CAR e as plantas urbanas oficiais."
+                  subtitulo="Inteligência geográfica conectando nacionalmente, territórios e oportunidades imobiliárias."
                 />
                 <MaisLink href="/imoveis">Todos os imóveis</MaisLink>
               </div>
@@ -318,7 +388,7 @@ export default async function Home() {
               <TituloSecao
                 eyebrow="06 · Diferenciais"
                 titulo="Por que a Arini"
-                subtitulo="Território conferido antes da negociação: divisa medida, cartografia oficial e consulta aos órgãos públicos, com uma imobiliária da região conduzindo do primeiro contato à escritura."
+                subtitulo="Mais segurança, informação e oportunidades para negociar imóveis. Conectamos cartografia, fontes oficiais e mercado imobiliário em uma experiência integrada, do primeiro contato à negociação."
               />
               <Stagger className="mt-12 grid grid-cols-2 gap-x-8 gap-y-10" gap={0.12}>
                 {porQue.map((s) => (
@@ -342,7 +412,7 @@ export default async function Home() {
                 <Reveal delay={0.4} className="absolute -bottom-8 -left-2 md:-left-10">
                   <div className="rounded-2xl bg-superficie p-6 shadow-md ring-1 ring-linha">
                     <Counter value={String(n.municipios)} className="lp-display block text-5xl text-texto" />
-                    <p className="mt-1 text-base font-semibold text-texto-2">municípios do Pontal no mapa</p>
+                    <p className="mt-1 text-base font-semibold text-texto-2">municípios no mapa</p>
                   </div>
                 </Reveal>
               )}
@@ -354,9 +424,28 @@ export default async function Home() {
         <section id="imoveis" className="lp-clara scroll-mt-24 py-20 md:py-28">
           <div className="lp-container">
             <div className="mb-12 flex flex-wrap items-end justify-between gap-6">
-              <TituloSecao eyebrow="07 · Vitrine" titulo="Últimos publicados" destaque={1} subtitulo="Imóveis aprovados pela conferência da Arini." />
+              <TituloSecao eyebrow="07 · Vitrine" titulo="Últimos publicados" destaque={1} />
               <MaisLink href="/imoveis">Ver todos os imóveis</MaisLink>
             </div>
+            {/* lupa: busca simples com filtro de cidade, cai na busca de imóveis */}
+            <form action="/imoveis" method="get" role="search" aria-label="Buscar imóveis"
+              className="-mt-4 mb-10 flex flex-col gap-2 rounded-2xl bg-superficie p-2 ring-1 ring-linha sm:flex-row sm:items-center">
+              <label className="flex min-w-0 flex-1 items-center gap-2 px-3">
+                <Search className="size-5 shrink-0 text-verde" aria-hidden="true" />
+                <span className="sr-only">O que você procura</span>
+                <input name="q" type="search" placeholder="Buscar por título ou código"
+                  className="h-11 w-full min-w-0 bg-transparent text-base text-texto outline-none placeholder:text-texto-3" />
+              </label>
+              <label className="sm:border-l sm:border-linha sm:pl-2">
+                <span className="sr-only">Cidade</span>
+                <select name="municipio" defaultValue=""
+                  className="h-11 w-full rounded-xl bg-transparent px-3 text-base text-texto outline-none sm:w-56">
+                  <option value="">Todas as cidades</option>
+                  {municipios.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                </select>
+              </label>
+              <button type="submit" className="lp-btn lp-btn-verde px-6 py-3">Buscar</button>
+            </form>
             {imoveis.length > 0 ? (
               <Stagger className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" gap={0.1} itemClassName="h-full">
                 {imoveis.map((p) => {
@@ -423,9 +512,9 @@ export default async function Home() {
           <div className="lp-container">
             <TituloSecao
               claro
-              eyebrow="08 · Do cadastro à escritura"
+              eyebrow="08 · Da exploração à negociação"
               titulo="Como funciona"
-              subtitulo="Cada anúncio passa pela Arini antes de ir ao ar, e cada interessado passa pela central antes de chegar ao proprietário."
+              subtitulo="Junção de dados públicos e informações territoriais integrados à experiência ARINI."
             />
             <div className="mt-16"><ComoFunciona /></div>
           </div>
@@ -434,7 +523,7 @@ export default async function Home() {
         {/* ---------- fontes oficiais ---------- */}
         <section aria-labelledby="titulo-fontes" className="lp-clara border-b border-linha py-12 md:py-14">
           <div className="lp-container mb-8 flex flex-wrap items-baseline justify-between gap-3">
-            <h2 id="titulo-fontes" className="lp-display text-2xl text-texto md:text-3xl">Fontes oficiais consultadas</h2>
+            <h2 id="titulo-fontes" className="lp-display text-2xl text-texto md:text-3xl">Informações oficiais</h2>
             <p className="text-base text-texto-2">Fonte fora do ar aparece como indisponível, nunca como &ldquo;nada encontrado&rdquo;.</p>
           </div>
           <FontesMarquee />
@@ -454,7 +543,7 @@ export default async function Home() {
               </ClipReveal>
             </div>
             <div className="order-1 lg:order-2">
-              <TituloSecao eyebrow="09 · A Arini" titulo={texto(cfg, "sobre_titulo", "Quem está por trás do mapa")} />
+              <TituloSecao eyebrow="09 · A Arini" titulo={texto(cfg, "sobre_titulo", "Conheça a Arini")} />
               <Reveal delay={0.15}>
                 <div className="mt-6 space-y-4 text-lg leading-relaxed text-texto-2">
                   {paragrafosSobre.map((p, i) => <p key={i}>{p}</p>)}

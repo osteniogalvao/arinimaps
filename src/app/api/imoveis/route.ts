@@ -66,12 +66,14 @@ export async function POST(request: Request) {
   }
 
   // condição de comercialização (spec item 8): parceiro é sempre "parceiro";
-  // proprietário escolhe autorização simples ou exclusividade e aceita o termo.
-  // A equipe Arini cadastra sem aceite eletrônico (contrato assinado vai em Documentos).
+  // proprietário vende só com exclusividade (revisão do Carlos, 29/10: saiu a
+  // autorização sem exclusividade) e aceita o termo.
+  // A equipe Arini cadastra sem aceite eletrônico (contrato assinado vai em Documentos)
+  // e ainda pode registrar uma autorização simples.
   const equipe = !owner_id && !partner_id;
   const condicao: "autorizacao" | "exclusividade" | "parceiro" = partner_id
     ? "parceiro"
-    : dados.condicao === "exclusividade" ? "exclusividade" : "autorizacao";
+    : equipe && dados.condicao !== "exclusividade" ? "autorizacao" : "exclusividade";
   // Leilão: só leiloeiro ou a equipe cadastram; o documento que sustenta o
   // anúncio é o edital, não a autorização do proprietário.
   const modalidade: "venda" | "leilao" =

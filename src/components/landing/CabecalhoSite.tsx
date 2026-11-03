@@ -26,7 +26,7 @@ import { formatarTelefone } from "./telefone";
 export type ItemNav = { href: string; rotulo: string; secao?: string };
 
 export const NAV_SITE: ItemNav[] = [
-  { href: "/#ferramenta", rotulo: "A ferramenta", secao: "ferramenta" },
+  { href: "/#ferramenta", rotulo: "Recursos", secao: "ferramenta" },
   { href: "/#consultas", rotulo: "Consultas", secao: "consultas" },
   { href: "/#imoveis", rotulo: "Imóveis", secao: "imoveis" },
   { href: "/planos", rotulo: "Planos" },

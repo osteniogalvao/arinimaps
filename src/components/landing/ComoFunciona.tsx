@@ -8,15 +8,15 @@
 
 import { useRef, useState } from "react";
 import { motion, useMotionValueEvent, useReducedMotion, useScroll, useSpring, useTransform } from "motion/react";
-import { BadgeCheck, FileText, Handshake, MessagesSquare, UploadCloud } from "lucide-react";
+import { Compass, Handshake, Lightbulb, Link2, Sparkles } from "lucide-react";
 import { EASE } from "./movimento";
 
 const PASSOS = [
-  { icone: UploadCloud, titulo: "Cadastro", texto: "Proprietário ou corretor envia o imóvel com a divisa, as fotos e os documentos." },
-  { icone: BadgeCheck, titulo: "Conferência da Arini", texto: "A equipe confere documentos, área declarada contra a área medida e as consultas oficiais." },
-  { icone: FileText, titulo: "Publicação", texto: "O anúncio vai ao mapa com divisa no satélite, tour 3D, vídeo e relatório territorial." },
-  { icone: MessagesSquare, titulo: "Interessado pela central", texto: "Todo contato passa pela central da Arini antes de chegar ao proprietário ou parceiro." },
-  { icone: Handshake, titulo: "Negociação e fechamento", texto: "A Arini organiza visitas, conduz a negociação e acompanha até a escritura." },
+  { icone: Compass, titulo: "Exploração", texto: "Uma nova perspectiva sobre imóveis e territórios." },
+  { icone: Lightbulb, titulo: "Informação", texto: "Conhecimento para compreender cada oportunidade." },
+  { icone: Sparkles, titulo: "Oportunidade", texto: "Novas possibilidades para encontrar o imóvel ideal." },
+  { icone: Link2, titulo: "Conexão", texto: "Aproximando pessoas, propriedades e negócios." },
+  { icone: Handshake, titulo: "Negociação", texto: "O caminho para transformar oportunidades em negócios." },
 ];
 
 export default function ComoFunciona() {
