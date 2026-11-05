@@ -11,13 +11,13 @@
  */
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter,
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
-  LayoutGrid, ListChecks, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
+  LayoutGrid, ListChecks, LogOut, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
   Settings, Shield, ShieldCheck, UserCheck, UserRound, Users, UsersRound, Wallet, X,
 } from "lucide-react";
 import { Logo } from "@/components/shell/AppShell";
@@ -25,6 +25,7 @@ import BotaoTema from "@/components/shell/BotaoTema";
 import { SETORES, type ItemMenu, type SetorId } from "@/lib/setores";
 import Avatar from "@/components/shell/Avatar";
 import { useNaoLidosSuporte } from "@/components/suporte/useNaoLidos";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
 /** Itens que todo membro da equipe tem, qualquer que seja o setor. */
 const GERAL: ItemMenu[] = [
@@ -94,7 +95,21 @@ export default function AdminShell({
   children, nome, papel, setores, avatar = null,
 }: { children: React.ReactNode; nome: string; papel: string; setores: SetorId[]; avatar?: string | null }) {
   const caminho = usePathname();
+  const router = useRouter();
   const [aberto, setAberto] = useState(false);
+  const [saindo, setSaindo] = useState(false);
+
+  // Sair da conta: registra no histórico de segurança (como em /conta/seguranca)
+  // e encerra a sessão deste aparelho.
+  async function sair() {
+    setSaindo(true);
+    await fetch("/api/auth/evento", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evento: "logout" }),
+    }).catch(() => undefined);
+    await supabaseBrowser().auth.signOut();
+    router.push("/entrar");
+    router.refresh();
+  }
   // grupos recolhidos pela pessoa (o grupo da tela atual nunca some)
   const [recolhidos, setRecolhidos] = useState<Record<string, boolean>>({});
   // 10.2: selo de chamados esperando a equipe (só para quem atua no Suporte)
@@ -191,6 +206,10 @@ export default function AdminShell({
           <ExternalLink className="size-4" /> Site
         </Link>
       </div>
+      <button type="button" onClick={sair} disabled={saindo}
+        className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-2xl border border-linha-forte/70 px-2 py-2 text-[11px] font-semibold text-texto-2 transition-colors hover:border-ouro hover:text-ouro disabled:opacity-60">
+        <LogOut className="size-4" /> {saindo ? "Saindo…" : "Sair da conta"}
+      </button>
     </div>
   );
 
