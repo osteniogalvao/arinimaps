@@ -46,7 +46,10 @@ if (!CHAVE || CHAVE.length < 16) {
 }
 const PG_DUMP = process.env.PG_DUMP ?? "pg_dump";
 const conexao = {
-  PGHOST: `db.${process.env.SUPABASE_PROJECT_REF}.supabase.co`, PGPORT: "5432", PGUSER: "postgres",
+  // BACKUP_PGHOST/BACKUP_PGUSER: o host direto db.<ref> é só IPv6 e a VPS não sai por IPv6;
+  // lá se usa o pooler em modo sessão (aws-0-sa-east-1.pooler.supabase.com, usuário postgres.<ref>).
+  PGHOST: process.env.BACKUP_PGHOST ?? `db.${process.env.SUPABASE_PROJECT_REF}.supabase.co`, PGPORT: "5432",
+  PGUSER: process.env.BACKUP_PGUSER ?? "postgres",
   PGPASSWORD: process.env.SUPABASE_DB_PASSWORD, PGDATABASE: "postgres", PGSSLMODE: "require",
 };
 
