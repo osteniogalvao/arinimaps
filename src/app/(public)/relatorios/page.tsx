@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ChevronRight, FileText, MapPin, Ruler } from "lucide-react";
+import { ArrowRight, ChevronRight, FileText, MapPin, Ruler, ScanSearch, Trees } from "lucide-react";
 import Moldura from "@/components/shell/Moldura";
 import { BotaoLink, CabecalhoPagina, Conteudo, Etiqueta, Vazio } from "@/components/ui/Pagina";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -47,10 +47,31 @@ export default async function Relatorios() {
         titulo="Relatórios"
         destaque="territoriais"
         subtitulo="Cruzamento da área do imóvel com mineração, terras indígenas, desmatamento e entorno. Cada relatório mostra a origem e a data de cada dado."
-        acoes={<BotaoLink href="/mapa" variante="ouro">Abrir o mapa</BotaoLink>}
+        acoes={<BotaoLink href="/mapa?ferramenta=consulta" variante="ouro">Gerar relatório de uma área</BotaoLink>}
       />
 
       <Conteudo className="space-y-8 py-12 md:py-16">
+        {/* Revisão do Carlos (29/10): "Ver relatórios territoriais" levava só a uma
+            lista. Agora a página começa pelos caminhos para conseguir um relatório. */}
+        <section aria-labelledby="como-gerar" className="space-y-4">
+          <h2 id="como-gerar" className="lp-display text-2xl text-texto md:text-3xl">Como conseguir um relatório</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              { icone: ScanSearch, titulo: "Desenhe a área no mapa", texto: "Contorne qualquer área do Brasil e cruze com as fontes oficiais em segundos.", href: "/mapa?ferramenta=consulta", rotulo: "Consultar área" },
+              { icone: Trees, titulo: "Escolha um imóvel do CAR", texto: "Ligue a camada do CAR, clique no imóvel rural e abra a consulta da divisa.", href: "/mapa?camada=car", rotulo: "Abrir o CAR no mapa" },
+              { icone: FileText, titulo: "Veja os imóveis anunciados", texto: "Os imóveis rurais publicados já têm o relatório pronto, com a data de cada fonte.", href: "#anunciados", rotulo: "Ver a lista" },
+            ].map((c) => (
+              <Link key={c.titulo} href={c.href} className="cartao cartao-link group flex flex-col gap-3 p-5 md:p-6">
+                <span className="grid size-11 place-items-center rounded-full bg-verde/12 text-verde"><c.icone className="size-5" /></span>
+                <span className="lp-display text-xl text-texto group-hover:text-verde">{c.titulo}</span>
+                <span className="flex-1 text-sm leading-relaxed text-texto-2">{c.texto}</span>
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-verde">{c.rotulo} <ArrowRight className="size-4 transition group-hover:translate-x-0.5" /></span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <h2 id="anunciados" className="lp-display scroll-mt-24 text-2xl text-texto md:text-3xl">Relatórios dos imóveis anunciados</h2>
         {!imoveis?.length ? (
           <Vazio
             icone={FileText}

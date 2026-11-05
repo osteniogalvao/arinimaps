@@ -48,6 +48,18 @@ export default function Entrar() {
   useEffect(() => {
     if (lerCarPendente()) mudarPapel("proprietario");
     const q = new URLSearchParams(window.location.search);
+    // veio do "Cadastre-se" (home ou /planos): abre a criação de conta já no perfil escolhido
+    if (q.get("cadastro")) {
+      setModo("cadastro");
+      const papel = q.get("papel");
+      if (papel && PERFIS.some((p) => p.value === papel) && !lerCarPendente()) {
+        const nicho = q.get("nicho");
+        setForm((f) => ({
+          ...f, role: papel,
+          nicho: nicho && nichosDoPapel(papel).some((n) => n.id === nicho) ? nicho : nichoPadrao(papel) ?? "",
+        }));
+      }
+    }
     if (q.get("recuperar")) setModo("recuperar");
     // a Central mandou de volta: a sessão existe, falta confirmar o segundo fator
     if (q.get("mfa")) { setDestino("/admin"); setModo("mfa"); }

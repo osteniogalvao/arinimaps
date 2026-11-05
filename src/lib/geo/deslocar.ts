@@ -421,3 +421,47 @@ export function assinaturaAjustes(ajustes: AjusteLocal[]): string {
   const r = (n: number) => Math.round(n * 1e4) / 1e4;
   return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}`).join("|");
 }
+
+/* ---------------------------------------------------------------------------
+ * LINHAS APAGADAS (áudio do Carlos, 05/11/2026: "onde eu posso excluir alguma
+ * coisa"). O operador apaga linhas soltas da planta na calibração, sem reenviar
+ * o DXF. O arquivo original fica intacto; a lista de apagadas é guardada à parte
+ * (cartography_layers.linhas_excluidas) e aplicada no arquivo público, nos lotes
+ * clicáveis e na tela de calibração.
+ *
+ * Chave de cada linha, sempre pela posição no ARQUIVO ORIGINAL:
+ *   "i:j" → a j-ésima linha da MultiLineString de índice i (o DXF chega como
+ *           uma MultiLineString por camada do CAD);
+ *   "i"   → o objeto i inteiro (LineString, polígono, ponto).
+ * ------------------------------------------------------------------------- */
+
+export const CHAVE_LINHA = /^\d{1,7}(:\d{1,7})?$/;
+
+/** Tira da planta as linhas apagadas. Mantém o número de objetos (objeto sem linha vira vazio e some). */
+export function removerLinhasExcluidas<T extends GeoJSON.FeatureCollection>(fc: T, excluidas: Iterable<string>): T {
+  const set = excluidas instanceof Set ? (excluidas as Set<string>) : new Set(excluidas);
+  if (!set.size) return fc;
+  const features: GeoJSON.Feature[] = [];
+  fc.features.forEach((f, i) => {
+    if (set.has(String(i))) return;
+    if (f.geometry?.type === "MultiLineString") {
+      const linhas = f.geometry.coordinates.filter((_, j) => !set.has(`${i}:${j}`));
+      if (!linhas.length) return;
+      if (linhas.length !== f.geometry.coordinates.length) {
+        features.push({ ...f, geometry: { ...f.geometry, coordinates: linhas } });
+        return;
+      }
+    }
+    features.push(f);
+  });
+  return { ...fc, features };
+}
+
+/** Pedaço da assinatura dos lotes: muda quando a lista de apagadas muda ("" sem nenhuma). */
+export function assinaturaExclusoes(excluidas: string[] | null | undefined): string {
+  if (!excluidas?.length) return "";
+  const s = [...excluidas].sort().join(",");
+  let h = 5381;
+  for (let k = 0; k < s.length; k++) h = ((h * 33) ^ s.charCodeAt(k)) >>> 0;
+  return `;ex:${excluidas.length}-${h.toString(36)}`;
+}

@@ -6,7 +6,7 @@ import { conferirOrigem, respostaOrigemNegada } from "@/lib/seguranca/origem";
 import { falha, falhaBanco } from "@/lib/erros";
 import { gerarPlantaPublica } from "@/lib/geo/plantaPublica";
 import {
-  afim, compor, inverter, centroArea, centroDe, areasSeSobrepoem, assinaturaAjustes, TRANSFORM_ZERO,
+  afim, compor, inverter, centroArea, centroDe, areasSeSobrepoem, assinaturaAjustes, TRANSFORM_ZERO, CHAVE_LINHA,
   type AjusteLocal, type Matriz, type Transform,
 } from "@/lib/geo/deslocar";
 
@@ -26,6 +26,11 @@ const LIMITES = {
   parteOffset: 500,
   partes: 100,
   verticesArea: 300,
+  // linhas apagadas à mão (áudio do Carlos, 05/11/2026): limpeza pontual, não
+  // substituto de reenviar um DXF errado
+  linhasExcluidas: 20_000,
+  espessuraMin: 0.25,
+  espessuraMax: 5,
 };
 
 /**
@@ -131,6 +136,14 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   if (Array.isArray(body.layers_ocultos)) {
     patch.layers_ocultos = body.layers_ocultos.map(String).slice(0, 500);
   }
+  if (Array.isArray(body.linhas_excluidas)) {
+    const chaves = [...new Set(body.linhas_excluidas.map(String))] as string[];
+    if (chaves.length > LIMITES.linhasExcluidas) fora.push(`${chaves.length} linhas apagadas (limite ${LIMITES.linhasExcluidas})`);
+    else if (chaves.some((k) => !CHAVE_LINHA.test(k))) fora.push("a lista de linhas apagadas tem itens inválidos");
+    else patch.linhas_excluidas = chaves.sort();
+  }
+  const espessura = num(body.espessura_linha);
+  if (espessura !== null) patch.espessura_linha = Math.round(Math.min(LIMITES.espessuraMax, Math.max(LIMITES.espessuraMin, espessura)) * 100) / 100;
   if (Array.isArray(body.pontos_controle)) {
     patch.pontos_controle = body.pontos_controle.slice(0, 20);
   }
@@ -159,7 +172,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
 
   const admin = supabaseAdmin();
   const { data: antes } = await admin.from("cartography_layers")
-    .select("nome, tipo, tiles_path, publico_path, publico_centro, offset_leste_m, offset_norte_m, rotacao_graus, escala, layers_ocultos, ajustes_locais, lotes_total, lotes_assinatura")
+    .select("nome, tipo, tiles_path, publico_path, publico_centro, offset_leste_m, offset_norte_m, rotacao_graus, escala, layers_ocultos, linhas_excluidas, ajustes_locais, lotes_total, lotes_assinatura")
     .eq("id", id).single();
   if (!antes) {
     return falha(404, "camada_sumiu", "Essa camada não existe mais.", {
@@ -178,11 +191,15 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   let avisoPublico: string | null = null;
   const mudouCamadas = Array.isArray(patch.layers_ocultos) &&
     [...(patch.layers_ocultos as string[])].sort().join("|") !== [...((antes.layers_ocultos as string[] | null) ?? [])].sort().join("|");
-  if (mudouCamadas && antes.tipo === "vector" && antes.tiles_path) {
+  const excluidasAntes = ((antes.linhas_excluidas as string[] | null) ?? []);
+  const excluidasDepois = (patch.linhas_excluidas as string[] | undefined) ?? excluidasAntes;
+  const mudouExcluidas = [...excluidasAntes].sort().join(",") !== [...excluidasDepois].sort().join(",");
+  if ((mudouCamadas || mudouExcluidas) && antes.tipo === "vector" && antes.tiles_path) {
     try {
       publico = await gerarPlantaPublica(
         admin, { id, tiles_path: antes.tiles_path, publico_path: antes.publico_path },
-        patch.layers_ocultos as string[]
+        (patch.layers_ocultos as string[] | undefined) ?? ((antes.layers_ocultos as string[] | null) ?? []),
+        excluidasDepois
       );
     } catch (e) {
       avisoPublico = e instanceof Error ? e.message : String(e);
@@ -199,7 +216,9 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   const mexeuNaPlanta =
     difere(patch.offset_leste_m, antes.offset_leste_m, 0.005) || difere(patch.offset_norte_m, antes.offset_norte_m, 0.005) ||
     difere(patch.rotacao_graus, antes.rotacao_graus, 1e-5) || (patch.escala !== undefined && Math.abs(Number(patch.escala) - Number(antes.escala ?? 1)) > 1e-7) ||
-    (Array.isArray(patch.layers_ocultos) && [...(patch.layers_ocultos as string[])].sort().join("|") !== camadasAntes);
+    (Array.isArray(patch.layers_ocultos) && [...(patch.layers_ocultos as string[])].sort().join("|") !== camadasAntes) ||
+    // linha apagada muda as quadras: os lotes são refeitos
+    mudouExcluidas;
 
   const ajustesAntes = ((antes.ajustes_locais as AjusteLocal[] | null) ?? []);
   const ajustesDepois = (patch.ajustes_locais as AjusteLocal[] | undefined) ?? ajustesAntes;

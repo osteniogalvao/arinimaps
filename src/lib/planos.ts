@@ -119,6 +119,53 @@ export function nichoPadrao(role: string): NichoId | null {
   return (NICHOS.find((n) => n.papeis[0] === role) ?? NICHOS.find((n) => n.papeis.includes(role)))?.id ?? null;
 }
 
+/**
+ * Blocos de persona da página /planos (Revisão.pdf do Carlos, 29/10/2026:
+ * "criar um bloco de personas clicável para cada perfil (...) para após
+ * clicarem, ser ofertado os pacotes de planos, individualmente para cada perfil").
+ *
+ * Cada persona junta um ou mais nichos. Os planos mostrados são os que nascem
+ * nesses nichos (`plans.nichos_padrao`, editável em /admin/planos) mais os
+ * `extras`, que são o próximo degrau natural daquele perfil. Um id de plano que
+ * não existir mais no banco é simplesmente ignorado.
+ *
+ * `papel` é o perfil que já vem marcado no cadastro (/entrar?cadastro=1&papel=…):
+ * o botão "Cadastre-se" da home leva a esta escolha, e daqui a pessoa segue
+ * para a conta já no perfil certo. Sem papel = conta criada pela Matriz.
+ */
+export type PersonaPlano = {
+  id: string;
+  nome: string;
+  chamada: string;
+  nichos: NichoId[];
+  extras?: string[];
+  papel?: string;
+  icone: "busca" | "casa" | "trator" | "regua" | "predio" | "martelo" | "lupa" | "governo";
+};
+
+export const PERSONAS_PLANOS: PersonaPlano[] = [
+  { id: "comprar", nome: "Quero comprar ou investir", chamada: "Encontre o imóvel certo no mapa, com a divisa e as fontes oficiais.", nichos: ["comprador_investidor"], extras: ["consulta_profissional"], papel: "comprador", icone: "busca" },
+  { id: "vender", nome: "Quero vender meu imóvel", chamada: "Anuncie com exclusividade Arini e acompanhe cada oportunidade.", nichos: ["proprietario"], papel: "proprietario", icone: "casa" },
+  { id: "consultar", nome: "Quero consultar áreas", chamada: "Pesquise o território, o CAR e os lotes urbanos antes de decidir.", nichos: ["consulta"], extras: ["consulta_profissional"], papel: "consulta", icone: "lupa" },
+  { id: "produtor", nome: "Sou produtor rural", chamada: "Consulte e acompanhe as suas áreas rurais com as fontes oficiais.", nichos: ["produtor_rural"], papel: "proprietario", icone: "trator" },
+  { id: "corretor", nome: "Sou corretor ou imobiliária", chamada: "Anuncie imóveis de terceiros e receba oportunidades encaminhadas.", nichos: ["corretor_imobiliaria"], papel: "corretor", icone: "predio" },
+  { id: "leiloeiro", nome: "Sou leiloeiro", chamada: "Publique imóveis de leilão com a localização exata no mapa.", nichos: ["leiloeiro"], papel: "leiloeiro", icone: "martelo" },
+  { id: "tecnico", nome: "Sou engenheiro ou técnico", chamada: "Cruze a área com as fontes oficiais e gere o relatório territorial.", nichos: ["engenheiro"], papel: "engenheiro", icone: "regua" },
+  { id: "organizacao", nome: "Empresa, holding ou prefeitura", chamada: "Vários usuários da mesma organização, com relatórios consolidados.", nichos: ["empresa_holding", "ente_publico"], icone: "governo" },
+];
+
+export const personaPorId = (id: string | null | undefined) => PERSONAS_PLANOS.find((p) => p.id === id) ?? null;
+
+/** Planos que a persona vê: os do nicho primeiro, depois os extras, sem repetir. */
+export function planosDaPersona<P extends { id: string; nichos_padrao: string[] }>(persona: PersonaPlano, planos: P[]): P[] {
+  const nichos = new Set<string>(persona.nichos);
+  const doNicho = planos.filter((p) => (p.nichos_padrao ?? []).some((n) => nichos.has(n)));
+  const extras = (persona.extras ?? [])
+    .map((id) => planos.find((p) => p.id === id))
+    .filter((p): p is P => !!p && !doNicho.includes(p));
+  return [...doNicho, ...extras];
+}
+
 export type Plano = {
   id: string;
   nome: string;

@@ -92,3 +92,12 @@ export function assinaturaAjustes(ajustes) {
   const r = (n) => Math.round(n * 1e4) / 1e4;
   return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}`).join("|");
 }
+
+/** Espelho de assinaturaExclusoes (src/lib/geo/deslocar.ts): linhas apagadas na calibração. */
+export function assinaturaExclusoes(excluidas) {
+  if (!excluidas?.length) return "";
+  const s = [...excluidas].sort().join(",");
+  let h = 5381;
+  for (let k = 0; k < s.length; k++) h = ((h * 33) ^ s.charCodeAt(k)) >>> 0;
+  return `;ex:${excluidas.length}-${h.toString(36)}`;
+}

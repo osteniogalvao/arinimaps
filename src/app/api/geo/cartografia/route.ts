@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
-import { assinaturaAjustes, type AjusteLocal } from "@/lib/geo/deslocar";
+import { assinaturaAjustes, assinaturaExclusoes, type AjusteLocal } from "@/lib/geo/deslocar";
 
 /**
  * Camadas de cartografia prontas: raster (pirâmide de tiles) e vetorial
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabaseAdmin()
     .from("cartography_layers")
-    .select("id, nome, tipo, tiles_path, min_zoom, max_zoom, opacidade_padrao, datum, offset_leste_m, offset_norte_m, rotacao_graus, escala, layers_ocultos, ajustes_locais, bytes, diagnostico, publico_path, publico_bytes, publico_centro, lotes_total, lotes_gerados_em, lotes_assinatura, municipality:municipalities(nome)")
+    .select("id, nome, tipo, tiles_path, min_zoom, max_zoom, opacidade_padrao, datum, offset_leste_m, offset_norte_m, rotacao_graus, escala, layers_ocultos, linhas_excluidas, espessura_linha, ajustes_locais, bytes, diagnostico, publico_path, publico_bytes, publico_centro, lotes_total, lotes_gerados_em, lotes_assinatura, municipality:municipalities(nome)")
     .eq("status", "pronto")
     .not("tiles_path", "is", null);
 
@@ -67,6 +67,9 @@ export async function GET(request: Request) {
       bytes_publico: c.publico_bytes ? Number(c.publico_bytes) : null,
       bbox,
       layers_ocultos: (c.layers_ocultos ?? []) as string[],
+      // linhas apagadas na calibração e espessura das linhas (áudio do Carlos, 05/11)
+      linhas_excluidas: (c.linhas_excluidas ?? []) as string[],
+      espessura: Number(c.espessura_linha ?? 1) || 1,
       layers_cad: diag?.layers ?? [],
       // lotes clicáveis: quantos há e se foram gerados com a calibração de agora
       lotes: c.tipo === "vector" ? {
@@ -75,7 +78,7 @@ export async function GET(request: Request) {
         defasados: c.lotes_total != null && c.lotes_assinatura !== [
           c.offset_leste_m ?? 0, c.offset_norte_m ?? 0, c.rotacao_graus ?? 0, c.escala ?? 1,
           [...((c.layers_ocultos ?? []) as string[])].sort().join("|"),
-        ].join(";") + assinaturaAjustes((c.ajustes_locais ?? []) as AjusteLocal[]),
+        ].join(";") + assinaturaExclusoes(c.linhas_excluidas as string[] | null) + assinaturaAjustes((c.ajustes_locais ?? []) as AjusteLocal[]),
       } : null,
       zona: diag?.zona ?? null,
       // partes da planta com ajuste próprio (src/lib/geo/deslocar.ts)

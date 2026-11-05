@@ -18,7 +18,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/react";
-import { ArrowRight, LogIn, Mail, Menu, MessageCircle, UserRound, X } from "lucide-react";
+import { ArrowRight, LogIn, Mail, Menu, MessageCircle, UserPlus, UserRound, X } from "lucide-react";
 import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
 import { formatarTelefone } from "./telefone";
@@ -147,8 +147,16 @@ export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usua
               href={usuario?.href ?? "/entrar"}
               className="hidden items-center gap-2 rounded-full border-[1.5px] border-current px-4 py-2.5 text-[15px] font-semibold text-texto transition hover:border-verde hover:text-verde sm:inline-flex"
             >
-              {usuario ? <UserRound className="size-4" /> : <LogIn className="size-4" />} {usuario?.nome ?? "Entrar"}
+              {usuario ? <UserRound className="size-4" /> : <LogIn className="size-4" />}{" "}
+              {/* entre lg e xl o menu divide a linha com o "Cadastre-se": o rótulo do visitante cede */}
+              <span className={usuario ? "" : "lg:sr-only xl:not-sr-only"}>{usuario?.nome ?? "Entrar"}</span>
             </Link>
+            {/* Revisão do Carlos (29/10): "Cadastre-se" leva aos perfis dos planos */}
+            {!usuario && (
+              <Link href="/planos#perfis" className="lp-btn lp-btn-ouro hidden px-4 py-3 text-[15px] sm:inline-flex">
+                <UserPlus className="size-4" /> Cadastre-se
+              </Link>
+            )}
             <Link href="/painel/novo" className="lp-btn lp-btn-verde hidden px-4 py-3 text-[15px] md:inline-flex">
               Anunciar imóvel
             </Link>
@@ -190,6 +198,11 @@ export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usua
               ))}
             </ul>
             <div className="lp-container space-y-3 pb-10 pt-6">
+              {!usuario && (
+                <Link href="/planos#perfis" onClick={fechar} className="lp-btn lp-btn-ouro w-full">
+                  <UserPlus /> Cadastre-se
+                </Link>
+              )}
               <Link href="/painel/novo" onClick={fechar} className="lp-btn lp-btn-verde w-full">
                 Anunciar imóvel <ArrowRight />
               </Link>
