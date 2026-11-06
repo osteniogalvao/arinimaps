@@ -23,6 +23,36 @@ export const TRANSFORM_ZERO: Transform = {
   offsetLesteM: 0, offsetNorteM: 0, rotacaoGraus: 0, escala: 1,
 };
 
+/** Uma polilinha do CAD corrigida manualmente, identificada sem duplicar o arquivo inteiro. */
+export type EdicaoGeometria = {
+  feature: number;
+  linha: number;
+  coordinates: [number, number][];
+};
+
+/**
+ * Aplica correções pontuais sobre o GeoJSON original. O arquivo bruto continua
+ * intacto no storage; só as linhas alteradas ficam no banco, o que torna salvar
+ * um vértice barato mesmo nas plantas de centenas de milhares de linhas.
+ */
+export function aplicarEdicoesGeoJSON<T extends GeoJSON.FeatureCollection>(fc: T, edicoes: EdicaoGeometria[] = []): T {
+  if (!edicoes.length) return fc;
+  const features = [...fc.features];
+  for (const e of edicoes) {
+    const f = features[e.feature];
+    if (!f?.geometry || e.coordinates.length < 2) continue;
+    if (f.geometry.type === "MultiLineString") {
+      if (e.linha < 0 || e.linha >= f.geometry.coordinates.length) continue;
+      const coordinates = [...f.geometry.coordinates];
+      coordinates[e.linha] = e.coordinates;
+      features[e.feature] = { ...f, geometry: { ...f.geometry, coordinates } };
+    } else if (f.geometry.type === "LineString" && e.linha === 0) {
+      features[e.feature] = { ...f, geometry: { ...f.geometry, coordinates: e.coordinates } };
+    }
+  }
+  return { ...fc, features } as T;
+}
+
 /** metros por grau na latitude informada (WGS84, aproximação local). */
 export function escalaLocal(lat: number) {
   return {
@@ -398,10 +428,20 @@ export function parteDaFeature(f: GeoJSON.Feature, areas: [number, number][][]):
 
 /** Duas áreas se sobrepõem? (algum vértice dentro da outra ou lados que se cruzam) */
 export function areasSeSobrepoem(a: [number, number][], b: [number, number][]): boolean {
-  if (a.some((p) => pontoNaArea(p, b)) || b.some((p) => pontoNaArea(p, a))) return true;
+  const naBorda = (p: number[], area: [number, number][]) => area.some((q, i) => {
+    const r = area[(i + 1) % area.length];
+    const cruz = (r[0] - q[0]) * (p[1] - q[1]) - (r[1] - q[1]) * (p[0] - q[0]);
+    return Math.abs(cruz) < 1e-12 && p[0] >= Math.min(q[0], r[0]) - 1e-12 && p[0] <= Math.max(q[0], r[0]) + 1e-12 &&
+      p[1] >= Math.min(q[1], r[1]) - 1e-12 && p[1] <= Math.max(q[1], r[1]) + 1e-12;
+  });
+  const dentroEstrito = (p: [number, number], area: [number, number][]) => !naBorda(p, area) && pontoNaArea(p, area);
+  if (a.some((p) => dentroEstrito(p, b)) || b.some((p) => dentroEstrito(p, a))) return true;
+  const centro = (v: [number, number][]): [number, number] => [v.reduce((s, p) => s + p[0], 0) / v.length, v.reduce((s, p) => s + p[1], 0) / v.length];
+  if (dentroEstrito(centro(a), b) || dentroEstrito(centro(b), a)) return true;
   const cruza = (p1: number[], p2: number[], p3: number[], p4: number[]) => {
-    const o = (p: number[], q: number[], r: number[]) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
-    return o(p1, p2, p3) !== o(p1, p2, p4) && o(p3, p4, p1) !== o(p3, p4, p2);
+    const o = (p: number[], q: number[], r: number[]) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+    const [a1, a2, b1, b2] = [o(p1, p2, p3), o(p1, p2, p4), o(p3, p4, p1), o(p3, p4, p2)];
+    return a1 * a2 < -1e-24 && b1 * b2 < -1e-24; // encostar na borda pode: quadras são vizinhas
   };
   for (let i = 0; i < a.length; i++) {
     for (let j = 0; j < b.length; j++) {
@@ -420,4 +460,14 @@ export function assinaturaAjustes(ajustes: AjusteLocal[]): string {
   if (!ajustes.length) return "";
   const r = (n: number) => Math.round(n * 1e4) / 1e4;
   return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}`).join("|");
+}
+
+export function assinaturaEdicoes(edicoes: EdicaoGeometria[]): string {
+  if (!edicoes.length) return "";
+  // Assinatura compacta e determinística; não é criptográfica, só invalida a
+  // geração de lotes quando uma coordenada corrigida muda.
+  let h = 2166136261;
+  const texto = edicoes.map((e) => `${e.feature}:${e.linha}:${e.coordinates.map((p) => `${p[0].toFixed(7)},${p[1].toFixed(7)}`).join(";")}`).join("|");
+  for (let i = 0; i < texto.length; i++) h = Math.imul(h ^ texto.charCodeAt(i), 16777619);
+  return `;ed:${(h >>> 0).toString(36)}`;
 }

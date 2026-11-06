@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import CalibrarPlanta from "./CalibrarPlanta";
 import { enviarJson, type ErroApi } from "@/lib/api/enviar";
 import { AvisoErro } from "@/components/ui/Aviso";
-import type { Transform, AjusteLocal } from "@/lib/geo/deslocar";
+import type { Transform, AjusteLocal, EdicaoGeometria } from "@/lib/geo/deslocar";
 import { Etiqueta, Vazio } from "@/components/ui/Pagina";
 import { Crosshair, LandPlot, Layers, Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,7 @@ type Camada = {
   layers_cad?: { nome: string; linhas: number }[];
   transform?: Transform;
   ajustes?: AjusteLocal[];
+  edicoes?: EdicaoGeometria[];
   lotes?: { total: number | null; gerados_em: string | null; defasados: boolean } | null;
   offset: { leste_m: number; norte_m: number };
 };
