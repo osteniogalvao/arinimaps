@@ -5,17 +5,18 @@
  */
 
 const FONTES: { sigla: string; nome: string }[] = [
-  { sigla: "SICAR", nome: "Cadastro Ambiental Rural" },
-  { sigla: "INCRA", nome: "Malha fundiária" },
-  { sigla: "IBAMA", nome: "Áreas embargadas" },
-  { sigla: "INPE", nome: "Focos de queimadas" },
-  { sigla: "FUNAI", nome: "Terras indígenas" },
-  { sigla: "ANM", nome: "Processos minerários" },
-  { sigla: "ANA", nome: "Corpos d'água" },
-  { sigla: "ANEEL", nome: "Linhas de energia" },
-  { sigla: "DNIT", nome: "Rodovias federais" },
-  { sigla: "IPHAN", nome: "Patrimônio" },
-  { sigla: "IBGE", nome: "Limites municipais" },
+  // rótulos pedidos pelo Carlos (revisão de 29/10): categorias no lugar dos nomes técnicos
+  { sigla: "Cartografia", nome: "Informações geográficas" },
+  { sigla: "IBGE", nome: "Dados institucionais" },
+  { sigla: "SICAR", nome: "Dados territoriais" },
+  { sigla: "INCRA", nome: "Informações imobiliárias" },
+  { sigla: "IBAMA", nome: "Dados territoriais" },
+  { sigla: "INPE", nome: "Dados territoriais" },
+  { sigla: "FUNAI", nome: "Dados institucionais" },
+  { sigla: "ANM", nome: "Dados institucionais" },
+  { sigla: "ANA", nome: "Informações geográficas" },
+  { sigla: "DNIT", nome: "Informações geográficas" },
+  { sigla: "IPHAN", nome: "Dados institucionais" },
 ];
 
 function Linha({ oculta = false }: { oculta?: boolean }) {

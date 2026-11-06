@@ -1,6 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
 import { urlTileAtivo } from "@/lib/map/config";
 
+/** Mapa topográfico da Esri (relevo sombreado + cartografia), para os cartões "cartográficos". */
+const urlTileRelevo = (z: number, x: number, y: number) =>
+  `https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${y}/${x}`;
+
 /**
  * Miniatura de satélite feita com os próprios tiles da Esri World Imagery que
  * o mapa usa (mesma fonte, mesma licença): um mosaico 3×3 em volta do ponto,
@@ -17,8 +21,8 @@ function tileXY(lng: number, lat: number, z: number) {
   return { x, y };
 }
 
-export default function MosaicoSatelite({ lng, lat, z = 13, className = "", alt = "" }: {
-  lng: number; lat: number; z?: number; className?: string; alt?: string;
+export default function MosaicoSatelite({ lng, lat, z = 13, className = "", alt = "", camada = "satelite" }: {
+  lng: number; lat: number; z?: number; className?: string; alt?: string; camada?: "satelite" | "relevo";
 }) {
   const { x, y } = tileXY(lng, lat, z);
   const x0 = Math.floor(x) - 1;
@@ -28,7 +32,7 @@ export default function MosaicoSatelite({ lng, lat, z = 13, className = "", alt 
   const dy = ((1.5 - (y - y0)) / 3) * 100;
   const tiles: { k: string; src: string }[] = [];
   for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
-    tiles.push({ k: `${i}-${j}`, src: urlTileAtivo(z, x0 + i, y0 + j) });
+    tiles.push({ k: `${i}-${j}`, src: camada === "relevo" ? urlTileRelevo(z, x0 + i, y0 + j) : urlTileAtivo(z, x0 + i, y0 + j) });
   }
   return (
     <div className={`absolute inset-0 overflow-hidden bg-[#124431] ${className}`} role={alt ? "img" : undefined} aria-label={alt || undefined}>

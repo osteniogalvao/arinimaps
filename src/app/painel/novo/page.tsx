@@ -52,9 +52,11 @@ export default function NovoImovel() {
     municipality_id: "", condicoes_venda: "", parent_codigo: "",
     aceita_permuta: false, aceita_financiamento: false,
     matricula_numero: "", matricula_cartorio: "",
+    medidas: "",
   });
   const [papel, setPapel] = useState<string | null>(null);
-  const [condicao, setCondicao] = useState<Condicao>("autorizacao");
+  // revisão do Carlos (29/10): venda pela plataforma só com exclusividade Arini
+  const [condicao, setCondicao] = useState<Condicao>("exclusividade");
   const [docs, setDocs] = useState<Docs>({ matricula: [], edital: [], ccir_itr: [], autorizacao: [], outro: [] });
   const [videos, setVideos] = useState<File[]>([]);
   const [selfie, setSelfie] = useState<File | null>(null);
@@ -93,10 +95,8 @@ export default function NovoImovel() {
       .catch(() => undefined);
   }, []);
 
-  // veio de "Este lote é meu" no mapa: a divisa do lote urbano já entra pronta
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("lote");
-    if (!id) return;
+  // divisa do lote urbano (de "Este lote é meu" no mapa ou do clique na etapa de localização)
+  function carregarLote(id: string) {
     fetch(`/api/geo/lotes/${encodeURIComponent(id)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((f) => {
@@ -104,6 +104,7 @@ export default function NovoImovel() {
         const g: GeometriaEscolhida = { geometry: f.geometry, fonte: "lote" };
         const p = f.properties ?? {};
         setLote({ id: p.id, area_m2: Number(p.area_m2), municipio: p.municipio ?? null });
+        setCar(null);
         setInicial(g);
         setGeometria(g);
         setForm((atual) => ({
@@ -114,13 +115,10 @@ export default function NovoImovel() {
         }));
       })
       .catch(() => undefined);
-  }, []);
+  }
 
-  // veio de "Esta área é minha" no mapa: a divisa do CAR já entra pronta
-  useEffect(() => {
-    const cod = new URLSearchParams(window.location.search).get("car") || lerCarPendente();
-    limparCarPendente();
-    if (!cod) return;
+  // divisa do CAR (de "Esta área é minha" no mapa ou do clique na etapa de localização)
+  function carregarCar(cod: string) {
     fetch(`/api/geo/car/${encodeURIComponent(cod)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((f) => {
@@ -128,6 +126,7 @@ export default function NovoImovel() {
         const g: GeometriaEscolhida = { geometry: f.geometry, fonte: "car" };
         const p = f.properties ?? {};
         setCar({ cod: p.cod, area_ha: p.area_ha ?? null, municipio: p.municipio ?? null });
+        setLote(null);
         setInicial(g);
         setGeometria(g);
         setForm((atual) => ({
@@ -137,6 +136,17 @@ export default function NovoImovel() {
         }));
       })
       .catch(() => undefined);
+  }
+
+  // veio do mapa com o lote ou a área do CAR já escolhidos
+  useEffect(() => {
+    const busca = new URLSearchParams(window.location.search);
+    const id = busca.get("lote");
+    if (id) carregarLote(id);
+    const cod = busca.get("car") || lerCarPendente();
+    limparCarPendente();
+    if (cod) carregarCar(cod);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [aceite, setAceite] = useState(false);
   const ehParceiro = papelEhParceiro(papel);
@@ -215,7 +225,10 @@ export default function NovoImovel() {
       valor: reais(form.valor),
       area_declarada: form.area_declarada ? Number(form.area_declarada.replace(",", ".")) : null,
       municipality_id: form.municipality_id || null,
-      caracteristicas: { unidade_area: form.tipo === "rural" ? "ha" : "m2" },
+      caracteristicas: {
+        unidade_area: form.tipo === "rural" ? "ha" : "m2",
+        ...(form.medidas.trim() && { medidas_informadas: form.medidas.trim().slice(0, 2000) }),
+      },
       condicao,
       aceite_termos: aceite,
       car_codigo: geometria.fonte === "car" ? car?.cod ?? null : null,
@@ -462,7 +475,22 @@ export default function NovoImovel() {
           // a divisa de cada unidade é a do lote no banco: aqui só se confere
           <DesenhoMapa onChange={() => undefined} inicial={inicial} />
         ) : (
-          <DesenhoMapa onChange={setGeometria} inicial={inicial} />
+          <DesenhoMapa onChange={setGeometria} inicial={inicial}
+            onSelecionar={(s) => (s.tipo === "car" ? carregarCar(s.cod) : carregarLote(s.id))} />
+        )}
+        {!loteamento && (
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-texto" htmlFor="medidas-area">
+              Informações da área (opcional)
+            </label>
+            <textarea id="medidas-area" rows={3} value={form.medidas}
+              onChange={(e) => setForm({ ...form, medidas: e.target.value })}
+              placeholder="Ex.: frente 12 m, fundo 12 m, laterais 30 m; 360 m² na matrícula; divisa com o córrego ao norte."
+              className="w-full rounded-xl border border-linha bg-superficie px-3.5 py-2.5 text-base text-texto outline-none focus:border-verde" />
+            <p className="mt-1 text-sm text-texto-2">
+              Lados, metragem e o que mais ajudar a conferir a divisa. A equipe Arini analisa e confirma antes de publicar.
+            </p>
+          </div>
         )}
         {geometria && (
           <p className="flex items-center gap-1.5 text-sm font-semibold text-verde">
@@ -541,9 +569,8 @@ export default function NovoImovel() {
             <Link href="/termos/parceiros" target="_blank" className="text-verde underline">Termo de Parceria</Link>.
           </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4">
             {([
-              ["autorizacao", "Autorização de venda", "Sem exclusividade: você pode vender por conta própria a quem a Arini não apresentou."],
               ["exclusividade", "Exclusividade Arini", "Só a Arini (e parceiros indicados por ela) intermedia durante o prazo, com compromissos de prazo de atendimento."],
             ] as const).map(([v, t, d]) => (
               <label key={v}

@@ -189,6 +189,12 @@ export default async function AnaliseImovel({ params }: PageProps<"/admin/imovei
       <Bloco titulo="Checklist de análise">
         <ul className="divide-y divide-linha text-[0.95rem] text-texto">
           <Item estado={p.descricao ? "ok" : "aviso"}>Descrição {p.descricao ? "preenchida" : "vazia"}</Item>
+          {typeof (p.caracteristicas as { medidas_informadas?: unknown } | null)?.medidas_informadas === "string" && (
+            <Item estado="aviso">
+              Medidas informadas pelo anunciante (conferir com a divisa):{" "}
+              <span className="whitespace-pre-line">{(p.caracteristicas as { medidas_informadas: string }).medidas_informadas}</span>
+            </Item>
+          )}
           <Item estado={p.valor ? "ok" : "aviso"}>Valor: <span className="tabular-nums">{formatBRL(p.valor)}</span></Item>
           <Item estado={geo ? "ok" : "erro"}>Geometria {geo ? `(${geo.fonte}) — ${formatArea(geo.area_m2, p.tipo as "urbano" | "rural")}` : "ausente"}</Item>
           {divergencia != null && (

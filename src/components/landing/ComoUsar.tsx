@@ -10,7 +10,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, Gavel, Handshake, Megaphone, ScanSearch, Search } from "lucide-react";
+import { ArrowRight, BrainCircuit, Megaphone, Rocket, ScanSearch, Search } from "lucide-react";
 import MosaicoSatelite from "./MosaicoSatelite";
 import { EASE } from "./movimento";
 import { BTN_ACAO } from "./Titulo";
@@ -18,54 +18,62 @@ import { BTN_ACAO } from "./Titulo";
 type Aba = {
   id: string;
   rotulo: string;
+  /** gatilho: a frase curta embaixo do rótulo da aba */
   frase: string;
+  /** título do cartão grande */
+  titulo: string;
   texto: string;
   link: { rotulo: string; href: string };
   icone: typeof Search;
-  imagem: { tipo: "foto"; src: string } | { tipo: "satelite"; lng: number; lat: number; z: number };
+  imagem: { tipo: "foto"; src: string } | { tipo: "satelite" | "relevo"; lng: number; lat: number; z: number };
   pontos: string[];
 };
 
 const ABAS: Aba[] = [
   {
     id: "comprar", rotulo: "Comprar", icone: Search,
-    frase: "Encontre pelo mapa, não pela foto.",
-    texto: "Navegue pelo satélite, filtre por tipo, município e preço e veja a divisa real de cada propriedade, com a área medida e o que há ao redor.",
-    pontos: ["Divisa sobre o satélite", "Área medida e conferida", "Tour 3D do imóvel"],
-    link: { rotulo: "Buscar imóveis", href: "/imoveis" },
-    imagem: { tipo: "foto", src: "/img/aerea-interior.jpg" },
+    frase: "Explore antes de decidir.",
+    titulo: "Encontre pelo mapa.",
+    texto: "Explore imóveis urbanos e rurais pelo mapa, conheça sua localização, consulte informações territoriais e descubra oportunidades com mais clareza e segurança.",
+    pontos: ["Explore novos lugares", "Descubra oportunidades", "Decida com confiança"],
+    link: { rotulo: "Buscar imóveis", href: "/imoveis?vista=mapa" },
+    imagem: { tipo: "satelite", lng: -50.196, lat: -19.728, z: 15 },
   },
   {
     id: "anunciar", rotulo: "Anunciar", icone: Megaphone,
-    frase: "Seu imóvel no mapa, do jeito certo.",
-    texto: "Cadastre a propriedade com a divisa, fotos e documentos. A Arini confere tudo antes de publicar e gera o tour 3D e o vídeo automaticamente.",
-    pontos: ["Conferência antes de publicar", "Tour 3D e vídeo automáticos", "Interessados qualificados"],
+    frase: "O anúncio certo garante a venda.",
+    titulo: "Seu imóvel no mapa, do jeito certo.",
+    texto: "Dê visibilidade ao seu imóvel, valorize seu potencial territorial e conecte sua propriedade às oportunidades certas de negócio.",
+    pontos: ["Anunciar ficou fácil", "Com segurança em cada etapa", "Conectando oportunidades"],
     link: { rotulo: "Anunciar imóvel", href: "/painel/novo" },
-    imagem: { tipo: "foto", src: "/img/hero-fazenda.jpg" },
+    imagem: { tipo: "foto", src: "/img/aerea-interior.jpg" },
   },
   {
     id: "consultar", rotulo: "Consultar área", icone: ScanSearch,
-    frase: "Saiba o que pesa sobre a terra.",
-    texto: "CAR, embargos, queimadas, processos minerários, terras indígenas e unidades de conservação cruzados com a divisa, num relatório com data e fonte de cada consulta.",
+    frase: "Saiba o que faz a diferença.",
+    titulo: "Saiba o que faz a diferença.",
+    texto: "Explore a área pelo mapa, consulte medidas, divisas e informações territoriais para compreender melhor cada propriedade e o que existe ao seu redor.",
     pontos: ["Fontes oficiais ao vivo", "Raio de cada incidência", "Relatório em PDF"],
     link: { rotulo: "Ver relatórios territoriais", href: "/relatorios" },
-    imagem: { tipo: "satelite", lng: -50.235, lat: -19.75, z: 14 },
+    imagem: { tipo: "relevo", lng: -50.32, lat: -19.78, z: 12 },
   },
   {
-    id: "leiloes", rotulo: "Leilões", icone: Gavel,
-    frase: "Oportunidade com a lição de casa feita.",
-    texto: "Imóveis de leilão da região reunidos num só lugar, com a área medida no satélite e as consultas ambientais prontas antes do lance.",
-    pontos: ["Imóveis de leilão no mapa", "Cor própria na legenda", "Consultas antes do lance"],
-    link: { rotulo: "Ver imóveis em leilão", href: "/imoveis?tipo=leilao" },
+    id: "inteligencia", rotulo: "Inteligência territorial", icone: BrainCircuit,
+    frase: "Uma visão além do imóvel.",
+    titulo: "Uma visão além do imóvel.",
+    texto: "Conectamos dados, informações territoriais e inteligência artificial em uma plataforma que evolui continuamente, ampliando a compreensão do território e revelando novas possibilidades de análise e decisão.",
+    pontos: ["Dados conectados", "Inteligência em evolução", "Conhecimento territorial"],
+    link: { rotulo: "Pacotes de serviço", href: "/planos" },
+    imagem: { tipo: "satelite", lng: -50.27, lat: -19.70, z: 13 },
+  },
+  {
+    id: "expansao", rotulo: "Expansão Arini", icone: Rocket,
+    frase: "Invista com a Arini.",
+    titulo: "Invista com a Arini.",
+    texto: "Conecte seu negócio à tecnologia ARINI e descubra novas possibilidades de expansão.",
+    pontos: ["Oportunidade de investimento", "Desenvolvimento regional", "Construindo parceria"],
+    link: { rotulo: "Faça parte da Arini", href: "/expansao" },
     imagem: { tipo: "foto", src: "/img/fazenda-gado.jpg" },
-  },
-  {
-    id: "corretores", rotulo: "Para corretores", icone: Handshake,
-    frase: "Ferramenta de território para quem vende.",
-    texto: "Imobiliárias e corretores parceiros anunciam com a mesma qualidade cartográfica, usam as consultas na negociação e recebem os contatos pela central.",
-    pontos: ["Planos por perfil", "Consultas na negociação", "Contatos pela central"],
-    link: { rotulo: "Conhecer os planos", href: "/planos" },
-    imagem: { tipo: "foto", src: "/img/casa-urbana.jpg" },
   },
 ];
 
@@ -137,7 +145,7 @@ export default function ComoUsar() {
             {aba.imagem.tipo === "foto" ? (
               <Image src={aba.imagem.src} alt="" fill sizes="(max-width: 1024px) 100vw, 55vw" className="object-cover" />
             ) : (
-              <MosaicoSatelite lng={aba.imagem.lng} lat={aba.imagem.lat} z={aba.imagem.z} />
+              <MosaicoSatelite lng={aba.imagem.lng} lat={aba.imagem.lat} z={aba.imagem.z} camada={aba.imagem.tipo} />
             )}
           </motion.div>
         </AnimatePresence>
@@ -153,7 +161,7 @@ export default function ComoUsar() {
             className="absolute inset-x-0 bottom-0 p-6 text-white md:p-10"
           >
             <p className="lp-eyebrow">{String(ativa + 1).padStart(2, "0")} · {aba.rotulo}</p>
-            <h3 className="lp-display mt-3 text-3xl md:text-[2.6rem]">{aba.frase}</h3>
+            <h3 className="lp-display mt-3 text-3xl md:text-[2.6rem]">{aba.titulo}</h3>
             <p className="mt-4 max-w-2xl text-lg leading-relaxed text-white/90">{aba.texto}</p>
             <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-base text-white/85">
               {aba.pontos.map((p) => (

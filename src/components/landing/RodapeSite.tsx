@@ -20,9 +20,9 @@ const wa = (n: string, msg?: string) =>
  */
 export function PreRodape({ contato }: { contato: Contato }) {
   const recursos = [
-    { icone: MapPinned, titulo: "Divisa no satélite", texto: "A propriedade entra com o polígono real, área medida e alerta quando a área declarada diverge." },
-    { icone: Box, titulo: "Tour 3D e vídeo", texto: "Sobrevoo com relevo real da região e vídeo pronto para compartilhar o imóvel." },
-    { icone: ShieldCheck, titulo: "Central Arini", texto: "Nenhum anúncio vai ao ar sem conferência, e todo interessado passa pela central." },
+    { icone: MapPinned, titulo: "Localização em destaque", texto: "Apresente seu imóvel com uma visão territorial que valoriza sua localização." },
+    { icone: Box, titulo: "Apresentação imersiva", texto: "Explore o imóvel por imagens, vídeos e experiências visuais." },
+    { icone: ShieldCheck, titulo: "Atendimento Arini", texto: "Conte com uma equipe imobiliária para acompanhar o contato e a negociação." },
   ];
   return (
     <section className="lp-escuro relative" aria-label="Anuncie na Arini">
@@ -51,7 +51,7 @@ export function PreRodape({ contato }: { contato: Contato }) {
               Muito mais do que <span className="text-ouro">anunciar imóveis.</span>
             </h2>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-white/80">
-              Tem um imóvel na região? Coloque ele no mapa, com a divisa conferida e o território consultado antes da negociação.
+              Seu imóvel merece mais do que um anúncio. Na ARINI, ele ganha uma apresentação que conecta localização, informações territoriais e oportunidades, aproximando proprietários, corretores e interessados em uma experiência mais completa.
             </p>
             <div className="mt-6 flex flex-wrap gap-2.5">
               <PilulaPonto className="!text-white">Inteligência</PilulaPonto>
@@ -92,7 +92,7 @@ const COLUNAS: { titulo: string; links: { rotulo: string; href: string }[] }[] =
     links: [
       { rotulo: "Anunciar imóvel", href: "/painel/novo" },
       { rotulo: "Entrar ou criar conta", href: "/entrar" },
-      { rotulo: "Imóveis em leilão", href: "/imoveis?tipo=leilao" },
+      { rotulo: "Faça parte da Arini", href: "/expansao" },
       { rotulo: "Suporte", href: "/suporte" },
     ],
   },
@@ -108,7 +108,7 @@ const COLUNAS: { titulo: string; links: { rotulo: string; href: string }[] }[] =
 ];
 
 /** Rodapé completo (sempre Verde Profundo, com linhas de mapa e a assinatura negativa). */
-export default function RodapeSite({ marca, contato }: { marca: string; contato: Contato }) {
+export default function RodapeSite({ contato }: { marca?: string; contato: Contato }) {
   const ano = new Date().getFullYear();
   return (
     <footer className="lp-escuro fundo-curvas-escuro relative overflow-hidden text-white/80">
@@ -116,7 +116,7 @@ export default function RodapeSite({ marca, contato }: { marca: string; contato:
         <div className="space-y-6">
           <Logo negativa />
           <p className="max-w-sm text-[17px] leading-relaxed">
-            {marca}: o mercado imobiliário do Pontal do Triângulo Mineiro visto do mapa, com intermediação da Arini Negócios Imobiliários.
+            Conectando pessoas, imóveis e oportunidades por meio da tecnologia e do conhecimento imobiliário.
           </p>
           <ul className="space-y-3 text-base">
             {contato.whatsapp && (

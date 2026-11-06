@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { centroDe } from "@/lib/geo/deslocar";
+import { aplicarEdicoesGeoJSON, centroDe, type EdicaoGeometria } from "@/lib/geo/deslocar";
 
 /**
  * Versão pública da planta: o GeoJSON sem as camadas do CAD que o operador
@@ -23,12 +23,14 @@ import { centroDe } from "@/lib/geo/deslocar";
 export async function gerarPlantaPublica(
   admin: SupabaseClient,
   camada: { id: string; tiles_path: string; publico_path?: string | null },
-  ocultos: string[]
+  ocultos: string[],
+  edicoes: EdicaoGeometria[] = []
 ): Promise<{ path: string | null; bytes: number; linhas: number; linhasTotal: number; centro: [number, number] }> {
   const { data: arquivo, error } = await admin.storage.from("media").download(camada.tiles_path);
   if (error || !arquivo) throw new Error(`não consegui ler a planta original: ${error?.message ?? "arquivo vazio"}`);
 
-  const fc = JSON.parse(await arquivo.text()) as GeoJSON.FeatureCollection;
+  const original = JSON.parse(await arquivo.text()) as GeoJSON.FeatureCollection;
+  const fc = aplicarEdicoesGeoJSON(original, edicoes);
   const centro = centroDe(fc);
   const esconder = new Set(ocultos);
   const features = fc.features.filter((f) => !esconder.has(String(f.properties?.layer ?? "")));
@@ -37,8 +39,9 @@ export async function gerarPlantaPublica(
   let path: string | null = null;
   let bytes = 0;
 
-  // nada escondido: o público é o próprio original, sem arquivo a mais
-  if (esconder.size) {
+  // Sem filtro nem correção, o público é o original. Uma linha corrigida exige
+  // arquivo derivado mesmo que nenhuma camada esteja escondida.
+  if (esconder.size || edicoes.length) {
     const corpo = Buffer.from(JSON.stringify({ ...fc, features }));
     // nome novo a cada gravação: a URL pública tem cache de CDN, e sobrescrever
     // o mesmo caminho serviria a seleção antiga por um tempo

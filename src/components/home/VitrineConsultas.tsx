@@ -169,10 +169,10 @@ export default function VitrineConsultas({ consultas }: Props) {
             <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-12 lg:pb-20 lg:pointer-events-auto">
               <p className="lp-eyebrow">05 · Consultas</p>
               <h2 className="lp-display mt-3 text-[2.6rem] text-balance md:text-[3.4rem]">
-                Entre na área de <span className="text-ouro">consultas</span>
+                Entre na Área de <span className="text-ouro">Consultas</span>
               </h2>
               <p className="mt-5 max-w-md text-lg leading-relaxed text-white/85">
-                Mapa, busca de imóveis e relatórios ficam numa área própria, com menu lateral e atalhos para cada camada oficial.
+                Acesse mapas, informações ambientais, dados imobiliários e consultas territoriais e muito mais em uma única plataforma.
               </p>
               <div className="mt-7">
                 <Link href="/mapa" className={BTN_ACAO}>Abrir o mapa</Link>
@@ -185,7 +185,7 @@ export default function VitrineConsultas({ consultas }: Props) {
                   key={c.rotulo}
                   href={c.href}
                   className={
-                    "group flex items-start gap-3 rounded-2xl border p-3.5 text-texto transition duration-200 " +
+                    "group flex items-center gap-3 rounded-2xl border p-3.5 text-texto transition duration-200 " +
                     "hover:-translate-y-0.5 hover:border-verde " +
                     (c.destaque
                       ? "border-verde/60 bg-superficie lg:col-span-2"
@@ -194,7 +194,7 @@ export default function VitrineConsultas({ consultas }: Props) {
                 >
                   <span
                     className={
-                      "mt-0.5 inline-grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors " +
+                      "inline-grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors " +
                       (c.destaque ? "bg-verde text-fundo" : "bg-verde/12 text-verde group-hover:bg-verde/20")
                     }
                   >
@@ -205,7 +205,6 @@ export default function VitrineConsultas({ consultas }: Props) {
                       {c.rotulo}
                       <span className="text-verde transition-transform duration-200 group-hover:translate-x-1">›</span>
                     </span>
-                    <span className="mt-0.5 block text-sm leading-snug text-texto-2">{c.desc}</span>
                   </span>
                 </Link>
               ))}
