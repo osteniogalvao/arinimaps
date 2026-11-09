@@ -1,5 +1,5 @@
 // Worker do Arini Imóveis Brasil — polling da tabela jobs (Postgres/Supabase).
-// Processa: otimizar_video · render_video · screenshot_og · tile_raster · fetch_pois · refresh_pois · gerar_lotes · descarte_retencao · verificar_fontes · inteligencia_mercado
+// Processa: otimizar_video · render_video · screenshot_og · tile_raster · fetch_pois · refresh_pois · gerar_lotes · descarte_retencao · verificar_fontes · inteligencia_mercado · coletar_cotacoes
 // 1 job por vez, teto de memória no container (ver docker-compose).
 import pg from "pg";
 import { renderVideo } from "./jobs/renderVideo.mjs";
@@ -12,6 +12,8 @@ import { verificarFontes } from "./jobs/verificarFontes.mjs";
 import { inteligenciaMercado } from "./jobs/inteligenciaMercado.mjs";
 import { otimizarVideo } from "./jobs/otimizarVideo.mjs";
 import { monitorar } from "./jobs/monitorar.mjs";
+import { lembretesProprietario } from "./jobs/lembretesProprietario.mjs";
+import { coletarCotacoes } from "./jobs/cotacoes.mjs";
 
 const INTERVALO_MS = Number(process.env.WORKER_INTERVALO_MS ?? 15000);
 const MAX_TENTATIVAS = 3;
@@ -37,6 +39,10 @@ const HANDLERS = {
   inteligencia_mercado: inteligenciaMercado,
   // vídeo do anunciante → MP4 720p que toca em qualquer aparelho
   otimizar_video: otimizarVideo,
+  // lembretes do proprietário com data vencida → e-mail (migration 0060, item 28)
+  lembretes_proprietario: lembretesProprietario,
+  // cotações do agro para a faixa do topo e o /mercado (migration 0056)
+  coletar_cotacoes: coletarCotacoes,
 };
 
 async function proximoJob() {
@@ -135,6 +141,40 @@ async function agendarPois() {
   }
 }
 
+// Cotações do agro (faixa do topo e /mercado): uma coleta a cada
+// COTACOES_HORAS (padrão 3 h). O CEPEA publica no fim da tarde; o dólar e o
+// Ibovespa mudam durante o pregão. A primeira coleta com a tabela vazia já faz
+// a carga de 1 ano (ver jobs/cotacoes.mjs).
+const COTACOES_HORAS = Number(process.env.COTACOES_HORAS ?? 3);
+async function agendarCotacoes() {
+  try {
+    await db.query(`
+      insert into jobs (tipo, payload)
+      select 'coletar_cotacoes', '{}'::jsonb
+      where not exists (
+        select 1 from jobs where tipo = 'coletar_cotacoes'
+          and (status in ('pendente', 'processando') or created_at > now() - make_interval(mins => $1::int))
+      )`, [Math.max(30, Math.round(COTACOES_HORAS * 60) - 10)]);
+  } catch (e) {
+    console.error("agendar cotações falhou:", e.message);
+  }
+}
+
+// Lembretes do proprietário (item 28): de hora em hora, envia os que venceram.
+async function agendarLembretes() {
+  try {
+    await db.query(`
+      insert into jobs (tipo, payload)
+      select 'lembretes_proprietario', '{}'::jsonb
+      where not exists (
+        select 1 from jobs where tipo = 'lembretes_proprietario'
+          and created_at > now() - interval '55 minutes'
+      )`);
+  } catch (e) {
+    console.error("agendar lembretes falhou:", e.message);
+  }
+}
+
 console.log("Arini Imóveis Brasil worker iniciado.");
 // monitoramento: confere /api/saude a cada 5 min e alerta (jobs/monitorar.mjs)
 if (!process.env.WORKER_UMA_VEZ) {
@@ -147,4 +187,8 @@ agendarVerificacaoFontes();
 setInterval(agendarVerificacaoFontes, 30 * 60 * 1000);
 agendarRotinas();
 setInterval(agendarRotinas, 60 * 60 * 1000);
+agendarLembretes();
+setInterval(agendarLembretes, 15 * 60 * 1000);
+agendarCotacoes();
+setInterval(agendarCotacoes, 20 * 60 * 1000);
 loop();

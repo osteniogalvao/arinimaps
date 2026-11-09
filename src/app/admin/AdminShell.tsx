@@ -15,7 +15,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter,
+  BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter, Grid3x3,
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
   Settings, Shield, ShieldCheck, UserCheck, UserRound, Users, UsersRound, Wallet, X,
@@ -44,6 +44,7 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/cadastros": UserCheck,
   "/admin/comercial": LayoutDashboard,
   "/admin/funil": Filter,
+  "/admin/empreendimentos": Grid3x3,
   "/admin/leads": Users,
   "/admin/demandas": SearchX,
   "/admin/organizacoes": Landmark,
@@ -207,7 +208,7 @@ export default function AdminShell({
     <div className="min-h-screen bg-fundo flex">
       <aside className="lp-escuro lp-malha-escura hidden lg:flex w-[264px] shrink-0 flex-col sticky top-0 h-screen">
         <div className="px-5 h-[72px] flex items-center border-b border-linha-forte/60">{marca}</div>
-        <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Menu da Central">{navegacao}</nav>
+        <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Menu da Central" data-tour="menu-central">{navegacao}</nav>
         {rodape}
       </aside>
 
@@ -223,7 +224,7 @@ export default function AdminShell({
                 <X className="size-5" />
               </button>
             </div>
-            <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Menu da Central">{navegacao}</nav>
+            <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Menu da Central" data-tour="menu-central">{navegacao}</nav>
             {rodape}
           </aside>
         </div>

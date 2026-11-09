@@ -6,10 +6,12 @@ import { enviarJson } from "@/lib/api/enviar";
 import { CAMPO_REVISAO_LABEL, valorRevisao, type DadosRevisao } from "@/lib/imovel/revisao";
 import { Clock, PencilLine } from "lucide-react";
 import { CAMPO, ROTULO } from "@/components/ui/Pagina";
+import { TOUR_AJUDA } from "@/lib/imovel/tour";
 
 type Atual = {
   titulo: string; descricao: string; valor: number | null; area_declarada: number | null;
   condicoes_venda: string | null; aceita_permuta: boolean; aceita_financiamento: boolean;
+  tour_virtual_url: string | null;
 };
 type Pendente = { id: string; versao: number; dados: Record<string, unknown>; created_at: string } | null;
 
@@ -33,6 +35,7 @@ export default function ProporAlteracao({ propertyId, atual, pendente, tipo }: {
     condicoes_venda: atual.condicoes_venda ?? "",
     aceita_permuta: !!atual.aceita_permuta,
     aceita_financiamento: !!atual.aceita_financiamento,
+    tour_virtual_url: atual.tour_virtual_url ?? "",
   });
 
   async function enviar(e: React.FormEvent) {
@@ -47,6 +50,7 @@ export default function ProporAlteracao({ propertyId, atual, pendente, tipo }: {
       condicoes_venda: form.condicoes_venda || null,
       aceita_permuta: form.aceita_permuta,
       aceita_financiamento: form.aceita_financiamento,
+      tour_virtual_url: form.tour_virtual_url.trim() || null,
     };
     const r = await enviarJson(`/api/imoveis/${propertyId}/revisao`, "POST", corpo);
     setOcupado(false);
@@ -103,7 +107,7 @@ export default function ProporAlteracao({ propertyId, atual, pendente, tipo }: {
     return (
       <div className="space-y-4">
         <p className="text-base leading-relaxed text-texto-2">
-          Seu anúncio está publicado. Mudanças de título, descrição, valor, área ou condições passam pela Matriz
+          Seu anúncio está publicado. Mudanças de título, descrição, valor, área, condições ou tour virtual passam pela Matriz
           antes de entrar no ar — enquanto isso, o anúncio atual continua visível.
         </p>
         <button type="button" onClick={() => setAberto(true)}
@@ -142,6 +146,13 @@ export default function ProporAlteracao({ propertyId, atual, pendente, tipo }: {
         <span className={ROTULO}>Condições de venda</span>
         <textarea className={campo} rows={3} value={form.condicoes_venda} maxLength={2000}
           onChange={(e) => setForm({ ...form, condicoes_venda: e.target.value })} />
+      </label>
+      <label className="block">
+        <span className={ROTULO}>Tour virtual 360 / vídeo imersivo (opcional)</span>
+        <input className={campo} type="url" inputMode="url" maxLength={500} value={form.tour_virtual_url}
+          placeholder="https://my.matterport.com/show/?m=…"
+          onChange={(e) => setForm({ ...form, tour_virtual_url: e.target.value })} />
+        <span className="mt-1.5 block text-sm text-texto-2">{TOUR_AJUDA} Deixe em branco para retirar o tour.</span>
       </label>
       <div className="flex flex-wrap gap-5 text-base text-texto">
         <label className="flex items-center gap-2.5">

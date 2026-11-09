@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 import { CAMPO, ROTULO } from "@/components/ui/Pagina";
 import { Send, StickyNote } from "lucide-react";
 
@@ -21,11 +22,9 @@ export default function Atendimento({
 
   async function salvar(body: Record<string, unknown>) {
     setOcupado(true); setErro("");
-    const res = await fetch("/api/admin/suporte", {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...body }),
-    });
+    const r = await enviarJson("/api/admin/suporte", "PATCH", { id, ...body });
     setOcupado(false);
-    if (!res.ok) { setErro((await res.json().catch(() => ({}))).error ?? "Não foi possível salvar."); return false; }
+    if (!r.ok) { setErro(r.erro.mensagem); return false; }
     router.refresh();
     return true;
   }

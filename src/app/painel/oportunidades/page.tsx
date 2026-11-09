@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Handshake, Phone, ArrowRight, Building2 } from "lucide-react";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ETAPA_LABEL } from "@/lib/funil";
 import { formatBRL } from "@/lib/format";
 import { Secao, Vazio, Etiqueta } from "@/components/ui/Pagina";
@@ -8,14 +9,22 @@ import { Secao, Vazio, Etiqueta } from "@/components/ui/Pagina";
 export default async function MinhasOportunidades() {
   const supabase = await supabaseServer();
   // RLS: só vêm as oportunidades encaminhadas a este parceiro/proprietário
-  const { data: opps } = await supabase
+  const { data: visiveis } = await supabase
     .from("opportunities")
-    .select(`
-      id, codigo, etapa, created_at,
-      lead:leads(nome, telefone),
-      property:properties(codigo, titulo, valor)
-    `)
-    .order("created_at", { ascending: false });
+    .select("id, codigo, etapa, created_at")
+    .order("created_at", { ascending: false })
+    .limit(300);
+  // Lead e imóvel pelo service role, só dos ids que a sessão já devolveu: a
+  // policy SELECT de leads é por setor da equipe, então o embed vinha null para
+  // corretor e proprietário (mesmo padrão da tela de detalhe).
+  const ids = (visiveis ?? []).map((o) => o.id);
+  const { data: detalhes } = ids.length
+    ? await supabaseAdmin().from("opportunities")
+      .select("id, lead:leads(nome, telefone), property:properties(codigo, titulo, valor)")
+      .in("id", ids)
+    : { data: [] };
+  const porId = new Map((detalhes ?? []).map((d) => [d.id, d]));
+  const opps = (visiveis ?? []).map((o) => ({ ...o, lead: porId.get(o.id)?.lead ?? null, property: porId.get(o.id)?.property ?? null }));
 
   return (
     <Secao

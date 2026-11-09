@@ -5,7 +5,7 @@ import { LOTES_MAX } from "@/lib/geo/loteamento";
 
 /** Vários lotes de uma vez (?ids=a,b,c), para o cadastro de loteamento. */
 export async function GET(request: Request) {
-  const bloqueio = limiteLeituraMapa(request, "geo");
+  const bloqueio = await limiteLeituraMapa(request, "geo");
   if (bloqueio) return bloqueio;
   const ids = [...new Set((new URL(request.url).searchParams.get("ids") ?? "").split(","))]
     .filter((id) => /^[0-9a-f-]{36}$/i.test(id));

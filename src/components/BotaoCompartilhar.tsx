@@ -1,38 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { Check, MessageCircle, Share2 } from "lucide-react";
+import EnviarWhatsApp from "@/components/compartilhar/EnviarWhatsApp";
 
-export default function BotaoCompartilhar({ codigo, titulo }: { codigo: string; titulo: string }) {
-  const [copiado, setCopiado] = useState(false);
-  // URL montada só no clique: window não existe no SSR (evita hydration mismatch)
-  const montarUrl = () => `${window.location.origin}/i/${codigo}`;
-
+/**
+ * Compartilhar a ficha do imóvel. O link é o curto (/i/AIB-…), que conta a
+ * abertura como evento do imóvel e leva à ficha pública (prévia com a foto de
+ * capa). O menu traz: outra pessoa, eu mesmo, apps do celular e copiar link.
+ */
+export default function BotaoCompartilhar({ codigo, titulo, resumo }: { codigo: string; titulo: string; resumo?: string }) {
   return (
-    <div className="flex gap-2.5">
-      <button
-        type="button"
-        className="flex flex-1 items-center justify-center gap-2 rounded-full border-[1.5px] border-verde bg-transparent py-3 text-sm font-bold text-verde transition hover:bg-verde hover:text-fundo"
-        onClick={async () => {
-          const url = montarUrl();
-          if (navigator.share) {
-            try { await navigator.share({ title: titulo, url }); return; } catch { /* cancelado */ }
-          }
-          await navigator.clipboard.writeText(url);
-          setCopiado(true);
-          setTimeout(() => setCopiado(false), 2000);
-        }}>
-        {copiado ? <><Check className="size-4" /> Link copiado</> : <><Share2 className="size-4" /> Compartilhar</>}
-      </button>
-      <button
-        type="button"
-        className="flex flex-1 items-center justify-center gap-2 rounded-full border-[1.5px] border-verde bg-transparent py-3 text-sm font-bold text-verde transition hover:bg-verde hover:text-fundo"
-        onClick={() => {
-          const texto = `${titulo} — veja no mapa da Arini: ${montarUrl()}`;
-          window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
-        }}>
-        <MessageCircle className="size-4" /> WhatsApp
-      </button>
-    </div>
+    <EnviarWhatsApp
+      caminho={`/i/${codigo}`}
+      titulo={titulo}
+      texto={`${titulo}${resumo ? ` · ${resumo}` : ""} — veja no mapa da Arini:`}
+    />
   );
 }

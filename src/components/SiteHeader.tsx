@@ -1,6 +1,7 @@
 import { currentUser } from "@/lib/supabase/server";
 import { lerConfiguracoes, texto } from "@/lib/settings";
 import CabecalhoSite from "@/components/landing/CabecalhoSite";
+import { cotacoesFaixa } from "@/lib/mercado/cotacoes";
 
 /**
  * Cabeçalho do site institucional (página inicial, suporte, termos). A área de
@@ -12,7 +13,8 @@ import CabecalhoSite from "@/components/landing/CabecalhoSite";
  * (sticky) e sólido, ocupando o próprio espaço.
  */
 export default async function SiteHeader({ sobreHero = false }: { sobreHero?: boolean }) {
-  const [user, cfg] = await Promise.all([currentUser(), lerConfiguracoes()]);
+  // cotações da faixa do topo: do banco, com cache de 15 min (nunca lança)
+  const [user, cfg, cotacoes] = await Promise.all([currentUser(), lerConfiguracoes(), cotacoesFaixa()]);
   const painelHref =
     user?.role === "admin_central" || user?.role === "analista_arini" ? "/admin" : "/painel";
 
@@ -22,6 +24,7 @@ export default async function SiteHeader({ sobreHero = false }: { sobreHero?: bo
       whatsapp={texto(cfg, "whatsapp_central") || undefined}
       email={texto(cfg, "email_contato") || undefined}
       usuario={user ? { nome: user.nome?.split(" ")[0] || "Painel", href: painelHref } : null}
+      cotacoes={cotacoes}
     />
   );
 }

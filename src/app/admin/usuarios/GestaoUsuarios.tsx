@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 import { SETORES } from "@/lib/setores";
 import { SENHA_MIN } from "@/lib/seguranca/senha";
 import { CAMPO, Etiqueta, ROTULO } from "@/components/ui/Pagina";
@@ -26,12 +27,9 @@ export default function GestaoUsuarios({
 
   async function chamar(method: "POST" | "PATCH", body: unknown) {
     setOcupado(true); setErro(""); setMsg("");
-    const res = await fetch("/api/admin/usuarios", {
-      method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
+    const r = await enviarJson("/api/admin/usuarios", method, body);
     setOcupado(false);
-    if (!res.ok) { setErro(data.error ?? "Falha na operação."); return false; }
+    if (!r.ok) { setErro([r.erro.mensagem, r.erro.motivo].filter(Boolean).join(" — ")); return false; }
     router.refresh();
     return true;
   }

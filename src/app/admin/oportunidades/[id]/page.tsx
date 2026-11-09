@@ -5,6 +5,9 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, STATUS_LABEL } from "@/lib/format";
 import { ETAPA_LABEL } from "@/lib/funil";
 import OportunidadeClient from "@/components/crm/OportunidadeClient";
+import SimuladorProposta from "@/components/empreendimento/SimuladorProposta";
+import { hojeBrasilia, simulacaoDaRodada } from "@/lib/simulador";
+import { nomeAnunciante } from "@/lib/empreendimento/espelho";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { ArrowRight, Building2, Mail, Phone, Radio } from "lucide-react";
 import { Etiqueta } from "@/components/ui/Pagina";
@@ -21,7 +24,7 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
       qualificacao, motivo_perda, created_at,
       lead:leads(nome, telefone, email, mensagem, origem, created_at),
       property:properties(id, codigo, titulo, tipo, status, valor, owner_id, partner_id,
-        municipality:municipalities(nome))
+        municipality:municipalities!properties_municipality_id_fkey(nome))
     `)
     .eq("id", id)
     .single();
@@ -30,7 +33,7 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
   const [{ data: eventos }, { data: visitas }, { data: propostas }, { data: contrato }, { data: venda }, { data: parceiros }, { data: pctPadrao }] = await Promise.all([
     admin.from("opportunity_events").select("id, tipo, descricao, created_at, autor:profiles(nome)").eq("opportunity_id", id).order("created_at", { ascending: false }).limit(50),
     admin.from("visits").select("id, data_hora, status, feedback").eq("opportunity_id", id).order("data_hora", { ascending: false }),
-    admin.from("proposals").select("id, numero_rodada, autor_lado, valor, entrada, prazo, condicoes, observacoes, status, created_at").eq("opportunity_id", id).order("numero_rodada", { ascending: false }),
+    admin.from("proposals").select("id, numero_rodada, autor_lado, valor, entrada, prazo, condicoes, observacoes, status, created_at, parcelamento").eq("opportunity_id", id).order("numero_rodada", { ascending: false }),
     admin.from("contracts").select("status, documento_path, assinado_at").eq("opportunity_id", id).maybeSingle(),
     admin.from("sales").select("id, valor_final, data_venda, commission:commissions(valor, percentual, status)").eq("opportunity_id", id).maybeSingle(),
     admin.from("partners").select("id, razao_social, tipo").in("status", ["aprovado", "ativo"]).order("razao_social"),
@@ -38,7 +41,13 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
   ]);
 
   const lead = opp.lead as unknown as { nome: string; telefone: string | null; email: string | null; mensagem: string | null; origem: string } | null;
-  const prop = opp.property as unknown as { id: string; codigo: string; titulo: string; tipo: string; status: string; valor: number | null; municipality: { nome: string } | null } | null;
+  const prop = opp.property as unknown as { id: string; codigo: string; titulo: string; tipo: string; status: string; valor: number | null; owner_id: string | null; partner_id: string | null; municipality: { nome: string } | null } | null;
+  // simulador de proposta (item 20)
+  const anunciante = await nomeAnunciante(prop?.owner_id ?? null, prop?.partner_id ?? null);
+  const rodadas = (propostas ?? []).flatMap((p) => {
+    const simulacao = simulacaoDaRodada(p.parcelamento);
+    return simulacao ? [{ id: p.id, numero_rodada: p.numero_rodada, autor_lado: p.autor_lado, status: p.status, valor: Number(p.valor), simulacao }] : [];
+  });
 
   return (
     <div className="space-y-8 max-w-5xl">
@@ -98,6 +107,16 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
           comissao: venda.commission as unknown as { valor: number; percentual: number; status: string } | null,
         } : null}
         percentualPadrao={Number(pctPadrao?.valor ?? 1)}
+      />
+
+      <SimuladorProposta
+        oportunidadeId={opp.id}
+        imovel={{ codigo: prop?.codigo ?? "", titulo: prop?.titulo ?? "" }}
+        valorTabela={prop?.valor ?? null}
+        cliente={lead?.nome ?? null}
+        anunciante={anunciante}
+        hoje={hojeBrasilia()}
+        rodadas={rodadas}
       />
     </div>
   );

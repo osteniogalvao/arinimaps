@@ -7,6 +7,10 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL } from "@/lib/format";
 import { ETAPA_LABEL } from "@/lib/funil";
 import OportunidadeClient from "@/components/crm/OportunidadeClient";
+import SimuladorProposta from "@/components/empreendimento/SimuladorProposta";
+import { hojeBrasilia, simulacaoDaRodada } from "@/lib/simulador";
+import { nomeAnunciante } from "@/lib/empreendimento/espelho";
+import { ator } from "@/lib/authz";
 
 export default async function OportunidadeParceiro({ params }: PageProps<"/painel/oportunidades/[id]">) {
   const { id } = await params;
@@ -23,15 +27,22 @@ export default async function OportunidadeParceiro({ params }: PageProps<"/paine
   const admin = supabaseAdmin();
   const [{ data: detalhe }, { data: eventos }, { data: visitas }, { data: propostas }] = await Promise.all([
     admin.from("opportunities")
-      .select("lead:leads(nome, telefone, email, mensagem), property:properties(codigo, titulo, valor)")
+      .select("lead:leads(nome, telefone, email, mensagem), property:properties(codigo, titulo, valor, owner_id, partner_id)")
       .eq("id", id).single(),
     admin.from("opportunity_events").select("id, tipo, descricao, created_at, autor:profiles(nome)").eq("opportunity_id", id).order("created_at", { ascending: false }).limit(50),
     admin.from("visits").select("id, data_hora, status, feedback").eq("opportunity_id", id).order("data_hora", { ascending: false }),
-    admin.from("proposals").select("id, numero_rodada, autor_lado, valor, entrada, prazo, condicoes, observacoes, status, created_at").eq("opportunity_id", id).order("numero_rodada", { ascending: false }),
+    admin.from("proposals").select("id, numero_rodada, autor_lado, valor, entrada, prazo, condicoes, observacoes, status, created_at, parcelamento").eq("opportunity_id", id).order("numero_rodada", { ascending: false }),
   ]);
 
   const lead = detalhe?.lead as unknown as { nome: string; telefone: string | null; email: string | null; mensagem: string | null } | null;
-  const prop = detalhe?.property as unknown as { codigo: string; titulo: string; valor: number | null } | null;
+  const prop = detalhe?.property as unknown as { codigo: string; titulo: string; valor: number | null; owner_id: string | null; partner_id: string | null } | null;
+  // simulador (item 20): quem anuncia contrapropõe como vendedor; o parceiro do comprador propõe
+  const [a, anunciante] = await Promise.all([ator(), nomeAnunciante(prop?.owner_id ?? null, prop?.partner_id ?? null)]);
+  const ladoVendedor = !!a && ((!!a.ownerId && a.ownerId === prop?.owner_id) || (!!a.partnerId && a.partnerId === opp.responsavel_partner_id));
+  const rodadas = (propostas ?? []).flatMap((p) => {
+    const simulacao = simulacaoDaRodada(p.parcelamento);
+    return simulacao ? [{ id: p.id, numero_rodada: p.numero_rodada, autor_lado: p.autor_lado, status: p.status, valor: Number(p.valor), simulacao }] : [];
+  });
 
   return (
     <div className="space-y-8">
@@ -81,6 +92,17 @@ export default async function OportunidadeParceiro({ params }: PageProps<"/paine
         contrato={null}
         venda={null}
         percentualPadrao={1}
+      />
+
+      <SimuladorProposta
+        oportunidadeId={opp.id}
+        imovel={{ codigo: prop?.codigo ?? "", titulo: prop?.titulo ?? "" }}
+        valorTabela={prop?.valor ?? null}
+        cliente={lead?.nome ?? null}
+        anunciante={anunciante}
+        hoje={hojeBrasilia()}
+        rodadas={rodadas}
+        ladoPadrao={ladoVendedor ? "vendedor" : "comprador"}
       />
     </div>
   );

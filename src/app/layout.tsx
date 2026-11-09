@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OG_IMAGEM_PADRAO, OG_NOME_SITE, urlDoSite } from "@/lib/compartilhar";
 import { Geist_Mono, League_Gothic, Quicksand } from "next/font/google";
 import "./globals.css";
 import { TEMA_SCRIPT } from "@/components/shell/BotaoTema";
@@ -29,6 +30,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // links compartilhados (WhatsApp): imagens e URLs da prévia precisam ser absolutas
+  metadataBase: new URL(urlDoSite()),
+  openGraph: {
+    type: "website", siteName: OG_NOME_SITE, locale: "pt_BR",
+    images: [{ url: OG_IMAGEM_PADRAO, width: 1600, height: 900, alt: OG_NOME_SITE }],
+  },
   title: {
     default: "Arini Imóveis Brasil — imóveis pelo mapa",
     template: "%s · Arini Imóveis Brasil",

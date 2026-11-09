@@ -78,6 +78,10 @@ export async function fetchPois(payload, db) {
   const blocos = CATEGORIAS.map((c) => `nwr[${c.seletor}](around:${raio},${prop.lat},${prop.lng});`).join("");
   const json = await consultarOverpass(`[out:json][timeout:25];(${blocos});out center 120;`);
 
+  // um INSERT só para todos os POIs (unnest), em vez de um por POI. Dedup por
+  // osm_id antes: o mesmo id duas vezes no lote quebraria o ON CONFLICT
+  // ("cannot affect row a second time").
+  const porOsm = new Map();
   for (const el of json.elements ?? []) {
     const lat = el.lat ?? el.center?.lat;
     const lng = el.lon ?? el.center?.lon;
@@ -91,11 +95,17 @@ export async function fetchPois(payload, db) {
       tags.amenity === "school" ? "escola" :
       tags.highway ? "acesso_rodovia" : null;
     if (!categoria) continue;
+    porOsm.set(`${el.type}/${el.id}`, { categoria, nome: tags.name ?? null, lng, lat });
+  }
+  if (porOsm.size) {
+    const ids = [...porOsm.keys()];
+    const itens = [...porOsm.values()];
     await db.query(`
       insert into pois (categoria, nome, geom, fonte, osm_id)
-      values ($1, $2, st_setsrid(st_point($3, $4), 4326), 'osm', $5)
+      select c, n, st_setsrid(st_point(x, y), 4326), 'osm', o
+      from unnest($1::text[], $2::text[], $3::float8[], $4::float8[], $5::text[]) as t(c, n, x, y, o)
       on conflict (fonte, osm_id) do update set nome = coalesce(excluded.nome, pois.nome), fetched_at = now()`,
-      [categoria, tags.name ?? null, lng, lat, `${el.type}/${el.id}`]);
+      [itens.map((i) => i.categoria), itens.map((i) => i.nome), itens.map((i) => i.lng), itens.map((i) => i.lat), ids]);
   }
   await db.query(`select fn_semear_pois_centro()`);
   await db.query(`select fn_vincular_pois($1, $2)`, [property_id, raio]);

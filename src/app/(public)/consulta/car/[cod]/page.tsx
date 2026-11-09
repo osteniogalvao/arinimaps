@@ -9,9 +9,29 @@ import { carregarConsultaArea } from "@/lib/geo/consultaArea";
 import { formatArea } from "@/lib/format";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
 import IndicadoresMunicipio from "@/components/rural/IndicadoresMunicipio";
+import EnviarWhatsApp from "@/components/compartilhar/EnviarWhatsApp";
+import BotaoExportarSig from "@/components/compartilhar/BotaoExportarSig";
+import { OG_IMAGEM_PADRAO, OG_NOME_SITE } from "@/lib/compartilhar";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Consulta de área rural" };
+/** Prévia do link (WhatsApp): área e município do CAR. Só lê as propriedades, sem a divisa. */
+export async function generateMetadata({ params }: PageProps<"/consulta/car/[cod]">): Promise<Metadata> {
+  const cod = decodeURIComponent((await params).cod);
+  const { data } = await supabaseAdmin().rpc("fn_car_imovel", { p_cod: cod });
+  const p = (data as Car | null)?.properties;
+  if (!p) return { title: "Consulta de área rural" };
+  const area = p.area_ha ? formatArea(Number(p.area_ha) * 10_000, "rural") : "Área rural";
+  const titulo = `CAR · ${area}${p.municipio ? ` em ${p.municipio}` : ""}`;
+  const descricao = `Cadastro Ambiental Rural ${p.cod}: dados do SICAR e cruzamento com as fontes oficiais, no mapa da Arini.`;
+  return {
+    title: titulo, description: descricao,
+    openGraph: {
+      type: "website", siteName: OG_NOME_SITE, locale: "pt_BR", url: `/consulta/car/${encodeURIComponent(p.cod)}`,
+      title: titulo, description: descricao, images: [{ url: OG_IMAGEM_PADRAO, alt: titulo }],
+    },
+    twitter: { card: "summary_large_image" },
+  };
+}
 
 const TIPO: Record<string, string> = { IRU: "Imóvel rural", AST: "Assentamento", PCT: "Povos e comunidades tradicionais" };
 const STATUS: Record<string, string> = { AT: "Ativo", PE: "Pendente", SU: "Suspenso", CA: "Cancelado" };
@@ -90,6 +110,17 @@ export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[
                 </div>
               ))}
             </dl>
+            {/* itens 6 e 8: enviar o link e exportar a divisa do CAR para SIG */}
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <EnviarWhatsApp caminho={`/consulta/car/${encodeURIComponent(p.cod)}`} titulo={`CAR ${p.cod}`}
+                texto={`Área do CAR no mapa da Arini: ${area}${p.municipio ? ` em ${p.municipio}` : ""} (${p.cod}).`}
+                aviso="Quem receber vê os dados públicos do CAR. O cruzamento com as fontes oficiais pede uma conta na Arini." />
+              <BotaoExportarSig nomeBase={p.cod}
+                divisa={{
+                  geometry: car.geometry, rotulo: `CAR ${p.cod}`,
+                  atributos: { cod_car: p.cod, area_ha: p.area_ha != null ? Number(p.area_ha) : null, municipio: p.municipio, situacao: situacao, fonte: "SICAR" },
+                }} />
+            </div>
             <div className="border-t border-linha pt-4"><MatriculaSigef cod={p.cod} /></div>
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-4">
               Dados públicos do SICAR, copiados em{" "}

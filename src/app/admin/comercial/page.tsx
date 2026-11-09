@@ -7,6 +7,8 @@ import { formatBRL } from "@/lib/format";
 import { CabecalhoSetor, Indicadores, Secao, TarefasDoSetor, contar, dataHoraBR, LinkAcao } from "@/components/admin/Painel";
 import { CODIGO, LINHA_LISTA, LISTA, LISTA_VAZIA } from "@/components/admin/estilos";
 import { Etiqueta } from "@/components/ui/Pagina";
+import { pendenciasIntermediador } from "@/lib/acompanhamento/servidor";
+import PendenciasIntermediador from "@/components/acompanhamento/PendenciasIntermediador";
 
 const dias = (d: string) => Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);
 
@@ -33,6 +35,8 @@ export default async function PainelComercial() {
     contar("partners", (q) => q.in("status", ["aprovado", "ativo"])),
   ]);
 
+  const pendencias = await pendenciasIntermediador({ central: true }).catch(() => null);
+
   const porEtapa = new Map<string, number>();
   for (const o of opps ?? []) porEtapa.set(o.etapa, (porEtapa.get(o.etapa) ?? 0) + 1);
   const maior = Math.max(1, ...porEtapa.values());
@@ -52,6 +56,9 @@ export default async function PainelComercial() {
         { rotulo: "Vendas em 30 dias", icone: TrendingUp, valor: vendas30.n, nota: vendas30.n ? formatBRL(vendas30.volume) : undefined },
         { rotulo: "Parceiros ativos", icone: Handshake, valor: parceirosAtivos, href: "/admin/cadastros" },
       ]} />
+
+      {/* item 28: pendências da Central como intermediadora (visita sem feedback, proprietário sem atualização) */}
+      {pendencias && <PendenciasIntermediador pendencias={pendencias} hrefOportunidade="/admin/oportunidades" />}
 
       <Secao titulo="Funil agora" acao={<LinkAcao href="/admin/funil">Abrir o funil</LinkAcao>}>
         <div className="cartao p-6 space-y-3">

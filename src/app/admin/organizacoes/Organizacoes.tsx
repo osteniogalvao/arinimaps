@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 import Avatar from "@/components/shell/Avatar";
 import { PAPEL_ORG_LABEL, STATUS_MEMBRO_LABEL, TIPOS_ORG, TIPO_ORG_LABEL, type TipoOrg } from "@/lib/organizacoes";
 import { ChevronDown, ChevronRight, Landmark, Plus } from "lucide-react";
@@ -22,11 +23,8 @@ type Plano = { id: string; nome: string; escopo: string };
 type Regiao = { id: string; nome: string };
 
 async function chamar(metodo: "POST" | "PATCH", corpo: Record<string, unknown>) {
-  const res = await fetch("/api/admin/organizacoes", {
-    method: metodo, headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
-  });
-  const d = await res.json().catch(() => ({}));
-  return { ok: res.ok, erro: [d.error, d.motivo].filter(Boolean).join(" — ") || "Não foi possível." };
+  const r = await enviarJson("/api/admin/organizacoes", metodo, corpo);
+  return { ok: r.ok, erro: r.ok ? "" : [r.erro.mensagem, r.erro.motivo].filter(Boolean).join(" — ") || "Não foi possível." };
 }
 
 // data sem hora ancorada ao meio-dia: senão cai no dia anterior no horário de Brasília

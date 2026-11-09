@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL } from "@/lib/format";
 import ComissaoBotoes from "./ComissaoBotoes";
+import Paginacao from "@/components/admin/Paginacao";
+import { lerEmLotes, paginaDe } from "@/lib/supabase/lotes";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { CODIGO, TABELA, TABELA_CAIXA, TBODY, TH, THEAD, TR } from "@/components/admin/estilos";
 import { CircleDollarSign, Handshake, Percent, Wallet } from "lucide-react";
@@ -14,18 +16,27 @@ const LABEL: Record<string, string> = {
   registrada: "Registrada", cobrada: "Cobrada", paga: "Paga", conciliada: "Conciliada",
 };
 
-export default async function AdminComissoes() {
+const POR_PAGINA = 50;
+
+export default async function AdminComissoes({ searchParams }: PageProps<"/admin/comissoes">) {
   await exigirSetor("financeiro");
-  const { data: comissoes } = await supabaseAdmin()
-    .from("commissions")
-    .select(`
-      id, base_calculo, percentual, valor, regra_contratual, status, pago_em, created_at,
-      sale:sales(data_venda, opportunity:opportunities(codigo), property:properties(codigo, titulo))
-    `)
-    .order("created_at", { ascending: false });
+  const sp = await searchParams;
+  const { pagina, de, ate } = paginaDe(sp.pagina, POR_PAGINA);
+  const admin = supabaseAdmin();
+  // tabela paginada; os totais leem só valor+status de todas, em lotes
+  // (o PostgREST corta cada pedido em 1000 linhas sem avisar)
+  const [{ data: comissoes, count }, { data: todas }] = await Promise.all([
+    admin.from("commissions")
+      .select(`
+        id, base_calculo, percentual, valor, regra_contratual, status, pago_em, created_at,
+        sale:sales(data_venda, opportunity:opportunities(codigo), property:properties(codigo, titulo))
+      `, { count: "exact" })
+      .order("created_at", { ascending: false }).order("id").range(de, ate),
+    lerEmLotes<{ valor: number; status: string }>((i, f) => admin.from("commissions").select("valor, status").order("id").range(i, f)),
+  ]);
 
   const total = (status: string[]) =>
-    (comissoes ?? []).filter((c) => status.includes(c.status)).reduce((s, c) => s + Number(c.valor), 0);
+    todas.filter((c) => status.includes(c.status)).reduce((s, c) => s + Number(c.valor), 0);
 
   return (
     <div className="space-y-8">
@@ -36,7 +47,7 @@ export default async function AdminComissoes() {
           valor={<span className="tabular-nums">{formatBRL(total(["registrada", "cobrada"]))}</span>} rotulo="A receber (registrada + cobrada)" />
         <Estatistica icone={CircleDollarSign}
           valor={<span className="tabular-nums text-verde">{formatBRL(total(["paga", "conciliada"]))}</span>} rotulo="Recebido" />
-        <Estatistica icone={Handshake} valor={<span className="tabular-nums">{comissoes?.length ?? 0}</span>} rotulo="Vendas com comissão" />
+        <Estatistica icone={Handshake} valor={<span className="tabular-nums">{count ?? todas.length}</span>} rotulo="Vendas com comissão" />
       </div>
 
       {!comissoes?.length ? (
@@ -75,6 +86,7 @@ export default async function AdminComissoes() {
           </table>
         </div>
       )}
+      <Paginacao caminho="/admin/comissoes" pagina={pagina} porPagina={POR_PAGINA} total={count} />
     </div>
   );
 }

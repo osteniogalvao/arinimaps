@@ -94,6 +94,9 @@ export default function ArtigosAdmin({ inicial, lacunasIniciais, resumoLacunas }
           setLacunaOrigem(l);
           aviso += " Publique o artigo para a pergunta contar como respondida.";
         }
+      } else {
+        // o artigo foi salvo; só o vínculo com a pergunta falhou — diz isso, não esconde
+        aviso += ` Mas não deu para ligar o artigo à pergunta de origem: ${v.erro.mensagem}`;
       }
     }
     setOk(aviso);

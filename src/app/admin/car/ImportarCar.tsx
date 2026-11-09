@@ -7,7 +7,10 @@ import { FileArchive, UploadCloud } from "lucide-react";
 import { enviarJson, type ErroApi } from "@/lib/api/enviar";
 import { AvisoErro, AvisoOk } from "@/components/ui/Aviso";
 import { CAMPO, ROTULO } from "@/components/ui/Pagina";
-import { emLotes, hashArquivos, lerArquivoSicar, TEMAS_CAR, type ArquivoLido, type TemaCar } from "@/lib/geo/shapefileCar";
+// só os nomes dos temas no carregamento; o leitor (jszip + proj4, ~340 KB)
+// vem com await import() quando o arquivo é escolhido
+import { TEMAS_CAR, type TemaCar } from "@/lib/geo/temasCar";
+import type { ArquivoLido } from "@/lib/geo/shapefileCar";
 
 const MB = 1024 * 1024;
 const fmt = (n: number) => n.toLocaleString("pt-BR");
@@ -55,6 +58,7 @@ export default function ImportarCar() {
     if (!lista.length) return;
     setFase("lendo");
     try {
+      const { lerArquivoSicar, hashArquivos } = await import("@/lib/geo/shapefileCar");
       const [l, h] = await Promise.all([lerArquivoSicar(lista), hashArquivos(lista)]);
       setLido(l); setSha(h);
       const cod = l.codIbge ? String(l.codIbge) : "";
@@ -89,6 +93,7 @@ export default function ImportarCar() {
     if (!aberta.ok) { setErro(aberta.erro); setFase("parado"); return; }
     const id = aberta.dados.id;
 
+    const { emLotes } = await import("@/lib/geo/shapefileCar"); // já em cache: carregou na leitura
     const porTema: Record<string, Contagem> = {};
     let feitos = 0;
     for (const c of camadasValidas) {

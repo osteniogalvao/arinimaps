@@ -6,17 +6,26 @@ import { exigirSetor } from "@/lib/setores-servidor";
 import { Building2, UserRound } from "lucide-react";
 import { CabecalhoPagina } from "@/components/ui/Pagina";
 
+/**
+ * Teto do quadro: as N oportunidades mais recentes. O PostgREST cortaria em
+ * 1000 sem avisar; aqui o corte é explícito e a página diz quantas ficaram de
+ * fora (a busca por código fica em Oportunidades).
+ */
+const MAX_CARDS = 500;
+
 export default async function AdminFunil() {
   await exigirSetor("comercial");
-  const { data: opps } = await supabaseAdmin()
+  const { data: recentes, count } = await supabaseAdmin()
     .from("opportunities")
     .select(`
       id, codigo, etapa, responsavel_tipo, created_at,
       lead:leads(nome),
       property:properties(codigo, titulo, valor),
       partner:partners!opportunities_responsavel_partner_id_fkey(razao_social)
-    `)
-    .order("created_at", { ascending: true });
+    `, { count: "exact" })
+    .order("created_at", { ascending: false }).limit(MAX_CARDS);
+  // no quadro a mais antiga fica no topo da coluna
+  const opps = [...(recentes ?? [])].reverse();
 
   const colunas = [...ETAPAS, "perdido"] as string[];
   const porEtapa = new Map<string, NonNullable<typeof opps>>(colunas.map((e) => [e, []]));
@@ -26,6 +35,11 @@ export default async function AdminFunil() {
     <div className="space-y-6">
       <CabecalhoPagina eyebrow="Comercial" titulo="Funil comercial"
         subtitulo="Clique no card para abrir a oportunidade completa (timeline, visitas, propostas, contrato, venda)." />
+      {count != null && count > opps.length && (
+        <p className="rounded-xl border border-alerta/40 bg-alerta/10 px-4 py-3 text-sm text-texto">
+          Mostrando as {opps.length} oportunidades mais recentes de {count}. As contagens das colunas valem para as que estão na tela.
+        </p>
+      )}
       <div className="-mx-5 flex gap-4 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8">
         {colunas.map((etapa) => {
           const cards = porEtapa.get(etapa) ?? [];

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -15,9 +16,12 @@ import { currentUser } from "@/lib/supabase/server";
 import MiniMapa from "@/components/map/MiniMapa";
 import InteresseForm from "@/components/InteresseForm";
 import BotaoCompartilhar from "@/components/BotaoCompartilhar";
+import BotaoExportarSig from "@/components/compartilhar/BotaoExportarSig";
+import { OG_IMAGEM_PADRAO, OG_NOME_SITE } from "@/lib/compartilhar";
 import BotaoFavorito from "@/components/imovel/BotaoFavorito";
 import { codigosFavoritos } from "@/lib/imovel/favoritos";
 import GaleriaImovel, { type Slide } from "@/components/GaleriaImovel";
+import TourImersivo from "@/components/imovel/TourImersivo";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, formatArea, STATUS_LABEL } from "@/lib/format";
 import { registrarEventoImovel, ORIGEM_DADO_LABEL } from "@/lib/imovel/eventos";
@@ -38,7 +42,9 @@ type Leilao = {
 const quandoPraca = (d?: string | null) =>
   d ? new Date(d).toLocaleString("pt-BR", { dateStyle: "long", timeStyle: "short" }) : null;
 
-async function getImovel(codigo: string) {
+// cache() do React: generateMetadata e a página pedem o mesmo imóvel no mesmo
+// request; sem isso a RPC rodava duas vezes (desempenho, 09/11/2026)
+const getImovel = cache(async (codigo: string) => {
   const { data } = await supabaseAdmin().rpc("fn_property_public", { p_codigo: codigo });
   return data as {
     codigo: string; tipo: "urbano" | "rural"; status: string; titulo: string;
@@ -49,7 +55,7 @@ async function getImovel(codigo: string) {
     geometry: GeoJSON.Geometry | null; area_m2: number | null; perimeter_m: number | null;
     media: Media[];
   } | null;
-}
+});
 
 export async function generateMetadata(
   { params }: PageProps<"/imovel/[codigo]">
@@ -57,15 +63,23 @@ export async function generateMetadata(
   const { codigo } = await params;
   const imovel = await getImovel(codigo);
   if (!imovel) return { title: "Imóvel não encontrado" };
-  const capa = imovel.media.find((m) => m.capa) ?? imovel.media[0];
+  // prévia do WhatsApp: a capa precisa ser foto (vídeo não aparece); sem foto, a imagem padrão do site
+  const capa = imovel.media.find((m) => m.capa && m.tipo === "foto") ?? imovel.media.find((m) => m.tipo === "foto");
+  const onde = imovel.municipio ? `${imovel.municipio.nome}/${imovel.municipio.uf}` : null;
+  const resumo = [formatBRL(imovel.valor), imovel.area_m2 ? formatArea(imovel.area_m2, imovel.tipo) : null, onde]
+    .filter(Boolean).join(" · ");
   return {
     title: `${imovel.titulo} — ${imovel.codigo}`,
-    description: imovel.descricao.slice(0, 160),
+    description: (imovel.descricao || resumo).slice(0, 160),
+    alternates: { canonical: `/imovel/${imovel.codigo}` },
     openGraph: {
+      type: "website", siteName: OG_NOME_SITE, locale: "pt_BR",
+      url: `/imovel/${imovel.codigo}`,
       title: imovel.titulo,
-      description: `${formatBRL(imovel.valor)} · ${imovel.municipio?.nome ?? ""} — Arini Imóveis Brasil`,
-      images: capa ? [mediaUrl(capa.path)] : [],
+      description: `${resumo} — ${OG_NOME_SITE}`,
+      images: [{ url: capa ? mediaUrl(capa.path) : OG_IMAGEM_PADRAO, alt: imovel.titulo }],
     },
+    twitter: { card: "summary_large_image" },
   };
 }
 
@@ -102,20 +116,24 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
   // código do nome antigo (ARINI-MAP-000002) → o mesmo imóvel no padrão novo
   const antigo = codigo.match(/^ARINI-MAP-(\d{6})$/i);
   if (antigo) redirect(`/imovel/AIB-${antigo[1]}`);
-  const imovel = await getImovel(codigo);
-  if (!imovel) notFound();
-
   const admin = supabaseAdmin();
-  const { data: propId } = await admin.from("properties").select("id, modalidade, leilao, owner_id, partner_id").eq("codigo", codigo).single();
+  // tudo o que só depende do código sai junto (antes era uma fila de idas ao banco)
+  const [imovel, { data: propId }, { data: matriculaConferida }, user] = await Promise.all([
+    getImovel(codigo),
+    admin.from("properties").select("id, modalidade, leilao, owner_id, partner_id, car_codigo").eq("codigo", codigo).maybeSingle(),
+    // só a DATA da conferência: o número da matrícula não vai para o site público
+    admin.from("property_matriculas")
+      .select("conferida_em, imovel:properties!inner(codigo)").eq("imovel.codigo", codigo).not("conferida_em", "is", null).maybeSingle(),
+    currentUser(),
+  ]);
+  if (!imovel) notFound();
   const leilao = propId?.modalidade === "leilao" ? (propId.leilao ?? {}) as Leilao : null;
-  // só a DATA da conferência: o número da matrícula não vai para o site público
-  const { data: matriculaConferida } = await supabaseAdmin().from("property_matriculas")
-    .select("conferida_em, imovel:properties!inner(codigo)").eq("imovel.codigo", imovel.codigo).not("conferida_em", "is", null).maybeSingle();
-  const [{ data: tourData }, { data: video }, { data: unidades }, { data: whats }, { data: divisa }, { data: origemCadastro }] = await Promise.all([
+  const [{ data: tourData }, { data: video }, { data: unidades }, { data: whats }, { data: divisa }, { data: origemCadastro }, favoritos, a] = await Promise.all([
     admin.rpc("fn_property_tour", { p_codigo: codigo }),
     admin.from("presentations").select("output_path")
       .eq("tipo", "video").eq("status", "pronto").not("output_path", "is", null)
-      .eq("property_id", propId?.id ?? "").maybeSingle(),
+      // order+limit: antes da 0063 podia haver vídeo duplicado (maybeSingle quebrava)
+      .eq("property_id", propId?.id ?? "").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     admin.from("properties")
       .select("codigo, titulo, valor, status")
       .eq("parent_property_id", propId?.id ?? "")
@@ -129,6 +147,8 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
     admin.from("property_data_sources").select("origem")
       .eq("property_id", propId?.id ?? "").eq("campo", "cadastro")
       .order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    codigosFavoritos(user?.id),
+    user ? ator() : Promise.resolve(null),
   ]);
 
   const pois = poisOrdenados((tourData as { pois?: { nome: string | null; categoria: string; distancia_m: number }[] } | null)?.pois ?? [])
@@ -154,8 +174,7 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
       : []),
   ];
 
-  const user = await currentUser();
-  const favorito = (await codigosFavoritos(user?.id)).includes(imovel.codigo);
+  const favorito = favoritos.includes(imovel.codigo);
   const usuario = user
     ? { nome: user.nome || "Conta", papel: user.role === "admin_central" ? "Administrador" : "Usuário" }
     : null;
@@ -164,7 +183,6 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
   if (propId?.id) void registrarEventoImovel({ propertyId: propId.id, tipo: "ficha", userId: user?.id, detalhe: { codigo } });
 
   // histórico completo: dono, parceiro responsável ou quem tem o recurso no plano
-  const a = user ? await ator() : null;
   const podeVerHistorico = !!a && !!propId && (
     a.ehArini || temRecurso(a, "historico_imovel") ||
     (!!a.ownerId && propId.owner_id === a.ownerId) || (!!a.partnerId && propId.partner_id === a.partnerId)
@@ -265,6 +283,14 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
               </div>
             </Secao>
 
+            {/* item 9: tour 360 / vídeo imersivo — iframe só depois do clique */}
+            {typeof imovel.caracteristicas?.tour_virtual_url === "string" && (
+              <Secao eyebrow="Tour virtual" titulo="Visite por dentro">
+                <TourImersivo url={imovel.caracteristicas.tour_virtual_url} titulo={imovel.titulo}
+                  poster={fotos[0] ? mediaUrl(fotos[0].path) : null} />
+              </Secao>
+            )}
+
             {imovel.geometry && (
               <Secao eyebrow="03 · Divisa no mapa" titulo="Localização e área">
                 <MiniMapa geometry={imovel.geometry} status={imovel.status}
@@ -305,6 +331,10 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
                     </Link>
                   ))}
                 </div>
+                <Link href={`/imovel/${imovel.codigo}/espelho`}
+                  className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-verde underline-offset-4 hover:underline">
+                  Ver lotes disponíveis no espelho
+                </Link>
               </Secao>
             )}
 
@@ -412,7 +442,23 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
             {["publicado", "em_negociacao", "vendido"].includes(imovel.status) && (
               <BotaoFavorito codigo={imovel.codigo} inicial={favorito} variante="ficha" />
             )}
-            <BotaoCompartilhar codigo={imovel.codigo} titulo={imovel.titulo} />
+            <BotaoCompartilhar codigo={imovel.codigo} titulo={imovel.titulo}
+              resumo={[formatBRL(imovel.valor), imovel.municipio ? `${imovel.municipio.nome}/${imovel.municipio.uf}` : null].filter(Boolean).join(" · ")} />
+            {/* item 8: exportar para SIG — só quando a ficha já mostra a divisa (mesma regra do mapa acima) */}
+            {imovel.geometry && (
+              <BotaoExportarSig nomeBase={imovel.codigo}
+                divisa={{
+                  geometry: imovel.geometry, rotulo: `Divisa ${imovel.codigo}`,
+                  atributos: {
+                    codigo: imovel.codigo, titulo: imovel.titulo,
+                    area_ha: imovel.area_m2 ? Math.round(imovel.area_m2 / 100) / 100 : null,
+                    perim_m: imovel.perimeter_m ? Math.round(imovel.perimeter_m) : null,
+                    municipio: imovel.municipio ? `${imovel.municipio.nome}/${imovel.municipio.uf}` : null,
+                    fonte: "Arini Imóveis Brasil",
+                  },
+                }}
+                carCodigo={(propId?.car_codigo as string | null) ?? null} />
+            )}
             {centroid && (
               <a href={`https://www.google.com/maps/dir/?api=1&destination=${centroid.lat},${centroid.lng}`}
                 target="_blank" rel="noreferrer"

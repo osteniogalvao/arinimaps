@@ -4,6 +4,9 @@ import { formatBRL, STATUS_LABEL } from "@/lib/format";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { ArrowRight, Building2, GitCompareArrows } from "lucide-react";
 import { CabecalhoPagina, Etiqueta, Vazio } from "@/components/ui/Pagina";
+import Paginacao from "@/components/admin/Paginacao";
+import BuscaLista, { termoBusca } from "@/components/admin/BuscaLista";
+import { paginaDe } from "@/lib/supabase/lotes";
 import { aba, CODIGO, TABELA, TABELA_CAIXA, TBODY, TH, THEAD, TR } from "@/components/admin/estilos";
 
 const FILTROS: Record<string, string[]> = {
@@ -13,9 +16,14 @@ const FILTROS: Record<string, string[]> = {
   outros: ["rascunho", "suspenso", "inativo", "reprovado"],
 };
 
+const POR_PAGINA = 50;
+
 export default async function AdminImoveis({ searchParams }: PageProps<"/admin/imoveis">) {
   await exigirSetor("operacoes");
-  const { filtro, revisao } = await searchParams;
+  const sp = await searchParams;
+  const { filtro, revisao } = sp;
+  const { pagina, de, ate } = paginaDe(sp.pagina, POR_PAGINA);
+  const q = termoBusca(sp.q);
   const admin = supabaseAdmin();
   // Fluxograma §9: anúncios com alteração proposta aguardando decisão
   const { data: pendentes } = await admin.from("property_revisions").select("property_id").eq("status", "pendente");
@@ -25,11 +33,13 @@ export default async function AdminImoveis({ searchParams }: PageProps<"/admin/i
 
   let consulta = admin
     .from("properties")
-    .select("id, codigo, titulo, tipo, status, valor, created_at, municipality:municipalities(nome)");
+    .select("id, codigo, titulo, tipo, status, valor, created_at, municipality:municipalities!properties_municipality_id_fkey(nome)", { count: "exact" });
   consulta = soRevisao
     ? consulta.in("id", comRevisao.size ? [...comRevisao] : ["00000000-0000-0000-0000-000000000000"])
     : consulta.in("status", FILTROS[chave]);
-  const { data: imoveis } = await consulta.order("created_at", { ascending: false });
+  if (q) consulta = consulta.or(`codigo.ilike.%${q}%,titulo.ilike.%${q}%`);
+  // paginado: o PostgREST corta em 1000 linhas sem avisar
+  const { data: imoveis, count } = await consulta.order("created_at", { ascending: false }).order("id").range(de, ate);
 
   return (
     <div className="space-y-6">
@@ -47,8 +57,10 @@ export default async function AdminImoveis({ searchParams }: PageProps<"/admin/i
         </Link>
       </div>
 
+      <BuscaLista caminho="/admin/imoveis" valor={q} placeholder="Buscar por código ou título" manter={{ filtro: chave === "revisao" ? undefined : chave, revisao: soRevisao ? "1" : undefined }} />
+
       {!imoveis?.length ? (
-        <Vazio icone={Building2} titulo="Nada aqui neste filtro" />
+        <Vazio icone={Building2} titulo={q ? "Nenhum imóvel encontrado nesta busca" : "Nada aqui neste filtro"} />
       ) : (
         <div className={TABELA_CAIXA}>
           <table className={TABELA}>
@@ -88,6 +100,8 @@ export default async function AdminImoveis({ searchParams }: PageProps<"/admin/i
           </table>
         </div>
       )}
+      <Paginacao caminho="/admin/imoveis" pagina={pagina} porPagina={POR_PAGINA} total={count}
+        params={{ filtro: chave === "revisao" ? undefined : chave, revisao: soRevisao ? "1" : undefined, q }} />
     </div>
   );
 }

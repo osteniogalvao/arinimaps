@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Upload, FileText, ExternalLink, Check, History } from "lucide-react";
 import { CAMPO, Etiqueta } from "@/components/ui/Pagina";
+import { enviarJson } from "@/lib/api/enviar";
 
 type Doc = {
   id: string; tipo: string; nome_arquivo: string | null; verificado: boolean;
@@ -33,12 +34,13 @@ export default function DocumentosImovel({ propertyId, podeConferir = false }: {
   const [verAnteriores, setVerAnteriores] = useState(false);
   const [tipo, setTipo] = useState("matricula");
   const [ocupado, setOcupado] = useState(false);
-  const [msg, setMsg] = useState("");
+  // mensagem com tom: sucesso em verde, falha em vermelho
+  const [msg, setMsg] = useState<{ texto: string; erro: boolean } | null>(null);
 
   const carregar = useCallback(async (versoes: boolean) => {
     const res = await fetch(`/api/imoveis/${propertyId}/documentos${versoes ? "?versoes=1" : ""}`);
     if (!res.ok) return;
-    const d = await res.json();
+    const d = await res.json().catch(() => ({}));
     setDocs(d.documentos ?? []);
     setAnteriores(versoes ? d.anteriores ?? [] : null);
   }, [propertyId]);
@@ -63,25 +65,34 @@ export default function DocumentosImovel({ propertyId, podeConferir = false }: {
             e.target.value = "";
             if (!f) return;
             setOcupado(true);
-            setMsg("");
+            setMsg(null);
             const fd = new FormData();
             fd.set("arquivo", f);
             fd.set("tipo", tipo);
-            const res = await fetch(`/api/imoveis/${propertyId}/documentos`, { method: "POST", body: fd });
-            setOcupado(false);
-            if (res.ok) {
+            try {
+              const res = await fetch(`/api/imoveis/${propertyId}/documentos`, { method: "POST", body: fd });
               const r = await res.json().catch(() => ({}));
-              setMsg(r.versao > 1
-                ? `Versão ${r.versao} anexada. A anterior ficou guardada em “Versões anteriores”${podeConferir ? "" : " e a nova aguarda conferência da Arini"}.`
-                : "Documento anexado.");
-              carregar(verAnteriores);
+              if (res.ok) {
+                setMsg({
+                  erro: false,
+                  texto: r.versao > 1
+                    ? `Versão ${r.versao} anexada. A anterior ficou guardada em “Versões anteriores”${podeConferir ? "" : " e a nova aguarda conferência da Arini"}.`
+                    : "Documento anexado.",
+                });
+                carregar(verAnteriores);
+              } else {
+                setMsg({ erro: true, texto: r.error ?? `Falha no envio (${res.status}).` });
+              }
+            } catch {
+              setMsg({ erro: true, texto: "O servidor não respondeu. Confira a internet e tente de novo." });
+            } finally {
+              setOcupado(false);
             }
-            else setMsg((await res.json().catch(() => ({}))).error ?? "Falha no envio.");
           }} />
         </label>
         {jaTem && <span className="text-sm text-texto-2">Já existe {rotuloTipo(tipo).toLowerCase()}: o envio vira a próxima versão.</span>}
       </div>
-      {msg && <p className="text-sm text-verde">{msg}</p>}
+      {msg && <p role={msg.erro ? "alert" : "status"} className={`text-sm ${msg.erro ? "text-critico" : "text-verde"}`}>{msg.texto}</p>}
       <ul className="divide-y divide-linha rounded-xl border border-linha">
         {docs.map((d) => (
           <li key={d.id} className="flex flex-wrap items-center gap-3 px-4 py-3.5 transition-colors hover:bg-superficie-2/60">
@@ -104,13 +115,11 @@ export default function DocumentosImovel({ propertyId, podeConferir = false }: {
             {podeConferir ? (
               <button type="button" disabled={ocupado}
                 onClick={async () => {
-                  setOcupado(true); setMsg("");
-                  const res = await fetch(`/api/imoveis/${propertyId}/documentos`, {
-                    method: "PATCH", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ documento_id: d.id, verificado: !d.verificado }),
-                  });
+                  setOcupado(true); setMsg(null);
+                  const r = await enviarJson(`/api/imoveis/${propertyId}/documentos`, "PATCH",
+                    { documento_id: d.id, verificado: !d.verificado });
                   setOcupado(false);
-                  if (res.ok) carregar(verAnteriores); else setMsg((await res.json()).error ?? "Falha ao conferir.");
+                  if (r.ok) carregar(verAnteriores); else setMsg({ erro: true, texto: r.erro.mensagem });
                 }}
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${d.verificado ? "border-verde/40 bg-verde/10 text-verde" : "border-linha-forte text-texto-2 hover:border-verde hover:text-texto"}`}>
                 {d.verificado ? <>conferido <Check className="size-3.5" /></> : "marcar como conferido"}

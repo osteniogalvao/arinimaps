@@ -7,31 +7,67 @@ import {
 } from "lucide-react";
 import { CabecalhoPagina, Estatistica } from "@/components/ui/Pagina";
 import { Secao } from "@/components/admin/Painel";
+import { lerEmLotes } from "@/lib/supabase/lotes";
+
+type Kpis = {
+  oportunidades_por_etapa: Record<string, number>;
+  vendas_total: number;
+  comissoes_por_status: Record<string, number>;
+  faturas_por_status: Record<string, number>;
+  leads_por_origem: Record<string, number>;
+};
+
+/**
+ * Indicadores somados no banco (fn_relatorio_kpis, migration 0063). Sem a
+ * função (migration não aplicada), lê as colunas em lotes e soma aqui — nunca
+ * a tabela inteira num pedido só, que o PostgREST corta em 1000 linhas.
+ */
+async function lerKpis(): Promise<Kpis> {
+  const admin = supabaseAdmin();
+  const { data, error } = await admin.rpc("fn_relatorio_kpis");
+  if (!error && data) return data as Kpis;
+
+  const [opps, vendas, comissoes, faturas, leads] = await Promise.all([
+    lerEmLotes<{ etapa: string }>((de, ate) => admin.from("opportunities").select("etapa").order("id").range(de, ate)),
+    lerEmLotes<{ valor_final: number }>((de, ate) => admin.from("sales").select("valor_final").order("id").range(de, ate)),
+    lerEmLotes<{ valor: number; status: string }>((de, ate) => admin.from("commissions").select("valor, status").order("id").range(de, ate)),
+    lerEmLotes<{ valor: number; status: string }>((de, ate) => admin.from("invoices").select("valor, status").order("id").range(de, ate)),
+    lerEmLotes<{ origem: string }>((de, ate) => admin.from("leads").select("origem").order("id").range(de, ate)),
+  ]);
+  const contar = (linhas: Record<string, unknown>[], campo: string) => {
+    const m: Record<string, number> = {};
+    for (const l of linhas) { const k = String(l[campo] ?? "direto"); m[k] = (m[k] ?? 0) + 1; }
+    return m;
+  };
+  const somar = (linhas: { valor: number; status: string }[]) => {
+    const m: Record<string, number> = {};
+    for (const l of linhas) m[l.status] = (m[l.status] ?? 0) + Number(l.valor);
+    return m;
+  };
+  return {
+    oportunidades_por_etapa: contar(opps.data, "etapa"),
+    vendas_total: vendas.data.reduce((s, v) => s + Number(v.valor_final), 0),
+    comissoes_por_status: somar(comissoes.data),
+    faturas_por_status: somar(faturas.data),
+    leads_por_origem: contar(leads.data, "origem"),
+  };
+}
 
 export default async function AdminRelatorios() {
   await exigirSetor("diretoria");
-  const admin = supabaseAdmin();
-  const [{ data: opps }, { data: vendas }, { data: comissoes }, { data: faturas }, { data: leads }] = await Promise.all([
-    admin.from("opportunities").select("etapa"),
-    admin.from("sales").select("valor_final, data_venda"),
-    admin.from("commissions").select("valor, status"),
-    admin.from("invoices").select("valor, status"),
-    admin.from("leads").select("origem"),
-  ]);
+  const kpis = await lerKpis();
 
-  const porEtapa = new Map<string, number>();
-  for (const o of opps ?? []) porEtapa.set(o.etapa, (porEtapa.get(o.etapa) ?? 0) + 1);
-  const totalOpps = opps?.length ?? 0;
+  const porEtapa = new Map<string, number>(Object.entries(kpis.oportunidades_por_etapa).map(([k, v]) => [k, Number(v)]));
+  const totalOpps = [...porEtapa.values()].reduce((s, n) => s + n, 0);
   const fechadas = (porEtapa.get("fechado") ?? 0) + (porEtapa.get("pos_venda") ?? 0);
   const perdidas = porEtapa.get("perdido") ?? 0;
   const conversao = totalOpps ? ((fechadas / totalOpps) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "0";
 
-  const somaVendas = (vendas ?? []).reduce((s, v) => s + Number(v.valor_final), 0);
-  const somaComissao = (st: string[]) => (comissoes ?? []).filter((c) => st.includes(c.status)).reduce((s, c) => s + Number(c.valor), 0);
-  const somaFaturas = (st: string[]) => (faturas ?? []).filter((f) => st.includes(f.status)).reduce((s, f) => s + Number(f.valor), 0);
+  const somaVendas = Number(kpis.vendas_total ?? 0);
+  const somaComissao = (st: string[]) => st.reduce((s, k) => s + Number(kpis.comissoes_por_status[k] ?? 0), 0);
+  const somaFaturas = (st: string[]) => st.reduce((s, k) => s + Number(kpis.faturas_por_status[k] ?? 0), 0);
 
-  const porOrigem = new Map<string, number>();
-  for (const l of leads ?? []) porOrigem.set(l.origem, (porOrigem.get(l.origem) ?? 0) + 1);
+  const porOrigem = new Map<string, number>(Object.entries(kpis.leads_por_origem).map(([k, v]) => [k, Number(v)]));
 
   const maxEtapa = Math.max(1, ...[...porEtapa.values()]);
 

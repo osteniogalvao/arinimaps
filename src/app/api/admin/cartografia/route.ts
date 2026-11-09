@@ -5,6 +5,7 @@ import { ator, temSetor } from "@/lib/authz";
 import { conferirOrigem, respostaOrigemNegada } from "@/lib/seguranca/origem";
 import { converterDxf, ErroDxf } from "@/lib/geo/dxf";
 import { falha, falhaBanco } from "@/lib/erros";
+import { publicarCopiaInicial } from "@/lib/geo/plantaPublica";
 
 // Conversão de planta de cidade leva segundos, não milissegundos.
 export const maxDuration = 300;
@@ -175,6 +176,14 @@ export async function POST(request: Request) {
     }).select("id").single();
     if (error) return falhaBanco("camada_nao_gravou", error);
 
+    // cópia pública em caminho próprio: o mapa público nunca recebe a URL do original
+    let avisoPublico: string | null = null;
+    try {
+      await publicarCopiaInicial(admin, camada.id, corpo, convertido.geojson as GeoJSON.FeatureCollection);
+    } catch (e) {
+      avisoPublico = e instanceof Error ? e.message : String(e);
+    }
+
     // planta nova → lotes clicáveis novos. A geração leva de segundos a mais de
     // um minuto, então vai para a fila do worker (ou `node scripts/gera-lotes.mjs`).
     await admin.from("jobs").insert({ tipo: "gerar_lotes", payload: { layer_id: camada.id } });
@@ -187,6 +196,9 @@ export async function POST(request: Request) {
 
     const d = convertido.diagnostico;
     const avisos: string[] = [];
+    if (avisoPublico) {
+      avisos.push(`A planta ainda não aparece no mapa público (${avisoPublico}). Salve a calibração uma vez para gerar o arquivo público.`);
+    }
     if (conferencia?.intersecta === false) {
       avisos.push(`O desenho não encosta no território de ${conferencia.nome} (${distanciaKm} km de distância) — confira se o município é o certo.`);
     } else if (conferencia?.contido === false) {

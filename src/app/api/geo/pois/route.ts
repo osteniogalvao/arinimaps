@@ -10,7 +10,7 @@ import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
  * anúncio publicado, em negociação ou vendido — nada de rascunho por aqui.
  */
 export async function GET(request: Request) {
-  const bloqueio = limiteLeituraMapa(request, "geo");
+  const bloqueio = await limiteLeituraMapa(request, "geo");
   if (bloqueio) return bloqueio;
   const codigo = new URL(request.url).searchParams.get("codigo") ?? "";
   if (!/^[A-Z0-9-]{3,40}$/i.test(codigo)) {

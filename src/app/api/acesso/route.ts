@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { BLOQUEIO_DIAS, COOKIE_BLOQUEIO, destinoSeguro, fichaDeAcesso, senhaConfere } from "@/lib/seguranca/bloqueio";
+import { BLOQUEIO_DIAS, COOKIE_BLOQUEIO, fichaDeAcesso, senhaConfere } from "@/lib/seguranca/bloqueio";
+import { destinoSeguro } from "@/lib/seguranca/destino";
 import { consultarLimite, ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
 
 // Confere a senha de bloqueio do site e libera o navegador por 30 dias.

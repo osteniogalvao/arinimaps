@@ -74,7 +74,7 @@ export function medidasDe(fc: GeoJSON.FeatureCollection, tela: { w: number; s: n
 /** Cartão do lote clicado: medidas e o atalho para o dono anunciar. */
 export function CartaoLote({ lote, onFechar, onVarios }: { lote: LoteInfo; onFechar: () => void; onVarios?: () => void }) {
   return (
-    <div className={`absolute top-16 left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] p-5 space-y-4 ${VIDRO}`}>
+    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] p-5 space-y-4 ${VIDRO}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-ouro">Lote urbano</p>
@@ -144,7 +144,7 @@ export function CartaoLotes({ lotes, aviso, onRemover, onLimpar, onSair }: {
   const nome = (l: LoteInfo) =>
     [l.quadra && `Qd. ${l.quadra}`, l.numero && `Lt. ${l.numero}`].filter(Boolean).join(" · ") || "Lote sem número";
   return (
-    <div className={`absolute top-16 left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] p-5 space-y-4 ${VIDRO}`}>
+    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] p-5 space-y-4 ${VIDRO}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-ouro">Loteamento</p>

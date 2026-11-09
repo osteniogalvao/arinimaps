@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, Lock } from "lucide-react";
 import { CAMPO } from "@/components/ui/Pagina";
 import { BTN_ACAO } from "@/components/landing/Titulo";
+import { destinoSeguro } from "@/lib/seguranca/destino";
 
 const INPUT = CAMPO;
 
@@ -28,7 +29,8 @@ export default function FormAcesso() {
       return;
     }
     // recarga completa: o cookie novo precisa ir no próximo pedido ao servidor
-    window.location.href = j.volta ?? "/";
+    // confere de novo aqui: o destino nunca sai do próprio site
+    window.location.href = destinoSeguro(j.volta);
   }
 
   return (

@@ -2,7 +2,7 @@
 
 /** Hook das preferências da conta (5.10). Tipos e validação: `preferencias.ts`. */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { CHAVE_PREFERENCIAS, PREFERENCIAS_PADRAO, normalizar, type Preferencias } from "@/lib/preferencias";
 
 // ---------------------------------------------------------------------------
@@ -31,8 +31,22 @@ function gravarLocal(p: Preferencias) {
   try { localStorage.setItem(CHAVE_PREFERENCIAS, JSON.stringify(p)); } catch { /* storage bloqueado */ }
 }
 
+/**
+ * Há sessão do Supabase neste navegador? O cookie de sessão não é httpOnly
+ * (ver seguranca/cookies.ts) e pode vir em pedaços (`...-auth-token.0`).
+ * Sem ele, nem pergunta ao servidor: o visitante gerava um 401 em toda página.
+ */
+export function temSessao() {
+  try {
+    return /(?:^|;\s*)sb-[^=]*-auth-token/.test(document.cookie);
+  } catch {
+    return false;
+  }
+}
+
 async function carregar(): Promise<Estado> {
   const local = lerLocal();
+  if (!temSessao()) return { prefs: local, logado: false, conta: null, carregado: true };
   try {
     const res = await fetch("/api/conta/preferencias", { headers: { Accept: "application/json" } });
     const tipo = res.headers.get("content-type") ?? "";
@@ -56,24 +70,30 @@ export function recarregarPreferencias() {
   return pedido;
 }
 
-/**
- * Preferências da pessoa, iguais em todas as instâncias da página (um só
- * pedido por carregamento). `salvar` aplica na hora, lembra no navegador e,
- * com sessão, grava na conta.
- */
-export function usePreferencias() {
-  const [estado, setEstado] = useState<Estado>(
-    cache ?? { prefs: PREFERENCIAS_PADRAO, logado: false, conta: null, carregado: false }
-  );
+/** Estado do servidor e do primeiro render da hidratação: sempre o mesmo. */
+const INICIAL: Estado = { prefs: PREFERENCIAS_PADRAO, logado: false, conta: null, carregado: false };
 
-  useEffect(() => {
-    let vivo = true;
-    const atualizar = () => { if (vivo && cache) setEstado(cache); };
-    window.addEventListener(EVENTO, atualizar);
-    if (!pedido) pedido = cache ? Promise.resolve(cache) : carregar().then((e) => { cache = e; return e; });
-    pedido.then(() => atualizar());
-    return () => { vivo = false; window.removeEventListener(EVENTO, atualizar); };
-  }, []);
+function assinar(avisar: () => void) {
+  window.addEventListener(EVENTO, avisar);
+  if (!pedido) {
+    pedido = carregar().then((e) => {
+      cache = e;
+      window.dispatchEvent(new CustomEvent(EVENTO));
+      return e;
+    });
+  }
+  return () => window.removeEventListener(EVENTO, avisar);
+}
+
+const lerCache = () => cache ?? INICIAL;
+const lerServidor = () => INICIAL;
+
+export function usePreferencias() {
+  // useSyncExternalStore e não useState(cache): um componente que hidrata
+  // depois (Suspense, streaming) pegava o cache já preenchido por outro e
+  // renderizava diferente do HTML do servidor (erro #418 intermitente). Na
+  // hidratação vale `lerServidor`; depois, o cache compartilhado.
+  const estado = useSyncExternalStore(assinar, lerCache, lerServidor);
 
   const salvar = useCallback(async (parcial: Partial<Preferencias>) => {
     const atual = cache ?? estado;

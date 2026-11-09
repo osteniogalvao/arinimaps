@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 import { GRUPOS, type Campo } from "@/lib/configuracoes";
 import { CAMPO, Etiqueta } from "@/components/ui/Pagina";
 import {
@@ -43,16 +44,14 @@ export default function ConfiguracoesForm({
   async function salvar() {
     setSalvando(true); setMsg(""); setErro("");
     const corpo = Object.fromEntries([...sujo].map((k) => [k, valores[k]]));
-    const res = await fetch("/api/admin/configuracoes", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
-    });
-    const data = await res.json().catch(() => ({}));
+    const r = await enviarJson<{ salvos?: number }>("/api/admin/configuracoes", "POST", corpo);
     setSalvando(false);
-    if (res.ok) {
-      setMsg(`${data.salvos === 1 ? "1 configuração salva" : `${data.salvos} configurações salvas`}. As mudanças já valem no site.`);
+    if (r.ok) {
+      const salvos = r.dados.salvos ?? 0;
+      setMsg(`${salvos === 1 ? "1 configuração salva" : `${salvos} configurações salvas`}. As mudanças já valem no site.`);
       setSujo(new Set());
       router.refresh();
-    } else setErro(data.error ?? "Falha ao salvar.");
+    } else setErro([r.erro.mensagem, r.erro.motivo].filter(Boolean).join(" — "));
   }
 
   const inputBase = CAMPO + " disabled:opacity-60 disabled:text-texto-2";

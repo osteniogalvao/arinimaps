@@ -5,7 +5,7 @@ import { ator, temSetor, type Ator } from "@/lib/authz";
 import { falha } from "@/lib/erros";
 import { ariniEmail, sendEmail } from "@/lib/notify";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
-import { CAMPOS_REVISAO, CAMPO_REVISAO_LABEL, validarDadosRevisao, valorRevisao, type DadosRevisao } from "@/lib/imovel/revisao";
+import { CAMPOS_REVISAO, CAMPOS_REVISAO_CARACTERISTICAS, CAMPO_REVISAO_LABEL, validarDadosRevisao, valorRevisao, type DadosRevisao } from "@/lib/imovel/revisao";
 
 /**
  * Alteração de anúncio publicado (Fluxograma §9): o anunciante propõe uma
@@ -16,11 +16,12 @@ type Imovel = {
   id: string; codigo: string; status: string; owner_id: string | null; partner_id: string | null;
   titulo: string; descricao: string; valor: number | null; area_declarada: number | null;
   condicoes_venda: string | null; aceita_permuta: boolean; aceita_financiamento: boolean;
+  caracteristicas: Record<string, unknown> | null;
 };
 
 async function carregar(a: Ator, id: string): Promise<{ p: Imovel } | { resposta: NextResponse }> {
   const { data } = await supabaseAdmin().from("properties")
-    .select("id, codigo, status, owner_id, partner_id, titulo, descricao, valor, area_declarada, condicoes_venda, aceita_permuta, aceita_financiamento")
+    .select("id, codigo, status, owner_id, partner_id, titulo, descricao, valor, area_declarada, condicoes_venda, aceita_permuta, aceita_financiamento, caracteristicas")
     .eq("id", id).maybeSingle();
   if (!data) return { resposta: falha(404, "nao_encontrado", "Imóvel não encontrado.") };
   const p = data as Imovel;
@@ -52,10 +53,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
   // só o que de fato mudou entra na proposta
   const dados: Record<string, unknown> = {};
   const anteriores: Record<string, unknown> = {};
-  for (const campo of CAMPOS_REVISAO) {
+  // campos de coluna e os que vivem em `caracteristicas` (tour virtual, item 9)
+  for (const campo of [...CAMPOS_REVISAO, ...CAMPOS_REVISAO_CARACTERISTICAS]) {
     if (!(campo in v.dados)) continue;
     const novo = (v.dados as Record<string, unknown>)[campo];
-    const atual = (p as unknown as Record<string, unknown>)[campo] ?? null;
+    const atual = ((CAMPOS_REVISAO_CARACTERISTICAS as readonly string[]).includes(campo)
+      ? (p.caracteristicas ?? {})[campo]
+      : (p as unknown as Record<string, unknown>)[campo]) ?? null;
     if (JSON.stringify(novo ?? null) === JSON.stringify(atual)) continue;
     dados[campo] = novo ?? null;
     anteriores[campo] = atual;

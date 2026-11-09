@@ -7,7 +7,7 @@ import { buscarEVincularPois } from "@/lib/overpass";
 import { casarDemandas } from "@/lib/demandas";
 import { setoresDe } from "@/lib/setores";
 import { mfaPendente } from "@/lib/authz";
-import { CAMPOS_REVISAO, CAMPO_REVISAO_LABEL, valorRevisao } from "@/lib/imovel/revisao";
+import { CAMPOS_REVISAO, CAMPOS_REVISAO_CARACTERISTICAS, CAMPO_REVISAO_LABEL, valorRevisao } from "@/lib/imovel/revisao";
 
 async function emailDoAnunciante(propertyId: string): Promise<string | null> {
   const admin = supabaseAdmin();
@@ -112,15 +112,31 @@ export async function POST(request: Request) {
         { property_id: id, valor_mensal: Number(valorPadrao?.valor ?? 0) },
         { onConflict: "property_id", ignoreDuplicates: true }
       );
-      // apresentação 3D fica disponível na hora; vídeo/OG vão para a fila do worker
-      await admin.from("presentations").insert([
-        { property_id: id, tipo: "tour3d", status: "pronto", output_path: `/imovel/${antes.codigo}/tour` },
-        { property_id: id, tipo: "video", status: "pendente" },
-      ]);
-      await admin.from("jobs").insert([
-        { tipo: "render_video", payload: { property_id: id, codigo: antes.codigo } },
-        { tipo: "screenshot_og", payload: { property_id: id, codigo: antes.codigo } },
-      ]);
+      // apresentação 3D fica disponível na hora; vídeo/OG vão para a fila do worker.
+      // Idempotente: republicar não duplica apresentação nem job (a migration 0063
+      // cria o unique (property_id, tipo); a checagem abaixo vale antes dela também).
+      const { data: existentes } = await admin.from("presentations").select("tipo, status").eq("property_id", id);
+      const temTour = (existentes ?? []).some((p) => p.tipo === "tour3d");
+      const video = (existentes ?? []).find((p) => p.tipo === "video");
+      const novas = [
+        ...(temTour ? [] : [{ property_id: id, tipo: "tour3d", status: "pronto", output_path: `/imovel/${antes.codigo}/tour` }]),
+        ...(video ? [] : [{ property_id: id, tipo: "video", status: "pendente" }]),
+      ];
+      if (novas.length) await admin.from("presentations").insert(novas);
+      // vídeo que falhou volta para a fila; o que já está pronto ou em andamento fica como está
+      if (video?.status === "erro") {
+        await admin.from("presentations").update({ status: "pendente", erro: null }).eq("property_id", id).eq("tipo", "video");
+      }
+      const { data: jobsAbertos } = await admin.from("jobs").select("tipo")
+        .in("tipo", ["render_video", "screenshot_og"]).in("status", ["pendente", "processando"])
+        .eq("payload->>property_id", id);
+      const abertos = new Set((jobsAbertos ?? []).map((j) => j.tipo));
+      const novosJobs = [
+        ...(!abertos.has("render_video") && video?.status !== "pronto"
+          ? [{ tipo: "render_video", payload: { property_id: id, codigo: antes.codigo } }] : []),
+        ...(!abertos.has("screenshot_og") ? [{ tipo: "screenshot_og", payload: { property_id: id, codigo: antes.codigo } }] : []),
+      ];
+      if (novosJobs.length) await admin.from("jobs").insert(novosJobs);
       // POIs: tenta agora (Overpass com cache); se falhar vira job
       buscarEVincularPois(id).catch(() => undefined);
       // 5.16: demandas abertas que casam com o imóvel viram tarefa do Comercial
@@ -173,6 +189,17 @@ export async function POST(request: Request) {
       // só os campos permitidos entram em properties
       const patch: Record<string, unknown> = {};
       for (const c of CAMPOS_REVISAO) if (c in dados) patch[c] = dados[c];
+      // tour virtual (item 9) mora em `caracteristicas`: mescla sem apagar o resto
+      const extras = CAMPOS_REVISAO_CARACTERISTICAS.filter((c) => c in dados);
+      if (extras.length) {
+        const { data: atualC } = await admin.from("properties").select("caracteristicas").eq("id", prop.id).single();
+        const carac = { ...((atualC?.caracteristicas ?? {}) as Record<string, unknown>) };
+        for (const c of extras) {
+          if (dados[c] == null || dados[c] === "") delete carac[c];
+          else carac[c] = dados[c];
+        }
+        patch.caracteristicas = carac;
+      }
       if (!Object.keys(patch).length) return NextResponse.json({ error: "A proposta não tem campos aplicáveis." }, { status: 400 });
       const { data: antesProp } = await admin.from("properties").select(CAMPOS_REVISAO.join(", ")).eq("id", prop.id).single();
       const { error: upErro } = await admin.from("properties").update(patch).eq("id", prop.id);

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { unstable_cache } from "next/cache";
 import {
   ArrowRight, BadgeDollarSign, Database, Eye, Grid3x3, House, MapPin, MapPinned, Ruler, Search, TrendingUp,
 } from "lucide-react";
@@ -45,16 +46,32 @@ function mediaUrl(path: string) {
 
 const temBanco = () => !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+/**
+ * Cache dos dados da home (TTFB medido em ~760 ms sem cache, 09/11/2026).
+ * Listas de imóveis: 5 min; números e municípios (contagens pesadas em
+ * urban_lots): 15 min. A função cacheada LANÇA em caso de erro, para que uma
+ * falha passageira do banco não fique guardada como "zero" por 15 minutos;
+ * quem chama apanha o erro e devolve o vazio. As configurações (textos do
+ * hero, contato) não entram no cache: edição no admin aparece na hora.
+ */
+const CACHE_LISTAS = 300;
+const CACHE_NUMEROS = 900;
+
+const destaquesCache = unstable_cache(async () => {
+  const { data, error } = await supabaseAdmin()
+    .from("properties")
+    .select("codigo, titulo, tipo, valor, modalidade, municipality:municipalities!properties_municipality_id_fkey(nome), geo:property_geometries(area_m2), media:property_media(storage_path, capa)")
+    .in("status", ["publicado", "em_negociacao"])
+    .order("published_at", { ascending: false })
+    .limit(6);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}, ["home-destaques"], { revalidate: CACHE_LISTAS, tags: ["home", "imoveis"] });
+
 async function destaques() {
   if (!temBanco()) return [];
   try {
-    const { data } = await supabaseAdmin()
-      .from("properties")
-      .select("codigo, titulo, tipo, valor, modalidade, municipality:municipalities(nome), geo:property_geometries(area_m2), media:property_media(storage_path, capa)")
-      .in("status", ["publicado", "em_negociacao"])
-      .order("published_at", { ascending: false })
-      .limit(6);
-    return data ?? [];
+    return await destaquesCache();
   } catch (e) {
     console.error("destaques da home falharam:", e);
     return [];
@@ -62,16 +79,22 @@ async function destaques() {
 }
 
 /** Imóveis de menor preço com foto: passam no 1º cartão de "Do anúncio à decisão". */
+const oportunidadesCache = unstable_cache(async () => {
+  const { data, error } = await supabaseAdmin()
+    .from("properties")
+    .select("codigo, titulo, valor, municipality:municipalities!properties_municipality_id_fkey(nome), media:property_media(storage_path, capa, tipo)")
+    .in("status", ["publicado", "em_negociacao"])
+    .not("valor", "is", null)
+    .order("valor", { ascending: true })
+    .limit(12);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}, ["home-oportunidades"], { revalidate: CACHE_LISTAS, tags: ["home", "imoveis"] });
+
 async function oportunidades(): Promise<Quadro[]> {
   if (!temBanco()) return [];
   try {
-    const { data } = await supabaseAdmin()
-      .from("properties")
-      .select("codigo, titulo, valor, municipality:municipalities(nome), media:property_media(storage_path, capa, tipo)")
-      .in("status", ["publicado", "em_negociacao"])
-      .not("valor", "is", null)
-      .order("valor", { ascending: true })
-      .limit(12);
+    const data = await oportunidadesCache();
     const quadros: Quadro[] = [];
     for (const p of data ?? []) {
       const fotos = ((p.media ?? []) as { storage_path: string; capa: boolean; tipo?: string | null }[])
@@ -97,63 +120,78 @@ async function numeros() {
   const vazio = { municipios: 0, plantas: 0, fontes: 0, imoveis: 0, lotes: 0, visitasMes: 0, visitasAnterior: 0, vendidosMi: 0 };
   if (!temBanco()) return vazio;
   try {
-    const admin = supabaseAdmin();
-    const dia = 86_400_000;
-    const ha30 = new Date(Date.now() - 30 * dia).toISOString();
-    const ha60 = new Date(Date.now() - 60 * dia).toISOString();
-    const [mun, plantas, fontes, imoveis, lotes, visitas, anteriores, vendas] = await Promise.all([
-      admin.from("municipalities").select("id", { count: "exact", head: true }).eq("ativo", true),
-      admin.from("cartography_layers").select("id", { count: "exact", head: true }).eq("status", "pronto"),
-      admin.from("fontes_externas").select("id", { count: "exact", head: true }).eq("ativa", true),
-      admin.from("properties").select("id", { count: "exact", head: true }).in("status", ["publicado", "em_negociacao", "vendido"]),
-      admin.from("urban_lots").select("id", { count: "exact", head: true }),
-      // visualizações das páginas de imóvel nos últimos 30 dias e nos 30 anteriores
-      admin.from("property_events").select("id", { count: "exact", head: true }).eq("tipo", "visualizacao").gte("created_at", ha30),
-      admin.from("property_events").select("id", { count: "exact", head: true }).eq("tipo", "visualizacao").gte("created_at", ha60).lt("created_at", ha30),
-      admin.from("sales").select("valor_final"),
-    ]);
-    const somaVendas = (vendas.data ?? []).reduce((s, v) => s + (Number((v as { valor_final: number | null }).valor_final) || 0), 0);
-    return {
-      municipios: mun.count ?? 0,
-      plantas: plantas.count ?? 0,
-      fontes: fontes.count ?? 0,
-      imoveis: imoveis.count ?? 0,
-      lotes: lotes.count ?? 0,
-      visitasMes: visitas.count ?? 0,
-      visitasAnterior: anteriores.count ?? 0,
-      vendidosMi: somaVendas / 1_000_000,
-    };
+    return await numerosCache();
   } catch {
     return vazio;
   }
 }
 
-/** Municípios ativos com a sede (para o satélite), imóveis publicados e lotes mapeados. */
+const numerosCache = unstable_cache(async () => {
+  const admin = supabaseAdmin();
+  const dia = 86_400_000;
+  const ha30 = new Date(Date.now() - 30 * dia).toISOString();
+  const ha60 = new Date(Date.now() - 60 * dia).toISOString();
+  const [mun, plantas, fontes, imoveis, lotes, visitas, anteriores, vendas] = await Promise.all([
+    admin.from("municipalities").select("id", { count: "exact", head: true }).eq("ativo", true),
+    admin.from("cartography_layers").select("id", { count: "exact", head: true }).eq("status", "pronto"),
+    admin.from("fontes_externas").select("id", { count: "exact", head: true }).eq("ativa", true),
+    admin.from("properties").select("id", { count: "exact", head: true }).in("status", ["publicado", "em_negociacao", "vendido"]),
+    admin.from("urban_lots").select("id", { count: "exact", head: true }),
+    // visualizações das páginas de imóvel nos últimos 30 dias e nos 30 anteriores
+    admin.from("property_events").select("id", { count: "exact", head: true }).eq("tipo", "visualizacao").gte("created_at", ha30),
+    admin.from("property_events").select("id", { count: "exact", head: true }).eq("tipo", "visualizacao").gte("created_at", ha60).lt("created_at", ha30),
+    admin.from("sales").select("valor_final"),
+  ]);
+  // a contagem principal falhou: não guarda zeros no cache
+  if (mun.error) throw new Error(mun.error.message);
+  const somaVendas = (vendas.data ?? []).reduce((s, v) => s + (Number((v as { valor_final: number | null }).valor_final) || 0), 0);
+  return {
+    municipios: mun.count ?? 0,
+    plantas: plantas.count ?? 0,
+    fontes: fontes.count ?? 0,
+    imoveis: imoveis.count ?? 0,
+    lotes: lotes.count ?? 0,
+    visitasMes: visitas.count ?? 0,
+    visitasAnterior: anteriores.count ?? 0,
+    vendidosMi: somaVendas / 1_000_000,
+  };
+}, ["home-numeros"], { revalidate: CACHE_NUMEROS, tags: ["home"] });
+
+/**
+ * Municípios ativos com a sede urbana (satélite e link do mapa), imóveis
+ * publicados e lotes mapeados. A sede vem da 0064 (IBGE BC250 "Cidade");
+ * antes dela a coluna guardava o centroide do polígono.
+ */
+const municipiosCache = unstable_cache(async (): Promise<MunicipioCartao[]> => {
+  const admin = supabaseAdmin();
+  const [{ data: muns, error }, { data: props }] = await Promise.all([
+    admin.from("municipalities").select("id, nome, uf, sede").eq("ativo", true).order("nome"),
+    admin.from("properties").select("municipality_id").in("status", ["publicado", "em_negociacao"]),
+  ]);
+  if (error) throw new Error(error.message);
+  if (!muns?.length) return [];
+  const lotes = await Promise.all(
+    muns.map((m) =>
+      admin.from("urban_lots").select("id", { count: "exact", head: true }).eq("municipality_id", m.id)
+        .then((r) => r.count ?? 0, () => 0),
+    ),
+  );
+  const porMun = new Map<string, number>();
+  for (const p of props ?? []) {
+    if (p.municipality_id) porMun.set(p.municipality_id, (porMun.get(p.municipality_id) ?? 0) + 1);
+  }
+  return muns.map((m, k) => {
+    // PostgREST devolve a geometria como GeoJSON
+    const c = (m.sede as { coordinates?: [number, number] } | null)?.coordinates;
+    const [lng, lat] = Array.isArray(c) && c.length >= 2 ? c : CENTRO_REGIAO;
+    return { id: m.id, nome: m.nome, uf: m.uf, lng, lat, imoveis: porMun.get(m.id) ?? 0, lotes: lotes[k] };
+  });
+}, ["home-municipios"], { revalidate: CACHE_NUMEROS, tags: ["home"] });
+
 async function municipiosAtendidos(): Promise<MunicipioCartao[]> {
   if (!temBanco()) return [];
   try {
-    const admin = supabaseAdmin();
-    const [{ data: muns }, { data: props }] = await Promise.all([
-      admin.from("municipalities").select("id, nome, uf, sede").eq("ativo", true).order("nome"),
-      admin.from("properties").select("municipality_id").in("status", ["publicado", "em_negociacao"]),
-    ]);
-    if (!muns?.length) return [];
-    const lotes = await Promise.all(
-      muns.map((m) =>
-        admin.from("urban_lots").select("id", { count: "exact", head: true }).eq("municipality_id", m.id)
-          .then((r) => r.count ?? 0, () => 0),
-      ),
-    );
-    const porMun = new Map<string, number>();
-    for (const p of props ?? []) {
-      if (p.municipality_id) porMun.set(p.municipality_id, (porMun.get(p.municipality_id) ?? 0) + 1);
-    }
-    return muns.map((m, k) => {
-      // PostgREST devolve a geometria como GeoJSON
-      const c = (m.sede as { coordinates?: [number, number] } | null)?.coordinates;
-      const [lng, lat] = Array.isArray(c) && c.length >= 2 ? c : CENTRO_REGIAO;
-      return { id: m.id, nome: m.nome, uf: m.uf, lng, lat, imoveis: porMun.get(m.id) ?? 0, lotes: lotes[k] };
-    });
+    return await municipiosCache();
   } catch (e) {
     console.error("municípios da home falharam:", e);
     return [];

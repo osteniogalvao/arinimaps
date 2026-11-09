@@ -27,8 +27,16 @@ export async function PATCH(request: Request) {
     if (!r) return NextResponse.json({ error: "Região inválida." }, { status: 400 });
     tipo = "franqueado";
   } else if (p.tipo === "franqueado") {
-    // perdeu o território: volta a ser imobiliária parceira
-    tipo = "imobiliaria";
+    // perdeu o território: volta ao tipo que tinha antes da franquia, lido da
+    // auditoria (a concessão grava `dados_antes.tipo`). Trocar de região grava
+    // "franqueado" como antes, por isso vale a concessão mais recente que veio
+    // de outro tipo. Sem registro (franquia anterior à auditoria): imobiliária.
+    const { data: concessoes } = await admin.from("audit_log").select("dados_antes")
+      .eq("entidade", "partners").eq("entidade_id", id).eq("acao", "franquia_concedida")
+      .neq("dados_antes->>tipo", "franqueado").order("created_at", { ascending: false }).limit(1);
+    const anterior = (concessoes?.[0]?.dados_antes as { tipo?: unknown } | null)?.tipo;
+    const PERMITIDOS = ["imobiliaria", "corretor", "engenheiro", "leiloeiro"];
+    tipo = typeof anterior === "string" && PERMITIDOS.includes(anterior) ? anterior : "imobiliaria";
   }
 
   const { error } = await admin.from("partners").update({ region_id: region_id || null, tipo }).eq("id", id);

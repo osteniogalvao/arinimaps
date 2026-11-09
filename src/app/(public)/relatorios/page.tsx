@@ -18,7 +18,7 @@ export default async function Relatorios() {
   const admin = supabaseAdmin();
   const [{ data: imoveis }, { data: consultas }, user] = await Promise.all([
     admin.from("properties")
-      .select("id, codigo, titulo, tipo, status, municipality:municipalities(nome), geo:property_geometries(area_m2)")
+      .select("id, codigo, titulo, tipo, status, municipality:municipalities!properties_municipality_id_fkey(nome), geo:property_geometries(area_m2)")
       .eq("tipo", "rural")
       .in("status", ["publicado", "em_negociacao", "vendido"])
       .order("published_at", { ascending: false }),

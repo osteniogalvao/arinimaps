@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 
 /**
  * Franquia territorial: a Matriz transforma um parceiro aprovado em franqueado
@@ -17,11 +18,9 @@ export default function TerritorioParceiro({
 
   async function salvar(region_id: string) {
     setOcupado(true); setErro("");
-    const res = await fetch("/api/admin/parceiros", {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, region_id }),
-    });
+    const r = await enviarJson("/api/admin/parceiros", "PATCH", { id, region_id });
     setOcupado(false);
-    if (!res.ok) { setErro((await res.json().catch(() => ({}))).error ?? "Falhou."); return; }
+    if (!r.ok) { setErro(r.erro.mensagem); return; }
     router.refresh();
   }
 

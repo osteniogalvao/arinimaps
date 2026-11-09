@@ -47,7 +47,7 @@ export const assinatura = (...ids: DocId[]) => ids.map((id) => `${id}@${VERSOES[
 const falta = (o: string) => `〔${o} — preencher em Admin › Configurações〕`;
 
 function dados(cfg: Record<string, unknown>) {
-  const pct = numero(cfg, "comissao_percentual_padrao", 1);
+  const pct = numero(cfg, "comissao_percentual_padrao", 1.9);
   const mensal = numero(cfg, "mensalidade_valor_padrao", 0);
   const empresa = texto(cfg, "juridico_razao_social", "Arini Negócios Imobiliários");
   return {
@@ -72,7 +72,7 @@ function dados(cfg: Record<string, unknown>) {
 }
 
 function extenso(n: number) {
-  const t: Record<number, string> = { 0.5: "meio por cento", 1: "um por cento", 1.5: "um e meio por cento", 2: "dois por cento", 3: "três por cento", 4: "quatro por cento", 5: "cinco por cento", 6: "seis por cento" };
+  const t: Record<number, string> = { 0.5: "meio por cento", 1: "um por cento", 1.5: "um e meio por cento", 1.9: "um vírgula nove por cento", 2: "dois por cento", 3: "três por cento", 4: "quatro por cento", 5: "cinco por cento", 6: "seis por cento" };
   return t[n] ?? `${n.toLocaleString("pt-BR")} por cento`;
 }
 

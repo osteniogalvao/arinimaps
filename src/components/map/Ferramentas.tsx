@@ -2,7 +2,8 @@
 
 /**
  * Barra de ferramentas do mapa (mockup desktop). Medir área e distância
- * usam a geodésia do turf — o número precisa bater com o que o corretor
+ * usam a geodésia do turf (as mesmas fórmulas, em src/lib/geo, sem baixar o
+ * @turf/turf inteiro) — o número precisa bater com o que o corretor
  * mediria em campo, não com pixels de tela.
  *
  * "Consultar área" (roadmap 5.6) usa o mesmo desenho da medição de área: o
@@ -19,6 +20,8 @@ import { ArrowRight, Camera, Lock, MoveHorizontal, Printer, ScanSearch, Triangle
 import { abrirAssistente } from "@/components/ia/ChatIA";
 import MarcaArini from "@/components/marca/MarcaArini";
 import { VIDRO, BotaoFechar } from "@/components/map/UiMapa";
+import { distanciaM } from "@/lib/geo/distancia";
+import { areaPoligonoM2 } from "@/lib/geo/areaGeodesica";
 
 type Modo = null | "area" | "distancia" | "consulta";
 
@@ -117,25 +120,21 @@ export default function Ferramentas({
 
   const calcular = async (pontos: [number, number][], tipo: Modo) => {
     if (!tipo || pontos.length < 2) return;
-    const turf = await import("@turf/turf");
     if (tipo === "distancia") {
       let total = 0;
-      for (let i = 1; i < pontos.length; i++) {
-        total += turf.distance(turf.point(pontos[i - 1]), turf.point(pontos[i]), { units: "kilometers" });
-      }
+      for (let i = 1; i < pontos.length; i++) total += distanciaM(pontos[i - 1], pontos[i]) / 1000;
       setResultado(
         total < 1
           ? `${(total * 1000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m`
           : `${total.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km`
       );
     } else if (pontos.length >= 3) {
-      const poligono = turf.polygon([[...pontos, pontos[0]]]);
+      const m2 = areaPoligonoM2([[...pontos, pontos[0]]]);
       if (tipo === "consulta") {
-        const ha = turf.area(poligono) / 10000;
+        const ha = m2 / 10000;
         setResultado(`${ha.toLocaleString("pt-BR", { maximumFractionDigits: ha < 10 ? 2 : 0 })} ha`);
         return;
       }
-      const m2 = turf.area(poligono);
       const ha = m2 / 10000;
       setResultado(
         ha < 1
@@ -161,9 +160,8 @@ export default function Ferramentas({
     const aoDuploClique = async () => {
       if (!modoRef.current) return;
       if (modoRef.current === "consulta" && pontosRef.current.length >= 3) {
-        const turf = await import("@turf/turf");
         const pts = pontosRef.current;
-        setConsultaPronta({ pontos: pts, ha: turf.area(turf.polygon([[...pts, pts[0]]])) / 10000 });
+        setConsultaPronta({ pontos: pts, ha: areaPoligonoM2([[...pts, pts[0]]]) / 10000 });
       }
       setModo(null);
       if (mapa) mapa.getCanvas().style.cursor = "";
@@ -265,7 +263,9 @@ export default function Ferramentas({
   );
 
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 w-[min(92%,760px)] space-y-2">
+    // no celular a barra fica compacta (só ícones, sem o título): antes ela e a
+    // legenda tampavam ~40 % do mapa e Imprimir, Capturar e a Ari ficavam fora (QA 09/11)
+    <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-[min(92%,760px)] space-y-2">
       {bloqueio && (
         <div className={`flex items-center gap-3 px-4 py-3 text-sm ${VIDRO}`}>
           <Lock className="size-4 shrink-0 text-ouro" />
@@ -314,29 +314,30 @@ export default function Ferramentas({
         </div>
       )}
 
-      <div className={`px-2.5 py-2 ${VIDRO}`}>
-        <p className="lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro px-2 pt-0.5 mb-2">Ferramentas</p>
-        <div className="flex items-center justify-between gap-1 overflow-x-auto">
+      <div className={`px-1.5 py-1.5 sm:px-2.5 sm:py-2 ${VIDRO}`}>
+        <p className="hidden sm:block lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro px-2 pt-0.5 mb-2">Ferramentas</p>
+        <div className="flex items-center justify-between gap-0.5 sm:gap-1 overflow-x-auto">
           {FERRAMENTAS.map((f) => {
             const ativo = modo === f.id;
             const pode = liberado(f.recurso);
             const Icone = pode ? f.icone : Lock;
             const classe =
-              "flex flex-col items-center gap-1.5 rounded-full px-3 py-2 min-w-[76px] text-[11px] font-medium transition " +
+              "flex flex-col items-center gap-1.5 rounded-full px-2 sm:px-3 py-2 min-w-[40px] sm:min-w-[76px] text-[11px] font-medium transition " +
               (ativo ? "bg-verde/15 text-verde ring-1 ring-verde/40" : "text-texto-2 hover:text-texto hover:bg-superficie-2") +
               (pode ? "" : " opacity-60");
-            const miolo = <><Icone className="size-[18px]" strokeWidth={1.9} />{f.rotulo}</>;
+            const miolo = <><Icone className="size-[18px]" strokeWidth={1.9} /><span className="hidden sm:block">{f.rotulo}</span></>;
+            const tour = f.id === "area" ? { "data-tour": "medir" } : {};
             if (!pode) {
               return (
-                <button key={f.id} onClick={() => avisarBloqueio(f.rotulo)} className={classe}
-                  title="Disponível na consulta profissional">
+                <button key={f.id} onClick={() => avisarBloqueio(f.rotulo)} className={classe} {...tour}
+                  title="Disponível na consulta profissional" aria-label={f.rotulo}>
                   {miolo}
                 </button>
               );
             }
             if (f.id === "kml") {
               return (
-                <label key={f.id} className={classe + " cursor-pointer"}>
+                <label key={f.id} className={classe + " cursor-pointer"} title={f.rotulo} aria-label={f.rotulo}>
                   {miolo}
                   <input type="file" accept=".kml,.kmz" className="hidden"
                     onChange={(e) => e.target.files?.[0] && onImportarKml(e.target.files[0])} />
@@ -344,20 +345,19 @@ export default function Ferramentas({
               );
             }
             return (
-              <button key={f.id} onClick={f.acao ?? undefined} className={classe}>
+              <button key={f.id} onClick={f.acao ?? undefined} className={classe} title={f.rotulo} aria-label={f.rotulo} {...tour}>
                 {miolo}
               </button>
             );
           })}
           {/* assistente de IA: no mapa fica aqui, não flutuando sobre a escala */}
-          <span className="mx-1 h-10 w-px shrink-0 bg-linha" aria-hidden />
-          <button onClick={abrirAssistente} title="Pergunte à Ari, a assistente de IA da Arini"
-            className="flex shrink-0 items-center gap-2 rounded-full bg-[#124431] py-1.5 pl-1.5 pr-4 text-left text-[#F2F2EC] ring-2 ring-[#D9BD6F]/70 transition hover:ring-[#D9BD6F]">
+          <span className="mx-0.5 sm:mx-1 h-10 w-px shrink-0 bg-linha" aria-hidden />
+          <button onClick={abrirAssistente} title="Pergunte à Ari, a assistente de IA da Arini" data-tour="ari" aria-label="Ari, assistente de IA"
+            className="flex shrink-0 items-center gap-2 rounded-full bg-[#124431] p-1.5 sm:pr-4 text-left text-[#F2F2EC] ring-2 ring-[#D9BD6F]/70 transition hover:ring-[#D9BD6F]">
             <span className="relative grid size-9 place-items-center rounded-full bg-[#0B2A1E]" aria-hidden>
-              <span className="absolute inset-0 animate-ping rounded-full bg-[#D9BD6F]/25 motion-reduce:hidden" />
               <MarcaArini variante="radar" titulo="" className="relative size-5" />
             </span>
-            <span className="leading-tight">
+            <span className="hidden sm:block leading-tight">
               <span className="block text-sm font-bold">Ari</span>
               <span className="block text-[10px] text-[#F2F2EC]/70 whitespace-nowrap">pergunte à IA</span>
             </span>

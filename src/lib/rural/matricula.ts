@@ -1,5 +1,10 @@
 import "server-only";
-import { area, bbox as envelope, booleanIntersects, feature, featureCollection, intersect } from "@turf/turf";
+// pacotes modulares, não o @turf/turf inteiro: menos código no cold start do servidor
+import { area } from "@turf/area";
+import { bbox as envelope } from "@turf/bbox";
+import { booleanIntersects } from "@turf/boolean-intersects";
+import { feature, featureCollection } from "@turf/helpers";
+import { intersect } from "@turf/intersect";
 import { parcelasSigefComGeometria, type Bbox } from "./adaptadores";
 
 /**

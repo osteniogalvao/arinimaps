@@ -44,8 +44,12 @@ export default function PainelImovel({
   onFechar: () => void;
 }) {
   const [aba, setAba] = useState<(typeof ABAS)[number]>("Resumo");
-  const [consulta, setConsulta] = useState<Record<string, { quantidade: number; erro: string | null } | null>>({});
-  const [carregando, setCarregando] = useState(true);
+  // consulta guardada com o id do imóvel: ao trocar de imóvel, os indicadores do
+  // anterior somem na hora (antes ficavam na tela até a nova resposta chegar)
+  type MapaConsulta = Record<string, { quantidade: number; erro: string | null } | null>;
+  const [consultaDe, setConsultaDe] = useState<{ id: string; mapa: MapaConsulta } | null>(null);
+  const consulta: MapaConsulta = consultaDe?.id === imovel.id ? consultaDe.mapa : {};
+  const carregando = consultaDe?.id !== imovel.id;
   // pontos de referência (roadmap 2.12): distância em linha reta do centro do imóvel
   // guardado com o código: ao trocar de imóvel, o do anterior não aparece enquanto carrega
   const [poisDe, setPoisDe] = useState<{ codigo: string; pois: PoiDistancia[]; em: string | null } | null>(null);
@@ -61,18 +65,19 @@ export default function PainelImovel({
   }, [imovel.codigo]);
 
   useEffect(() => {
-    setCarregando(true);
-    fetch(`/api/imoveis/${imovel.id}/consulta-rural`)
+    const id = imovel.id;
+    let vivo = true; // resposta de um imóvel que já saiu da tela é descartada
+    fetch(`/api/imoveis/${id}/consulta-rural`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!d?.fontes) return;
-        const mapa: Record<string, { quantidade: number; erro: string | null } | null> = {};
-        for (const f of d.fontes) {
+        const mapa: MapaConsulta = {};
+        for (const f of d?.fontes ?? []) {
           mapa[f.id] = f.consulta ? { quantidade: f.consulta.quantidade, erro: f.consulta.erro } : null;
         }
-        setConsulta(mapa);
+        if (vivo) setConsultaDe({ id, mapa });
       })
-      .finally(() => setCarregando(false));
+      .catch(() => { if (vivo) setConsultaDe({ id, mapa: {} }); });
+    return () => { vivo = false; };
   }, [imovel.id]);
 
   const qtd = (id: string) => consulta[id]?.quantidade ?? 0;
@@ -117,7 +122,7 @@ export default function PainelImovel({
 
         {imovel.capa && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={mediaUrl(imovel.capa)} alt="" className="w-full h-40 object-cover rounded-2xl" />
+          <img src={mediaUrl(imovel.capa)} alt="" loading="lazy" decoding="async" className="w-full h-40 object-cover rounded-2xl" />
         )}
 
         <div>

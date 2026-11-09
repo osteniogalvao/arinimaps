@@ -225,7 +225,7 @@ export default function AppShell({
             <BotaoTema />
             <button type="button" onClick={abrirAssistente}
               className="inline-flex h-10 items-center gap-2 rounded-full bg-[#124431] pl-1.5 pr-2 text-[#F2F2EC] ring-2 ring-[#D9BD6F]/60 transition hover:ring-[#D9BD6F] sm:pr-3.5"
-              aria-label="Pergunte à Ari (assistente de IA)" title="Pergunte à Ari, a assistente de IA da Arini">
+              data-tour="ari" aria-label="Pergunte à Ari (assistente de IA)" title="Pergunte à Ari, a assistente de IA da Arini">
               <span className="grid size-7 place-items-center rounded-full bg-[#0B2A1E]" aria-hidden>
                 <MarcaArini variante="radar" titulo="" className="size-4" />
               </span>

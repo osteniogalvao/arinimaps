@@ -2,7 +2,9 @@
 
 /**
  * Cabeçalho do site institucional, no molde do site de referência:
- *  · barra fina de contato no topo (some ao rolar);
+ *  · faixa fina no topo (some ao rolar): carrossel de cotações do agro que
+ *    leva a /mercado (itens 1.2.1/1.2.2 da revisão); sem cotações no banco,
+ *    volta a ser a barra de contato (WhatsApp e e-mail);
  *  · barra principal transparente sobre o hero, que vira sólida com blur ao
  *    rolar (`sobreHero`); nas outras páginas ela já nasce sólida e "grudada";
  *  · menu com a seção visível em destaque (na home);
@@ -16,11 +18,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/react";
 import { ArrowRight, LogIn, Mail, Menu, MessageCircle, UserPlus, UserRound, X } from "lucide-react";
 import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
+import type { CotacaoAtual } from "@/lib/mercado/formato";
+import FaixaCotacoes from "./FaixaCotacoes";
 import { formatarTelefone } from "./telefone";
 
 export type ItemNav = { href: string; rotulo: string; secao?: string };
@@ -38,11 +42,14 @@ type Props = {
   whatsapp?: string;
   email?: string;
   usuario?: { nome: string; href: string } | null;
+  /** cotações da faixa do topo, lidas no servidor (SiteHeader) */
+  cotacoes?: CotacaoAtual[];
 };
 
-export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usuario }: Props) {
+export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usuario, cotacoes }: Props) {
   const caminho = usePathname();
   const [aberto, setAberto] = useState(false);
+  const botaoMenu = useRef<HTMLButtonElement>(null);
   const [rolou, setRolou] = useState(false);
   const [secao, setSecao] = useState<string | null>(null);
   const { scrollY } = useScroll();
@@ -53,6 +60,18 @@ export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usua
     const html = document.documentElement;
     html.style.overflow = aberto ? "hidden" : "";
     return () => { html.style.overflow = ""; };
+  }, [aberto]);
+
+  // Esc fecha a gaveta e devolve o foco ao botão que a abriu
+  useEffect(() => {
+    if (!aberto) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setAberto(false);
+      botaoMenu.current?.focus();
+    };
+    document.addEventListener("keydown", aoTeclar);
+    return () => document.removeEventListener("keydown", aoTeclar);
   }, [aberto]);
 
   // seção visível → item do menu em destaque (só na home)
@@ -78,30 +97,35 @@ export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usua
     n.secao ? caminho === "/" && secao === n.secao : caminho.startsWith(n.href);
   const fechar = () => setAberto(false);
   const wa = whatsapp ? `https://wa.me/${whatsapp.replace(/\D/g, "")}` : null;
+  const temCotacoes = !!cotacoes?.length;
 
   return (
     <header className={`${sobreHero ? "fixed" : "sticky"} inset-x-0 top-0 z-50 ${transparente ? "lp-escuro" : ""}`}>
-      {/* ---------- barra de contato ---------- */}
-      {(wa || email) && (
+      {/* ---------- faixa do topo: cotações (ou contato, sem cotações) ---------- */}
+      {(temCotacoes || wa || email) && (
         <motion.div
           initial={false}
           animate={{ height: rolou ? 0 : 40 }}
           transition={{ duration: 0.3 }}
-          className={`hidden overflow-hidden text-sm md:block ${transparente ? "bg-black/35 text-white/85" : "lp-escuro bg-[#0A2219] text-white/85"}`}
+          className={`overflow-hidden text-sm ${temCotacoes ? "" : "hidden md:block"} ${transparente ? "bg-black/35 text-white/85" : "lp-escuro bg-[#0A2219] text-white/85"}`}
         >
-          <div className="lp-container flex h-10 items-center gap-6">
-            {wa && (
-              <a href={wa} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 transition hover:text-white">
-                <MessageCircle className="size-4 text-[#6FB08F]" /> WhatsApp da central · {formatarTelefone(whatsapp!)}
-              </a>
-            )}
-            {email && (
-              <a href={`mailto:${email}`} className="flex items-center gap-2 transition hover:text-white">
-                <Mail className="size-4 text-[#6FB08F]" /> {email}
-              </a>
-            )}
-            <span className="ml-auto text-white/60">Pontal do Triângulo Mineiro</span>
-          </div>
+          {temCotacoes ? (
+            <FaixaCotacoes itens={cotacoes!} />
+          ) : (
+            <div className="lp-container flex h-10 items-center gap-6">
+              {wa && (
+                <a href={wa} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 transition hover:text-white">
+                  <MessageCircle className="size-4 text-[#6FB08F]" /> WhatsApp da central · {formatarTelefone(whatsapp!)}
+                </a>
+              )}
+              {email && (
+                <a href={`mailto:${email}`} className="flex items-center gap-2 transition hover:text-white">
+                  <Mail className="size-4 text-[#6FB08F]" /> {email}
+                </a>
+              )}
+              <span className="ml-auto text-white/60">Pontal do Triângulo Mineiro</span>
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -161,6 +185,7 @@ export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usua
               Anunciar imóvel
             </Link>
             <button
+              ref={botaoMenu}
               type="button"
               className="grid size-11 place-items-center rounded-full border border-linha-forte text-texto transition hover:border-verde lg:hidden"
               aria-label={aberto ? "Fechar menu" : "Abrir menu"}

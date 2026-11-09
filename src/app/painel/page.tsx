@@ -5,6 +5,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, STATUS_LABEL } from "@/lib/format";
 import { Secao, Estatistica, Vazio, Etiqueta, BotaoLink } from "@/components/ui/Pagina";
 import MiniaturaDivisa, { type GeoDivisa } from "@/components/imovel/MiniaturaDivisa";
+import { pendenciasIntermediador } from "@/lib/acompanhamento/servidor";
+import PendenciasIntermediador from "@/components/acompanhamento/PendenciasIntermediador";
 
 type Tom = "verde" | "ouro" | "alerta" | "critico" | "neutro";
 const STATUS_TOM: Record<string, Tom> = {
@@ -26,26 +28,38 @@ function mediaUrl(path: string) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`;
 }
 
-export default async function MeusImoveis() {
+export default async function MeusImoveis({ searchParams }: PageProps<"/painel">) {
   const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  const sp = await searchParams;
+  const umParam = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+  const enviado = umParam(sp.enviado).replace(/[^A-Za-z0-9-]/g, "").slice(0, 30);
+  const videosFalharam = Math.max(0, Math.min(99, Number(umParam(sp.videos_falharam)) || 0));
+  const docsFalharam = Math.max(0, Math.min(99, Number(umParam(sp.docs_falharam)) || 0));
 
-  // RLS garante que só vêm os imóveis do usuário
-  const { data: imoveis } = await supabase
-    .from("properties")
-    .select(CAMPOS)
-    .not("status", "in", '("publicado","em_negociacao","vendido","historico")')
-    .order("created_at", { ascending: false });
-
-  const { data: publicados } = await supabase
-    .from("properties")
-    .select(CAMPOS)
-    .in("status", ["publicado", "em_negociacao", "vendido"])
-    .order("created_at", { ascending: false });
-
-  // cadastro (owner/partner) ainda em análise?
-  const { data: owner } = await supabase.from("owners").select("status").maybeSingle();
-  const { data: partner } = await supabase.from("partners").select("status").maybeSingle();
+  // cadastro (owner/partner) do PRÓPRIO usuário — a equipe enxerga todos pela RLS
+  const [{ data: owner }, { data: partner }] = user
+    ? await Promise.all([
+        supabase.from("owners").select("id, status").eq("profile_id", user.id).maybeSingle(),
+        supabase.from("partners").select("id, status").eq("profile_id", user.id).maybeSingle(),
+      ])
+    : [{ data: null }, { data: null }];
   const statusCadastro = owner?.status ?? partner?.status;
+
+  // A RLS libera anúncio publicado para todos: o filtro pelo dono é obrigatório
+  // (auditoria 09/11/2026 — "Meus imóveis" listava imóveis de outros anunciantes)
+  const filtroDono = [owner?.id && `owner_id.eq.${owner.id}`, partner?.id && `partner_id.eq.${partner.id}`]
+    .filter(Boolean).join(",");
+  const [{ data: imoveis }, { data: publicados }] = filtroDono
+    ? await Promise.all([
+        supabase.from("properties").select(CAMPOS).or(filtroDono)
+          .not("status", "in", '("publicado","em_negociacao","vendido","historico")')
+          .order("created_at", { ascending: false }).limit(200),
+        supabase.from("properties").select(CAMPOS).or(filtroDono)
+          .in("status", ["publicado", "em_negociacao", "vendido"])
+          .order("created_at", { ascending: false }).limit(200),
+      ])
+    : [{ data: [] }, { data: [] }];
   const aguardando = statusCadastro && !["aprovado", "ativo"].includes(statusCadastro);
 
   const meus = [...(imoveis ?? []), ...(publicados ?? [])];
@@ -64,8 +78,30 @@ export default async function MeusImoveis() {
   const emAnalise = meus.filter((p) => EM_ANALISE.includes(p.status)).length;
   const noAr = meus.filter((p) => ["publicado", "em_negociacao"].includes(p.status)).length;
 
+  // item 28: o corretor parceiro vê as pendências com os proprietários
+  const pendencias = partner?.id && ["aprovado", "ativo"].includes(partner.status)
+    ? await pendenciasIntermediador({ partnerId: partner.id }).catch(() => null)
+    : null;
+
   return (
     <div className="space-y-10 md:space-y-12">
+      {enviado && (
+        <div className="flex items-start gap-3 rounded-2xl border border-verde/30 bg-verde/10 px-5 py-4 text-base text-verde">
+          <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+          <p>Imóvel <strong className="font-mono">{enviado}</strong> enviado. A Arini analisa o cadastro antes de publicar.</p>
+        </div>
+      )}
+      {(videosFalharam > 0 || docsFalharam > 0) && (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-alerta/40 bg-alerta/10 px-5 py-4 text-base text-alerta">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+          <p>
+            O imóvel foi criado, mas {[
+              videosFalharam > 0 && (videosFalharam === 1 ? "1 vídeo não foi enviado" : `${videosFalharam} vídeos não foram enviados`),
+              docsFalharam > 0 && (docsFalharam === 1 ? "1 documento não foi enviado" : `${docsFalharam} documentos não foram enviados`),
+            ].filter(Boolean).join(" e ")}. Abra o imóvel abaixo e envie de novo nas seções de vídeos e documentos.
+          </p>
+        </div>
+      )}
       {aguardando && (
         <div className="flex items-start gap-3 rounded-2xl border border-alerta/40 bg-alerta/10 px-5 py-4 text-base text-alerta">
           <AlertTriangle className="mt-0.5 size-5 shrink-0" />
@@ -81,6 +117,8 @@ export default async function MeusImoveis() {
         <Estatistica icone={CheckCircle2} valor={noAr} rotulo="Publicados no site" />
         <Estatistica icone={Handshake} valor={oportunidades ?? 0} rotulo="Oportunidades encaminhadas" href="/painel/oportunidades" />
       </div>
+
+      {pendencias && <PendenciasIntermediador pendencias={pendencias} hrefOportunidade="/painel/oportunidades" />}
 
       <Secao
         eyebrow="Seus anúncios"

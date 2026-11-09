@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 import { CircleCheck, Link2, Plus, SearchX } from "lucide-react";
 import { CAMPO, Etiqueta, ROTULO } from "@/components/ui/Pagina";
 import { CAMPO_COMPACTO, CODIGO, LISTA } from "@/components/admin/estilos";
@@ -60,14 +61,10 @@ export default function Demandas({
     e.preventDefault();
     if (!form) return;
     setOcupado(true); setErro(""); setOk("");
-    const res = await fetch("/api/demandas", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, opportunity_id: prefill?.opportunity_id ?? null }),
-    });
-    const d = await res.json().catch(() => ({}));
+    const r = await enviarJson<{ codigo?: string }>("/api/demandas", "POST", { ...form, opportunity_id: prefill?.opportunity_id ?? null });
     setOcupado(false);
-    if (!res.ok) { setErro([d.error, d.motivo].filter(Boolean).join(" — ") || "Não foi possível registrar."); return; }
-    setOk(`Demanda ${d.codigo} registrada. Vamos avisar quando um imóvel publicado casar com ela.`);
+    if (!r.ok) { setErro([r.erro.mensagem, r.erro.motivo].filter(Boolean).join(" — ")); return; }
+    setOk(`Demanda ${r.dados.codigo ?? ""} registrada. Vamos avisar quando um imóvel publicado casar com ela.`);
     setForm(null);
     router.replace("/admin/demandas");
     router.refresh();
@@ -76,22 +73,22 @@ export default function Demandas({
   async function mudarStatus(id: string, status: string) {
     const motivo = status === "aberta" ? "" : prompt(status === "atendida" ? "Como foi atendida? (opcional)" : "Motivo do cancelamento (opcional)") ?? null;
     if (motivo === null) return;
-    const res = await fetch(`/api/demandas/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, motivo }),
-    });
-    if (res.ok) router.refresh(); else setErro((await res.json().catch(() => ({}))).error ?? "Não foi possível alterar.");
+    setErro("");
+    const r = await enviarJson(`/api/demandas/${id}`, "PATCH", { status, motivo });
+    if (r.ok) router.refresh(); else setErro(r.erro.mensagem);
   }
 
   async function mudarResponsavel(id: string, responsavel: string) {
-    const res = await fetch(`/api/demandas/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ responsavel }),
-    });
-    if (res.ok) router.refresh();
+    setErro("");
+    const r = await enviarJson(`/api/demandas/${id}`, "PATCH", { responsavel });
+    if (r.ok) router.refresh(); else setErro(`Não foi possível trocar o responsável: ${r.erro.mensagem}`);
   }
 
   return (
     <div className="space-y-4">
       {ok && <p className="flex items-center gap-2 rounded-xl border border-verde/40 bg-verde/10 px-4 py-3 text-[0.95rem] text-verde"><CircleCheck className="size-5 shrink-0" />{ok}</p>}
+      {/* erro das ações da lista (status, responsável); o do formulário aparece dentro dele */}
+      {erro && !form && <p role="alert" className="text-sm text-critico">{erro}</p>}
       {!form ? (
         <button type="button" onClick={() => setForm({ ...VAZIO, responsavel: souEu })} className="btn-verde inline-flex items-center gap-2 px-5 py-2.5 text-sm">
           <Plus className="size-4" /> Registrar demanda

@@ -4,19 +4,29 @@
  * Matriz decidir; só então entram em `properties`. Compartilhado entre o
  * servidor (validação e aplicação) e os formulários.
  */
+import { validarCampoTour } from "@/lib/imovel/tour";
+
 export const CAMPOS_REVISAO = [
   "titulo", "descricao", "valor", "area_declarada", "condicoes_venda", "aceita_permuta", "aceita_financiamento",
 ] as const;
-export type CampoRevisao = (typeof CAMPOS_REVISAO)[number];
+/**
+ * Campos que não são coluna: vivem dentro de `properties.caracteristicas`
+ * (jsonb). Ao aprovar, entram mesclados no jsonb, sem apagar o resto.
+ * Item 9 da segunda etapa: link do tour virtual 360 / vídeo imersivo.
+ */
+export const CAMPOS_REVISAO_CARACTERISTICAS = ["tour_virtual_url"] as const;
+export type CampoRevisao = (typeof CAMPOS_REVISAO)[number] | (typeof CAMPOS_REVISAO_CARACTERISTICAS)[number];
 
 export const CAMPO_REVISAO_LABEL: Record<CampoRevisao, string> = {
   titulo: "Título", descricao: "Descrição", valor: "Valor", area_declarada: "Área declarada",
   condicoes_venda: "Condições de venda", aceita_permuta: "Aceita permuta", aceita_financiamento: "Aceita financiamento",
+  tour_virtual_url: "Tour virtual 360 / vídeo",
 };
 
 export type DadosRevisao = Partial<{
   titulo: string; descricao: string; valor: number | null; area_declarada: number | null;
   condicoes_venda: string | null; aceita_permuta: boolean; aceita_financiamento: boolean;
+  tour_virtual_url: string | null;
 }>;
 
 /** Valor de um campo da revisão em texto legível. */
@@ -68,5 +78,10 @@ export function validarDadosRevisao(b: Record<string, unknown>): { ok: true; dad
   }
   if ("aceita_permuta" in b) dados.aceita_permuta = !!b.aceita_permuta;
   if ("aceita_financiamento" in b) dados.aceita_financiamento = !!b.aceita_financiamento;
+  if ("tour_virtual_url" in b) {
+    const t = validarCampoTour(b.tour_virtual_url);
+    if (!t.ok) return { ok: false, erro: t.erro };
+    dados.tour_virtual_url = t.url;
+  }
   return { ok: true, dados };
 }

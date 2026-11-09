@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { CONTRATO_LABEL, ETAPAS, ETAPA_LABEL, humanizarEvento } from "@/lib/funil";
 import { Workflow, CalendarDays, HandCoins, FileSignature, BadgeDollarSign, MessagesSquare, Paperclip, Download, type LucideIcon } from "lucide-react";
 import { CAMPO, Etiqueta } from "@/components/ui/Pagina";
+import { enviarJson } from "@/lib/api/enviar";
+import { lerNumeroBR, numeroParaCampo } from "@/lib/simulador";
 
 type Parceiro = { id: string; razao_social: string; tipo: string };
 type Evento = { id: string; tipo: string; descricao: string; created_at: string; autor: string | null };
@@ -40,12 +42,10 @@ export default function OportunidadeClient(props: Props) {
   async function chamar(method: "PATCH" | "POST", body: unknown) {
     setOcupado(true);
     setErro("");
-    const res = await fetch(base, {
-      method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
+    // enviarJson nunca lança: queda de rede ou resposta sem JSON viram erro com motivo
+    const r = await enviarJson(base, method, body);
     setOcupado(false);
-    if (!res.ok) { setErro(data.error ?? "Falha na operação."); return false; }
+    if (!r.ok) { setErro(r.erro.mensagem); return false; }
     router.refresh();
     return true;
   }
@@ -55,7 +55,8 @@ export default function OportunidadeClient(props: Props) {
   const [visitaData, setVisitaData] = useState("");
   const [prop, setProp] = useState({ autor_lado: "comprador", valor: "", entrada: "", prazo: "", condicoes: "", observacoes: "" });
   const [venda, setVenda] = useState({
-    valor_final: props.propostas.find((p) => p.status === "aceita")?.valor?.toString() ?? o.valor_imovel?.toString() ?? "",
+    // formato brasileiro no campo: "350000.5".toString() lido como milhar gravava a venda 10× maior
+    valor_final: numeroParaCampo(props.propostas.find((p) => p.status === "aceita")?.valor ?? o.valor_imovel),
     percentual: String(props.percentualPadrao),
     regra: "",
   });
@@ -116,7 +117,12 @@ export default function OportunidadeClient(props: Props) {
         <div className="flex gap-3">
           <input type="datetime-local" className={input} value={visitaData} onChange={(e) => setVisitaData(e.target.value)} />
           <button disabled={ocupado || !visitaData} className={`${btn} btn-verde`}
-            onClick={async () => { if (await chamar("POST", { tipo: "visita", data_hora: visitaData })) setVisitaData(""); }}>
+            onClick={async () => {
+              // datetime-local não tem fuso: converte no navegador (horário de quem agenda) para ISO com fuso
+              const quando = new Date(visitaData);
+              if (Number.isNaN(quando.getTime())) { setErro("Data e hora inválidas."); return; }
+              if (await chamar("POST", { tipo: "visita", data_hora: quando.toISOString() })) setVisitaData("");
+            }}>
             Agendar
           </button>
         </div>
@@ -165,8 +171,8 @@ export default function OportunidadeClient(props: Props) {
           onClick={async () => {
             const ok = await chamar("POST", {
               tipo: "proposta", autor_lado: prop.autor_lado,
-              valor: Number(prop.valor.replace(/\./g, "").replace(",", ".")),
-              entrada: prop.entrada ? Number(prop.entrada.replace(/\./g, "").replace(",", ".")) : null,
+              valor: lerNumeroBR(prop.valor),
+              entrada: prop.entrada ? lerNumeroBR(prop.entrada) : null,
               prazo: prop.prazo || null, condicoes: prop.condicoes || null,
             });
             if (ok) setProp({ autor_lado: "comprador", valor: "", entrada: "", prazo: "", condicoes: "", observacoes: "" });
@@ -218,19 +224,34 @@ export default function OportunidadeClient(props: Props) {
                   const f = e.target.files?.[0];
                   if (!f) return;
                   setOcupado(true);
+                  setErro("");
                   const fd = new FormData();
                   fd.set("arquivo", f);
-                  const res = await fetch(`${base}/contrato`, { method: "POST", body: fd });
-                  setOcupado(false);
-                  if (res.ok) router.refresh(); else setErro("Falha no upload do contrato.");
+                  try {
+                    const res = await fetch(`${base}/contrato`, { method: "POST", body: fd });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok) router.refresh();
+                    else setErro(data.error ?? `Falha no upload do contrato (${res.status}).`);
+                  } catch {
+                    setErro("O servidor não respondeu. Confira a internet e tente de novo.");
+                  } finally {
+                    setOcupado(false);
+                    e.target.value = "";
+                  }
                 }} />
               </label>
               {props.contrato?.documento_path && (
                 <button className="inline-flex items-center gap-1.5 text-sm font-semibold text-verde hover:underline"
                   onClick={async () => {
-                    const res = await fetch(`${base}/contrato`);
-                    const data = await res.json();
-                    if (data.url) window.open(data.url, "_blank");
+                    setErro("");
+                    try {
+                      const res = await fetch(`${base}/contrato`);
+                      const data = await res.json().catch(() => ({}));
+                      if (res.ok && data.url) window.open(data.url, "_blank");
+                      else setErro(data.error ?? "Não foi possível baixar o contrato.");
+                    } catch {
+                      setErro("O servidor não respondeu. Confira a internet e tente de novo.");
+                    }
                   }}>
                   <Download className="size-4" /> Baixar contrato
                 </button>
@@ -258,11 +279,15 @@ export default function OportunidadeClient(props: Props) {
                 <button disabled={ocupado || !venda.valor_final}
                   className={`${btn} btn-ouro`}
                   onClick={() => {
-                    if (!confirm("Registrar a venda? O imóvel vira VENDIDO e sai da oferta.")) return;
+                    const valorFinal = lerNumeroBR(venda.valor_final);
+                    const percentual = lerNumeroBR(venda.percentual);
+                    if (!(valorFinal > 0)) { setErro("Valor final inválido."); return; }
+                    if (!(percentual >= 0)) { setErro("Percentual de comissão inválido."); return; }
+                    if (!confirm(`Registrar a venda de ${brl(valorFinal)}? O imóvel vira VENDIDO e sai da oferta.`)) return;
                     chamar("POST", {
                       tipo: "venda",
-                      valor_final: Number(venda.valor_final.replace(/\./g, "").replace(",", ".")),
-                      percentual: Number(venda.percentual.replace(",", ".")),
+                      valor_final: valorFinal,
+                      percentual,
                       regra: venda.regra || null,
                     });
                   }}>

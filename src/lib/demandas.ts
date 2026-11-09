@@ -2,7 +2,6 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { lerConfiguracoes, numero } from "@/lib/settings";
 import { emailDoProfile, sendEmail } from "@/lib/notify";
-import { logAudit } from "@/lib/audit";
 import { formatBRL } from "@/lib/format";
 
 /**
@@ -73,25 +72,48 @@ export async function casarDemandas(propertyId: string): Promise<number> {
       .eq("property_id", propertyId).in("demanda_id", casadas.map((d) => d.id));
     const feitos = new Set((jaFeitos ?? []).map((m) => m.demanda_id));
     const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-    let novos = 0;
+    const pendentes = casadas.filter((x) => !feitos.has(x.id));
+    if (!pendentes.length) return 0;
 
-    for (const d of casadas.filter((x) => !feitos.has(x.id))) {
-      // reserva o par antes de criar a tarefa: duas publicações simultâneas não duplicam
-      const { data: match, error: mErro } = await admin.from("demanda_matches")
-        .insert({ demanda_id: d.id, property_id: propertyId }).select("id").single();
-      if (mErro || !match) continue;
-      const { data: tarefa } = await admin.from("tasks").insert({
-        titulo: `Imóvel novo casa com demanda ${d.codigo}`,
-        descricao:
-          `${p.codigo} — ${p.titulo} (${formatBRL(p.valor)}) foi publicado e atende à demanda de ${d.cliente_nome}` +
-          `${d.cliente_contato ? ` (${d.cliente_contato})` : ""}.\n` +
-          `Imóvel: ${site}/imovel/${p.codigo} · Demanda: ${site}/admin/demandas?d=${d.codigo}`,
-        setor: "comercial", responsavel: d.responsavel, prioridade: "alta",
-        property_id: propertyId, opportunity_id: d.opportunity_id,
-      }).select("id").single();
-      if (tarefa) await admin.from("demanda_matches").update({ task_id: tarefa.id }).eq("id", match.id);
-      novos++;
+    // Tudo em lote (antes eram 3 a 4 consultas por demanda casada).
+    // 1) reserva os pares antes de criar as tarefas: o unique (demanda_id,
+    //    property_id) + ignoreDuplicates faz duas publicações simultâneas não
+    //    duplicarem — só voltam os pares que ESTE pedido criou.
+    const { data: reservados, error: mErro } = await admin.from("demanda_matches")
+      .upsert(pendentes.map((d) => ({ demanda_id: d.id, property_id: propertyId })),
+        { onConflict: "demanda_id,property_id", ignoreDuplicates: true })
+      .select("id, demanda_id");
+    if (mErro || !reservados?.length) return 0;
+    const matchPorDemanda = new Map(reservados.map((m) => [m.demanda_id as string, m.id as string]));
+    const novas = pendentes.filter((d) => matchPorDemanda.has(d.id));
 
+    // 2) uma tarefa por demanda, num insert só (o título leva o código da demanda, que é único)
+    const tituloDe = (d: Demanda) => `Imóvel novo casa com demanda ${d.codigo}`;
+    const { data: tarefas } = await admin.from("tasks").insert(novas.map((d) => ({
+      titulo: tituloDe(d),
+      descricao:
+        `${p.codigo} — ${p.titulo} (${formatBRL(p.valor)}) foi publicado e atende à demanda de ${d.cliente_nome}` +
+        `${d.cliente_contato ? ` (${d.cliente_contato})` : ""}.\n` +
+        `Imóvel: ${site}/imovel/${p.codigo} · Demanda: ${site}/admin/demandas?d=${d.codigo}`,
+      setor: "comercial", responsavel: d.responsavel, prioridade: "alta",
+      property_id: propertyId, opportunity_id: d.opportunity_id,
+    }))).select("id, titulo");
+    const tarefaPorTitulo = new Map((tarefas ?? []).map((t) => [t.titulo as string, t.id as string]));
+
+    // 3) liga cada par à sua tarefa, num upsert só
+    const ligacoes = novas.filter((d) => tarefaPorTitulo.has(tituloDe(d))).map((d) => ({
+      id: matchPorDemanda.get(d.id)!, demanda_id: d.id, property_id: propertyId, task_id: tarefaPorTitulo.get(tituloDe(d))!,
+    }));
+    if (ligacoes.length) await admin.from("demanda_matches").upsert(ligacoes, { onConflict: "id" });
+
+    // 4) auditoria em lote (append-only; falha não derruba a publicação)
+    const { error: aErro } = await admin.from("audit_log").insert(novas.map((d) => ({
+      acao: "demanda_casou", entidade: "demandas", entidade_id: d.id, property_id: propertyId,
+      dados_depois: { imovel: p.codigo, tarefa: tarefaPorTitulo.get(tituloDe(d)) ?? null },
+    })));
+    if (aErro) console.error("audit_log (demandas) falhou:", aErro.message);
+
+    for (const d of novas) {
       if (d.responsavel) {
         emailDoProfile(d.responsavel).then((to) => sendEmail(to,
           `Demanda ${d.codigo}: imóvel novo pode interessar a ${d.cliente_nome}`,
@@ -99,12 +121,8 @@ export async function casarDemandas(propertyId: string): Promise<number> {
           `Veja o imóvel: ${site}/imovel/${p.codigo}\nTarefa criada no setor Comercial: ${site}/admin/tarefas`,
         )).catch(() => undefined);
       }
-      await logAudit({
-        acao: "demanda_casou", entidade: "demandas", entidade_id: d.id, property_id: propertyId,
-        dados_depois: { imovel: p.codigo, tarefa: tarefa?.id ?? null },
-      });
     }
-    return novos;
+    return novas.length;
   } catch (e) {
     console.error("casarDemandas falhou:", e);
     return 0;

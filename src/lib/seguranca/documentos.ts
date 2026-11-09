@@ -17,6 +17,7 @@ import { ipDoPedido } from "./limite";
  * | Selfie do aceite (selfie_path)        | só quem fez o aceite                   | Operações, Jurídico                    |
  * | Contrato (contracts.documento_path)   | quem opera a oportunidade              | Comercial, Jurídico, Financeiro        |
  * | Anexo cartográfico (cartographic_requests.arquivos) | quem abriu a solicitação | Cartografia                          |
+ * | Minha área (property_area_arquivos)   | dono ou parceiro responsável           | Operações, Cartografia, Comercial      |
  */
 export type CategoriaArquivo = "documento" | "selfie" | "autorizacao" | "contrato" | "cartografia";
 
@@ -48,6 +49,8 @@ async function responsavelPeloImovel(a: Ator, propertyId: string) {
 }
 
 const nomeDoPath = (path: string) => path.split("/").pop() ?? "arquivo";
+/** Terceiro trecho do caminho (imoveis/<id>/<pasta>/…). */
+const partes3 = (path: string) => path.split("/")[2] ?? "";
 
 /** Descobre o que é o arquivo e se este usuário pode abri-lo. null = arquivo desconhecido. */
 export async function resolverArquivo(a: Ator, path: string): Promise<ArquivoResolvido | null> {
@@ -76,6 +79,16 @@ export async function resolverArquivo(a: Ator, path: string): Promise<ArquivoRes
       return { ...base, categoria: selfie ? "selfie" : "autorizacao", permitido,
         motivo: permitido ? null : selfie ? "selfie só para quem fez o aceite e a equipe" : "não é responsável pelo imóvel",
         nome: nomeDoPath(path), documentoId: aut.id, propertyId };
+    }
+    // Minha área (item 29, migration 0060): arquivos de projeto do anunciante.
+    // Só o dono e a Central. Tabela ausente = arquivo desconhecido.
+    if (partes3(path) === "minha-area") {
+      const { data: arq, error } = await admin.from("property_area_arquivos")
+        .select("id, nome_arquivo, property_id").eq("storage_path", path).limit(1).maybeSingle();
+      if (error || !arq || arq.property_id !== propertyId) return null;
+      const permitido = temSetor(a, "operacoes", "cartografia", "comercial") || (await responsavelPeloImovel(a, propertyId));
+      return { ...base, categoria: "documento", permitido, motivo: permitido ? null : "não é responsável pelo imóvel",
+        nome: arq.nome_arquivo ?? nomeDoPath(path), documentoId: arq.id, propertyId };
     }
     return null;
   }

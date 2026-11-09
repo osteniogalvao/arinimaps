@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Building2, Handshake, PlusCircle, Map as MapIcon, Users, LifeBuoy, UserRound, ShieldCheck,
+  Building2, Handshake, PlusCircle, Map as MapIcon, Users, LifeBuoy, UserRound, ShieldCheck, Grid3x3,
   type LucideIcon,
 } from "lucide-react";
 
@@ -15,6 +15,7 @@ const ABAS: { href: string; rotulo: string; icone: LucideIcon }[] = [
   { href: "/painel", rotulo: "Meus imóveis", icone: Building2 },
   { href: "/painel/oportunidades", rotulo: "Minhas oportunidades", icone: Handshake },
   { href: "/painel/novo", rotulo: "Anunciar", icone: PlusCircle },
+  { href: "/painel/empreendimentos", rotulo: "Espelho de vendas", icone: Grid3x3 },
   { href: "/painel/cartografia", rotulo: "Mapa: solicitações", icone: MapIcon },
   { href: "/painel/organizacao", rotulo: "Organização", icone: Users },
   { href: "/suporte", rotulo: "Suporte", icone: LifeBuoy },
@@ -30,7 +31,7 @@ export default function AbasPainel() {
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
-    <nav aria-label="Área do cliente">
+    <nav aria-label="Área do cliente" data-tour="abas-painel">
       <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {ABAS.map(({ href, rotulo, icone: Icone }) => {
           const ativo = href === ativa;

@@ -3,6 +3,7 @@ import { currentUser, supabaseServer } from "@/lib/supabase/server";
 import { lerConfiguracoes, numero } from "@/lib/settings";
 import { setoresDe } from "@/lib/setores";
 import AdminShell from "./AdminShell";
+import AjudaTour from "@/components/ajuda/AjudaTour";
 
 const PAPEL_LABEL: Record<string, string> = {
   admin_central: "Diretoria",
@@ -39,6 +40,8 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
       avatar={user.avatarUrl}
     >
       {children}
+      {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14) */}
+      <AjudaTour perfil="central" />
     </AdminShell>
   );
 }

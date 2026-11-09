@@ -1,5 +1,7 @@
 import "server-only";
+import { NextResponse } from "next/server";
 import { ipDoPedido, respostaLimite, type Limite } from "@/lib/seguranca/limite";
+import { bloqueioAtivo, COOKIE_BLOQUEIO, fichaDeAcesso } from "@/lib/seguranca/bloqueio";
 
 /**
  * Limite de requisições das LEITURAS DO MAPA (tiles e /api/geo), por IP, em
@@ -70,13 +72,48 @@ function limpar(agora: number, janela: number) {
 }
 
 /**
- * Atalho para as rotas do mapa: devolve a resposta 429 pronta quando o IP
- * passou do teto, ou null para seguir.
+ * Atalho para as rotas do mapa: devolve a resposta pronta quando o pedido não
+ * pode seguir, ou null para seguir. Duas travas, nesta ordem:
+ *
+ * 1. SITE_SENHA (src/lib/seguranca/bloqueio.ts). `api/geo` e `api/tiles` ficam
+ *    fora do matcher do proxy (desempenho do zoom), então a trava do site
+ *    inteiro precisa ser conferida aqui também. A ficha esperada (HMAC da senha)
+ *    é calculada uma vez por processo; cada pedido só lê o cookie e compara.
+ * 2. Limite por IP em memória (acima).
  */
-export function limiteLeituraMapa(request: Request, tipo: keyof typeof LIMITES_MAPA) {
+export async function limiteLeituraMapa(request: Request, tipo: keyof typeof LIMITES_MAPA) {
+  if (bloqueioAtivo() && !(await acessoLiberado(request))) {
+    return NextResponse.json({ error: "Site em acesso restrito." }, { status: 401 });
+  }
   const { max, janelaS } = LIMITES_MAPA[tipo];
   const l = limitarEmMemoria(`${tipo}:${ipDoPedido(request)}`, max, janelaS);
   return l.permitido ? null : respostaLimite(l, "leitura do mapa");
+}
+
+// ficha guardada por senha: trocar a SITE_SENHA (novo deploy/reinício) recalcula
+let fichaCache: { senha: string; ficha: Promise<string> } | null = null;
+
+async function acessoLiberado(request: Request) {
+  const valor = lerCookie(request.headers.get("cookie"), COOKIE_BLOQUEIO);
+  if (!valor) return false;
+  const senha = process.env.SITE_SENHA ?? "";
+  if (!fichaCache || fichaCache.senha !== senha) fichaCache = { senha, ficha: fichaDeAcesso() };
+  const certa = await fichaCache.ficha;
+  if (valor.length !== certa.length) return false;
+  let d = 0;
+  for (let i = 0; i < valor.length; i++) d |= valor.charCodeAt(i) ^ certa.charCodeAt(i);
+  return d === 0;
+}
+
+function lerCookie(cabecalho: string | null, nome: string) {
+  if (!cabecalho) return undefined;
+  for (const parte of cabecalho.split(";")) {
+    const i = parte.indexOf("=");
+    if (i > 0 && parte.slice(0, i).trim() === nome) {
+      try { return decodeURIComponent(parte.slice(i + 1).trim()); } catch { return undefined; }
+    }
+  }
+  return undefined;
 }
 
 /** Só para teste: zera os contadores. */

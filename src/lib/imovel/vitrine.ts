@@ -14,7 +14,7 @@ export function imoveisDaVitrine() {
   return supabaseAdmin().from("properties")
     .select(`
       codigo, titulo, tipo, status, valor, published_at, modalidade,
-      municipality:municipalities(id, nome, uf),
+      municipality:municipalities!properties_municipality_id_fkey(id, nome, uf),
       geo:property_geometries(area_m2),
       media:property_media(storage_path, capa)
     `)

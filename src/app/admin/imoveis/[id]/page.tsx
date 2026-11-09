@@ -9,6 +9,7 @@ import MatriculaAdmin from "./MatriculaAdmin";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
 import DocumentosImovel from "@/components/crm/DocumentosImovel";
 import HistoricoImovel from "@/components/crm/HistoricoImovel";
+import MinhaAreaCliente from "@/components/imovel/MinhaAreaCliente";
 import { CAMPO_REVISAO_LABEL, valorRevisao } from "@/lib/imovel/revisao";
 import ConsultaRural from "@/components/rural/ConsultaRural";
 import { exigirSetor } from "@/lib/setores-servidor";
@@ -71,7 +72,7 @@ export default async function AnaliseImovel({ params }: PageProps<"/admin/imovei
       id, codigo, titulo, descricao, tipo, status, valor, area_declarada,
       caracteristicas, condicoes_venda, aceita_permuta, aceita_financiamento, exclusividade, motivo_correcao,
       pendencia_tipo, created_at, car_codigo, modalidade, leilao,
-      municipality:municipalities(nome, uf),
+      municipality:municipalities!properties_municipality_id_fkey(nome, uf),
       owner:owners(id, profile:profiles(nome, telefone)),
       partner:partners(id, razao_social, tipo, profile:profiles(nome, telefone))
     `)
@@ -278,9 +279,19 @@ export default async function AnaliseImovel({ params }: PageProps<"/admin/imovei
 
       {!!media?.length && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-          {media.map((m) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={m.storage_path} src={mediaUrl(m.storage_path)} alt="" className="h-32 w-full object-cover rounded-xl border border-linha" />
+          {/* lazy + tamanho reservado: a ficha não baixa as fotos fora da tela nem pula
+              quando elas chegam. O projeto não usa a transformação de imagem do
+              Supabase (plano), então a miniatura ainda é o arquivo original; o
+              clique abre o original em outra aba para conferir. */}
+          {media.map((m) => m.tipo === "video" ? (
+            <video key={m.storage_path} src={mediaUrl(m.storage_path)} preload="none" controls
+              className="h-32 w-full rounded-xl border border-linha bg-superficie-2 object-cover" />
+          ) : (
+            <a key={m.storage_path} href={mediaUrl(m.storage_path)} target="_blank" rel="noopener noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={mediaUrl(m.storage_path)} alt="" loading="lazy" decoding="async" width={320} height={128}
+                className="h-32 w-full object-cover rounded-xl border border-linha" />
+            </a>
           ))}
         </div>
       )}
@@ -306,6 +317,11 @@ export default async function AnaliseImovel({ params }: PageProps<"/admin/imovei
 
       <Bloco titulo="Documentos">
         <DocumentosImovel propertyId={p.id} podeConferir />
+      </Bloco>
+
+      {/* item 29: desenhos e projetos privados do anunciante — a Central só consulta */}
+      <Bloco titulo="Minha área do anunciante">
+        <MinhaAreaCliente propertyId={p.id} somenteLeitura />
       </Bloco>
 
       <Bloco titulo="Decisão" className="border-l-4 border-l-verde">

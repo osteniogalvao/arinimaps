@@ -4,6 +4,7 @@ import Moldura from "@/components/shell/Moldura";
 import { currentUser } from "@/lib/supabase/server";
 import { acessoDe } from "@/lib/planos-servidor";
 import { versaoDosLotes } from "@/lib/geo/versaoLotes";
+import AjudaTour from "@/components/ajuda/AjudaTour";
 
 const MapaRegional = dynamicImport(() => import("@/components/map/MapaRegional"));
 
@@ -24,6 +25,8 @@ export default async function PaginaMapa() {
   return (
     <Moldura usuario={usuario} cheia>
       <MapaRegional recursos={[...acesso.recursos]} logado={!!user} versaoLotes={versaoLotes} />
+      {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14) */}
+      <AjudaTour perfil="mapa" className="fixed bottom-56 right-3 z-30 lg:bottom-36" />
     </Moldura>
   );
 }

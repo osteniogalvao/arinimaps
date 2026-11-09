@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BadgeCheck, Save } from "lucide-react";
+import { enviarJson } from "@/lib/api/enviar";
 
 type Atual = { numero: string; cartorio: string | null; conferida_em: string | null } | null;
 
@@ -21,13 +22,11 @@ export default function MatriculaAdmin({ propertyId, atual }: { propertyId: stri
 
   async function gravar(conferir: boolean) {
     setOcupado(true); setMsg(null);
-    const r = await fetch("/api/admin/matricula", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ property_id: propertyId, numero, cartorio, conferir }),
-    });
-    const j = await r.json().catch(() => ({}));
+    const r = await enviarJson<{ matricula: { numero: string; cartorio: string | null; conferida_em: string | null } }>(
+      "/api/admin/matricula", "POST", { property_id: propertyId, numero, cartorio, conferir });
     setOcupado(false);
-    if (!r.ok) { setMsg({ ok: false, texto: j.error ?? "Não foi possível gravar." }); return; }
+    if (!r.ok) { setMsg({ ok: false, texto: r.erro.mensagem }); return; }
+    const j = r.dados;
     setSalvo({ numero: j.matricula.numero, cartorio: j.matricula.cartorio ?? "" });
     setConferidaEm(j.matricula.conferida_em);
     setMsg({ ok: true, texto: conferir ? "Matrícula conferida." : "Matrícula gravada." });

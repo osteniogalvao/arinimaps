@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
 import { PainelCamadas, Legenda, VIDRO, BotaoFechar } from "@/components/map/UiMapa";
-import { ArrowRight, ChevronLeft, ChevronRight, Flag, History, ImageUp, Layers, Lock, ScanSearch, Search } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
 import Ferramentas from "@/components/map/Ferramentas";
@@ -32,6 +32,10 @@ import { usePreferencias } from "@/lib/usePreferencias";
 import { escaparHtml } from "@/lib/seguranca/html";
 import { GerenciadorCamadasOficiais, type EstadoCamada, type FeicaoNoPonto } from "@/components/map/camadasOficiaisMapa";
 import { CAMADAS_OFICIAIS, camadaOficialPorId, descreverFeicao, type CamadaOficialId } from "@/lib/map/camadasOficiais";
+import { GerenciadorRelevo, type EstadoRelevo, type RelevoId } from "@/components/map/camadasRelevo";
+import { FORMATOS_BUSCA, interpretarBusca } from "@/lib/map/buscaRural";
+import BotaoCompartilharPonto, { MarcadorDaUrl } from "@/components/map/CompartilharPonto";
+import CartaoPonto, { usePressaoLonga, type PontoLivre } from "@/components/map/CartaoPonto";
 
 type ImovelProps = {
   id: string;
@@ -123,14 +127,17 @@ function ListaOficiais({ itens }: { itens: FeicaoNoPonto[] }) {
 }
 
 /** Clique fora do CAR mas sobre camadas oficiais: o mesmo resumo, sem o cartão do imóvel. */
-function CartaoOficiais({ itens, onFechar }: { itens: FeicaoNoPonto[]; onFechar: () => void }) {
+function CartaoOficiais({ itens, ponto, onFechar }: {
+  itens: FeicaoNoPonto[]; ponto: { lng: number; lat: number; zoom: number } | null; onFechar: () => void;
+}) {
   return (
-    <div className={`absolute top-16 left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[70%] overflow-y-auto p-5 space-y-3 ${VIDRO}`}>
+    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[70%] overflow-y-auto p-5 space-y-3 ${VIDRO}`}>
       <div className="flex items-start justify-between gap-3">
         <p className="lp-display text-2xl text-verde">Neste ponto</p>
         <BotaoFechar onClick={onFechar} />
       </div>
       <ListaOficiais itens={itens} />
+      {ponto && <BotaoCompartilharPonto lng={ponto.lng} lat={ponto.lat} zoom={Math.max(ponto.zoom, 15)} />}
     </div>
   );
 }
@@ -138,7 +145,7 @@ function CartaoOficiais({ itens, onFechar }: { itens: FeicaoNoPonto[]; onFechar:
 function CartaoCar({ car, onFechar, oficiais = [] }: { car: CarProps; onFechar: () => void; oficiais?: FeicaoNoPonto[] }) {
   const area = Number(car.area_ha);
   return (
-    <div className={`absolute top-16 left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-5rem)] overflow-y-auto p-5 space-y-4 ${VIDRO}`}>
+    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-5rem)] overflow-y-auto p-5 space-y-4 ${VIDRO}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro">{CAR_TIPO[car.tipo ?? ""] ?? "Imóvel rural"} · CAR</p>
@@ -202,6 +209,13 @@ const ESTILO_RUAS = {
   escuro: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
   claro: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
 } as const;
+
+/**
+ * Hash da URL no momento em que o último mapa foi desmontado. O remove() do
+ * MapLibre apaga o #pos=…; se o componente remonta em seguida (Strict Mode,
+ * navegação client-side vinda da home), o mapa novo reabre nesta posição.
+ */
+let hashDaSaida: { hash: string; quando: number } | null = null;
 
 /** Abaixo deste zoom o imóvel aparece como marcador; acima, pela divisa. */
 const ZOOM_MARCADOR = 12.5;
@@ -281,6 +295,8 @@ export default function MapaRegional({
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "urbano" | "rural" | "leilao">("todos");
   const [faixaPreco, setFaixaPreco] = useState(0);
   const [busca, setBusca] = useState("");
+  // busca limpa depois de ir até uma coordenada: o anel dourado fica no mapa
+  const manterPontoBuscaRef = useRef(false);
   // no celular o mapa é o protagonista: a lista começa fechada e vira gaveta
   const [painelAberto, setPainelAberto] = useState(true);
   useEffect(() => {
@@ -309,6 +325,10 @@ export default function MapaRegional({
   const camadasAtivasRef = useRef(camadasAtivas);
   const [estadoCamadas, setEstadoCamadas] = useState<Partial<Record<CamadaOficialId, EstadoCamada>>>({});
   const [noPonto, setNoPonto] = useState<FeicaoNoPonto[]>([]);
+  // onde foi o último clique: o cartão "Neste ponto" oferece compartilhar esse ponto
+  const [pontoClicado, setPontoClicado] = useState<{ lng: number; lat: number; zoom: number } | null>(null);
+  // pressão longa / botão direito em qualquer ponto: cartão mínimo "Neste ponto" (QA 09/11)
+  const [pontoLivre, setPontoLivre] = useState<PontoLivre | null>(null);
   const alternarCamada = useCallback((id: CamadaOficialId) => {
     const nova = new Set(camadasAtivasRef.current);
     if (nova.has(id)) nova.delete(id); else nova.add(id);
@@ -316,7 +336,39 @@ export default function MapaRegional({
     camadasRef.current?.alternar(id, nova.has(id));
     setCamadasAtivas(nova);
   }, []);
+  // relevo e água (itens 3 e 21 da segunda etapa): dados abertos, para qualquer plano
+  const relevoRef = useRef<GerenciadorRelevo | null>(null);
+  const [relevoAtivas, setRelevoAtivas] = useState<Set<RelevoId>>(new Set());
+  const relevoAtivasRef = useRef(relevoAtivas);
+  const [estadoRelevo, setEstadoRelevo] = useState<EstadoRelevo>({});
+  const alternarRelevo = useCallback((id: RelevoId) => {
+    const nova = new Set(relevoAtivasRef.current);
+    if (nova.has(id)) nova.delete(id); else nova.add(id);
+    relevoAtivasRef.current = nova;
+    relevoRef.current?.alternar(id, nova.has(id));
+    setRelevoAtivas(nova);
+  }, []);
+  // camadas da base CARTO (as do tema): o resto é nosso e atravessa a troca de tema
+  const baseEstiloRef = useRef<{ fontes: Set<string>; camadas: Set<string> } | null>(null);
+  const temaAplicadoRef = useRef(tema);
   const [carAviso, setCarAviso] = useState("");
+  // barra de chips: menu "Mais" (celular) e a altura medida, para os painéis abrirem logo abaixo
+  const [maisAberto, setMaisAberto] = useState(false);
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const areaMapaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const barra = chipsRef.current, area = areaMapaRef.current;
+    if (!barra || !area) return;
+    const medir = () => area.style.setProperty("--abaixo-chips", `${barra.offsetHeight + 20}px`);
+    medir();
+    const obs = new ResizeObserver(medir);
+    obs.observe(barra);
+    return () => obs.disconnect();
+  }, []);
+  // posição de entrada (#pos=…), lida UMA vez no primeiro mount: o remove() do
+  // MapLibre apaga o hash, e no remount (Strict Mode em dev, navegação vinda da
+  // home) o segundo mapa nascia na visão padrão em vez do município clicado
+  const hashEntradaRef = useRef<string | null>(null);
   // lotes urbanos: o lote sob o cursor e o clicado
   const loteHoverRef = useRef<string | null>(null);
   const [loteSel, setLoteSel] = useState<LoteInfo | null>(null);
@@ -426,8 +478,10 @@ export default function MapaRegional({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ xmin: b.getWest(), ymin: b.getSouth(), xmax: b.getEast(), ymax: b.getNorth() }),
         });
-        const j = await r.json().catch(() => null) as { imoveis?: number } | null;
-        if (!r.ok) celulas.forEach((c) => carCelulasPedidasRef.current.delete(c)); // tenta de novo depois
+        const j = await r.json().catch(() => null) as { imoveis?: number; longe?: boolean } | null;
+        // erro, ou janela grande demais (`longe`, monitor grande no z11): as
+        // células não foram buscadas — desmarca para pedir de novo ao aproximar
+        if (!r.ok || j?.longe) celulas.forEach((c) => carCelulasPedidasRef.current.delete(c));
         if (j?.imoveis && mapRef.current) {
           const fonte = mapRef.current.getSource("car") as VectorTileSource | undefined;
           fonte?.setTiles([`${window.location.origin}/api/tiles/car/{z}/{x}/{y}.pbf?v=${Date.now()}`]);
@@ -581,9 +635,18 @@ export default function MapaRegional({
     let cancelado = false;
     let mapa: MLMap | undefined;
 
+    // remount logo depois de um remove() (mesma página): o hash que valia é o guardado na saída
+    const recente = hashDaSaida && Date.now() - hashDaSaida.quando < 3000 ? hashDaSaida.hash : "";
+    hashEntradaRef.current ??= window.location.hash.includes("pos=") ? window.location.hash : recente || window.location.hash;
+    const entrada = hashEntradaRef.current;
     (async () => {
       const maplibregl = await carregarMaplibre();
       if (cancelado || !containerRef.current) return;
+      // o mapa anterior (remount) pode ter apagado o hash: devolve o de entrada
+      // antes de criar, para o MapLibre abrir nele
+      if (entrada.includes("pos=") && !window.location.hash.includes("pos=")) {
+        history.replaceState(history.state, "", window.location.pathname + window.location.search + entrada);
+      }
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: ESTILO_RUAS[tema],
@@ -618,6 +681,10 @@ export default function MapaRegional({
       popupRef.current = popup;
 
       map.on("load", async () => {
+        // o que veio do estilo da CARTO; tudo o que entrar depois é nosso (troca de tema)
+        const estilo = map.getStyle();
+        baseEstiloRef.current = { fontes: new Set(Object.keys(estilo.sources)), camadas: new Set(estilo.layers.map((l) => l.id)) };
+        temaAplicadoRef.current = tema;
         const [municipios, imoveis, cartografia] = await Promise.all([
           fetch("/api/geo/municipios").then((r) => r.json()),
           fetch("/api/geo/imoveis").then((r) => r.json()),
@@ -821,8 +888,9 @@ export default function MapaRegional({
           };
           walk(f.geometry?.coordinates);
         }
-        // respeita posição vinda da URL (#pos=…); sem ela, enquadra a região
-        if (coords.length && !window.location.hash.includes("pos=")) {
+        // respeita posição vinda da URL (#pos=…); sem ela, enquadra a região. Lê o
+        // hash de ENTRADA: o MapLibre já gravou #pos=9/… sozinho antes daqui
+        if (coords.length && !entrada.includes("pos=")) {
           const lngs = coords.map((c) => c[0]);
           const lats = coords.map((c) => c[1]);
           map.fitBounds(
@@ -942,12 +1010,17 @@ export default function MapaRegional({
         // camadas oficiais: o mapa é recriado na troca de tema, então religa as que estavam ligadas
         camadasRef.current = new GerenciadorCamadasOficiais(map, setEstadoCamadas);
         camadasAtivasRef.current.forEach((id) => camadasRef.current?.alternar(id, true));
+        // relevo e água: nada é baixado até alguém ligar uma camada no painel
+        relevoRef.current = new GerenciadorRelevo(map, setEstadoRelevo, tema);
+        relevoRef.current.mudarBase(baseRef.current);
+        relevoAtivasRef.current.forEach((id) => relevoRef.current?.alternar(id, true));
         // clique: reúne no cartão tudo o que as camadas ligadas têm no ponto;
         // fora do CAR, o cartão do imóvel rural fecha (não fica um de outro lugar)
         map.on("click", (e) => {
           if (desenhandoRef.current) return;
           const oficiais = camadasRef.current?.noPonto(e.point) ?? [];
           setNoPonto(oficiais);
+          setPontoClicado({ lng: e.lngLat.lng, lat: e.lngLat.lat, zoom: map.getZoom() });
           const noCar = !!map.getLayer("car-fill") && map.getLayoutProperty("car-fill", "visibility") !== "none"
             && map.queryRenderedFeatures(e.point, { layers: ["car-fill"] }).length > 0;
           if (!noCar) setCarSel(null);
@@ -971,11 +1044,38 @@ export default function MapaRegional({
       cancelado = true;
       camadasRef.current?.destruir();
       camadasRef.current = null;
+      relevoRef.current?.destruir();
+      relevoRef.current = null;
+      hashDaSaida = { hash: window.location.hash, quando: Date.now() };
       mapa?.remove();
       mapRef.current = null;
     };
+    // o mapa nasce uma vez; a troca de tema é do efeito abaixo (sem recriar)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tema]);
+  }, []);
+
+  /**
+   * Tema claro/escuro: troca só o estilo da base CARTO (setStyle), levando junto
+   * todas as fontes e camadas nossas — satélite, CAR, lotes, anúncios, camadas
+   * oficiais, relevo, desenho. Antes o mapa inteiro era destruído e recriado,
+   * o que baixava de novo imóveis, municípios e cartografia a cada troca.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !pronto || !baseEstiloRef.current || temaAplicadoRef.current === tema) return;
+    temaAplicadoRef.current = tema;
+    map.setStyle(ESTILO_RUAS[tema], {
+      transformStyle: (anterior, nova) => {
+        const base = baseEstiloRef.current;
+        if (!anterior || !base) return nova;
+        baseEstiloRef.current = { fontes: new Set(Object.keys(nova.sources)), camadas: new Set(nova.layers.map((l) => l.id)) };
+        const fontes = Object.fromEntries(Object.entries(anterior.sources).filter(([id]) => !base.fontes.has(id)));
+        const camadas = anterior.layers.filter((l) => !base.camadas.has(l.id));
+        return { ...nova, sources: { ...nova.sources, ...fontes }, layers: [...nova.layers, ...camadas] };
+      },
+    });
+    relevoRef.current?.mudarTema(tema);
+  }, [tema, pronto]);
 
   // base ruas/satélite (a planta da cidade muda de cor para continuar legível)
   useEffect(() => {
@@ -983,6 +1083,7 @@ export default function MapaRegional({
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("satelite")) return;
     map.setLayoutProperty("satelite", "visibility", base === "satelite" ? "visible" : "none");
+    relevoRef.current?.mudarBase(base);
     const cores = CARTO_CORES[base];
     if (map.getLayer("lotes-borda")) {
       map.setPaintProperty("lotes-borda", "line-color",
@@ -1026,20 +1127,122 @@ export default function MapaRegional({
     else { setCarSel(null); setCarAviso(""); }
   }, [carAtivo, pronto, conferirZoomCar, garantirCarSobDemanda]);
 
+  // busca rural inteligente (item 23): o formato do texto diz o que é
+  const buscaLida = useMemo(() => interpretarBusca(busca), [busca]);
+  // coordenada e CAR não são nome de imóvel: não filtram a lista; o código de anúncio filtra pelo código
+  const termoFiltro = buscaLida.tipo === "texto" ? busca : buscaLida.tipo === "anuncio" ? buscaLida.codigo : "";
+
   // filtros e busca
   useEffect(() => {
-    if (pronto) aplicar(filtroTipo, faixaPreco, busca);
-  }, [filtroTipo, faixaPreco, busca, pronto, aplicar]);
+    if (pronto) aplicar(filtroTipo, faixaPreco, termoFiltro);
+  }, [filtroTipo, faixaPreco, termoFiltro, pronto, aplicar]);
 
   // busca que casa com município → voa até ele
   const municipioSugerido = useMemo(() => {
+    if (buscaLida.tipo !== "texto") return null;
     const termo = norm(busca.trim());
     if (!termo || termo.length < 3) return null;
     const f = (municipiosRef.current?.features ?? []).find((m) =>
       norm(String((m.properties as { nome?: string })?.nome ?? "")).includes(termo)
     );
     return f ? { nome: (f.properties as { nome: string }).nome, geometry: f.geometry } : null;
+  }, [busca, buscaLida.tipo]);
+
+  // fora da região: municípios do Brasil inteiro pelo IBGE (cache de um dia no servidor)
+  const [municipiosBrasil, setMunicipiosBrasil] = useState<{ cod: number; nome: string; uf: string }[]>([]);
+  useEffect(() => {
+    const termo = busca.trim();
+    if (buscaLida.tipo !== "texto" || termo.length < 3) return; // a lista só aparece com 3+ letras
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/geo/municipio-busca?q=${encodeURIComponent(termo)}`, { signal: ctrl.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { municipios?: { cod: number; nome: string; uf: string }[] } | null) => setMunicipiosBrasil(j?.municipios ?? []))
+        .catch(() => {});
+    }, 350);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [busca, buscaLida.tipo]);
+
+  const [buscaAviso, setBuscaAviso] = useState("");
+  const [ajudaBusca, setAjudaBusca] = useState(false);
+
+  const irParaMunicipioIbge = useCallback(async (cod: number) => {
+    setBuscaAviso("");
+    const j = await fetch(`/api/geo/municipio-busca?cod=${cod}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as
+      { bbox?: [number, number, number, number] } | null;
+    if (!j?.bbox) { setBuscaAviso("O IBGE não respondeu agora. Tente de novo em instantes."); return; }
+    const [w, s, e, n] = j.bbox;
+    mapRef.current?.fitBounds([[w, s], [e, n]], { padding: 60, duration: 1200 });
+  }, []);
+
+  /** Coordenada digitada: voa até o ponto e o marca com o anel dourado. */
+  const irParaPonto = useCallback((lat: number, lng: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const dado: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [{ type: "Feature", geometry: { type: "Point", coordinates: [lng, lat] }, properties: {} }],
+    };
+    const fonte = map.getSource("busca-ponto") as GeoJSONSource | undefined;
+    if (fonte) fonte.setData(dado);
+    else {
+      map.addSource("busca-ponto", { type: "geojson", data: dado });
+      map.addLayer({ id: "busca-ponto-anel", type: "circle", source: "busca-ponto",
+        paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-width": 2.5, "circle-stroke-color": "#D9BD6F" } });
+      map.addLayer({ id: "busca-ponto", type: "circle", source: "busca-ponto",
+        paint: { "circle-radius": 4.5, "circle-color": "#D9BD6F", "circle-stroke-width": 1.5, "circle-stroke-color": "#124431" } });
+    }
+    map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 15), duration: 1400, essential: true });
+  }, []);
+
+  // apagou a busca: o ponto marcado sai do mapa
+  useEffect(() => {
+    if (busca.trim()) return;
+    // a busca foi limpa depois de ir até a coordenada: o anel fica
+    if (manterPontoBuscaRef.current) { manterPontoBuscaRef.current = false; return; }
+    (mapRef.current?.getSource("busca-ponto") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [] });
   }, [busca]);
+
+  /** Código do CAR: enquadra a divisa e abre o cartão; fora da base importada, vai para a consulta (que busca no SICAR). */
+  const abrirCar = useCallback(async (cod: string) => {
+    setBuscaAviso("Procurando o imóvel no CAR…");
+    const f = await fetch(`/api/geo/car/${encodeURIComponent(cod)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as
+      { geometry?: GeoJSON.Geometry; properties?: Partial<CarProps> } | null;
+    if (!f?.geometry) { router.push(`/consulta/car/${encodeURIComponent(cod)}`); return; }
+    setBuscaAviso("");
+    const coords: [number, number][] = [];
+    const walk = (c: unknown): void => {
+      if (Array.isArray(c) && typeof c[0] === "number") coords.push(c as [number, number]);
+      else if (Array.isArray(c)) c.forEach(walk);
+    };
+    walk((f.geometry as { coordinates?: unknown }).coordinates);
+    if (coords.length && mapRef.current) {
+      const lngs = coords.map((c) => c[0]), lats = coords.map((c) => c[1]);
+      mapRef.current.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 80, duration: 1200 });
+    }
+    setCarAtivo(true);
+    setCarSel({
+      cod, area_ha: f.properties?.area_ha ?? null, condicao: f.properties?.condicao ?? null,
+      status: f.properties?.status ?? null, tipo: f.properties?.tipo ?? null, municipio: f.properties?.municipio ?? null,
+    });
+  }, [router]);
+
+  /** Código de anúncio: abre na lista do mapa se estiver nela; senão, a página do imóvel. */
+  const abrirAnuncio = useCallback((codigo: string) => {
+    const f = dadosRef.current?.features.find((x) => (x.properties as ImovelProps).codigo?.toUpperCase() === codigo);
+    if (f) voarPara(f.properties as ImovelProps);
+    else router.push(`/imovel/${codigo}`);
+  }, [router, voarPara]);
+
+  /** Enter na caixa de busca: faz o que a primeira sugestão faria. */
+  const confirmarBusca = () => {
+    const b = buscaLida;
+    if (b.tipo === "coordenada") escolherSugestao(() => irParaPonto(b.lat, b.lng), true);
+    else if (b.tipo === "car") escolherSugestao(() => void abrirCar(b.cod));
+    else if (b.tipo === "anuncio") escolherSugestao(() => abrirAnuncio(b.codigo));
+    else if (municipioSugerido) escolherSugestao(irParaMunicipio);
+    else if (municipiosBrasil[0]) { const cod = municipiosBrasil[0].cod; escolherSugestao(() => void irParaMunicipioIbge(cod)); }
+  };
 
   const irParaMunicipio = useCallback(() => {
     if (!municipioSugerido) return;
@@ -1059,6 +1262,24 @@ export default function MapaRegional({
     }
   }, [municipioSugerido]);
 
+  usePressaoLonga(mapaPronto, {
+    ativo: () => !desenhandoRef.current && !variosRef.current,
+    aoPressionar: (p) => {
+      // o cartão mínimo ocupa o mesmo canto: os outros cartões cedem a vez
+      setCarSel(null); setNoPonto([]); setCamadasAbertas(false);
+      if (loteSel) { setLoteSel(null); mapRef.current?.removeFeatureState({ source: "lotes", sourceLayer: "lotes" }); }
+      setPontoLivre(p);
+    },
+    aoClicar: () => setPontoLivre(null),
+  });
+
+  /** Escolheu uma sugestão da busca: o voo já aconteceu, o texto não filtra mais a lista. */
+  const escolherSugestao = (acao: () => void, manterPonto = false) => {
+    acao();
+    manterPontoBuscaRef.current = manterPonto;
+    setBusca("");
+  };
+
   const ativos = lista.filter((p) => p.status !== "vendido").length;
 
   /** "Não encontrei meu imóvel": leva o ponto onde a pessoa estava olhando. */
@@ -1072,6 +1293,42 @@ export default function MapaRegional({
   // chips sobre o satélite: vidro do tema com desfoque (o ativo continua verde pelo data-ativo do .chip)
   const chipBase = "chip inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium whitespace-nowrap shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md";
 
+  const chipsSecundarios = (
+    <>
+      {/* Revisão do Carlos (29/10): "buscar imóveis" como opção de filtro no mapa */}
+      <button onClick={() => { setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
+        className={chipBase} title="Abrir a lista com a busca e os filtros de imóveis">
+        <Search className="size-3.5" /> Buscar imóveis
+      </button>
+      <button onClick={() => { setBuscaImagem(!buscaImagem); setSeletorAno(false); }} data-ativo={buscaImagem} className={chipBase}
+        title="Encontre o local por uma foto com GPS, um print de mapa, um croqui ou um documento">
+        <ImageUp className="size-3.5" /> Buscar por imagem
+      </button>
+      <button
+        onClick={() => {
+          if (!liberado("camadas_oficiais")) {
+            setAvisoPlano(logado
+              ? "As imagens históricas fazem parte da consulta profissional e não estão no seu plano."
+              : "Entre na sua conta para ver as imagens históricas.");
+            return;
+          }
+          setSeletorAno(!seletorAno);
+        }}
+        data-ativo={!!imagemAno || seletorAno} className={chipBase}
+        title="Imagens de satélite de anos anteriores (Esri Wayback e Sentinel-2)">
+        {liberado("camadas_oficiais") ? <History className="size-3.5" /> : <Lock className="size-3.5" />} {imagemAno ? `Imagem de ${imagemHistoricaPorId(imagemAno)?.ano}` : "Imagem do ano"}
+      </button>
+      <button onClick={() => { setCarAtivo(!carAtivo); void salvarPrefs({ camada_car: !carAtivo }); }} data-ativo={carAtivo} className={chipBase}
+        title="Imóveis rurais do Cadastro Ambiental Rural (SICAR)">
+        Imóveis rurais (CAR)
+      </button>
+      <button onClick={() => setPlantaAtiva(!plantaAtiva)} data-ativo={plantaAtiva} className={chipBase}
+        title="Desenho completo da planta da cidade, como veio do CAD: ruas, calçadas, textos e detalhes">
+        Planta completa
+      </button>
+    </>
+  );
+
   return (
     <div className="relative flex-1 min-h-0 flex bg-fundo">
       {/* ---------- resultados ---------- */}
@@ -1080,21 +1337,81 @@ export default function MapaRegional({
         (painelAberto ? "w-[85%] sm:w-[320px]" : "w-0 overflow-hidden")
       }>
         <div className="p-4 space-y-3 border-b border-linha">
-          <div className="relative">
-            <input ref={buscaInputRef} value={busca} onChange={(e) => setBusca(e.target.value)}
-              aria-label="Buscar imóveis"
-              placeholder="Buscar por imóvel, município ou código"
-              className="w-full rounded-full border border-linha-forte bg-superficie-2 pl-10 pr-3 py-2.5 text-sm text-texto placeholder:text-texto-2/70 transition focus:border-verde focus:outline-none focus:ring-2 focus:ring-verde/30" />
+          <form role="search" className="relative" onSubmit={(e) => { e.preventDefault(); confirmarBusca(); }}>
+            <input ref={buscaInputRef} data-tour="busca" value={busca} onChange={(e) => { setBusca(e.target.value); setBuscaAviso(""); }}
+              aria-label="Buscar imóvel, município, CAR, código ou coordenada"
+              placeholder="Imóvel, município, CAR, AIB-… ou coordenada"
+              title="Também aceita graus/minutos/segundos e UTM (ex.: 22K 612345 7818123). Enter para ir."
+              className="w-full rounded-full border border-linha-forte bg-superficie-2 pl-10 pr-10 py-2.5 text-sm text-texto placeholder:text-texto-2/70 transition focus:border-verde focus:outline-none focus:ring-2 focus:ring-verde/30" />
             <Search aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-texto-2" />
-          </div>
+            <button type="button" onClick={() => setAjudaBusca(!ajudaBusca)} aria-expanded={ajudaBusca}
+              aria-label="Formatos aceitos na busca" title="Formatos aceitos na busca"
+              className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-texto-2 transition hover:bg-superficie hover:text-verde">
+              <CircleHelp className="size-4" />
+            </button>
+          </form>
 
+          {ajudaBusca && (
+            <dl className="rounded-xl border border-linha bg-superficie-2/60 px-3.5 py-2.5 text-xs space-y-1.5">
+              {FORMATOS_BUSCA.map((f) => (
+                <div key={f.rotulo} className="flex items-baseline justify-between gap-3">
+                  <dt className="text-texto-2">{f.rotulo}</dt>
+                  <dd className="font-mono text-[11px] text-texto text-right">{f.exemplo}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {buscaLida.tipo === "coordenada" && (
+            <button onClick={() => escolherSugestao(() => irParaPonto(buscaLida.lat, buscaLida.lng), true)}
+              className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-verde/25 bg-verde/12 text-verde px-3.5 py-2.5 hover:bg-verde/20 transition">
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5"><Crosshair className="size-3.5 shrink-0" /> Ir para o ponto
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-texto-2">
+                    {buscaLida.formato === "utm" ? "UTM" : buscaLida.formato === "gms" ? "GMS" : "graus"}
+                  </span>
+                </span>
+                <strong className="block font-mono text-xs tabular-nums">{buscaLida.rotulo}</strong>
+              </span>
+              <ArrowRight className="size-4 shrink-0" />
+            </button>
+          )}
+          {buscaLida.tipo === "car" && (
+            <button onClick={() => escolherSugestao(() => void abrirCar(buscaLida.cod))}
+              className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-verde/25 bg-verde/12 text-verde px-3.5 py-2.5 hover:bg-verde/20 transition">
+              <span className="min-w-0">Abrir o imóvel do CAR
+                <strong className="block truncate font-mono text-[11px]">{buscaLida.cod}</strong>
+              </span>
+              <ArrowRight className="size-4 shrink-0" />
+            </button>
+          )}
+          {buscaLida.tipo === "anuncio" && (
+            <button onClick={() => escolherSugestao(() => abrirAnuncio(buscaLida.codigo))}
+              className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-verde/25 bg-verde/12 text-verde px-3.5 py-2.5 hover:bg-verde/20 transition">
+              <span>Abrir o anúncio <strong className="font-mono">{buscaLida.codigo}</strong></span>
+              <ArrowRight className="size-4 shrink-0" />
+            </button>
+          )}
           {municipioSugerido && (
-            <button onClick={irParaMunicipio}
+            <button onClick={() => escolherSugestao(irParaMunicipio)}
               className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-verde/25 bg-verde/12 text-verde px-3.5 py-2.5 hover:bg-verde/20 transition">
               <span>Ir para <strong>{municipioSugerido.nome}</strong></span>
               <ArrowRight className="size-4 shrink-0" />
             </button>
           )}
+          {buscaLida.tipo === "texto" && busca.trim().length >= 3 && municipiosBrasil
+            .filter((m) => !municipioSugerido || norm(m.nome) !== norm(municipioSugerido.nome))
+            .slice(0, municipioSugerido ? 2 : 3)
+            .map((m) => (
+              <button key={m.cod} onClick={() => escolherSugestao(() => void irParaMunicipioIbge(m.cod))}
+                className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-linha-forte px-3.5 py-2 text-texto-3 hover:border-verde/40 hover:text-verde transition">
+                <span className="flex items-center gap-1.5 min-w-0"><MapPin className="size-3.5 shrink-0" />
+                  <span className="truncate">{m.nome} <span className="text-texto-2">· {m.uf}</span></span>
+                </span>
+                <ArrowRight className="size-4 shrink-0" />
+              </button>
+            ))}
+          {buscaAviso && <p className="text-xs text-texto-2" aria-live="polite">{buscaAviso}</p>}
 
           <div className="flex gap-1.5 flex-wrap">
             {(["todos", "rural", "urbano", "leilao"] as const).map((t) => (
@@ -1105,7 +1422,7 @@ export default function MapaRegional({
             ))}
           </div>
 
-          <select value={faixaPreco} onChange={(e) => setFaixaPreco(Number(e.target.value))}
+          <select value={faixaPreco} onChange={(e) => setFaixaPreco(Number(e.target.value))} aria-label="Faixa de preço"
             className="w-full rounded-xl border border-linha-forte bg-superficie-2 px-3.5 py-2.5 text-sm text-texto transition focus:border-verde focus:outline-none focus:ring-2 focus:ring-verde/30">
             {FAIXAS_PRECO.map((f, i) => <option key={f.label} value={i}>{f.label}</option>)}
           </select>
@@ -1174,20 +1491,16 @@ export default function MapaRegional({
       </button>
 
       {/* ---------- mapa ---------- */}
-      <div className="relative flex-1 min-w-0">
+      <div ref={areaMapaRef} className="relative flex-1 min-w-0">
         {/* inline: o CSS do maplibre força position:relative na classe e colapsaria a altura */}
         <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
 
-        <div className="absolute top-3 left-3 right-14 flex gap-2 overflow-x-auto pb-1">
-          {/* Revisão do Carlos (29/10): "buscar imóveis" como opção de filtro no mapa */}
-          <button onClick={() => { setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
-            className={chipBase} title="Abrir a lista com a busca e os filtros de imóveis">
-            <Search className="size-3.5" /> Buscar imóveis
-          </button>
-          <button onClick={() => { setBuscaImagem(!buscaImagem); setSeletorAno(false); }} data-ativo={buscaImagem} className={chipBase}
-            title="Encontre o local por uma foto com GPS, um print de mapa, um croqui ou um documento">
-            <ImageUp className="size-3.5" /> Buscar por imagem
-          </button>
+        {/* Barra do mapa (QA 09/11): antes era uma fila só com rolagem lateral e, em
+            1366 px ou no celular, "Não encontrei meu imóvel", Satélite/Mapa e Camadas
+            sumiam para fora da tela. Agora os de prioridade vêm primeiro e a barra
+            QUEBRA em linhas; no celular o resto vai para o menu "Mais". A altura real
+            da barra vira --abaixo-chips, e os painéis abrem logo abaixo dela. */}
+        <div ref={chipsRef} className="absolute top-3 left-3 right-14 z-10 flex flex-wrap items-start gap-2">
           {/* requisitos cartográficos §2.1 + Revisão do Carlos (29/10): "Não encontrei
               meu imóvel" precisa ser fácil de achar — fica em dourado, logo no começo */}
           <button
@@ -1196,48 +1509,36 @@ export default function MapaRegional({
             title="Informar um imóvel ausente ou uma divergência do mapa à equipe de cartografia">
             <Flag className="size-3.5" /> Não encontrei meu imóvel
           </button>
-          <button onClick={() => setCamadasAbertas(!camadasAbertas)} data-ativo={camadasAbertas}
-            className={chipBase}>
-            <Layers className="size-3.5" /> Camadas e Dados
-          </button>
           {(["satelite", "ruas"] as const).map((b) => (
             <button key={b} onClick={() => { setBase(b); void salvarPrefs({ mapa_base: b === "ruas" ? "mapa" : "satelite" }); }} data-ativo={base === b} className={chipBase}>
               {b === "ruas" ? "Mapa" : "Satélite"}
             </button>
           ))}
-          <button
-            onClick={() => {
-              if (!liberado("camadas_oficiais")) {
-                setAvisoPlano(logado
-                  ? "As imagens históricas fazem parte da consulta profissional e não estão no seu plano."
-                  : "Entre na sua conta para ver as imagens históricas.");
-                return;
-              }
-              setSeletorAno(!seletorAno);
-            }}
-            data-ativo={!!imagemAno || seletorAno} className={chipBase}
-            title="Imagens de satélite de anos anteriores (Esri Wayback e Sentinel-2)">
-            {liberado("camadas_oficiais") ? <History className="size-3.5" /> : <Lock className="size-3.5" />} {imagemAno ? `Imagem de ${imagemHistoricaPorId(imagemAno)?.ano}` : "Imagem do ano"}
+          <button onClick={() => { setCamadasAbertas(!camadasAbertas); setMaisAberto(false); }} data-ativo={camadasAbertas}
+            className={chipBase} data-tour="camadas">
+            <Layers className="size-3.5" /> Camadas e Dados
           </button>
-          <button onClick={() => { setCarAtivo(!carAtivo); void salvarPrefs({ camada_car: !carAtivo }); }} data-ativo={carAtivo} className={chipBase}
-            title="Imóveis rurais do Cadastro Ambiental Rural (SICAR)">
-            Imóveis rurais (CAR)
+          <div className="hidden sm:contents">{chipsSecundarios}</div>
+          <button onClick={() => setMaisAberto(!maisAberto)} data-ativo={maisAberto} aria-expanded={maisAberto} className={chipBase + " sm:hidden"} data-tour="mais">
+            <Ellipsis className="size-3.5" /> Mais
           </button>
-          <button onClick={() => setPlantaAtiva(!plantaAtiva)} data-ativo={plantaAtiva} className={chipBase}
-            title="Desenho completo da planta da cidade, como veio do CAD: ruas, calçadas, textos e detalhes">
-            Planta completa
-          </button>
-
+          {/* ancorado na barra (não no botão): não passa da borda da tela */}
+          {maisAberto && (
+            <div className={`sm:hidden absolute left-0 top-full z-30 mt-2 flex w-56 max-w-full flex-col items-stretch gap-1.5 p-2 ${VIDRO}`}
+              onClick={() => setMaisAberto(false)}>
+              {chipsSecundarios}
+            </div>
+          )}
         </div>
 
         {carAtivo && carAviso && !carSel && (
-          <p className={`absolute top-14 left-3 right-14 sm:right-auto px-3.5 py-2 text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>
+          <p className={`absolute top-[var(--abaixo-chips,4rem)] left-3 right-14 sm:right-auto px-3.5 py-2 text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>
             {carAviso}
           </p>
         )}
 
         {avisoPlano && (
-          <div className={`absolute top-14 left-3 z-10 px-4 py-3 flex items-center gap-3 text-sm max-w-[calc(100%-1.5rem)] ${VIDRO}`}>
+          <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 px-4 py-3 flex items-center gap-3 text-sm max-w-[calc(100%-1.5rem)] ${VIDRO}`}>
             <Lock className="size-4 shrink-0 text-ouro" />
             <span className="text-texto-3">{avisoPlano}</span>
             <Link href={logado ? "/planos" : "/entrar"} className="inline-flex items-center gap-1 text-verde font-semibold whitespace-nowrap hover:underline">
@@ -1257,7 +1558,7 @@ export default function MapaRegional({
         )}
 
         {seletorAno && (
-          <div className={`absolute top-14 left-3 z-20 w-80 max-w-[calc(100%-1.5rem)] p-5 space-y-3.5 max-h-[70%] overflow-y-auto ${VIDRO}`}>
+          <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-20 w-80 max-w-[calc(100%-1.5rem)] p-5 space-y-3.5 max-h-[70%] overflow-y-auto ${VIDRO}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <span className="grid size-9 place-items-center rounded-full bg-verde/12 text-verde"><History className="size-[18px]" /></span>
@@ -1308,7 +1609,11 @@ export default function MapaRegional({
         )}
 
         {carSel && <CartaoCar car={carSel} oficiais={noPonto} onFechar={() => { setCarSel(null); setNoPonto([]); }} />}
-        {!carSel && noPonto.length > 0 && !loteSel && <CartaoOficiais itens={noPonto} onFechar={() => setNoPonto([])} />}
+        {!carSel && noPonto.length > 0 && !loteSel && <CartaoOficiais itens={noPonto} ponto={pontoClicado} onFechar={() => setNoPonto([])} />}
+        {pontoLivre && !carSel && !loteSel && !varios && noPonto.length === 0 && (
+          <CartaoPonto ponto={pontoLivre} onFechar={() => setPontoLivre(null)} />
+        )}
+        <MarcadorDaUrl map={mapaPronto} />
         {loteSel && !carSel && !varios && (
           <CartaoLote lote={loteSel} onFechar={() => {
             setLoteSel(null);
@@ -1325,9 +1630,10 @@ export default function MapaRegional({
         {camadasAbertas && (
           <PainelCamadas onFechar={() => setCamadasAbertas(false)}
             bloqueado={!liberado("camadas_oficiais")} logado={logado}
-            ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada} />
+            ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada}
+            relevoAtivas={relevoAtivas} estadoRelevo={estadoRelevo} onAlternarRelevo={alternarRelevo} />
         )}
-        <Legenda extras={CAMADAS_OFICIAIS.filter((c) => camadasAtivas.has(c.id))
+        <Legenda relevo={[...relevoAtivas]} extras={CAMADAS_OFICIAIS.filter((c) => camadasAtivas.has(c.id))
           // camada com cor por valor (biomas): uma linha por valor na legenda
           .flatMap((c) => (c.cores ? Object.entries(c.cores).map(([nome, cor]) => ({ nome, cor })) : [c]))} />
 

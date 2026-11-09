@@ -4,6 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { ator, podeOperarOportunidade } from "@/lib/authz";
 import { CONTRATO_LABEL, ETAPAS, ETAPA_LABEL, RESPONSAVEL_LABEL } from "@/lib/funil";
 import { sendEmail, ariniEmail } from "@/lib/notify";
+import { avisarVisitaAoProprietario } from "@/lib/acompanhamento/servidor";
 
 async function contexto(id: string) {
   const a = await ator();
@@ -106,23 +107,33 @@ export async function POST(request: Request, ctx: RouteContext<"/api/oportunidad
 
     case "visita": {
       if (!body.data_hora) return NextResponse.json({ error: "Informe data e hora." }, { status: 400 });
+      // datetime-local chega sem fuso: sem isso o timestamptz o lê como UTC e a visita
+      // das 14:00 aparece às 11:00. O painel já manda ISO; o fuso de Brasília cobre clientes antigos.
+      const bruto = String(body.data_hora);
+      const quando = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(bruto) ? `${bruto}-03:00` : bruto);
+      if (Number.isNaN(quando.getTime())) return NextResponse.json({ error: "Data e hora inválidas." }, { status: 400 });
       const { data: v, error } = await admin.from("visits")
-        .insert({ opportunity_id: id, data_hora: body.data_hora, responsavel: a!.userId })
+        .insert({ opportunity_id: id, data_hora: quando.toISOString(), responsavel: a!.userId })
         .select("id").single();
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-      await evento(id, "anotacao", `Visita agendada para ${new Date(body.data_hora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}`, a!.userId);
+      await evento(id, "anotacao", `Visita agendada para ${quando.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}`, a!.userId);
       await logAudit({ user_id: a!.userId, acao: "visita_agendada", entidade: "visits", entidade_id: v.id, opportunity_id: id, property_id: opp.property_id });
+      // item 28: o proprietário é avisado (canal isolado em lib/acompanhamento)
+      await avisarVisitaAoProprietario({ opportunityId: id, autorId: a!.userId, status: "agendada", dataHora: quando.toISOString() });
       return NextResponse.json({ ok: true });
     }
 
     case "visita_status": {
       const { visita_id, status, feedback } = body;
-      if (!["realizada", "remarcada", "nao_compareceu"].includes(status)) {
+      // "cancelada" existe a partir da migration 0060 (item 28)
+      if (!["realizada", "remarcada", "nao_compareceu", "cancelada"].includes(status)) {
         return NextResponse.json({ error: "Status de visita inválido." }, { status: 400 });
       }
-      await admin.from("visits").update({ status, feedback: feedback ?? null }).eq("id", visita_id).eq("opportunity_id", id);
+      const { error: errVisita } = await admin.from("visits").update({ status, feedback: feedback ?? null }).eq("id", visita_id).eq("opportunity_id", id);
+      if (errVisita) return NextResponse.json({ error: errVisita.message }, { status: 400 });
       await evento(id, "anotacao", `Visita ${status}${feedback ? `: ${feedback}` : ""}`, a!.userId);
       await logAudit({ user_id: a!.userId, acao: `visita_${status}`, entidade: "visits", entidade_id: visita_id, opportunity_id: id, property_id: opp.property_id });
+      await avisarVisitaAoProprietario({ opportunityId: id, autorId: a!.userId, status, feedback: feedback ?? null });
       return NextResponse.json({ ok: true });
     }
 
@@ -169,7 +180,11 @@ export async function POST(request: Request, ctx: RouteContext<"/api/oportunidad
         return NextResponse.json({ error: "Status de contrato inválido." }, { status: 400 });
       }
       await admin.from("contracts").upsert(
-        { opportunity_id: id, status, assinado_at: status === "assinado" ? new Date().toISOString() : undefined },
+        {
+          opportunity_id: id, status,
+          assinado_at: status === "assinado" ? new Date().toISOString() : undefined,
+          registrado_at: status === "registrado" ? new Date().toISOString() : undefined,
+        },
         { onConflict: "opportunity_id" });
       await evento(id, "anotacao", `Contrato: ${(CONTRATO_LABEL[status] ?? status).toLowerCase()}`, a!.userId);
       await logAudit({ user_id: a!.userId, acao: `contrato_${status}`, entidade: "contracts", opportunity_id: id, property_id: opp.property_id });

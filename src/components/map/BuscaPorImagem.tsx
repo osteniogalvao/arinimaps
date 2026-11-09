@@ -85,7 +85,7 @@ export default function BuscaPorImagem({
   }
 
   return (
-    <div className={`absolute top-14 left-3 z-20 w-96 max-w-[calc(100%-1.5rem)] p-5 space-y-3.5 ${VIDRO}`}>
+    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-20 w-96 max-w-[calc(100%-1.5rem)] p-5 space-y-3.5 ${VIDRO}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="grid size-9 place-items-center rounded-full bg-verde/12 text-verde"><ImageUp className="size-[18px]" /></span>

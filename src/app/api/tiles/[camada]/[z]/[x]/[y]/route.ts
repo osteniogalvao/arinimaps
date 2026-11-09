@@ -40,7 +40,7 @@ function lembrar(chave: string, raw: Buffer, gz: Buffer) {
 }
 
 export async function GET(request: Request, ctx: RouteContext<"/api/tiles/[camada]/[z]/[x]/[y]">) {
-  const bloqueio = limiteLeituraMapa(request, "tiles");
+  const bloqueio = await limiteLeituraMapa(request, "tiles");
   if (bloqueio) return bloqueio;
   const { camada, z: zs, x: xs, y: ys } = await ctx.params;
   const cfg = CAMADAS[camada];

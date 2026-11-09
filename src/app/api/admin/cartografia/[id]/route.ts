@@ -226,7 +226,10 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   const mudouExcluidas = [...excluidasAntes].sort().join(",") !== [...excluidasDepois].sort().join(",");
   const mudouGeometria = patch.edicoes_geometria !== undefined &&
     JSON.stringify(patch.edicoes_geometria) !== JSON.stringify(antes.edicoes_geometria ?? []);
-  if ((mudouCamadas || mudouExcluidas || mudouGeometria) && antes.tipo === "vector" && antes.tiles_path) {
+  // planta sem arquivo público (enviada antes de 09/11/2026): gera agora, para
+  // o mapa público deixar de depender da URL do original
+  const semPublico = !antes.publico_path;
+  if ((mudouCamadas || mudouExcluidas || mudouGeometria || semPublico) && antes.tipo === "vector" && antes.tiles_path) {
     try {
       publico = await gerarPlantaPublica(
         admin, { id, tiles_path: antes.tiles_path, publico_path: antes.publico_path },

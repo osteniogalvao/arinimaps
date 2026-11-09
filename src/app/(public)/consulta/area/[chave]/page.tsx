@@ -8,9 +8,32 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { carregarConsultaArea } from "@/lib/geo/consultaArea";
 import { formatArea } from "@/lib/format";
 import IndicadoresMunicipio from "@/components/rural/IndicadoresMunicipio";
+import EnviarWhatsApp from "@/components/compartilhar/EnviarWhatsApp";
+import BotaoExportarSig from "@/components/compartilhar/BotaoExportarSig";
+import { OG_IMAGEM_PADRAO, OG_NOME_SITE } from "@/lib/compartilhar";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Consulta de área desenhada" };
+const chaveDe = (bruta: string) => (bruta.startsWith("geo:") ? bruta : `geo:${bruta}`);
+
+/** Prévia do link (WhatsApp): tamanho e município da área. */
+export async function generateMetadata({ params }: PageProps<"/consulta/area/[chave]">): Promise<Metadata> {
+  const chave = chaveDe(decodeURIComponent((await params).chave));
+  if (!/^geo:[0-9a-f]{40}$/.test(chave)) return { title: "Consulta de área desenhada" };
+  const { data } = await supabaseAdmin().rpc("fn_area_consulta", { p_chave: chave });
+  const area = data as { area_ha: number; municipio: string | null } | null;
+  if (!area) return { title: "Consulta de área desenhada" };
+  const tamanho = formatArea(Number(area.area_ha) * 10_000, Number(area.area_ha) >= 1 ? "rural" : "urbano");
+  const titulo = `Consulta de área · ${tamanho}${area.municipio ? ` em ${area.municipio}` : ""}`;
+  const descricao = "Área desenhada no mapa da Arini, com o cruzamento com CAR, mineração, terras indígenas, desmatamento e outras fontes oficiais.";
+  return {
+    title: titulo, description: descricao,
+    openGraph: {
+      type: "website", siteName: OG_NOME_SITE, locale: "pt_BR", url: `/consulta/area/${chave.slice(4)}`,
+      title: titulo, description: descricao, images: [{ url: OG_IMAGEM_PADRAO, alt: titulo }],
+    },
+    twitter: { card: "summary_large_image" },
+  };
+}
 
 type Area = {
   chave: string; area_ha: number; created_at: string;
@@ -26,7 +49,7 @@ type Area = {
  */
 export default async function ConsultaAreaDesenhada({ params }: PageProps<"/consulta/area/[chave]">) {
   const bruta = decodeURIComponent((await params).chave);
-  const chave = bruta.startsWith("geo:") ? bruta : `geo:${bruta}`;
+  const chave = chaveDe(bruta);
   if (!/^geo:[0-9a-f]{40}$/.test(chave)) notFound();
   const [{ data: areaRaw }, consulta] = await Promise.all([
     supabaseAdmin().rpc("fn_area_consulta", { p_chave: chave }),
@@ -73,6 +96,17 @@ export default async function ConsultaAreaDesenhada({ params }: PageProps<"/cons
                 </div>
               ))}
             </dl>
+            {/* itens 6 e 8: enviar o link e exportar a área para SIG */}
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <EnviarWhatsApp caminho={`/consulta/area/${chave.slice(4)}`} titulo={`Consulta de área · ${tamanho}`}
+                texto={`Consulta de área no mapa da Arini: ${tamanho}${area.municipio ? ` em ${area.municipio}` : ""}.`}
+                aviso="Quem receber vê a área e os dados dela. O cruzamento com as fontes oficiais pede uma conta na Arini." />
+              <BotaoExportarSig nomeBase={`area-${tamanho.replace(/\s+/g, "")}-${chave.slice(4, 12)}`}
+                divisa={{
+                  geometry: area.geometry, rotulo: "Área desenhada",
+                  atributos: { chave: chave.slice(4), area_ha: Number(area.area_ha), municipio: area.municipio, fonte: "Área desenhada no mapa da Arini" },
+                }} />
+            </div>
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-4">
               A área foi desenhada à mão sobre o satélite: é aproximada. Para uma análise do imóvel, use a divisa
               do CAR ou da matrícula.

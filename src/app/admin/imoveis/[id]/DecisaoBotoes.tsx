@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 
 const ACOES: { acao: string; label: string; classe: string; pedirMotivo?: boolean }[] = [
   { acao: "em_analise", label: "Iniciar análise", classe: "btn-contorno" },
@@ -27,15 +28,10 @@ export default function DecisaoBotoes({ propertyId }: { propertyId: string }) {
     }
     setOcupado(true);
     setErro("");
-    const res = await fetch("/api/admin/decisao", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ alvo: "imovel", id: propertyId, acao, motivo }),
-    });
-    const data = await res.json();
+    const r = await enviarJson("/api/admin/decisao", "POST", { alvo: "imovel", id: propertyId, acao, motivo });
     setOcupado(false);
-    if (!res.ok) {
-      setErro(data.error ?? "Falha ao aplicar a decisão.");
+    if (!r.ok) {
+      setErro([r.erro.mensagem, r.erro.motivo].filter(Boolean).join(" — "));
       return;
     }
     router.refresh();

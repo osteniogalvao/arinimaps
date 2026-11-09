@@ -50,6 +50,9 @@ export default function PainelAvaliacao({
   const [contato, setContato] = useState<{ aberto: boolean; telefone: string; mensagem: string; aceite: boolean; enviado: string | null; erro: ErroApi | null }>(
     { aberto: false, telefone: "", mensagem: "", aceite: false, enviado: null, erro: null });
 
+  // trava o "Enviar pedido" enquanto o primeiro está em voo: clique duplo criava duas oportunidades
+  const [enviando, setEnviando] = useState(false);
+
   const aptidaoPossivel = mostrarAptidao && tipoImovel === "rural";
   const tipo = mostrarPre && aptidaoPossivel ? "ambos" : mostrarPre ? "pre_avaliacao" : "aptidao";
 
@@ -62,10 +65,13 @@ export default function PainelAvaliacao({
   }
 
   async function pedirAvaliador() {
+    if (enviando) return;
+    setEnviando(true);
     const res = await enviarJson<{ oportunidade: string }>(`/api/avaliacao/${propertyId}/avaliador`, "POST", {
       telefone: contato.telefone, mensagem: contato.mensagem, consentimento: contato.aceite,
       avaliacaoId: r?.pre_avaliacao?.id,
     });
+    setEnviando(false);
     if (!res.ok) return setContato((c) => ({ ...c, erro: res.erro }));
     setContato((c) => ({ ...c, enviado: res.dados.oportunidade, erro: null }));
   }
@@ -221,8 +227,8 @@ export default function PainelAvaliacao({
                   Autorizo a Arini a me contatar sobre a avaliação deste imóvel, conforme a Política de Privacidade.
                 </label>
                 {contato.erro && <AvisoErro erro={contato.erro} aoFechar={() => setContato({ ...contato, erro: null })} />}
-                <button type="button" onClick={pedirAvaliador} disabled={!contato.aceite} className="btn-ouro px-5 py-3 text-sm disabled:opacity-50">
-                  Enviar pedido
+                <button type="button" onClick={pedirAvaliador} disabled={!contato.aceite || enviando} className="btn-ouro px-5 py-3 text-sm disabled:opacity-50">
+                  {enviando ? "Enviando..." : "Enviar pedido"}
                 </button>
               </div>
             ) : (

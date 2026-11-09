@@ -21,7 +21,7 @@ export default async function PainelOperacoes() {
     contar("owners", (q) => q.in("status", ["solicitado", "em_analise"])),
     contar("properties", (q) => q.gte("published_at", inicioMes)),
     admin.from("properties")
-      .select("id, codigo, titulo, tipo, status, created_at, car_codigo, municipality:municipalities(nome)")
+      .select("id, codigo, titulo, tipo, status, created_at, car_codigo, municipality:municipalities!properties_municipality_id_fkey(nome)")
       .in("status", ["pendente", "em_analise", "correcao", "aprovado"])
       .order("created_at").limit(30),
     admin.from("property_documents")

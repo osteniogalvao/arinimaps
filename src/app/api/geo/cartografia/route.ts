@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
+import { ator, temSetor } from "@/lib/authz";
 import { assinaturaAjustes, assinaturaEdicoes, assinaturaExclusoes, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
 
 /**
@@ -21,11 +22,25 @@ import { assinaturaAjustes, assinaturaEdicoes, assinaturaExclusoes, type AjusteL
  * `max-age=60` ela reabria nos valores ANTIGOS logo depois de salvar — o
  * operador via "não salvou", mexia de novo e gravava o valor velho por cima.
  * Perder calibração é pior do que uma consulta a mais ao banco.
+ *
+ * O ORIGINAL É SÓ DA EQUIPE. O arquivo completo tem as camadas que o operador
+ * escondeu e as linhas que apagou; o diagnóstico do CAD (camadas, zona UTM)
+ * também é material de trabalho. Esses campos só saem para quem é do setor de
+ * cartografia (a tela Calibrar). Para o público, `geojson` aponta SÓ para o
+ * arquivo público (`publico_path`, nome aleatório que não leva ao original).
+ * A URL do original nunca sai para o público, nem quando os dois são iguais:
+ * quem a guardasse baixaria depois as camadas escondidas. Planta ainda sem
+ * arquivo público fica fora do mapa público até a calibração gerá-lo (envio
+ * novo já gera; planta antiga gera ao salvar a calibração uma vez).
  */
 export async function GET(request: Request) {
-  const bloqueio = limiteLeituraMapa(request, "geo");
+  const bloqueio = await limiteLeituraMapa(request, "geo");
   if (bloqueio) return bloqueio;
   const fresco = new URL(request.url).searchParams.get("fresco") === "1";
+  // só consulta a sessão se houver cookie de login: o mapa público (anônimo)
+  // não paga a ida ao Supabase Auth
+  const temSessao = /(?:^|;\s*)sb-[^=]*-auth-token/.test(request.headers.get("cookie") ?? "");
+  const equipe = temSessao ? temSetor(await ator(), "cartografia") : false;
 
   const { data, error } = await supabaseAdmin()
     .from("cartography_layers")
@@ -48,29 +63,40 @@ export async function GET(request: Request) {
     // inventado.
     const b = diag?.bbox;
     const bbox = Array.isArray(b) && b.length === 4 && b.every((n) => Number.isFinite(n)) ? b : null;
+    const original = c.tipo === "vector" ? `${base}/${c.tiles_path}` : undefined;
+    // Planta antiga sem arquivo público e sem nada escondido, apagado ou
+    // corrigido: o original é idêntico ao público, então pode ser servido até a
+    // próxima calibração gerar a cópia (senão ela sumiria do mapa público).
+    const nadaFiltrado = !(c.layers_ocultos as string[] | null)?.length &&
+      !(c.linhas_excluidas as string[] | null)?.length &&
+      !(c.edicoes_geometria as unknown[] | null)?.length;
+    const publico = c.tipo !== "vector" ? undefined
+      : c.publico_path ? `${base}/${c.publico_path}`
+      : nadaFiltrado ? original : undefined;
     return {
       id: c.id,
       nome: c.nome,
       municipio: mun?.nome ?? null,
       tipo: c.tipo,
       tiles: c.tipo === "raster" ? `${base}/${c.tiles_path}/{z}/{x}/{y}.png` : undefined,
-      // original completo: a calibração lê daqui para poder reexibir camada escondida
-      geojson: c.tipo === "vector" ? `${base}/${c.tiles_path}` : undefined,
+      // equipe: original completo (a calibração lê daqui para reexibir camada
+      // escondida). Público: só o arquivo público.
+      geojson: equipe ? original : publico,
       // o que o mapa público baixa: já sem as camadas escondidas (0019)
-      geojson_publico: c.tipo === "vector" && c.publico_path ? `${base}/${c.publico_path}` : undefined,
+      geojson_publico: publico,
       centro: Array.isArray(c.publico_centro) && c.publico_centro.length === 2 ? (c.publico_centro as [number, number]) : null,
       min_zoom: c.min_zoom,
       max_zoom: c.max_zoom,
       opacidade: Number(c.opacidade_padrao),
       datum: c.datum,
-      bytes: c.bytes ? Number(c.bytes) : null,
+      bytes: equipe && c.bytes ? Number(c.bytes) : null,
       bytes_publico: c.publico_bytes ? Number(c.publico_bytes) : null,
       bbox,
       layers_ocultos: (c.layers_ocultos ?? []) as string[],
       // linhas apagadas na calibração e espessura das linhas (áudio do Carlos, 05/11)
       linhas_excluidas: (c.linhas_excluidas ?? []) as string[],
       espessura: Number(c.espessura_linha ?? 1) || 1,
-      layers_cad: diag?.layers ?? [],
+      layers_cad: equipe ? diag?.layers ?? [] : [],
       // lotes clicáveis: quantos há e se foram gerados com a calibração de agora
       lotes: c.tipo === "vector" ? {
         total: c.lotes_total as number | null,
@@ -81,7 +107,7 @@ export async function GET(request: Request) {
         ].join(";") + assinaturaExclusoes(c.linhas_excluidas as string[] | null) + assinaturaAjustes((c.ajustes_locais ?? []) as AjusteLocal[]) +
           assinaturaEdicoes((c.edicoes_geometria ?? []) as EdicaoGeometria[]),
       } : null,
-      zona: diag?.zona ?? null,
+      zona: equipe ? diag?.zona ?? null : null,
       // partes da planta com ajuste próprio (src/lib/geo/deslocar.ts)
       ajustes: (c.ajustes_locais ?? []) as AjusteLocal[],
       edicoes: (c.edicoes_geometria ?? []) as EdicaoGeometria[],
@@ -95,6 +121,7 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json(corpo, {
-    headers: { "Cache-Control": fresco ? "no-store" : "public, max-age=60" },
+    // resposta da equipe tem o original: nunca em cache compartilhado
+    headers: { "Cache-Control": fresco || equipe ? "private, no-store" : "public, max-age=60", Vary: "Cookie" },
   });
 }

@@ -3,6 +3,41 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { aplicarEdicoesGeoJSON, centroDe, removerLinhasExcluidas, type EdicaoGeometria } from "@/lib/geo/deslocar";
 
 /**
+ * Caminho do arquivo público: pasta própria e nome aleatório. Antes era o
+ * caminho do original + `.publico-<ts>`, e bastava tirar o sufixo para baixar
+ * o original (com as camadas escondidas e as linhas apagadas) do bucket público.
+ * O nome novo não guarda nada do original. Também muda a cada gravação: a URL
+ * pública tem cache de CDN, e sobrescrever serviria a seleção antiga.
+ */
+export function caminhoPlantaPublica() {
+  return `cartografia/publico/${crypto.randomUUID()}.geojson`;
+}
+
+/**
+ * Planta recém-enviada: o público é cópia do original (nada escondido ainda),
+ * mas num caminho próprio, para que a URL do original nunca saia na resposta
+ * pública (/api/geo/cartografia).
+ */
+export async function publicarCopiaInicial(
+  admin: SupabaseClient,
+  camadaId: string,
+  corpo: Buffer,
+  fc: GeoJSON.FeatureCollection
+): Promise<void> {
+  const path = caminhoPlantaPublica();
+  const { error: upErro } = await admin.storage.from("media")
+    .upload(path, corpo, { contentType: "application/geo+json", upsert: false });
+  if (upErro) throw new Error(`o armazenamento recusou a cópia pública: ${upErro.message}`);
+  const { error } = await admin.from("cartography_layers").update({
+    publico_path: path, publico_bytes: corpo.length, publico_centro: centroDe(fc),
+  }).eq("id", camadaId);
+  if (error) {
+    await admin.storage.from("media").remove([path]).catch(() => undefined);
+    throw new Error(`a cópia pública subiu, mas o banco não gravou: ${error.message}`);
+  }
+}
+
+/**
  * Versão pública da planta: o GeoJSON sem as camadas do CAD que o operador
  * escondeu na calibração.
  *
@@ -46,15 +81,13 @@ export async function gerarPlantaPublica(
   let path: string | null = null;
   let bytes = 0;
 
-  // Sem filtro, linha apagada nem correção, o público é o original. Uma linha
-  // corrigida ou apagada exige arquivo derivado mesmo sem camada escondida.
-  if (esconder.size || excluidas.length || edicoes.length) {
+  // Sempre grava o arquivo público, mesmo sem filtro: o mapa público nunca
+  // recebe a URL do original (ver caminhoPlantaPublica).
+  {
     const corpo = Buffer.from(JSON.stringify({ ...fc, features }));
-    // nome novo a cada gravação: a URL pública tem cache de CDN, e sobrescrever
-    // o mesmo caminho serviria a seleção antiga por um tempo
-    path = camada.tiles_path.replace(/\.geojson$/, "") + `.publico-${Date.now()}.geojson`;
+    path = caminhoPlantaPublica();
     const { error: upErro } = await admin.storage.from("media")
-      .upload(path, corpo, { contentType: "application/geo+json", upsert: true });
+      .upload(path, corpo, { contentType: "application/geo+json", upsert: false });
     if (upErro) throw new Error(`o armazenamento recusou a planta filtrada: ${upErro.message}`);
     bytes = corpo.length;
   }

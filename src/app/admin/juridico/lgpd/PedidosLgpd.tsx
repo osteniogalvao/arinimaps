@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 import { CalendarClock, ChevronDown, ChevronRight, Plus, Shield, X } from "lucide-react";
 import { CAMPO, Etiqueta } from "@/components/ui/Pagina";
 import { CODIGO, LISTA } from "@/components/admin/estilos";
@@ -31,9 +32,9 @@ export default function PedidosLgpd({ pedidos }: { pedidos: Pedido[] }) {
 
   async function chamar(method: "POST" | "PATCH", body: unknown) {
     setOcupado(true); setErro("");
-    const res = await fetch("/api/admin/lgpd", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const r = await enviarJson("/api/admin/lgpd", method, body);
     setOcupado(false);
-    if (!res.ok) { setErro((await res.json().catch(() => ({}))).error ?? "Não foi possível salvar."); return false; }
+    if (!r.ok) { setErro(r.erro.mensagem); return false; }
     router.refresh();
     return true;
   }

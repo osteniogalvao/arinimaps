@@ -10,11 +10,13 @@ import type { GeometriaEscolhida } from "@/components/map/DesenhoMapa";
 import { ehEquipe as papelEhEquipe, ehParceiro as papelEhParceiro } from "@/lib/perfis";
 import { enviarVideo, VIDEO_ACEITA, VIDEO_MAX_MB } from "@/lib/midia/enviarVideo";
 import { comprimirFotos } from "@/lib/midia/comprimirFoto";
+import { lerTour, PROVEDOR_TOUR_LABEL, TOUR_AJUDA } from "@/lib/imovel/tour";
 import {
   Check, CheckCircle2, Gavel, FileText, MapPin, Trees, LandPlot, Image as ImageIcon, ShieldCheck,
   Handshake, Camera, AlertTriangle, Send, type LucideIcon,
 } from "lucide-react";
 import { CAMPO, ROTULO } from "@/components/ui/Pagina";
+import CadastroRapidoAri, { type ResultadoAri } from "@/components/painel/CadastroRapidoAri";
 
 const DesenhoMapa = dynamic(() => import("@/components/map/DesenhoMapa"), { ssr: false });
 
@@ -53,6 +55,7 @@ export default function NovoImovel() {
     aceita_permuta: false, aceita_financiamento: false,
     matricula_numero: "", matricula_cartorio: "",
     medidas: "",
+    tour_virtual_url: "",
   });
   const [papel, setPapel] = useState<string | null>(null);
   // revisão do Carlos (29/10): venda pela plataforma só com exclusividade Arini
@@ -153,8 +156,54 @@ export default function NovoImovel() {
   const ehEquipe = papelEhEquipe(papel);
   const ehLeiloeiro = papel === "leiloeiro";
   const emLeilao = modalidade === "leilao";
-  // selfie só no aceite eletrônico de exclusividade (a equipe anexa contrato assinado)
-  const pedeSelfie = condicao === "exclusividade" && !ehEquipe;
+  // selfie só no aceite eletrônico de exclusividade (a equipe anexa contrato assinado),
+  // e só se a Central não a desligou (juridico_selfie_exclusividade, a mesma regra da API)
+  const [selfieExigida, setSelfieExigida] = useState(true);
+  const pedeSelfie = condicao === "exclusividade" && !ehEquipe && selfieExigida;
+  useEffect(() => {
+    fetch("/api/conta/anunciar").then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && typeof d.selfie_exclusividade === "boolean") setSelfieExigida(d.selfie_exclusividade); })
+      .catch(() => undefined);
+  }, []);
+  // anúncio criado, mas algum documento ou vídeo não subiu: mostra antes de sair da página
+  const [concluido, setConcluido] = useState<{ codigo: string; docs: string[]; videos: string[]; destino: string } | null>(null);
+
+  // cadastro rápido com a Ari (2ª etapa, item 4): preenche o formulário e marca o que veio da IA
+  const [daIa, setDaIa] = useState<Set<string>>(new Set());
+  const [caracIa, setCaracIa] = useState<Record<string, unknown>>({});
+  const realce = (campo: string) => (daIa.has(campo) ? " !border-ouro ring-2 ring-ouro/40" : "");
+  function aplicarAri({ extracao: x, fotos: f, docs: d, videos: v }: ResultadoAri) {
+    const novo: Partial<typeof form> = {};
+    const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    if (x.tipo && !loteamento) novo.tipo = x.tipo;
+    if (x.titulo) novo.titulo = x.titulo;
+    if (x.descricao) novo.descricao = x.descricao;
+    if (x.valor) novo.valor = Math.round(x.valor).toLocaleString("pt-BR");
+    if (x.area && !loteamento) novo.area_declarada = String(Math.round(x.area * 100) / 100).replace(".", ",");
+    const mun = x.municipio && municipios.find((m) => semAcento(m.nome) === semAcento(x.municipio!));
+    if (mun) novo.municipality_id = mun.id;
+    if (x.condicoes_venda) novo.condicoes_venda = x.condicoes_venda;
+    if (x.aceita_permuta) novo.aceita_permuta = true;
+    if (x.aceita_financiamento) novo.aceita_financiamento = true;
+    if (x.medidas) novo.medidas = x.medidas;
+    if (x.matricula_numero) novo.matricula_numero = x.matricula_numero;
+    if (x.matricula_cartorio) novo.matricula_cartorio = x.matricula_cartorio;
+    setForm((atual) => ({ ...atual, ...novo }));
+    setDaIa(new Set(Object.keys(novo)));
+    setCaracIa(x.caracteristicas);
+    if (f.length) setFotos(f.slice(0, 20));
+    if (d.matricula.length || d.outro.length) {
+      setDocs((atual) => ({
+        ...atual,
+        matricula: [...atual.matricula, ...d.matricula].slice(0, 10),
+        outro: [...atual.outro, ...d.outro].slice(0, 10),
+      }));
+    }
+    if (v.length) setVideos(v.slice(0, 3));
+    // código do CAR lido no documento: traz a divisa do CAR para a etapa de localização
+    if (x.codigo_car && !geometria) carregarCar(x.codigo_car);
+    if (x.finalidade === "leilao" && (ehEquipe || ehLeiloeiro)) setModalidade("leilao");
+  }
 
   useEffect(() => {
     const supabase = supabaseBrowser();
@@ -207,6 +256,10 @@ export default function NovoImovel() {
       setErro("Para a exclusividade, tire uma selfie: ela identifica quem está aceitando o termo.");
       return;
     }
+    if (form.tour_virtual_url.trim() && !lerTour(form.tour_virtual_url)) {
+      setErro(`Link do tour virtual não reconhecido. ${TOUR_AJUDA}`);
+      return;
+    }
     const videoGrande = videos.find((v) => v.size > VIDEO_MAX_MB * 1024 * 1024);
     if (videoGrande) {
       setErro(`O vídeo ${videoGrande.name} passa de ${VIDEO_MAX_MB} MB. Corte ou grave em 1080p.`);
@@ -226,6 +279,7 @@ export default function NovoImovel() {
       area_declarada: form.area_declarada ? Number(form.area_declarada.replace(",", ".")) : null,
       municipality_id: form.municipality_id || null,
       caracteristicas: {
+        ...caracIa,
         unidade_area: form.tipo === "rural" ? "ha" : "m2",
         ...(form.medidas.trim() && { medidas_informadas: form.medidas.trim().slice(0, 2000) }),
       },
@@ -240,30 +294,51 @@ export default function NovoImovel() {
     }));
     if (pedeSelfie && selfie) fd.set("selfie", selfie);
     fd.set("geometria", JSON.stringify(geometria));
-    // fotos reduzidas no próprio aparelho (~0,5 MB cada) antes de subir
-    const otimizadas = await comprimirFotos(fotos, (n) => setProgresso(`Otimizando fotos (${n} de ${fotos.length})…`));
-    setProgresso("Enviando…");
-    for (const f of otimizadas) fd.append("fotos", f);
-    for (const [tipo, arquivos] of Object.entries(docs)) {
-      for (const f of arquivos as File[]) fd.append(`doc_${tipo}`, f);
-    }
+    // queda de rede, 413/504 com página HTML: o botão não pode ficar em "Enviando…" para sempre
+    let saindo = false;
+    try {
+      // fotos reduzidas no próprio aparelho (~0,5 MB cada) antes de subir
+      const otimizadas = await comprimirFotos(fotos, (n) => setProgresso(`Otimizando fotos (${n} de ${fotos.length})…`));
+      setProgresso("Enviando…");
+      for (const f of otimizadas) fd.append("fotos", f);
+      for (const [tipo, arquivos] of Object.entries(docs)) {
+        for (const f of arquivos as File[]) fd.append(`doc_${tipo}`, f);
+      }
 
-    const res = await fetch("/api/imoveis", { method: "POST", body: fd });
-    const data = await res.json();
-    if (!res.ok) {
-      setErro(data.error ?? "Não foi possível enviar o imóvel.");
-      setEnviando(false);
-      return;
+      const res = await fetch("/api/imoveis", { method: "POST", body: fd });
+      const data = (await res.json().catch(() => null)) as { id?: string; codigo?: string; error?: string; documentos_falharam?: string[] } | null;
+      if (!res.ok || !data?.id || !data.codigo) {
+        setErro(data?.error ?? (res.status === 413
+          ? "Os arquivos passaram do tamanho que o servidor aceita num envio. Envie menos fotos ou documentos menores."
+          : `O servidor não respondeu como esperado (erro ${res.status}). Confira em Meus imóveis se o anúncio entrou antes de enviar de novo.`));
+        return;
+      }
+      // vídeos vão depois de o imóvel existir, direto para o armazenamento
+      const falhas: string[] = [];
+      for (const [i, v] of videos.entries()) {
+        setProgresso(`Enviando vídeo ${i + 1} de ${videos.length}…`);
+        const problema = await enviarVideo(data.id, v);
+        if (problema) falhas.push(problema);
+      }
+      // falhas de upload chegam ao /painel para o aviso (só a contagem: nomes não vão para a URL)
+      const nomesDocs = Array.isArray(data.documentos_falharam) ? data.documentos_falharam : [];
+      const docsFalharam = nomesDocs.length;
+      const destino = "/painel?enviado=" + encodeURIComponent(data.codigo)
+        + (falhas.length ? "&videos_falharam=" + falhas.length : "")
+        + (docsFalharam ? "&docs_falharam=" + docsFalharam : "");
+      // algum arquivo não subiu: mostra QUAIS aqui, antes de sair da página
+      if (falhas.length || docsFalharam) {
+        setConcluido({ codigo: data.codigo, docs: nomesDocs, videos: falhas, destino });
+        return;
+      }
+      saindo = true;
+      router.push(destino);
+      router.refresh();
+    } catch {
+      setErro("A conexão caiu durante o envio. Confira em Meus imóveis se o anúncio entrou antes de enviar de novo.");
+    } finally {
+      if (!saindo) { setEnviando(false); setProgresso(""); }
     }
-    // vídeos vão depois de o imóvel existir, direto para o armazenamento
-    const falhas: string[] = [];
-    for (const [i, v] of videos.entries()) {
-      setProgresso(`Enviando vídeo ${i + 1} de ${videos.length}…`);
-      const problema = await enviarVideo(data.id, v);
-      if (problema) falhas.push(problema);
-    }
-    router.push("/painel?enviado=" + data.codigo + (falhas.length ? "&videos_falharam=" + falhas.length : ""));
-    router.refresh();
   }
 
   const input = CAMPO;
@@ -289,6 +364,8 @@ export default function NovoImovel() {
           Preencha os dados e marque a localização. O imóvel vai para a análise da Arini antes de publicar.
         </p>
       </div>
+
+      <CadastroRapidoAri onAplicar={aplicarAri} onFotos={(f) => setFotos(f.slice(0, 20))} />
 
       <ol className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {etapas.map((e, i) => (
@@ -367,14 +444,14 @@ export default function NovoImovel() {
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <label className={label}>Tipo</label>
-            <select className={input} value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
+            <select className={input + realce("tipo")} value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
               <option value="rural">Rural (fazenda, sítio, chácara)</option>
               <option value="urbano">Urbano (casa, lote, comercial)</option>
             </select>
           </div>
           <div>
             <label className={label}>Município</label>
-            <select className={input} value={form.municipality_id}
+            <select className={input + realce("municipality_id")} value={form.municipality_id}
               onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}>
               <option value="">Detectar pelo mapa</option>
               {municipios.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
@@ -384,13 +461,13 @@ export default function NovoImovel() {
 
         <div>
           <label className={label}>Título do anúncio</label>
-          <input required className={input} placeholder='Ex.: "Fazenda dupla aptidão às margens da BR-364"'
+          <input required className={input + realce("titulo")} placeholder='Ex.: "Fazenda dupla aptidão às margens da BR-364"'
             value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} />
         </div>
 
         <div>
           <label className={label}>Descrição</label>
-          <textarea rows={5} className={input}
+          <textarea rows={5} className={input + realce("descricao")}
             placeholder="Benfeitorias, água, acesso, documentação, detalhes que valorizam o imóvel…"
             value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
         </div>
@@ -398,13 +475,13 @@ export default function NovoImovel() {
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <label className={label}>{loteamento ? "Preço padrão por lote (R$)" : "Valor pedido (R$)"}</label>
-            <input className={input} placeholder={loteamento ? "Ex.: 85.000" : "Ex.: 3.800.000"} inputMode="numeric"
+            <input className={input + realce("valor")} placeholder={loteamento ? "Ex.: 85.000" : "Ex.: 3.800.000"} inputMode="numeric"
               value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} />
             {loteamento && <p className={ajuda}>Vale para todos os lotes; troque na tabela abaixo o que tiver preço diferente.</p>}
           </div>
           <div>
             <label className={label}>{loteamento ? "Área total dos lotes (m²)" : `Área declarada (${form.tipo === "rural" ? "hectares" : "m²"})`}</label>
-            <input className={input} placeholder={form.tipo === "rural" ? "Ex.: 84" : "Ex.: 420"} inputMode="decimal"
+            <input className={input + realce("area_declarada")} placeholder={form.tipo === "rural" ? "Ex.: 84" : "Ex.: 420"} inputMode="decimal"
               readOnly={!!loteamento}
               value={form.area_declarada} onChange={(e) => setForm({ ...form, area_declarada: e.target.value })} />
           </div>
@@ -428,7 +505,7 @@ export default function NovoImovel() {
 
         <div>
           <label className={label}>Condições de venda</label>
-          <textarea rows={2} className={input} placeholder="Entrada, parcelamento, prazo…"
+          <textarea rows={2} className={input + realce("condicoes_venda")} placeholder="Entrada, parcelamento, prazo…"
             value={form.condicoes_venda} onChange={(e) => setForm({ ...form, condicoes_venda: e.target.value })} />
           <div className="mt-3 flex flex-wrap gap-5 text-base text-texto">
             {([["aceita_permuta", "Aceita permuta"], ["aceita_financiamento", "Aceita financiamento"]] as const).map(([k, l]) => (
@@ -486,7 +563,7 @@ export default function NovoImovel() {
             <textarea id="medidas-area" rows={3} value={form.medidas}
               onChange={(e) => setForm({ ...form, medidas: e.target.value })}
               placeholder="Ex.: frente 12 m, fundo 12 m, laterais 30 m; 360 m² na matrícula; divisa com o córrego ao norte."
-              className="w-full rounded-xl border border-linha bg-superficie px-3.5 py-2.5 text-base text-texto outline-none focus:border-verde" />
+              className={"w-full rounded-xl border border-linha bg-superficie px-3.5 py-2.5 text-base text-texto outline-none focus:border-verde" + realce("medidas")} />
             <p className="mt-1 text-sm text-texto-2">
               Lados, metragem e o que mais ajudar a conferir a divisa. A equipe Arini analisa e confirma antes de publicar.
             </p>
@@ -519,6 +596,18 @@ export default function NovoImovel() {
               : `MP4, MOV ou WebM, até ${VIDEO_MAX_MB} MB cada — de 1 a 2 minutos em 1080p.`}
           </p>
         </div>
+
+        <div>
+          <label className={label} htmlFor="tour_virtual_url">Tour virtual 360 / vídeo imersivo (opcional)</label>
+          <input id="tour_virtual_url" type="url" inputMode="url" className={input} maxLength={500}
+            placeholder="https://my.matterport.com/show/?m=…"
+            value={form.tour_virtual_url} onChange={(e) => setForm({ ...form, tour_virtual_url: e.target.value })} />
+          <p className={ajuda}>
+            {form.tour_virtual_url.trim()
+              ? (() => { const t = lerTour(form.tour_virtual_url); return t ? `Link do ${PROVEDOR_TOUR_LABEL[t.provedor]} reconhecido. Ele abre na ficha do imóvel quando o visitante clicar.` : `Link não reconhecido. ${TOUR_AJUDA}`; })()
+              : `${TOUR_AJUDA} O tour abre na ficha do imóvel só quando o visitante clicar.`}
+          </p>
+        </div>
       </Etapa>
 
       <Etapa id="documentos" numero={numero("documentos")} icone={ShieldCheck}
@@ -531,13 +620,13 @@ export default function NovoImovel() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className={label} htmlFor="matricula_numero">Número da matrícula</label>
-              <input id="matricula_numero" className={input} maxLength={120} placeholder="Ex.: 45413"
+              <input id="matricula_numero" className={input + realce("matricula_numero")} maxLength={120} placeholder="Ex.: 45413"
                 value={form.matricula_numero} onChange={(e) => setForm({ ...form, matricula_numero: e.target.value })} />
               <p className={ajuda}>Está no topo do documento da matrícula. Se houver mais de uma, separe por vírgula.</p>
             </div>
             <div>
               <label className={label} htmlFor="matricula_cartorio">Cartório de registro</label>
-              <input id="matricula_cartorio" className={input} maxLength={200} placeholder="Ex.: Cartório de Registro de Imóveis de Iturama"
+              <input id="matricula_cartorio" className={input + realce("matricula_cartorio")} maxLength={200} placeholder="Ex.: Cartório de Registro de Imóveis de Iturama"
                 value={form.matricula_cartorio} onChange={(e) => setForm({ ...form, matricula_cartorio: e.target.value })} />
               <p className={ajuda}>Não aparece no site: só a Arini usa, para conferir e pedir o espelho.</p>
             </div>
@@ -630,11 +719,30 @@ export default function NovoImovel() {
         )}
       </Etapa>
 
+      {concluido && (
+        <div role="status" className="rounded-2xl border border-alerta/40 bg-alerta/10 p-5 text-base text-texto">
+          <p className="flex items-start gap-2 font-semibold">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-alerta" />
+            Anúncio {concluido.codigo} enviado para análise, mas alguns arquivos não subiram:
+          </p>
+          <ul className="mt-3 list-disc space-y-1 pl-7 text-sm text-texto-2">
+            {concluido.docs.map((d) => <li key={"d" + d}>Documento: {d}</li>)}
+            {concluido.videos.map((v, i) => <li key={"v" + i}>Vídeo: {v}</li>)}
+          </ul>
+          <p className="mt-3 text-sm text-texto-2">
+            Não envie o anúncio de novo: reenvie só esses arquivos na página do anúncio, em Meus imóveis.
+          </p>
+          <Link href={concluido.destino} className="lp-btn lp-btn-ouro mt-4 !px-5 !py-3 text-[0.95rem]">
+            Ir para Meus imóveis
+          </Link>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 border-t border-linha pt-6 sm:flex-row sm:items-center sm:justify-between">
         {erro
           ? <p role="alert" className="flex items-start gap-2 text-base text-critico"><AlertTriangle className="mt-0.5 size-5 shrink-0" />{erro}</p>
           : <p className="text-sm text-texto-2">A Arini confere tudo antes de publicar. Você acompanha em Meus imóveis.</p>}
-        <button disabled={enviando}
+        <button disabled={enviando || !!concluido}
           className="lp-btn lp-btn-verde shrink-0 !px-6 !py-3.5 text-[0.95rem] disabled:opacity-60">
           {enviando ? (progresso || "Enviando…") : <>Enviar para análise da Arini <Send /></>}
         </button>

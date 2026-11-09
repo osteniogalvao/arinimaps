@@ -8,6 +8,7 @@ import { ehParceiro } from "@/lib/perfis";
 import { registrarOrigemDado } from "@/lib/imovel/eventos";
 import { ACEITA, conferirArquivo, type ArquivoConferido } from "@/lib/seguranca/arquivos";
 import { LOTES_MAX } from "@/lib/geo/loteamento";
+import { validarCampoTour } from "@/lib/imovel/tour";
 
 // Cria imóvel (multipart): dados + geometria GeoJSON + fotos.
 // Proprietário/parceiro precisa estar aprovado/ativo; Arini também pode cadastrar.
@@ -196,6 +197,13 @@ export async function POST(request: Request) {
     geometriaFinal = { ...geometria, fonte: "desenho" };
   }
 
+  // tour virtual 360 / vídeo imersivo (item 9): só links dos domínios aceitos
+  const tour = validarCampoTour(dados.tour_virtual_url);
+  if (!tour.ok) return NextResponse.json({ error: tour.erro }, { status: 400 });
+  const caracteristicas = { ...((dados.caracteristicas ?? {}) as Record<string, unknown>) };
+  delete caracteristicas.tour_virtual_url;
+  if (tour.url) caracteristicas.tour_virtual_url = tour.url;
+
   if (!equipe && dados.aceite_termos !== true) {
     return NextResponse.json(
       { error: "Para anunciar é preciso aceitar o termo da condição de comercialização e a Regra de Remuneração." },
@@ -241,7 +249,7 @@ export async function POST(request: Request) {
       // empreendimento: o preço é de cada unidade; a área, a soma dos lotes
       valor: unidades.length ? null : dados.valor || null,
       area_declarada: unidades.length ? Math.round(unidades.reduce((s, u) => s + Number(u.lote.area_m2), 0)) : dados.area_declarada || null,
-      caracteristicas: dados.caracteristicas ?? {},
+      caracteristicas,
       condicoes_venda: dados.condicoes_venda?.trim() || null,
       aceita_permuta: !!dados.aceita_permuta,
       aceita_financiamento: !!dados.aceita_financiamento,
@@ -421,7 +429,7 @@ export async function POST(request: Request) {
       descricao: dados.descricao?.trim() || "",
       valor: u.valor ?? (dados.valor || null),
       area_declarada: Math.round(Number(u.lote.area_m2)),
-      caracteristicas: dados.caracteristicas ?? {},
+      caracteristicas,
       condicoes_venda: dados.condicoes_venda?.trim() || null,
       aceita_permuta: !!dados.aceita_permuta,
       aceita_financiamento: !!dados.aceita_financiamento,

@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { bloqueioAtivo, caminhoLivre, cookieValido, COOKIE_BLOQUEIO } from "@/lib/seguranca/bloqueio";
+import {
+  bloqueioAtivo, caminhoLivre, cookieValido, COOKIE_BLOQUEIO, pedidoDePrevia, respostaPrevia,
+} from "@/lib/seguranca/bloqueio";
 import { conferirOrigem, respostaOrigemNegada } from "@/lib/seguranca/origem";
 import { opcoesCookieSessao } from "@/lib/seguranca/cookies";
 
@@ -17,6 +19,12 @@ export async function proxy(request: NextRequest) {
       !(await cookieValido(request.cookies.get(COOKIE_BLOQUEIO)?.value))) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Site em acesso restrito." }, { status: 401 });
+    }
+    // SITE_SENHA_PREVIA=1: robô de prévia de link recebe só as metatags (ver bloqueio.ts)
+    const ua = request.headers.get("user-agent");
+    if (pedidoDePrevia(request.method, pathname, ua)) {
+      const previa = await respostaPrevia(pathname, search, ua!);
+      if (previa) return previa;
     }
     const url = request.nextUrl.clone();
     url.pathname = "/acesso";

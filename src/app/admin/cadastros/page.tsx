@@ -7,31 +7,48 @@ import { exigirSetor } from "@/lib/setores-servidor";
 import { LISTA } from "@/components/admin/estilos";
 import { CabecalhoPagina, Etiqueta } from "@/components/ui/Pagina";
 import { Phone } from "lucide-react";
+import BuscaLista, { termoBusca } from "@/components/admin/BuscaLista";
 
-export default async function AdminCadastros() {
+/**
+ * Teto de cada lista (o PostgREST cortaria em 1000 sem avisar), mais recentes
+ * primeiro; quando passa do teto, a página avisa e a busca por nome alcança
+ * o resto.
+ */
+const MAX_LISTA = 200;
+
+export default async function AdminCadastros({ searchParams }: PageProps<"/admin/cadastros">) {
   await exigirSetor("operacoes");
+  const q = termoBusca((await searchParams).q);
   const admin = supabaseAdmin();
-  const [{ data: partners }, { data: owners }, { data: regioes }] = await Promise.all([
-    admin.from("partners")
-      .select("id, tipo, razao_social, registro_profissional, status, region_id, created_at, profile:profiles(nome, telefone)")
-      .order("created_at", { ascending: false }),
-    admin.from("owners")
-      .select("id, status, created_at, profile:profiles(nome, telefone)")
-      .order("created_at", { ascending: false }),
+  let qPartners = admin.from("partners")
+    .select("id, tipo, razao_social, registro_profissional, status, region_id, created_at, profile:profiles(nome, telefone)", { count: "exact" });
+  if (q) qPartners = qPartners.ilike("razao_social", `%${q}%`);
+  // busca de proprietário é pelo nome do perfil: !inner faz o filtro valer na linha
+  const qOwners = q
+    ? admin.from("owners").select("id, status, created_at, profile:profiles!inner(nome, telefone)", { count: "exact" })
+      .ilike("profile.nome", `%${q}%`)
+    : admin.from("owners").select("id, status, created_at, profile:profiles(nome, telefone)", { count: "exact" });
+  const [{ data: partners, count: totalPartners }, { data: owners, count: totalOwners }, { data: regioes }] = await Promise.all([
+    qPartners.order("created_at", { ascending: false }).limit(MAX_LISTA),
+    qOwners.order("created_at", { ascending: false }).limit(MAX_LISTA),
     admin.from("regions").select("id, nome").order("nome"),
   ]);
 
   const Bloco = ({
-    titulo, itens, alvo,
+    titulo, itens, alvo, total,
   }: {
     titulo: string;
+    total: number | null;
     alvo: "partner" | "owner";
     itens: { id: string; status: string; extra?: string; nome: string; telefone: string | null; tipo?: string; region_id?: string | null }[];
   }) => (
     <section className="space-y-4">
       <h2 className="lp-display text-xl md:text-2xl text-texto">
-        {titulo} <span className="ml-1 align-middle text-base font-semibold text-texto-2 tabular-nums">{itens.length}</span>
+        {titulo} <span className="ml-1 align-middle text-base font-semibold text-texto-2 tabular-nums">{total ?? itens.length}</span>
       </h2>
+      {total != null && total > itens.length && (
+        <p className="text-sm text-texto-2">Mostrando {itens.length} de {total}. Use a busca para achar os demais.</p>
+      )}
       {!itens.length ? (
         <p className="cartao px-5 py-8 text-center text-[0.95rem] text-texto-2">Nenhum cadastro.</p>
       ) : (
@@ -63,9 +80,11 @@ export default async function AdminCadastros() {
     <div className="space-y-10 md:space-y-12 max-w-5xl">
       <CabecalhoPagina eyebrow="Operações" titulo="Cadastros"
         subtitulo="Aprovação de parceiros e proprietários, e território de cada franqueado." />
+      <BuscaLista caminho="/admin/cadastros" valor={q} placeholder="Buscar parceiro (razão social) ou proprietário (nome)" />
       <Bloco
         titulo="Parceiros (imobiliárias, corretores, engenheiros, leiloeiros e franqueados)"
         alvo="partner"
+        total={totalPartners}
         itens={(partners ?? []).map((p) => ({
           id: p.id,
           status: p.status,
@@ -78,6 +97,7 @@ export default async function AdminCadastros() {
       <Bloco
         titulo="Proprietários"
         alvo="owner"
+        total={totalOwners}
         itens={(owners ?? []).map((o) => ({
           id: o.id,
           status: o.status,

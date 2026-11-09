@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatarCPF, validarDocumento } from "@/lib/br/documentos";
 import { lerCarPendente } from "@/lib/map/carPendente";
 import { SENHA_MIN, validarSenha } from "@/lib/seguranca/senha";
+import { destinoSeguro } from "@/lib/seguranca/destino";
 import { REGISTRO_LABEL, ehParceiro as papelEhParceiro, podeAnunciar } from "@/lib/perfis";
 import { nichoPadrao, nichosDoPapel } from "@/lib/planos";
 import { ArrowLeft, ArrowRight } from "lucide-react";
@@ -33,6 +34,8 @@ export default function Entrar() {
   const [aviso, setAviso] = useState("");
   const [codigoMfa, setCodigoMfa] = useState("");
   const [destino, setDestino] = useState("/painel");
+  // ?volta=/imovel/... (ex.: "Entre para salvar favoritos"): depois do login, volta para a página
+  const [volta, setVolta] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [form, setForm] = useState({
@@ -61,6 +64,10 @@ export default function Entrar() {
       }
     }
     if (q.get("recuperar")) setModo("recuperar");
+    if (q.get("volta")) {
+      const v = destinoSeguro(q.get("volta"));
+      if (v !== "/" && !v.startsWith("/entrar")) setVolta(v);
+    }
     // a Central mandou de volta: a sessão existe, falta confirmar o segundo fator
     if (q.get("mfa")) { setDestino("/admin"); setModo("mfa"); }
     if (q.get("expirou")) {
@@ -76,6 +83,7 @@ export default function Entrar() {
     // clicou numa área do CAR antes de entrar: volta direto para anunciá-la
     const carPendente = lerCarPendente();
     const anuncia = podeAnunciar(role);
+    if (volta && !carPendente) return volta;
     return role === "admin_central" || role === "analista_arini" ? "/admin"
       : carPendente && anuncia ? `/painel/novo?car=${encodeURIComponent(carPendente)}`
       : ["comprador", "consulta"].includes(role) ? "/mapa"

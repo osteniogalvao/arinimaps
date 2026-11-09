@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ExpressionSpecification, Map as MLMap } from "maplibre-gl";
+import type { ExpressionSpecification, GeoJSONSource, Map as MLMap } from "maplibre-gl";
 import { CENTRO_REGIAO, ESTILO_BASE } from "@/lib/map/config";
 import { RADAR_ANEL, STATUS_MAPA } from "./statusMapa";
 import { carregarMaplibre } from "@/lib/map/maplibre";
@@ -14,6 +14,42 @@ export type ItemMapaBusca = {
   leilao: boolean;
   geom: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
 };
+
+const VAZIO: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+/** Divisas, pontos (centro de cada divisa) e o retângulo de todos, a partir da lista. */
+function dadosDoMapa(itens: ItemMapaBusca[]) {
+  const cor = (i: ItemMapaBusca) => i.leilao ? STATUS_MAPA.leilao : STATUS_MAPA[i.status] ?? STATUS_MAPA.publicado;
+  const comDivisa = itens.filter((i) => i.geom);
+  const divisas: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: comDivisa.map((i, n) => ({
+      type: "Feature", id: n, geometry: i.geom!, properties: { codigo: i.codigo, cor: cor(i) },
+    })),
+  };
+  const limites: [number, number, number, number] = [180, 90, -180, -90];
+  const pontos: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: comDivisa.map((i, n) => {
+      const b: [number, number, number, number] = [180, 90, -180, -90];
+      const andar = (c: unknown): void => {
+        if (Array.isArray(c) && typeof c[0] === "number") {
+          const [x, y] = c as [number, number];
+          b[0] = Math.min(b[0], x); b[1] = Math.min(b[1], y); b[2] = Math.max(b[2], x); b[3] = Math.max(b[3], y);
+        } else if (Array.isArray(c)) c.forEach(andar);
+      };
+      andar(i.geom!.coordinates);
+      limites[0] = Math.min(limites[0], b[0]); limites[1] = Math.min(limites[1], b[1]);
+      limites[2] = Math.max(limites[2], b[2]); limites[3] = Math.max(limites[3], b[3]);
+      return {
+        type: "Feature", id: n,
+        geometry: { type: "Point", coordinates: [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] },
+        properties: { codigo: i.codigo, cor: cor(i), preco: i.preco },
+      };
+    }),
+  };
+  return { divisas, pontos, limites, total: comDivisa.length };
+}
 
 /**
  * Busca de imóveis com a lista ao lado do mapa (/imoveis?vista=mapa).
@@ -28,6 +64,10 @@ export default function MapaBusca({ itens, listaId }: { itens: ItemMapaBusca[]; 
   const mapaRef = useRef<MLMap | null>(null);
   const [pronto, setPronto] = useState(false);
   const acesoRef = useRef<string | null>(null);
+  // os ouvintes do mapa nascem uma vez: leem a lista e o id atuais por aqui
+  const itensRef = useRef(itens);
+  const listaIdRef = useRef(listaId);
+  useEffect(() => { itensRef.current = itens; listaIdRef.current = listaId; }, [itens, listaId]);
 
   useEffect(() => {
     if (!caixa.current) return;
@@ -58,37 +98,10 @@ export default function MapaBusca({ itens, listaId }: { itens: ItemMapaBusca[]; 
         if (iniciado || !m.isStyleLoaded()) return;
         iniciado = true;
         m.off("styledata", iniciar);
-        const cor = (i: ItemMapaBusca) => i.leilao ? STATUS_MAPA.leilao : STATUS_MAPA[i.status] ?? STATUS_MAPA.publicado;
-        const comDivisa = itens.filter((i) => i.geom);
-        const divisas: GeoJSON.FeatureCollection = {
-          type: "FeatureCollection",
-          features: comDivisa.map((i, n) => ({
-            type: "Feature", id: n, geometry: i.geom!, properties: { codigo: i.codigo, cor: cor(i) },
-          })),
-        };
-        const limites: [number, number, number, number] = [180, 90, -180, -90];
-        const pontos: GeoJSON.FeatureCollection = {
-          type: "FeatureCollection",
-          features: comDivisa.map((i, n) => {
-            const b: [number, number, number, number] = [180, 90, -180, -90];
-            const andar = (c: unknown): void => {
-              if (Array.isArray(c) && typeof c[0] === "number") {
-                const [x, y] = c as [number, number];
-                b[0] = Math.min(b[0], x); b[1] = Math.min(b[1], y); b[2] = Math.max(b[2], x); b[3] = Math.max(b[3], y);
-              } else if (Array.isArray(c)) c.forEach(andar);
-            };
-            andar(i.geom!.coordinates);
-            limites[0] = Math.min(limites[0], b[0]); limites[1] = Math.min(limites[1], b[1]);
-            limites[2] = Math.max(limites[2], b[2]); limites[3] = Math.max(limites[3], b[3]);
-            return {
-              type: "Feature", id: n,
-              geometry: { type: "Point", coordinates: [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] },
-              properties: { codigo: i.codigo, cor: cor(i), preco: i.preco },
-            };
-          }),
-        };
-        m.addSource("divisas", { type: "geojson", data: divisas });
-        m.addSource("pontos", { type: "geojson", data: pontos });
+        // as fontes nascem vazias: quem as enche é o efeito de `itens` (setData),
+        // sem recriar o mapa a cada filtro
+        m.addSource("divisas", { type: "geojson", data: VAZIO });
+        m.addSource("pontos", { type: "geojson", data: VAZIO });
         const aceso: ExpressionSpecification = ["boolean", ["feature-state", "aceso"], false];
         m.addLayer({
           id: "divisa-fill", type: "fill", source: "divisas", minzoom: 11,
@@ -120,9 +133,6 @@ export default function MapaBusca({ itens, listaId }: { itens: ItemMapaBusca[]; 
             "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 1, 13, 0],
           },
         });
-        if (comDivisa.length) {
-          m.fitBounds([[limites[0], limites[1]], [limites[2], limites[3]]], { padding: 50, duration: 0, maxZoom: 15 });
-        }
 
         const popup = new ml.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: "popup-busca" });
         for (const camada of ["divisa-fill", "ponto"]) {
@@ -130,7 +140,7 @@ export default function MapaBusca({ itens, listaId }: { itens: ItemMapaBusca[]; 
             const f = e.features?.[0];
             if (!f) return;
             m.getCanvas().style.cursor = "pointer";
-            const item = itens.find((i) => i.codigo === f.properties.codigo);
+            const item = itensRef.current.find((i) => i.codigo === f.properties.codigo);
             if (item) {
               const el = document.createElement("div");
               el.className = "text-[13px] leading-tight";
@@ -144,7 +154,7 @@ export default function MapaBusca({ itens, listaId }: { itens: ItemMapaBusca[]; 
           m.on("click", camada, (e) => {
             const codigo = e.features?.[0]?.properties.codigo as string | undefined;
             if (!codigo) return;
-            const cartao = document.querySelector<HTMLElement>(`#${CSS.escape(listaId)} [data-codigo="${CSS.escape(codigo)}"]`);
+            const cartao = document.querySelector<HTMLElement>(`#${CSS.escape(listaIdRef.current)} [data-codigo="${CSS.escape(codigo)}"]`);
             if (cartao) {
               cartao.scrollIntoView({ behavior: "smooth", block: "center" });
               cartao.classList.add("busca-destaque");
@@ -160,7 +170,21 @@ export default function MapaBusca({ itens, listaId }: { itens: ItemMapaBusca[]; 
     })();
 
     return () => { cancelado = true; mapa?.remove(); mapaRef.current = null; };
-  }, [itens, listaId]);
+  }, []);
+
+  // filtro novo: só troca os dados das fontes e reenquadra (o mapa fica)
+  useEffect(() => {
+    const m = mapaRef.current;
+    if (!m || !pronto) return;
+    const { divisas, pontos, limites, total } = dadosDoMapa(itens);
+    (m.getSource("divisas") as GeoJSONSource | undefined)?.setData(divisas);
+    (m.getSource("pontos") as GeoJSONSource | undefined)?.setData(pontos);
+    // os ids (posição na lista) mudam com o filtro: nenhum fica aceso por engano
+    m.removeFeatureState({ source: "divisas" });
+    m.removeFeatureState({ source: "pontos" });
+    acesoRef.current = null;
+    if (total) m.fitBounds([[limites[0], limites[1]], [limites[2], limites[3]]], { padding: 50, duration: 0, maxZoom: 15 });
+  }, [itens, pronto]);
 
   // passar o mouse num cartão da lista acende o imóvel no mapa
   useEffect(() => {

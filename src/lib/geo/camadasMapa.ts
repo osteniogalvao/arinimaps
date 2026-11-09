@@ -1,5 +1,6 @@
 import "server-only";
-import { simplify } from "@turf/turf";
+// pacote modular, não o @turf/turf inteiro: menos código no cold start do servidor
+import { simplify } from "@turf/simplify";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ufsDoEnvelope } from "@/lib/rural/ufs";
 import { getComCadeia } from "@/lib/geo/tlsOrgaos";

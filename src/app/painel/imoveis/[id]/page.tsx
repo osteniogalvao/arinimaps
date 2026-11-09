@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FileWarning, PencilLine, FolderLock, Video, type LucideIcon } from "lucide-react";
+import { FileWarning, PencilLine, FolderLock, Video, type LucideIcon } from "lucide-react";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, STATUS_LABEL } from "@/lib/format";
@@ -9,6 +8,7 @@ import VideosImovel from "@/components/crm/VideosImovel";
 import HistoricoImovel from "@/components/crm/HistoricoImovel";
 import ProporAlteracao from "./ProporAlteracao";
 import { Etiqueta } from "@/components/ui/Pagina";
+import { exigirAnunciante } from "@/lib/imovel/anunciante";
 
 const TOM: Record<string, "verde" | "ouro" | "alerta" | "critico" | "neutro"> = {
   rascunho: "neutro", pendente: "alerta", em_analise: "alerta", correcao: "alerta", aprovado: "verde",
@@ -17,11 +17,12 @@ const TOM: Record<string, "verde" | "ouro" | "alerta" | "critico" | "neutro"> = 
 
 export default async function MeuImovel({ params }: PageProps<"/painel/imoveis/[id]">) {
   const { id } = await params;
+  // A RLS libera anúncio publicado para todos: o dono é conferido aqui (auditoria 09/11)
+  await exigirAnunciante(id);
   const supabase = await supabaseServer();
-  // RLS: só o dono (ou Arini) enxerga
   const { data: p } = await supabase
     .from("properties")
-    .select("id, codigo, titulo, descricao, tipo, status, valor, area_declarada, condicoes_venda, aceita_permuta, aceita_financiamento, motivo_correcao, pendencia_tipo")
+    .select("id, codigo, titulo, descricao, tipo, status, valor, area_declarada, condicoes_venda, aceita_permuta, aceita_financiamento, motivo_correcao, pendencia_tipo, caracteristicas")
     .eq("id", id)
     .maybeSingle();
   if (!p) notFound();
@@ -44,12 +45,8 @@ export default async function MeuImovel({ params }: PageProps<"/painel/imoveis/[
   return (
     <div className="max-w-4xl space-y-8">
       <div>
-        <Link href="/painel" className="inline-flex items-center gap-1.5 text-sm font-semibold text-texto-2 hover:text-verde transition-colors">
-          <ArrowLeft className="size-4" /> Meus imóveis
-        </Link>
-        <p className="mt-5 font-mono text-sm text-texto-2">{p.codigo}</p>
-        <h1 className="lp-display mt-1 text-2xl md:text-[2rem] text-texto text-balance">{p.titulo}</h1>
-        <div className="mt-3 flex flex-wrap items-center gap-2.5">
+        {/* voltar, código, título e abas ficam no layout do imóvel */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-lg font-semibold tabular-nums text-texto">{formatBRL(p.valor)}</span>
           <Etiqueta tom={TOM[p.status] ?? "neutro"}>{rotuloStatus}</Etiqueta>
           {revisao && <Etiqueta tom="alerta">alteração em análise</Etiqueta>}
@@ -70,6 +67,7 @@ export default async function MeuImovel({ params }: PageProps<"/painel/imoveis/[
             atual={{
               titulo: p.titulo, descricao: p.descricao ?? "", valor: p.valor, area_declarada: p.area_declarada,
               condicoes_venda: p.condicoes_venda, aceita_permuta: !!p.aceita_permuta, aceita_financiamento: !!p.aceita_financiamento,
+              tour_virtual_url: typeof p.caracteristicas?.tour_virtual_url === "string" ? p.caracteristicas.tour_virtual_url : null,
             }}
             pendente={revisao ? { id: revisao.id, versao: revisao.versao, dados: (revisao.dados ?? {}) as Record<string, unknown>, created_at: revisao.created_at } : null}
           />

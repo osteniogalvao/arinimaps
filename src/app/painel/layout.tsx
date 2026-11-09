@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/supabase/server";
 import { acessoDe } from "@/lib/planos-servidor";
-import { PAPEL_LABEL } from "@/lib/perfis";
+import { PAPEL_LABEL, ehParceiro } from "@/lib/perfis";
+import AjudaTour from "@/components/ajuda/AjudaTour";
 import AppShell from "@/components/shell/AppShell";
 import MarcaArini from "@/components/marca/MarcaArini";
 import AbasPainel from "@/components/painel/AbasPainel";
@@ -35,6 +36,9 @@ export default async function PainelLayout({ children }: LayoutProps<"/painel">)
           </div>
         </header>
         <div className="pb-12">{children}</div>
+        {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14) */}
+        <AjudaTour perfil={ehParceiro(user.role) ? "parceiro" : "painel"}
+          className="fixed bottom-24 right-4 z-40 lg:bottom-6 lg:right-6" />
       </div>
     </AppShell>
   );

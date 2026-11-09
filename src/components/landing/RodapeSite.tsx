@@ -102,7 +102,7 @@ const COLUNAS: { titulo: string; links: { rotulo: string; href: string }[] }[] =
       { rotulo: "A Arini", href: "/#sobre" },
       { rotulo: "Como funciona", href: "/#como-funciona" },
       { rotulo: "Termos de uso", href: "/termos" },
-      { rotulo: "Privacidade e LGPD", href: "/termos" },
+      { rotulo: "Privacidade e LGPD", href: "/termos/privacidade" },
     ],
   },
 ];

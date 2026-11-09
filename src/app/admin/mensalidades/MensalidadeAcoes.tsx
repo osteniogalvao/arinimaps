@@ -2,18 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { enviarJson } from "@/lib/api/enviar";
 
 async function acao(body: unknown) {
-  const res = await fetch("/api/admin/mensalidades", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  const r = await enviarJson("/api/admin/mensalidades", "POST", body);
+  if (!r.ok) {
     // mensagem + motivo + o que fazer (envelope de src/lib/erros.ts)
-    alert([data.error ?? "Falha.", data.motivo, data.solucao].filter(Boolean).join("\n\n"));
+    alert([r.erro.mensagem, r.erro.motivo, r.erro.solucao].filter(Boolean).join("\n\n"));
     return null;
   }
-  return data;
+  return r.dados;
 }
 
 export default function MensalidadeAcoes() {
@@ -50,10 +48,16 @@ export function FaturaAcoes({ id }: { id: string }) {
       </button>
       <button disabled={ocupado} className="btn-contorno whitespace-nowrap px-3 py-1.5 text-xs disabled:opacity-50"
         onClick={async () => {
+          // a aba abre AINDA no clique: window.open depois do await é barrado
+          // pelo bloqueador de pop-up. Depois só navega (ou fecha, se falhar).
+          const aba = window.open("about:blank", "_blank");
           setOcupado(true);
           const d = await acao({ acao: "cobrar_asaas", invoice_id: id });
           setOcupado(false);
-          if (d?.url) window.open(d.url as string, "_blank");
+          const url = typeof d?.url === "string" ? d.url : null;
+          if (!url) { aba?.close(); return; }
+          if (aba) { aba.opener = null; aba.location.href = url; }
+          else window.location.href = url; // bloqueador barrou até a aba em branco: abre aqui mesmo
         }}>
         Cobrar via Asaas
       </button>

@@ -8,6 +8,10 @@ import { CabecalhoSetor, Indicadores, Secao, TarefasDoSetor } from "@/components
 import { CODIGO, TABELA, TABELA_CAIXA, TBODY, TD, TH, THEAD, TR } from "@/components/admin/estilos";
 
 import { LEAD_ORIGEM_LABEL as ORIGEM } from "@/lib/funil";
+import { lerEmLotes } from "@/lib/supabase/lotes";
+
+/** linhas na tabela de material; os indicadores contam todos */
+const MAX_TABELA = 100;
 
 /**
  * Marketing: de onde vêm os interessados, o que mais atrai e que material de
@@ -20,12 +24,16 @@ export default async function PainelMarketing() {
   const ha90 = new Date(Date.now() - 90 * 86_400_000).toISOString();
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
 
+  // em lotes: o PostgREST corta cada pedido em 1000 linhas sem avisar, e aqui
+  // tudo vira contagem (origem, campanha, interessados por imóvel)
   const [{ data: leads }, { data: imoveis }, { data: apresentacoes }] = await Promise.all([
-    admin.from("leads").select("property_id, origem, canal, utm, created_at").gte("created_at", ha90),
-    admin.from("properties")
-      .select("id, codigo, titulo, tipo, valor, published_at, municipality:municipalities(nome), media:property_media(id)")
-      .in("status", ["publicado", "em_negociacao"]).order("published_at", { ascending: false }),
-    admin.from("presentations").select("property_id, tipo, status"),
+    lerEmLotes<{ property_id: string; origem: string; canal: string | null; utm: unknown; created_at: string }>((de, ate) =>
+      admin.from("leads").select("property_id, origem, canal, utm, created_at").gte("created_at", ha90).order("id").range(de, ate)),
+    lerEmLotes((de, ate) => admin.from("properties")
+      .select("id, codigo, titulo, tipo, valor, published_at, municipality:municipalities!properties_municipality_id_fkey(nome), media:property_media(id)")
+      .in("status", ["publicado", "em_negociacao"]).order("published_at", { ascending: false }).order("id").range(de, ate)),
+    lerEmLotes<{ property_id: string; tipo: string; status: string }>((de, ate) =>
+      admin.from("presentations").select("property_id, tipo, status").order("id").range(de, ate)),
   ]);
 
   const leads30 = (leads ?? []).filter((l) => l.created_at >= ha30);
@@ -115,7 +123,7 @@ export default async function PainelMarketing() {
               </tr>
             </thead>
             <tbody className={TBODY}>
-              {lista.sort((a, b) => b.leads - a.leads).map((p) => (
+              {lista.sort((a, b) => b.leads - a.leads).slice(0, MAX_TABELA).map((p) => (
                 <tr key={p.id} className={TR}>
                   <td className="px-4 py-3.5">
                     <Link href={`/imovel/${p.codigo}`} target="_blank" className="font-medium text-texto hover:text-verde">{p.titulo}</Link>
@@ -142,6 +150,11 @@ export default async function PainelMarketing() {
             </tbody>
           </table>
         </div>
+        {lista.length > MAX_TABELA && (
+          <p className="text-sm text-texto-2">
+            Mostrando {MAX_TABELA} de {lista.length} imóveis no ar (os com mais interessados primeiro). Os indicadores acima contam todos.
+          </p>
+        )}
         <p className="text-sm text-texto-2">
           O vídeo é gerado pelo serviço de vídeo do servidor; “na fila” significa que ele ainda não processou o imóvel.
         </p>

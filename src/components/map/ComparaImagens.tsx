@@ -112,7 +112,7 @@ export default function ComparaImagens({
         {imagem.rotulo}
       </span>
 
-      <div className={`pointer-events-auto absolute top-16 right-14 px-4 py-3 text-xs max-w-64 space-y-1.5 ${VIDRO}`}>
+      <div className={`pointer-events-auto absolute top-[var(--abaixo-chips,4rem)] right-14 px-4 py-3 text-xs max-w-64 space-y-1.5 ${VIDRO}`}>
         <div className="flex items-center justify-between gap-3">
           <span className="lp-display text-lg text-verde">Comparando com {imagem.ano}</span>
           <BotaoFechar onClick={onFechar} rotulo="Sair da comparação" />
