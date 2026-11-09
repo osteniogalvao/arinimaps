@@ -12,7 +12,7 @@
 // de área. É uma leitura do desenho, não um cadastro: lote que o CAD não fechou
 // (traço faltando) não aparece.
 
-import { seletorDeMatriz, pedacosComMatriz, assinaturaAjustes, assinaturaExclusoes } from "./ajustes.mjs";
+import { seletorDeMatriz, pedacosComMatriz, assinaturaAjustes, assinaturaExclusoes, assinaturaEdicoes, aplicarEdicoes } from "./ajustes.mjs";
 
 const AREA_MIN = 100;      // m² — abaixo disso é detalhe de desenho
 const AREA_MAX = 5000;     // m² — acima disso é quadra ou gleba
@@ -67,7 +67,7 @@ export function afim(centro, t) {
 
 export const assinaturaDe = (c) =>
   [c.offset_leste_m ?? 0, c.offset_norte_m ?? 0, c.rotacao_graus ?? 0, c.escala ?? 1, [...(c.layers_ocultos ?? [])].sort().join("|")].join(";") +
-  assinaturaExclusoes(c.linhas_excluidas) + assinaturaAjustes(c.ajustes_locais);
+  assinaturaExclusoes(c.linhas_excluidas) + assinaturaAjustes(c.ajustes_locais) + assinaturaEdicoes(c.edicoes_geometria);
 
 /**
  * @param {{layer_id: string}} payload
@@ -80,11 +80,11 @@ export async function gerarLotes(payload, db) {
   try {
     await client.query("set statement_timeout = 0");
     const { rows: [cam] } = await client.query(
-      `select id, nome, municipality_id, tiles_path, layers_ocultos, linhas_excluidas, offset_leste_m, offset_norte_m, rotacao_graus, escala, ajustes_locais
+      `select id, nome, municipality_id, tiles_path, layers_ocultos, linhas_excluidas, offset_leste_m, offset_norte_m, rotacao_graus, escala, ajustes_locais, edicoes_geometria
        from cartography_layers where id = $1 and tipo = 'vector'`, [payload.layer_id]);
     if (!cam) throw new Error("planta vetorial não encontrada");
 
-    const fc = await (await fetch(`${base}/storage/v1/object/public/media/${cam.tiles_path}`)).json();
+    const fc = aplicarEdicoes(await (await fetch(`${base}/storage/v1/object/public/media/${cam.tiles_path}`)).json(), cam.edicoes_geometria);
     if (!Array.isArray(fc?.features)) throw new Error("GeoJSON da planta ilegível");
     // cada linha usa a matriz da sua parte ajustada, ou a da planta (worker/jobs/ajustes.mjs)
     const matrizDe = seletorDeMatriz(centroDe(fc), {

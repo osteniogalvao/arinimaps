@@ -26,15 +26,15 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair, Eraser, Hand, Move, PenLine, RotateCcw, Save, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Trash2, Undo2, X } from "lucide-react";
 import type { Map as MLMap, GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { SATELITE } from "@/lib/map/config";
 import {
   centroDe, ajustarPorPontos, DESLOCAMENTO_DATUM, TRANSFORM_ZERO,
   afim, compor, inverter, aplicarMatriz, aplicarMatrizPonto, centroArea, partesDasLinhas,
-  areasSeSobrepoem,
-  type Transform, type ParDeControle, type AjusteLocal,
+  areasSeSobrepoem, aplicarEdicoesGeoJSON,
+  type Transform, type ParDeControle, type AjusteLocal, type EdicaoGeometria,
 } from "@/lib/geo/deslocar";
 import { enviarJson, type ErroApi } from "@/lib/api/enviar";
 import { AvisoErro } from "@/components/ui/Aviso";
@@ -50,10 +50,12 @@ type Camada = {
   ajustes?: AjusteLocal[];
   linhas_excluidas?: string[];
   espessura?: number;
+  edicoes?: EdicaoGeometria[];
   offset: { leste_m: number; norte_m: number };
 };
 
-type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar";
+type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar" | "objeto" | "vertices";
+type LinhaSelecionada = { feature: number; linha: number };
 
 /** O que o desfazer guarda: a planta inteira, as partes e as linhas apagadas. */
 type Estado = { t: Transform; ajustes: AjusteLocal[]; excluidas: Set<string> };
@@ -113,7 +115,7 @@ function montar(
     return {
       type: "Feature",
       geometry: { type: "Polygon", coordinates: [[...anel, anel[0]]] },
-      properties: { ativa: a.id === ativa, nome: a.nome },
+      properties: { id: a.id, ativa: a.id === ativa, nome: a.nome },
     };
   });
   return {
@@ -144,6 +146,43 @@ const ehIgualAoSalvo = (a: Transform, b: Transform) =>
   Math.abs(a.rotacaoGraus - b.rotacaoGraus) < 1e-4 &&
   Math.abs(a.escala - b.escala) < 1e-6;
 
+function coordenadasLinha(fc: GeoJSON.FeatureCollection, s: LinhaSelecionada): [number, number][] | null {
+  const g = fc.features[s.feature]?.geometry;
+  if (g?.type === "MultiLineString") return (g.coordinates[s.linha] as [number, number][] | undefined) ?? null;
+  if (g?.type === "LineString" && s.linha === 0) return g.coordinates as [number, number][];
+  return null;
+}
+
+const distanciaSegmento2 = (p: [number, number], a: [number, number], b: [number, number]) => {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const den = dx * dx + dy * dy;
+  const u = den ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / den)) : 0;
+  const x = a[0] + u * dx, y = a[1] + u * dy;
+  return (p[0] - x) ** 2 + (p[1] - y) ** 2;
+};
+
+/** Procura a polilinha mais perto do clique no desenho cru. Só roda ao clicar. */
+function linhaMaisProxima(
+  fc: GeoJSON.FeatureCollection, p: [number, number], limite: number, apagadas: Set<string> = new Set(),
+): LinhaSelecionada | null {
+  let melhor = limite * limite, achou: LinhaSelecionada | null = null;
+  fc.features.forEach((f, feature) => {
+    const linhas = f.geometry?.type === "MultiLineString" ? f.geometry.coordinates
+      : f.geometry?.type === "LineString" ? [f.geometry.coordinates] : [];
+    if (apagadas.has(String(feature))) return;
+    const multi = f.geometry?.type === "MultiLineString";
+    linhas.forEach((linha, i) => {
+      // linha apagada não aparece no mapa, então não pode ser escolhida
+      if (multi && apagadas.has(`${feature}:${i}`)) return;
+      for (let j = 1; j < linha.length; j++) {
+        const d = distanciaSegmento2(p, linha[j - 1] as [number, number], linha[j] as [number, number]);
+        if (d < melhor) { melhor = d; achou = { feature, linha: i }; }
+      }
+    });
+  });
+  return achou;
+}
+
 export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; onFechar: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
@@ -173,6 +212,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   // linhas apagadas ("i" ou "i:j", posição no arquivo original) e espessura das linhas
   const [excluidas, setExcluidas] = useState<Set<string>>(new Set(camada.linhas_excluidas ?? []));
   const [espessura, setEspessura] = useState(camada.espessura ?? 1);
+  const [edicoes, setEdicoes] = useState<EdicaoGeometria[]>(camada.edicoes ?? []);
+  const [linhaSelecionada, setLinhaSelecionada] = useState<LinhaSelecionada | null>(null);
   // null = ajustando a planta inteira; id = só aquela parte
   const [ativa, setAtiva] = useState<string | null>(null);
   // vértices da área sendo desenhada (posição na tela, em graus)
@@ -193,11 +234,14 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const excluidasRef = useRef(excluidas); excluidasRef.current = excluidas;
   // o clique de apagar é registrado uma vez; a busca da linha usa o estado do momento
   const apagarNoPontoRef = useRef<(e: MapMouseEvent) => void>(() => undefined);
+  const edicoesRef = useRef(edicoes); edicoesRef.current = edicoes;
+  const linhaSelecionadaRef = useRef(linhaSelecionada); linhaSelecionadaRef.current = linhaSelecionada;
   // parte de cada linha: só muda quando uma parte nasce ou some, não a cada movimento
   const membrosRef = useRef<{ chave: string; m: Int32Array[] }>({ chave: "", m: [] });
   const parteAtual = ajustes.find((a) => a.id === ativa) ?? null;
   // o clique do mapa é registrado uma vez; fechar a área usa o estado do momento
   const fecharAreaRef = useRef<() => void>(() => undefined);
+  const criarParteDaLinhaRef = useRef<(s: LinhaSelecionada) => void>(() => undefined);
 
   const layersCad = useMemo(() => camada.layers_cad ?? [], [camada.layers_cad]);
   const totalLinhas = useMemo(() => layersCad.reduce((s, l) => s + l.linhas, 0), [layersCad]);
@@ -287,6 +331,23 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     (map.getSource("controle") as GeoJSONSource).setData({ type: "FeatureCollection", features: feats });
   }, []);
 
+  const desenharLinhaSelecionada = useCallback((s: LinhaSelecionada | null, coordsOverride?: [number, number][]) => {
+    const map = mapRef.current, bruto = brutoRef.current;
+    const fonte = map?.getSource("edicao") as GeoJSONSource | undefined;
+    if (!fonte || !bruto || !s) { fonte?.setData(VAZIO); return; }
+    const coords = coordsOverride ?? coordenadasLinha(bruto, s);
+    if (!coords) { fonte.setData(VAZIO); return; }
+    const g = afim(centroRef.current, tRef.current);
+    const k = membrosRef.current.m[s.feature]?.[s.linha] ?? -1;
+    const a = k >= 0 ? ajustesRef.current[k] : null;
+    const m = a ? compor(g, afim(centroArea(a.area), a.t)) : g;
+    const tela = coords.map((p) => aplicarMatrizPonto(m, p));
+    fonte.setData({ type: "FeatureCollection", features: [
+      { type: "Feature", geometry: { type: "LineString", coordinates: tela }, properties: { tipo: "linha" } },
+      ...tela.map((p, i) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: p }, properties: { tipo: "vertice", i } })),
+    ] });
+  }, []);
+
   // ---------- monta o mapa uma vez ----------
   useEffect(() => {
     if (!containerRef.current || mapRef.current || !camada.geojson) return;
@@ -312,7 +373,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       // referência na tela, não de conta de cabeça
       map.addControl(new maplibregl.ScaleControl({ unit: "metric", maxWidth: 120 }), "bottom-left");
 
-      const bruto = (await fetch(camada.geojson!).then((r) => r.json()).catch(() => null)) as GeoJSON.FeatureCollection | null;
+      const original = (await fetch(camada.geojson!).then((r) => r.json()).catch(() => null)) as GeoJSON.FeatureCollection | null;
+      const bruto = original ? aplicarEdicoesGeoJSON(original, camada.edicoes ?? []) : null;
       if (cancelado) return;
       if (!bruto) {
         setErro({
@@ -400,6 +462,20 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           paint: { "circle-radius": 5, "circle-color": "#D9BD6F", "circle-stroke-width": 2, "circle-stroke-color": "#0B140F" },
         });
 
+        // Uma única linha em edição fica isolada: arrastar um vértice atualiza
+        // só esta fonte pequena; a planta inteira é refeita apenas ao soltar.
+        map.addSource("edicao", { type: "geojson", data: VAZIO });
+        map.addLayer({
+          id: "edicao-linha", type: "line", source: "edicao",
+          filter: ["==", ["geometry-type"], "LineString"],
+          paint: { "line-color": "#FF8A3D", "line-width": 4 },
+        });
+        map.addLayer({
+          id: "edicao-vertices", type: "circle", source: "edicao",
+          filter: ["==", ["geometry-type"], "Point"],
+          paint: { "circle-radius": 6, "circle-color": "#FFF4D6", "circle-stroke-width": 2.5, "circle-stroke-color": "#FF6B1A" },
+        });
+
         map.addSource("controle", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
         map.addLayer({
           id: "controle-liga", type: "line", source: "controle",
@@ -445,6 +521,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         px: number; py: number; base: Transform; ultimo: [number, number];
         parte: AjusteLocal | null; camadas: string[];
       } | null = null;
+      let quadroArraste: number | null = null;
+      let verticeArrastando: { s: LinhaSelecionada; i: number; coords: [number, number][]; inversa: ReturnType<typeof inverter> } | null = null;
       const canvas = map.getCanvas();
 
       const emMetros = (dxPx: number, dyPx: number, origem: { px: number; py: number }): [number, number] => {
@@ -458,6 +536,20 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       };
 
       map.on("mousedown", (e: MapMouseEvent) => {
+        if (modoRef.current === "vertices" && linhaSelecionadaRef.current) {
+          const hits = map.queryRenderedFeatures([[e.point.x - 10, e.point.y - 10], [e.point.x + 10, e.point.y + 10]], { layers: ["edicao-vertices"] });
+          const i = Number(hits[0]?.properties?.i);
+          const s = linhaSelecionadaRef.current, coords = coordenadasLinha(bruto, s);
+          if (Number.isInteger(i) && coords?.[i]) {
+            const global = afim(centroRef.current, tRef.current);
+            const k = membrosRef.current.m[s.feature]?.[s.linha] ?? -1;
+            const a = k >= 0 ? ajustesRef.current[k] : null;
+            const matriz = a ? compor(global, afim(centroArea(a.area), a.t)) : global;
+            verticeArrastando = { s, i, coords: coords.map((p) => [...p] as [number, number]), inversa: inverter(matriz) };
+            map.dragPan.disable(); e.preventDefault(); canvas.style.cursor = "grabbing";
+          }
+          return;
+        }
         if (modoRef.current !== "mover") return;
         e.preventDefault();
         // com uma parte ativa, só ela e o seu contorno andam
@@ -472,36 +564,58 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       });
 
       const aoMover = (ev: MouseEvent) => {
+        if (verticeArrastando) {
+          const r = canvas.getBoundingClientRect();
+          const ll = map.unproject([ev.clientX - r.left, ev.clientY - r.top]);
+          const novo = aplicarMatrizPonto(verticeArrastando.inversa, [ll.lng, ll.lat]);
+          const coords = verticeArrastando.coords, ultimo = coords.length - 1;
+          const fechada = ultimo > 1 && Math.hypot(coords[0][0] - coords[ultimo][0], coords[0][1] - coords[ultimo][1]) < 1e-8;
+          coords[verticeArrastando.i] = novo;
+          if (fechada && verticeArrastando.i === 0) coords[ultimo] = [...novo];
+          else if (fechada && verticeArrastando.i === ultimo) coords[0] = [...novo];
+          desenharLinhaSelecionada(verticeArrastando.s, verticeArrastando.coords);
+          return;
+        }
         if (!arrastando) return;
         const r = canvas.getBoundingClientRect();
         const k = ev.shiftKey ? FINO : 1;
         const dx = (ev.clientX - r.left - arrastando.px) * k;
         const dy = (ev.clientY - r.top - arrastando.py) * k;
         arrastando.ultimo = [dx, dy];
-        for (const id of arrastando.camadas) {
-          if (map.getLayer(id)) map.setPaintProperty(id, "line-translate", [dx, dy]);
-        }
-        // o painel acompanha em metros, sem redesenhar o dado
-        const [dLeste, dNorte] = emMetros(dx, dy, arrastando);
-        if (arrastando.parte) {
-          const [pl, pn] = telaParaParte(dLeste, dNorte, arrastando.base);
-          const p = arrastando.parte;
-          setAjustes(ajustesRef.current.map((a) => (a.id === p.id
-            ? { ...a, t: { ...p.t, offsetLesteM: p.t.offsetLesteM + pl, offsetNorteM: p.t.offsetNorteM + pn } } : a)));
-          return;
-        }
-        setT({
-          ...arrastando.base,
-          offsetLesteM: arrastando.base.offsetLesteM + dLeste,
-          offsetNorteM: arrastando.base.offsetNorteM + dNorte,
+        if (quadroArraste === null) quadroArraste = requestAnimationFrame(() => {
+          quadroArraste = null;
+          if (!arrastando) return;
+          for (const id of arrastando.camadas) {
+            if (map.getLayer(id)) map.setPaintProperty(id, "line-translate", arrastando.ultimo);
+          }
         });
+        // Não chama setState aqui. Mesmo com o traço na GPU, renderizar este
+        // componente React a cada mousemove era o gargalo percebido pelo Carlos.
+        // O painel numérico consolida o valor uma única vez, ao soltar.
       };
 
       const aoSoltar = () => {
+        if (verticeArrastando) {
+          const { s, coords } = verticeArrastando;
+          verticeArrastando = null;
+          const f = bruto.features[s.feature];
+          if (f.geometry?.type === "MultiLineString") f.geometry.coordinates[s.linha] = coords;
+          else if (f.geometry?.type === "LineString" && s.linha === 0) f.geometry.coordinates = coords;
+          const nova: EdicaoGeometria = { feature: s.feature, linha: s.linha, coordinates: coords };
+          const lista = [...edicoesRef.current.filter((x) => x.feature !== s.feature || x.linha !== s.linha), nova];
+          edicoesRef.current = lista; setEdicoes(lista);
+          membrosRef.current.chave = "";
+          redesenhar(tRef.current, ocultosRef.current);
+          desenharLinhaSelecionada(s, coords);
+          map.dragPan.disable(); canvas.style.cursor = "crosshair";
+          setMsg("Linha reajustada. Salve para publicar a correção no mapa principal.");
+          return;
+        }
         if (!arrastando) return;
         const { base, ultimo, parte, camadas } = arrastando;
         const [dLeste, dNorte] = emMetros(ultimo[0], ultimo[1], arrastando);
         arrastando = null;
+        if (quadroArraste !== null) { cancelAnimationFrame(quadroArraste); quadroArraste = null; }
         map.scrollZoom.enable();
         canvas.style.cursor = modoRef.current === "mover" ? "grab" : "";
 
@@ -538,6 +652,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       window.addEventListener("mousemove", aoMover);
       window.addEventListener("mouseup", aoSoltar);
       limparArrasteRef.current = () => {
+        if (quadroArraste !== null) cancelAnimationFrame(quadroArraste);
         window.removeEventListener("mousemove", aoMover);
         window.removeEventListener("mouseup", aoSoltar);
       };
@@ -546,6 +661,28 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       // primeiro ponto (ou duplo clique). O MapLibre manda dois "click" antes
       // do "dblclick", então o duplo clique só fecha — o vértice já entrou.
       map.on("click", (e: MapMouseEvent) => {
+        if (modoRef.current === "objeto" || modoRef.current === "vertices") {
+          if (modoRef.current === "objeto") {
+            const parteHit = map.queryRenderedFeatures(e.point, { layers: ["partes-fundo"] })[0];
+            const id = String(parteHit?.properties?.id ?? "");
+            if (id && ajustesRef.current.some((a) => a.id === id)) {
+              ativaRef.current = id; setAtiva(id); setModo("mover");
+              setMsg(`“${parteHit.properties?.nome ?? "Peça"}” selecionada. Arraste para mover só ela.`);
+              return;
+            }
+          }
+          const inv = inverter(afim(centroRef.current, tRef.current));
+          const cru = aplicarMatrizPonto(inv, [e.lngLat.lng, e.lngLat.lat]);
+          const lado = map.unproject([e.point.x + 14, e.point.y]);
+          const cruLado = aplicarMatrizPonto(inv, [lado.lng, lado.lat]);
+          const limite = Math.hypot(cruLado[0] - cru[0], cruLado[1] - cru[1]);
+          const s = linhaMaisProxima(bruto, cru, limite, excluidasRef.current);
+          if (!s) { setMsg("Clique mais perto de uma linha da planta."); return; }
+          linhaSelecionadaRef.current = s; setLinhaSelecionada(s);
+          if (modoRef.current === "objeto") criarParteDaLinhaRef.current(s);
+          else { desenharLinhaSelecionada(s); setMsg("Arraste os pontos laranja para reajustar esta linha."); }
+          return;
+        }
         if (modoRef.current !== "parte") return;
         const atual = desenhoRef.current;
         if (atual.length >= 3) {
@@ -599,8 +736,11 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (modo === "mover") { map.dragPan.disable(); map.getCanvas().style.cursor = "grab"; }
-    else { map.dragPan.enable(); map.getCanvas().style.cursor = modo === "pontos" || modo === "parte" || modo === "apagar" ? "crosshair" : ""; }
+    if (modo === "mover" || modo === "vertices") {
+      map.dragPan.disable(); map.getCanvas().style.cursor = modo === "mover" ? "grab" : "crosshair";
+    } else {
+      map.dragPan.enable(); map.getCanvas().style.cursor = modo === "pontos" || modo === "parte" || modo === "objeto" || modo === "apagar" ? "crosshair" : "";
+    }
     // no desenho da área o duplo clique fecha a área, não aproxima o mapa
     if (modo === "parte") map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
   }, [modo, carregando]);
@@ -619,6 +759,39 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
 
   // trocar a parte ativa muda o que vai para a fonte que o arraste empurra
   useEffect(() => { redesenhar(tRef.current, ocultosRef.current); }, [ativa, redesenhar]);
+  useEffect(() => { desenharLinhaSelecionada(modo === "vertices" ? linhaSelecionada : null); }, [linhaSelecionada, modo, carregando, desenharLinhaSelecionada]);
+
+  criarParteDaLinhaRef.current = (s) => {
+    const bruto = brutoRef.current;
+    if (!bruto) return;
+    const existente = membrosRef.current.m[s.feature]?.[s.linha] ?? -1;
+    if (existente >= 0 && ajustesRef.current[existente]) {
+      const id = ajustesRef.current[existente].id;
+      ativaRef.current = id; setAtiva(id); setModo("mover");
+      setMsg(`“${ajustesRef.current[existente].nome}” selecionada. Arraste para mover só esta peça.`);
+      return;
+    }
+    const linha = coordenadasLinha(bruto, s);
+    if (!linha?.length) return;
+    const fechada = linha.length >= 4 && Math.hypot(linha[0][0] - linha.at(-1)![0], linha[0][1] - linha.at(-1)![1]) < 1e-8;
+    let area: [number, number][];
+    if (fechada) area = linha.slice(0, -1);
+    else {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const [x, y] of linha) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      const folga = Math.max((x1 - x0) * 0.08, (y1 - y0) * 0.08, 0.000003);
+      area = [[x0 - folga, y0 - folga], [x1 + folga, y0 - folga], [x1 + folga, y1 + folga], [x0 - folga, y1 + folga]];
+    }
+    const encosta = ajustesRef.current.find((a) => areasSeSobrepoem(a.area, area));
+    if (encosta) { setMsg(`Essa peça encosta em “${encosta.nome}”. Selecione essa parte ou remova-a primeiro.`); return; }
+    const numero = ajustesRef.current.length + 1;
+    const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`).slice(0, 13);
+    const nova: AjusteLocal = { id, nome: `Peça ${numero}`, area, t: { ...TRANSFORM_ZERO } };
+    ativaRef.current = id; setAtiva(id);
+    definir(tRef.current, [...ajustesRef.current, nova]);
+    setModo("mover");
+    setMsg(`${nova.nome} selecionada diretamente. Arraste para mover só ela.`);
+  };
 
   fecharAreaRef.current = () => {
     const map = mapRef.current, bruto = brutoRef.current;
@@ -906,6 +1079,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         ajustes_locais: ajustes,
         linhas_excluidas: [...excluidas],
         espessura_linha: espessura,
+        edicoes_geometria: edicoes,
       });
     setSalvando(false);
     if (!r.ok) { setErro(r.erro); return; }
@@ -917,7 +1091,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     if (gravadas) { ajustesRef.current = gravadas; setAjustes(gravadas); }
     setSalvo({
       t: tRef.current, ocultos: [...ocultos].sort(), opacidade, ajustes: JSON.stringify(ajustesRef.current),
-      excluidas: [...excluidas].sort().join(","), espessura,
+      excluidas: [...excluidas].sort().join(","), espessura, edicoes: JSON.stringify(edicoesRef.current),
     });
 
     const g = r.dados.aplicado ?? {};
@@ -934,6 +1108,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       (ajustes.length ? ` ${ajustes.length} parte${ajustes.length === 1 ? "" : "s"} com ajuste próprio.` : "") +
       (excluidas.size ? ` ${fmt(excluidas.size)} linha${excluidas.size === 1 ? "" : "s"} apagada${excluidas.size === 1 ? "" : "s"}.` : "") +
       (espessura !== 1 ? ` Espessura das linhas ${espessura.toFixed(2).replace(".", ",")}×.` : "") +
+      (edicoes.length ? ` ${edicoes.length} linha${edicoes.length === 1 ? "" : "s"} reajustada${edicoes.length === 1 ? "" : "s"} e publicada${edicoes.length === 1 ? "" : "s"}.` : "") +
       (r.dados.lotes_movidos ? ` ${fmt(r.dados.lotes_movidos)} lotes clicáveis acompanharam as partes.` : "") +
       (r.dados.aviso_lotes ? ` Atenção: ${r.dados.aviso_lotes}.` : "")
     );
@@ -949,11 +1124,12 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
    * volta arredondado do banco (`salvar` manda 2 casas em metros): comparar por
    * igualdade exata acusaria pendência logo depois de salvar com sucesso.
    */
-  const [salvo, setSalvo] = useState<{ t: Transform; ocultos: string[]; opacidade: number; ajustes: string; excluidas: string; espessura: number }>({
+  const [salvo, setSalvo] = useState<{ t: Transform; ocultos: string[]; opacidade: number; ajustes: string; excluidas: string; espessura: number; edicoes: string }>({
     t: inicial,
     excluidas: [...(camada.linhas_excluidas ?? [])].sort().join(","),
     espessura: camada.espessura ?? 1,
     ajustes: JSON.stringify(camada.ajustes ?? []),
+    edicoes: JSON.stringify(camada.edicoes ?? []),
     ocultos: [...(camada.layers_ocultos ?? [])].sort(),
     opacidade: camada.opacidade ?? 0.85,
   });
@@ -964,9 +1140,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     if (salvo.ajustes !== JSON.stringify(ajustes)) return true;
     if (salvo.excluidas !== [...excluidas].sort().join(",")) return true;
     if (Math.abs(salvo.espessura - espessura) > 1e-6) return true;
+    if (salvo.edicoes !== JSON.stringify(edicoes)) return true;
     const atuais = [...ocultos].sort();
     return atuais.length !== salvo.ocultos.length || atuais.some((n, i) => n !== salvo.ocultos[i]);
-  }, [salvo, t, ocultos, opacidade, ajustes, excluidas, espessura]);
+  }, [salvo, t, ocultos, opacidade, ajustes, excluidas, espessura, edicoes]);
 
   /**
    * Fechar com calibração pendente perdia o trabalho sem aviso (X, clique fora
@@ -996,6 +1173,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               {modo === "parte" && (desenho.length < 3
                 ? "Clique em volta da quadra ou do trecho que quer mover separado — um clique por canto."
                 : "Feche a área clicando no primeiro ponto, com duplo clique ou Enter. Esc desiste.")}
+              {modo === "objeto" && "Clique diretamente numa quadra, lote ou polilinha fechada. Ela vira uma peça independente e já fica pronta para arrastar."}
+              {modo === "vertices" && (linhaSelecionada ? "Arraste um ponto laranja para reajustar só aquela linha. A planta inteira é recalculada apenas ao soltar." : "Clique na linha que quer reajustar; depois arraste os vértices laranja.")}
               {modo === "navegar" && "Arraste para navegar no mapa. Volte para “mover planta” quando quiser ajustar."}
               {modo === "apagar" && "Clique em cima de uma linha para apagá-la do mapa (aproxime para acertar a linha certa). Ctrl+Z desfaz; nada muda no mapa público antes de salvar."}
               {modo === "pontos" && (pendente
@@ -1038,6 +1217,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           )}
           <div className="flex flex-wrap items-center gap-2">
             <button className={chip(modo === "mover")} onClick={() => setModo("mover")}><Move className="size-4" /> Mover planta</button>
+            <button className={chip(modo === "objeto")} onClick={() => setModo("objeto")}
+              title="Clique numa peça fechada para separá-la e mover só ela"><MousePointer2 className="size-4" /> Selecionar peça</button>
+            <button className={chip(modo === "vertices")} onClick={() => setModo("vertices")}
+              title="Selecione uma linha e arraste seus vértices"><Pencil className="size-4" /> Ajustar linha</button>
             <button className={chip(modo === "navegar")} onClick={() => setModo("navegar")}><Hand className="size-4" /> Navegar</button>
             <button className={chip(modo === "pontos")} onClick={() => { selecionarParte(null); setModo("pontos"); }}
               title="Calibra a planta inteira por pares de pontos"><Crosshair className="size-4" /> Pontos de controle</button>

@@ -101,3 +101,21 @@ export function assinaturaExclusoes(excluidas) {
   for (let k = 0; k < s.length; k++) h = ((h * 33) ^ s.charCodeAt(k)) >>> 0;
   return `;ex:${excluidas.length}-${h.toString(36)}`;
 }
+
+/** Aplica somente as polilinhas corrigidas manualmente sobre o arquivo bruto. */
+export function aplicarEdicoes(fc, edicoes = []) {
+  for (const e of edicoes ?? []) {
+    const g = fc.features?.[e.feature]?.geometry;
+    if (g?.type === "MultiLineString" && g.coordinates[e.linha] && e.coordinates?.length >= 2) g.coordinates[e.linha] = e.coordinates;
+    else if (g?.type === "LineString" && e.linha === 0 && e.coordinates?.length >= 2) g.coordinates = e.coordinates;
+  }
+  return fc;
+}
+
+export function assinaturaEdicoes(edicoes = []) {
+  if (!edicoes?.length) return "";
+  let h = 2166136261;
+  const texto = edicoes.map((e) => `${e.feature}:${e.linha}:${e.coordinates.map((p) => `${Number(p[0]).toFixed(7)},${Number(p[1]).toFixed(7)}`).join(";")}`).join("|");
+  for (let i = 0; i < texto.length; i++) h = Math.imul(h ^ texto.charCodeAt(i), 16777619);
+  return `;ed:${(h >>> 0).toString(36)}`;
+}

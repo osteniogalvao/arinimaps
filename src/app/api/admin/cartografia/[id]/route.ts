@@ -7,7 +7,7 @@ import { falha, falhaBanco } from "@/lib/erros";
 import { gerarPlantaPublica } from "@/lib/geo/plantaPublica";
 import {
   afim, compor, inverter, centroArea, centroDe, areasSeSobrepoem, assinaturaAjustes, TRANSFORM_ZERO, CHAVE_LINHA,
-  type AjusteLocal, type Matriz, type Transform,
+  type AjusteLocal, type EdicaoGeometria, type Matriz, type Transform,
 } from "@/lib/geo/deslocar";
 
 /**
@@ -31,7 +31,32 @@ const LIMITES = {
   linhasExcluidas: 20_000,
   espessuraMin: 0.25,
   espessuraMax: 5,
+  edicoes: 2_000,
+  verticesLinha: 2_000,
+  verticesEditadosTotal: 50_000,
 };
+
+function lerEdicoes(v: unknown): { ok: true; edicoes: EdicaoGeometria[] } | { ok: false; motivo: string } {
+  if (!Array.isArray(v)) return { ok: false, motivo: "as correções de linha não vieram como lista" };
+  if (v.length > LIMITES.edicoes) return { ok: false, motivo: `correções demais (limite ${LIMITES.edicoes})` };
+  const fin = (n: unknown) => typeof n === "number" && Number.isFinite(n);
+  const edicoes: EdicaoGeometria[] = [];
+  let totalVertices = 0;
+  for (const [i, item] of v.entries()) {
+    const e = item as Partial<EdicaoGeometria> | null;
+    if (!e || !Number.isInteger(e.feature) || e.feature! < 0 || !Number.isInteger(e.linha) || e.linha! < 0) {
+      return { ok: false, motivo: `correção ${i + 1} sem identificador de linha válido` };
+    }
+    if (!Array.isArray(e.coordinates) || e.coordinates.length < 2 || e.coordinates.length > LIMITES.verticesLinha ||
+        !e.coordinates.every((p) => Array.isArray(p) && p.length >= 2 && fin(p[0]) && fin(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90)) {
+      return { ok: false, motivo: `correção ${i + 1} precisa de 2 a ${LIMITES.verticesLinha} vértices válidos` };
+    }
+    totalVertices += e.coordinates.length;
+    if (totalVertices > LIMITES.verticesEditadosTotal) return { ok: false, motivo: `correções acima de ${LIMITES.verticesEditadosTotal} vértices no total` };
+    edicoes.push({ feature: e.feature!, linha: e.linha!, coordinates: e.coordinates.map((p) => [Number(p[0]), Number(p[1])]) });
+  }
+  return { ok: true, edicoes };
+}
 
 /**
  * Lê as partes ajustadas que a tela mandou. Devolve a lista limpa ou o motivo
@@ -155,6 +180,11 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
     if (!lidos.ok) fora.push(lidos.motivo);
     else patch.ajustes_locais = lidos.ajustes;
   }
+  if (body.edicoes_geometria !== undefined) {
+    const lidas = lerEdicoes(body.edicoes_geometria);
+    if (!lidas.ok) fora.push(lidas.motivo);
+    else patch.edicoes_geometria = lidas.edicoes;
+  }
 
   if (fora.length) {
     return falha(400, "ajuste_fora_da_faixa", "O ajuste pedido está fora do que a calibração aceita.", {
@@ -172,7 +202,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
 
   const admin = supabaseAdmin();
   const { data: antes } = await admin.from("cartography_layers")
-    .select("nome, tipo, tiles_path, publico_path, publico_centro, offset_leste_m, offset_norte_m, rotacao_graus, escala, layers_ocultos, linhas_excluidas, ajustes_locais, lotes_total, lotes_assinatura")
+    .select("nome, tipo, tiles_path, publico_path, publico_centro, offset_leste_m, offset_norte_m, rotacao_graus, escala, layers_ocultos, linhas_excluidas, ajustes_locais, edicoes_geometria, lotes_total, lotes_assinatura")
     .eq("id", id).single();
   if (!antes) {
     return falha(404, "camada_sumiu", "Essa camada não existe mais.", {
@@ -194,12 +224,15 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   const excluidasAntes = ((antes.linhas_excluidas as string[] | null) ?? []);
   const excluidasDepois = (patch.linhas_excluidas as string[] | undefined) ?? excluidasAntes;
   const mudouExcluidas = [...excluidasAntes].sort().join(",") !== [...excluidasDepois].sort().join(",");
-  if ((mudouCamadas || mudouExcluidas) && antes.tipo === "vector" && antes.tiles_path) {
+  const mudouGeometria = patch.edicoes_geometria !== undefined &&
+    JSON.stringify(patch.edicoes_geometria) !== JSON.stringify(antes.edicoes_geometria ?? []);
+  if ((mudouCamadas || mudouExcluidas || mudouGeometria) && antes.tipo === "vector" && antes.tiles_path) {
     try {
       publico = await gerarPlantaPublica(
         admin, { id, tiles_path: antes.tiles_path, publico_path: antes.publico_path },
         (patch.layers_ocultos as string[] | undefined) ?? ((antes.layers_ocultos as string[] | null) ?? []),
-        excluidasDepois
+        excluidasDepois,
+        (patch.edicoes_geometria as EdicaoGeometria[] | undefined) ?? ((antes.edicoes_geometria as EdicaoGeometria[] | null) ?? [])
       );
     } catch (e) {
       avisoPublico = e instanceof Error ? e.message : String(e);
@@ -217,8 +250,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
     difere(patch.offset_leste_m, antes.offset_leste_m, 0.005) || difere(patch.offset_norte_m, antes.offset_norte_m, 0.005) ||
     difere(patch.rotacao_graus, antes.rotacao_graus, 1e-5) || (patch.escala !== undefined && Math.abs(Number(patch.escala) - Number(antes.escala ?? 1)) > 1e-7) ||
     (Array.isArray(patch.layers_ocultos) && [...(patch.layers_ocultos as string[])].sort().join("|") !== camadasAntes) ||
-    // linha apagada muda as quadras: os lotes são refeitos
-    mudouExcluidas;
+    // linha apagada ou corrigida muda as quadras: os lotes são refeitos
+    mudouExcluidas || mudouGeometria;
 
   const ajustesAntes = ((antes.ajustes_locais as AjusteLocal[] | null) ?? []);
   const ajustesDepois = (patch.ajustes_locais as AjusteLocal[] | undefined) ?? ajustesAntes;

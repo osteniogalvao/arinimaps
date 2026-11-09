@@ -29,7 +29,7 @@ const db = new pg.Pool({
 });
 
 const { rows } = await db.query(`
-  select id, nome, lotes_total, lotes_assinatura, layers_ocultos, linhas_excluidas, offset_leste_m, offset_norte_m, rotacao_graus, escala, ajustes_locais
+  select id, nome, lotes_total, lotes_assinatura, layers_ocultos, linhas_excluidas, offset_leste_m, offset_norte_m, rotacao_graus, escala, ajustes_locais, edicoes_geometria
   from cartography_layers where tipo = 'vector' and status = 'pronto' and tiles_path is not null order by nome`);
 
 for (const c of rows) {
