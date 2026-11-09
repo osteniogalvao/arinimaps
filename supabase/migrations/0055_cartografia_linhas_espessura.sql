@@ -1,4 +1,4 @@
--- Arini Imóveis Brasil — migration 0054: apagar linhas e mudar a espessura da planta.
+-- Arini Imóveis Brasil — migration 0055: apagar linhas e mudar a espessura da planta.
 --
 -- Pedido do Carlos (áudio de 05/11/2026), na Central › Cartografia › Calibrar:
 -- "onde eu posso excluir alguma coisa, eu posso mudar, aumentar as linhas".
