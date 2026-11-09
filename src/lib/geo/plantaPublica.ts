@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { aplicarEdicoesGeoJSON, centroDe, type EdicaoGeometria } from "@/lib/geo/deslocar";
+import { aplicarEdicoesGeoJSON, centroDe, removerLinhasExcluidas, type EdicaoGeometria } from "@/lib/geo/deslocar";
 
 /**
  * Versão pública da planta: o GeoJSON sem as camadas do CAD que o operador
@@ -19,11 +19,16 @@ import { aplicarEdicoesGeoJSON, centroDe, type EdicaoGeometria } from "@/lib/geo
  *
  * O arquivo original fica intacto: é dele que a calibração lê, para poder
  * mostrar de novo uma camada que foi escondida.
+ *
+ * LINHAS APAGADAS (05/11/2026): as linhas soltas que o operador apagou na
+ * calibração também saem daqui. Por isso o arquivo público passa a existir
+ * sempre que houver camada escondida OU linha apagada.
  */
 export async function gerarPlantaPublica(
   admin: SupabaseClient,
   camada: { id: string; tiles_path: string; publico_path?: string | null },
   ocultos: string[],
+  excluidas: string[] = [],
   edicoes: EdicaoGeometria[] = []
 ): Promise<{ path: string | null; bytes: number; linhas: number; linhasTotal: number; centro: [number, number] }> {
   const { data: arquivo, error } = await admin.storage.from("media").download(camada.tiles_path);
@@ -33,15 +38,17 @@ export async function gerarPlantaPublica(
   const fc = aplicarEdicoesGeoJSON(original, edicoes);
   const centro = centroDe(fc);
   const esconder = new Set(ocultos);
-  const features = fc.features.filter((f) => !esconder.has(String(f.properties?.layer ?? "")));
+  // apaga as linhas pela posição no arquivo ORIGINAL, antes de filtrar as camadas
+  const semApagadas = removerLinhasExcluidas(fc, excluidas);
+  const features = semApagadas.features.filter((f) => !esconder.has(String(f.properties?.layer ?? "")));
 
   const anterior = camada.publico_path ?? null;
   let path: string | null = null;
   let bytes = 0;
 
-  // Sem filtro nem correção, o público é o original. Uma linha corrigida exige
-  // arquivo derivado mesmo que nenhuma camada esteja escondida.
-  if (esconder.size || edicoes.length) {
+  // Sem filtro, linha apagada nem correção, o público é o original. Uma linha
+  // corrigida ou apagada exige arquivo derivado mesmo sem camada escondida.
+  if (esconder.size || excluidas.length || edicoes.length) {
     const corpo = Buffer.from(JSON.stringify({ ...fc, features }));
     // nome novo a cada gravação: a URL pública tem cache de CDN, e sobrescrever
     // o mesmo caminho serviria a seleção antiga por um tempo

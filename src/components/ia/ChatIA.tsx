@@ -229,19 +229,25 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
 
   return (
     <>
+      {/* Revisão do Carlos (29/10): a IA se chama "Ari" e precisa ser vista — o
+          nome fica sempre à mostra, com o radar da marca pulsando de leve */}
       {flutuante && !aberto && (
-        <button type="button" onClick={abrir} aria-label="Pergunte à Arini"
-          className="group fixed bottom-3 right-3 z-50 flex h-12 items-center rounded-full pl-[14px] pr-[14px] sm:bottom-5 sm:right-5 sm:h-14 sm:pl-[17px] sm:pr-[17px] text-[#F2F2EC] shadow-[0_1px_2px_rgba(10,34,25,0.25),0_12px_24px_-14px_rgba(10,34,25,0.5)] ring-1 ring-[#D9BD6F]/50 transition-[padding] hover:pr-5 focus-visible:pr-5"
+        <button type="button" onClick={abrir} aria-label="Pergunte à Ari, a assistente de IA da Arini"
+          className="group fixed bottom-3 right-3 z-50 flex h-12 items-center gap-2.5 rounded-full pl-2 pr-4 sm:bottom-5 sm:right-5 sm:h-14 sm:pr-5 text-[#F2F2EC] shadow-[0_1px_2px_rgba(10,34,25,0.25),0_12px_24px_-14px_rgba(10,34,25,0.5)] ring-2 ring-[#D9BD6F]/70 transition hover:-translate-y-0.5 hover:ring-[#D9BD6F]"
           style={{ background: "#124431" }}>
-          <MarcaArini variante="radar" titulo="" className="size-5 shrink-0 sm:size-6" />
-          <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-bold transition-[max-width,margin] duration-300 group-hover:ml-2 group-hover:max-w-40 group-focus-visible:ml-2 group-focus-visible:max-w-40">
-            Pergunte à Arini
+          <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-[#0B2A1E] sm:size-10" aria-hidden>
+            <span className="absolute inset-0 animate-ping rounded-full bg-[#D9BD6F]/25 motion-reduce:hidden" />
+            <MarcaArini variante="radar" titulo="" className="relative size-5 sm:size-6" />
+          </span>
+          <span className="text-left leading-tight">
+            <span className="block text-[15px] font-bold">Pergunte à Ari</span>
+            <span className="hidden text-[11px] text-[#F2F2EC]/70 sm:block">sua assistente de IA</span>
           </span>
         </button>
       )}
 
       {aberto && (
-        <div role="dialog" aria-label="Assistente Arini"
+        <div role="dialog" aria-label="Ari, assistente de IA da Arini"
           className="fixed z-50 inset-x-2 bottom-20 top-20 sm:inset-x-auto sm:right-4 sm:top-auto sm:w-[420px] sm:h-[620px] sm:max-h-[calc(100vh-7rem)] lg:bottom-6 flex flex-col overflow-hidden rounded-3xl border border-linha bg-superficie shadow-[0_1px_2px_var(--sombra-botao),0_24px_56px_-24px_var(--sombra-popup)]">
           <div className="lp-escuro lp-malha-escura relative flex items-center gap-3 px-4 py-3.5 shrink-0">
             <div className="lp-grade pointer-events-none absolute inset-0 opacity-50" aria-hidden />
@@ -249,8 +255,8 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
               <MarcaArini variante="radar" titulo="" className="size-6" />
             </span>
             <div className="relative flex-1 min-w-0 leading-tight">
-              <p className="lp-display text-xl text-texto">Assistente Arini</p>
-              <p className="mt-0.5 truncate text-[11px] text-texto-2">IA · imóveis publicados, CAR e base de conhecimento</p>
+              <p className="lp-display text-xl text-texto">Ari</p>
+              <p className="mt-0.5 truncate text-[11px] text-texto-2">Assistente de IA da Arini · imóveis, CAR e base de conhecimento</p>
             </div>
             {msgs.length > 0 && (
               <button type="button" onClick={novaConversa} title="Nova conversa"
@@ -274,8 +280,8 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
                 <p className="lp-display text-xl text-verde">{estado.motivo === "desligado" ? "Assistente desligado" : "Assistente em configuração"}</p>
                 <p className="text-texto-2 leading-relaxed">
                   {estado.motivo === "desligado"
-                    ? "A Arini desligou o assistente por enquanto."
-                    : "O assistente de IA ainda está sendo configurado."}{" "}
+                    ? "A Arini desligou a Ari por enquanto."
+                    : "A Ari, nossa assistente de IA, ainda está sendo configurada."}{" "}
                   Enquanto isso, use a <Link href="/imoveis" className="text-verde underline">busca de imóveis</Link> ou o{" "}
                   <Link href="/mapa" className="text-verde underline">mapa</Link>.
                 </p>
@@ -297,7 +303,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
             {estado?.ligado && estado.permitido && msgs.length === 0 && (
               <div className="space-y-4">
                 <div>
-                  <p className="lp-display text-2xl text-verde">Como posso ajudar?</p>
+                  <p className="lp-display text-2xl text-verde">Oi, eu sou a Ari. Como posso ajudar?</p>
                   <p className="mt-1 text-texto-2 leading-relaxed">
                     Pergunte sobre imóveis publicados, uma área do CAR ou como o Arini Imóveis Brasil funciona.
                   </p>

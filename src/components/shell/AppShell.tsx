@@ -16,7 +16,7 @@ import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight, Bell, Building2, ChevronRight, CreditCard, FileText, House,
-  LayoutDashboard, Map as Mapa, Menu, Plus, Search, Sparkles, X,
+  LayoutDashboard, Map as Mapa, Menu, Plus, Search, X,
 } from "lucide-react";
 import BotaoTema from "./BotaoTema";
 import MarcaArini from "@/components/marca/MarcaArini";
@@ -224,10 +224,12 @@ export default function AppShell({
           <div className="ml-auto flex items-center gap-2">
             <BotaoTema />
             <button type="button" onClick={abrirAssistente}
-              className="inline-flex h-10 items-center gap-2 rounded-[10px] px-2.5 text-texto-2 transition hover:bg-superficie-2 hover:text-verde"
-              aria-label="Pergunte à Arini (assistente de IA)" title="Pergunte à Arini">
-              <Sparkles className="size-[18px] text-verde" />
-              <span className="hidden text-sm font-semibold 2xl:inline">Pergunte à Arini</span>
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-[#124431] pl-1.5 pr-2 text-[#F2F2EC] ring-2 ring-[#D9BD6F]/60 transition hover:ring-[#D9BD6F] sm:pr-3.5"
+              aria-label="Pergunte à Ari (assistente de IA)" title="Pergunte à Ari, a assistente de IA da Arini">
+              <span className="grid size-7 place-items-center rounded-full bg-[#0B2A1E]" aria-hidden>
+                <MarcaArini variante="radar" titulo="" className="size-4" />
+              </span>
+              <span className="hidden text-sm font-bold sm:inline">Pergunte à Ari</span>
             </button>
             <button type="button"
               className="relative grid size-10 place-items-center rounded-[10px] text-texto-2 transition hover:bg-superficie-2 hover:text-texto"

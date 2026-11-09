@@ -15,8 +15,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Map as MLMap, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import type { RecursoId } from "@/lib/planos";
-import { ArrowRight, Camera, Lock, MoveHorizontal, Printer, ScanSearch, Sparkles, Triangle, Upload, X } from "lucide-react";
+import { ArrowRight, Camera, Lock, MoveHorizontal, Printer, ScanSearch, Triangle, Upload, X } from "lucide-react";
 import { abrirAssistente } from "@/components/ia/ChatIA";
+import MarcaArini from "@/components/marca/MarcaArini";
 import { VIDRO, BotaoFechar } from "@/components/map/UiMapa";
 
 type Modo = null | "area" | "distancia" | "consulta";
@@ -242,6 +243,20 @@ export default function Ferramentas({
       ? `“${rotulo}” faz parte da consulta profissional e não está no seu plano.`
       : `Entre na sua conta para usar “${rotulo}”.`);
 
+  // atalho /mapa?ferramenta=consulta (vem de "Ver relatórios territoriais"):
+  // abre o mapa já com o desenho da consulta ligado, uma vez só
+  const atalhoFeito = useRef(false);
+  useEffect(() => {
+    if (!mapa || atalhoFeito.current) return;
+    if (new URLSearchParams(window.location.search).get("ferramenta") !== "consulta") return;
+    atalhoFeito.current = true;
+    setTimeout(() => {
+      if (liberado("consulta_area")) iniciar("consulta");
+      else avisarBloqueio("Consultar Área");
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapa]);
+
   const botaoLimpar = (
     <button onClick={limpar}
       className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-texto-2 transition hover:bg-superficie-2 hover:text-texto">
@@ -336,9 +351,16 @@ export default function Ferramentas({
           })}
           {/* assistente de IA: no mapa fica aqui, não flutuando sobre a escala */}
           <span className="mx-1 h-10 w-px shrink-0 bg-linha" aria-hidden />
-          <button onClick={abrirAssistente}
-            className="flex min-w-[76px] flex-col items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-semibold text-verde transition hover:bg-verde/10">
-            <Sparkles className="size-[18px]" strokeWidth={1.9} />Perguntar
+          <button onClick={abrirAssistente} title="Pergunte à Ari, a assistente de IA da Arini"
+            className="flex shrink-0 items-center gap-2 rounded-full bg-[#124431] py-1.5 pl-1.5 pr-4 text-left text-[#F2F2EC] ring-2 ring-[#D9BD6F]/70 transition hover:ring-[#D9BD6F]">
+            <span className="relative grid size-9 place-items-center rounded-full bg-[#0B2A1E]" aria-hidden>
+              <span className="absolute inset-0 animate-ping rounded-full bg-[#D9BD6F]/25 motion-reduce:hidden" />
+              <MarcaArini variante="radar" titulo="" className="relative size-5" />
+            </span>
+            <span className="leading-tight">
+              <span className="block text-sm font-bold">Ari</span>
+              <span className="block text-[10px] text-[#F2F2EC]/70 whitespace-nowrap">pergunte à IA</span>
+            </span>
           </button>
         </div>
       </div>

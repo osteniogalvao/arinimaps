@@ -18,10 +18,15 @@
  *    um bairro está fora, mover a planta inteira desalinha o que já batia. O
  *    operador desenha uma área em volta do trecho e move/gira só aquilo; o
  *    resto fica onde está. Ver "AJUSTE POR PARTE" em src/lib/geo/deslocar.ts.
+ *  - APAGAR LINHAS E ESPESSURA (05/11/2026, áudio do Carlos: "onde eu posso
+ *    excluir alguma coisa (...) aumentar as linhas"). No modo "Apagar linhas" o
+ *    clique tira a linha mais próxima da planta; o original não muda e dá para
+ *    desfazer ou restaurar tudo. A espessura multiplica a largura com que o
+ *    mapa público desenha a planta.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair, Hand, MousePointer2, Move, PenLine, Pencil, Save, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Trash2, Undo2, X } from "lucide-react";
 import type { Map as MLMap, GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { SATELITE } from "@/lib/map/config";
@@ -43,15 +48,22 @@ type Camada = {
   layers_cad?: { nome: string; linhas: number }[];
   transform?: Transform;
   ajustes?: AjusteLocal[];
+  linhas_excluidas?: string[];
+  espessura?: number;
   edicoes?: EdicaoGeometria[];
   offset: { leste_m: number; norte_m: number };
 };
 
-type Modo = "navegar" | "mover" | "pontos" | "parte" | "objeto" | "vertices";
+type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar" | "objeto" | "vertices";
 type LinhaSelecionada = { feature: number; linha: number };
 
-/** O que o desfazer guarda: a planta inteira e as partes. */
-type Estado = { t: Transform; ajustes: AjusteLocal[] };
+/** O que o desfazer guarda: a planta inteira, as partes e as linhas apagadas. */
+type Estado = { t: Transform; ajustes: AjusteLocal[]; excluidas: Set<string> };
+
+/** Larguras base das linhas na calibração; a espessura escolhida multiplica. */
+const LARGURA = { linha: [13, 1, 16, 1.6, 19, 2.6], contorno: [13, 2.2, 16, 3.4, 19, 5], parte: [13, 1.2, 16, 2, 19, 3] };
+const largura = (paradas: number[], k: number) =>
+  ["interpolate", ["linear"], ["zoom"], ...paradas.map((v, i) => (i % 2 ? Math.round(v * k * 100) / 100 : v))] as never;
 
 const VAZIO: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
@@ -63,6 +75,7 @@ const VAZIO: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: 
 function montar(
   bruto: GeoJSON.FeatureCollection, centro: [number, number], t: Transform,
   esconder: Set<string>, ajustes: AjusteLocal[], ativa: string | null, membros: Int32Array[],
+  apagadas: Set<string> = new Set(),
 ) {
   const g = afim(centro, t);
   const ms = ajustes.map((a) => compor(g, afim(centroArea(a.area), a.t)));
@@ -71,23 +84,28 @@ function montar(
   bruto.features.forEach((f, i) => {
     if (!f.geometry || !("coordinates" in f.geometry)) return;
     if (esconder.size && esconder.has(String(f.properties?.layer ?? ""))) return;
+    if (apagadas.size && apagadas.has(String(i))) return;
     const quem = membros[i];
+    // __i = posição no arquivo original: é por ela que o clique acha a linha a apagar
+    const props = { ...f.properties, __i: i };
     // MultiLineString (uma por camada do CAD): as linhas da parte ativa saem
     // num objeto à parte, com as mesmas propriedades
     if (f.geometry.type === "MultiLineString") {
       const ficam: GeoJSON.Position[][] = [], vao: GeoJSON.Position[][] = [];
       f.geometry.coordinates.forEach((l, j) => {
+        if (apagadas.size && apagadas.has(`${i}:${j}`)) return;
         const k = quem?.[j] ?? -1;
         const nl = aplicarMatriz(l, k >= 0 ? ms[k] : g) as GeoJSON.Position[];
         (k >= 0 && k === iAtiva ? vao : ficam).push(nl);
       });
-      if (ficam.length) resto.push({ ...f, geometry: { type: "MultiLineString", coordinates: ficam } });
-      if (vao.length) parte.push({ ...f, geometry: { type: "MultiLineString", coordinates: vao } });
+      if (ficam.length) resto.push({ ...f, properties: props, geometry: { type: "MultiLineString", coordinates: ficam } });
+      if (vao.length) parte.push({ ...f, properties: props, geometry: { type: "MultiLineString", coordinates: vao } });
       return;
     }
     const k = quem?.[0] ?? -1;
     const nf = {
       ...f,
+      properties: props,
       geometry: { ...f.geometry, coordinates: aplicarMatriz((f.geometry as { coordinates: unknown }).coordinates, k >= 0 ? ms[k] : g) },
     } as GeoJSON.Feature;
     (k >= 0 && k === iAtiva ? parte : resto).push(nf);
@@ -144,12 +162,18 @@ const distanciaSegmento2 = (p: [number, number], a: [number, number], b: [number
 };
 
 /** Procura a polilinha mais perto do clique no desenho cru. Só roda ao clicar. */
-function linhaMaisProxima(fc: GeoJSON.FeatureCollection, p: [number, number], limite: number): LinhaSelecionada | null {
+function linhaMaisProxima(
+  fc: GeoJSON.FeatureCollection, p: [number, number], limite: number, apagadas: Set<string> = new Set(),
+): LinhaSelecionada | null {
   let melhor = limite * limite, achou: LinhaSelecionada | null = null;
   fc.features.forEach((f, feature) => {
     const linhas = f.geometry?.type === "MultiLineString" ? f.geometry.coordinates
       : f.geometry?.type === "LineString" ? [f.geometry.coordinates] : [];
+    if (apagadas.has(String(feature))) return;
+    const multi = f.geometry?.type === "MultiLineString";
     linhas.forEach((linha, i) => {
+      // linha apagada não aparece no mapa, então não pode ser escolhida
+      if (multi && apagadas.has(`${feature}:${i}`)) return;
       for (let j = 1; j < linha.length; j++) {
         const d = distanciaSegmento2(p, linha[j - 1] as [number, number], linha[j] as [number, number]);
         if (d < melhor) { melhor = d; achou = { feature, linha: i }; }
@@ -185,6 +209,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const [aba, setAba] = useState<"posicao" | "camadas">("posicao");
   const [historico, setHistorico] = useState<Estado[]>([]);
   const [ajustes, setAjustes] = useState<AjusteLocal[]>(camada.ajustes ?? []);
+  // linhas apagadas ("i" ou "i:j", posição no arquivo original) e espessura das linhas
+  const [excluidas, setExcluidas] = useState<Set<string>>(new Set(camada.linhas_excluidas ?? []));
+  const [espessura, setEspessura] = useState(camada.espessura ?? 1);
   const [edicoes, setEdicoes] = useState<EdicaoGeometria[]>(camada.edicoes ?? []);
   const [linhaSelecionada, setLinhaSelecionada] = useState<LinhaSelecionada | null>(null);
   // null = ajustando a planta inteira; id = só aquela parte
@@ -204,6 +231,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const ajustesRef = useRef(ajustes); ajustesRef.current = ajustes;
   const ativaRef = useRef(ativa); ativaRef.current = ativa;
   const desenhoRef = useRef(desenho); desenhoRef.current = desenho;
+  const excluidasRef = useRef(excluidas); excluidasRef.current = excluidas;
+  // o clique de apagar é registrado uma vez; a busca da linha usa o estado do momento
+  const apagarNoPontoRef = useRef<(e: MapMouseEvent) => void>(() => undefined);
   const edicoesRef = useRef(edicoes); edicoesRef.current = edicoes;
   const linhaSelecionadaRef = useRef(linhaSelecionada); linhaSelecionadaRef.current = linhaSelecionada;
   // parte de cada linha: só muda quando uma parte nasce ou some, não a cada movimento
@@ -246,7 +276,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       if (membrosRef.current.chave !== chave || membrosRef.current.m.length !== bruto.features.length) {
         membrosRef.current = { chave, m: calcularMembros(bruto, lista) };
       }
-      const d = montar(bruto, centroRef.current, alvo.t, alvo.esconder, lista, ativaRef.current, membrosRef.current.m);
+      const d = montar(bruto, centroRef.current, alvo.t, alvo.esconder, lista, ativaRef.current, membrosRef.current.m, excluidasRef.current);
       (map.getSource("planta") as GeoJSONSource).setData(d.resto);
       (map.getSource("planta-parte") as GeoJSONSource | undefined)?.setData(d.parte);
       (map.getSource("partes") as GeoJSONSource | undefined)?.setData(d.contornos);
@@ -265,7 +295,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     // fotografa AGORA: dentro do updater a leitura dos refs acontece quando o
     // React processa a fila, e aí `definir` já trocou tRef pelo estado novo —
     // o desfazer guardava a posição nova e "voltava" para ela.
-    const antes: Estado = { t: tRef.current, ajustes: ajustesRef.current };
+    const antes: Estado = { t: tRef.current, ajustes: ajustesRef.current, excluidas: excluidasRef.current };
     setHistorico((h) => [...h.slice(-30), antes]);
   }, []);
 
@@ -362,7 +392,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       const aoCarregar = () => {
         // a primeira montagem já separa as partes; daqui em diante é o redesenhar()
         membrosRef.current = { chave: ajustesRef.current.map((a) => a.id).join("|"), m: calcularMembros(bruto, ajustesRef.current) };
-        const d0 = montar(bruto, centroRef.current, inicial, new Set(camada.layers_ocultos ?? []), ajustesRef.current, null, membrosRef.current.m);
+        const d0 = montar(bruto, centroRef.current, inicial, new Set(camada.layers_ocultos ?? []), ajustesRef.current, null, membrosRef.current.m, excluidasRef.current);
+        const k0 = camada.espessura ?? 1;
         map.addSource("planta", { type: "geojson", data: d0.resto });
         // contorno escuro embaixo, linha clara em cima: sobre telhado de
         // cerâmica o amarelo sozinho some, e é justamente ali que a divisa
@@ -371,7 +402,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           id: "planta-contorno", type: "line", source: "planta",
           paint: {
             "line-color": "#120C02",
-            "line-width": ["interpolate", ["linear"], ["zoom"], 13, 2.2, 16, 3.4, 19, 5] as never,
+            "line-width": largura(LARGURA.contorno, k0) as never,
             "line-opacity": 0.5,
           },
         });
@@ -379,7 +410,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           id: "planta", type: "line", source: "planta",
           paint: {
             "line-color": "#FFE299",
-            "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1, 16, 1.6, 19, 2.6] as never,
+            "line-width": largura(LARGURA.linha, k0) as never,
             "line-opacity": camada.opacidade ?? 0.85,
           },
         });
@@ -405,7 +436,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           id: "planta-parte-contorno", type: "line", source: "planta-parte",
           paint: {
             "line-color": "#120C02",
-            "line-width": ["interpolate", ["linear"], ["zoom"], 13, 2.2, 16, 3.4, 19, 5] as never,
+            "line-width": largura(LARGURA.contorno, k0) as never,
             "line-opacity": 0.5,
           },
         });
@@ -413,7 +444,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           id: "planta-parte", type: "line", source: "planta-parte",
           paint: {
             "line-color": "#FFE299",
-            "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.2, 16, 2, 19, 3] as never,
+            "line-width": largura(LARGURA.parte, k0) as never,
             "line-opacity": 0.95,
           },
         });
@@ -592,6 +623,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         const antesDoArraste: Estado = {
           t: base,
           ajustes: parte ? ajustesRef.current.map((a) => (a.id === parte.id ? parte : a)) : ajustesRef.current,
+          excluidas: excluidasRef.current,
         };
         setHistorico((h) => [...h.slice(-30), antesDoArraste]);
         if (parte) {
@@ -644,7 +676,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           const lado = map.unproject([e.point.x + 14, e.point.y]);
           const cruLado = aplicarMatrizPonto(inv, [lado.lng, lado.lat]);
           const limite = Math.hypot(cruLado[0] - cru[0], cruLado[1] - cru[1]);
-          const s = linhaMaisProxima(bruto, cru, limite);
+          const s = linhaMaisProxima(bruto, cru, limite, excluidasRef.current);
           if (!s) { setMsg("Clique mais perto de uma linha da planta."); return; }
           linhaSelecionadaRef.current = s; setLinhaSelecionada(s);
           if (modoRef.current === "objeto") criarParteDaLinhaRef.current(s);
@@ -665,6 +697,12 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         if (modoRef.current !== "parte") return;
         e.preventDefault();
         fecharAreaRef.current();
+      });
+
+      // ---- apagar linha ----
+      map.on("click", (e: MapMouseEvent) => {
+        if (modoRef.current !== "apagar") return;
+        apagarNoPontoRef.current(e);
       });
 
       // ---- pontos de controle ----
@@ -701,7 +739,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     if (modo === "mover" || modo === "vertices") {
       map.dragPan.disable(); map.getCanvas().style.cursor = modo === "mover" ? "grab" : "crosshair";
     } else {
-      map.dragPan.enable(); map.getCanvas().style.cursor = modo === "pontos" || modo === "parte" || modo === "objeto" ? "crosshair" : "";
+      map.dragPan.enable(); map.getCanvas().style.cursor = modo === "pontos" || modo === "parte" || modo === "objeto" || modo === "apagar" ? "crosshair" : "";
     }
     // no desenho da área o duplo clique fecha a área, não aproxima o mapa
     if (modo === "parte") map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
@@ -816,6 +854,97 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     setMsg(`${nova.nome} criada com ${fmt(linhas)} linhas. Arraste para encaixar só este trecho.`);
   };
 
+  /**
+   * Apagar: acha a linha da planta mais perto do clique e tira da lista do mapa.
+   * O ponto clicado volta para as coordenadas do desenho cru (desfazendo a
+   * calibração da planta ou da parte daquela linha) e a distância é medida lá,
+   * sem projetar as dezenas de milhares de vértices na tela a cada clique.
+   */
+  apagarNoPontoRef.current = (e: MapMouseEvent) => {
+    const map = mapRef.current, bruto = brutoRef.current;
+    if (!map || !bruto) return;
+    const tol = 7;
+    const achados = map.queryRenderedFeatures(
+      [[e.point.x - tol, e.point.y - tol], [e.point.x + tol, e.point.y + tol]],
+      { layers: ["planta", "planta-parte"].filter((id) => map.getLayer(id)) }
+    );
+    const indices = [...new Set(achados.map((f) => Number(f.properties?.__i)).filter((n) => Number.isInteger(n)))];
+    if (!indices.length) {
+      setMsg("Nenhuma linha da planta neste ponto. Aproxime o mapa e clique em cima da linha.");
+      return;
+    }
+    const g = afim(centroRef.current, tRef.current);
+    const ajs = ajustesRef.current;
+    const invs = ajs.map((a) => inverter(compor(g, afim(centroArea(a.area), a.t))));
+    const invG = inverter(g);
+    const clique: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+    const cosLat = Math.cos((clique[1] * Math.PI) / 180);
+    // distância ponto–segmento em graus, com a longitude encolhida pela latitude
+    const dist = (p: [number, number], a: GeoJSON.Position, b: GeoJSON.Position) => {
+      const ax = a[0] * cosLat, ay = a[1], bx = b[0] * cosLat, by = b[1], px = p[0] * cosLat, py = p[1];
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+      const u = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+      return Math.hypot(px - (ax + u * dx), py - (ay + u * dy));
+    };
+    const pontoCru = (k: number) => aplicarMatrizPonto(k >= 0 ? invs[k] : invG, clique) as [number, number];
+    let melhor: { chave: string; d: number; camada: string } | null = null;
+    for (const i of indices) {
+      const f = bruto.features[i];
+      if (!f?.geometry) continue;
+      const camadaCad = String(f.properties?.layer ?? "");
+      const linhas: GeoJSON.Position[][] =
+        f.geometry.type === "MultiLineString" ? f.geometry.coordinates
+        : f.geometry.type === "LineString" ? [f.geometry.coordinates]
+        : f.geometry.type === "Polygon" ? f.geometry.coordinates
+        : f.geometry.type === "MultiPolygon" ? f.geometry.coordinates.flat()
+        : [];
+      const multi = f.geometry.type === "MultiLineString";
+      linhas.forEach((l, j) => {
+        const chave = multi ? `${i}:${j}` : String(i);
+        if (excluidasRef.current.has(chave)) return;
+        const k = multi ? (membrosRef.current.m[i]?.[j] ?? -1) : (membrosRef.current.m[i]?.[0] ?? -1);
+        const p = pontoCru(k);
+        for (let v = 1; v < l.length; v++) {
+          const d = dist(p, l[v - 1], l[v]);
+          if (!melhor || d < melhor.d) melhor = { chave, d, camada: camadaCad };
+        }
+      });
+    }
+    // aceita até ~2× a tolerância do clique, convertida de pixels para graus
+    const a = map.unproject([e.point.x, e.point.y]), b = map.unproject([e.point.x + tol * 2, e.point.y]);
+    const limite = Math.abs(b.lng - a.lng) * cosLat;
+    const achado = melhor as { chave: string; d: number; camada: string } | null;
+    if (!achado || achado.d > limite) {
+      setMsg("Nenhuma linha da planta neste ponto. Aproxime o mapa e clique em cima da linha.");
+      return;
+    }
+    registrar();
+    const novo = new Set(excluidasRef.current);
+    novo.add(achado.chave);
+    excluidasRef.current = novo;
+    setExcluidas(novo);
+    redesenhar(tRef.current, ocultosRef.current);
+    setMsg(`Linha apagada${achado.camada ? ` (camada ${achado.camada})` : ""}. Ctrl+Z desfaz.`);
+  };
+
+  function restaurarApagadas() {
+    if (!excluidasRef.current.size) return;
+    registrar();
+    const vazio = new Set<string>();
+    excluidasRef.current = vazio;
+    setExcluidas(vazio);
+    redesenhar(tRef.current, ocultosRef.current);
+  }
+
+  function mudarEspessura(k: number) {
+    setEspessura(k);
+    const map = mapRef.current;
+    if (!map) return;
+    for (const [id, base] of [["planta", LARGURA.linha], ["planta-contorno", LARGURA.contorno], ["planta-parte", LARGURA.parte], ["planta-parte-contorno", LARGURA.contorno]] as const) {
+      if (map.getLayer(id)) map.setPaintProperty(id, "line-width", largura(base, k));
+    }
+  }
+
   function cancelarDesenho() {
     desenhoRef.current = [];
     setDesenho([]);
@@ -883,6 +1012,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       ativaRef.current = null;
       setAtiva(null);
     }
+    if (anterior.excluidas !== excluidasRef.current) {
+      excluidasRef.current = anterior.excluidas;
+      setExcluidas(anterior.excluidas);
+    }
     definir(anterior.t, anterior.ajustes, false);
   }
 
@@ -944,6 +1077,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         layers_ocultos: [...ocultos],
         pontos_controle: pares,
         ajustes_locais: ajustes,
+        linhas_excluidas: [...excluidas],
+        espessura_linha: espessura,
         edicoes_geometria: edicoes,
       });
     setSalvando(false);
@@ -954,7 +1089,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     // usar o que foi gravado, senão acusaria pendência logo depois de salvar
     const gravadas = (r.dados.aplicado as { ajustes_locais?: AjusteLocal[] } | undefined)?.ajustes_locais;
     if (gravadas) { ajustesRef.current = gravadas; setAjustes(gravadas); }
-    setSalvo({ t: tRef.current, ocultos: [...ocultos].sort(), opacidade, ajustes: JSON.stringify(ajustesRef.current), edicoes: JSON.stringify(edicoesRef.current) });
+    setSalvo({
+      t: tRef.current, ocultos: [...ocultos].sort(), opacidade, ajustes: JSON.stringify(ajustesRef.current),
+      excluidas: [...excluidas].sort().join(","), espessura, edicoes: JSON.stringify(edicoesRef.current),
+    });
 
     const g = r.dados.aplicado ?? {};
     const n = (v: unknown, casas: number) => (typeof v === "number" ? v.toFixed(casas) : "—");
@@ -968,6 +1106,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         : "") +
       (r.dados.aviso_publico ? ` Atenção: o arquivo filtrado não foi gerado (${r.dados.aviso_publico}); o mapa filtra no navegador.` : "") +
       (ajustes.length ? ` ${ajustes.length} parte${ajustes.length === 1 ? "" : "s"} com ajuste próprio.` : "") +
+      (excluidas.size ? ` ${fmt(excluidas.size)} linha${excluidas.size === 1 ? "" : "s"} apagada${excluidas.size === 1 ? "" : "s"}.` : "") +
+      (espessura !== 1 ? ` Espessura das linhas ${espessura.toFixed(2).replace(".", ",")}×.` : "") +
       (edicoes.length ? ` ${edicoes.length} linha${edicoes.length === 1 ? "" : "s"} reajustada${edicoes.length === 1 ? "" : "s"} e publicada${edicoes.length === 1 ? "" : "s"}.` : "") +
       (r.dados.lotes_movidos ? ` ${fmt(r.dados.lotes_movidos)} lotes clicáveis acompanharam as partes.` : "") +
       (r.dados.aviso_lotes ? ` Atenção: ${r.dados.aviso_lotes}.` : "")
@@ -984,8 +1124,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
    * volta arredondado do banco (`salvar` manda 2 casas em metros): comparar por
    * igualdade exata acusaria pendência logo depois de salvar com sucesso.
    */
-  const [salvo, setSalvo] = useState<{ t: Transform; ocultos: string[]; opacidade: number; ajustes: string; edicoes: string }>({
+  const [salvo, setSalvo] = useState<{ t: Transform; ocultos: string[]; opacidade: number; ajustes: string; excluidas: string; espessura: number; edicoes: string }>({
     t: inicial,
+    excluidas: [...(camada.linhas_excluidas ?? [])].sort().join(","),
+    espessura: camada.espessura ?? 1,
     ajustes: JSON.stringify(camada.ajustes ?? []),
     edicoes: JSON.stringify(camada.edicoes ?? []),
     ocultos: [...(camada.layers_ocultos ?? [])].sort(),
@@ -996,10 +1138,12 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     if (!ehIgualAoSalvo(salvo.t, t)) return true;
     if (Math.abs(salvo.opacidade - opacidade) > 1e-6) return true;
     if (salvo.ajustes !== JSON.stringify(ajustes)) return true;
+    if (salvo.excluidas !== [...excluidas].sort().join(",")) return true;
+    if (Math.abs(salvo.espessura - espessura) > 1e-6) return true;
     if (salvo.edicoes !== JSON.stringify(edicoes)) return true;
     const atuais = [...ocultos].sort();
     return atuais.length !== salvo.ocultos.length || atuais.some((n, i) => n !== salvo.ocultos[i]);
-  }, [salvo, t, ocultos, opacidade, ajustes, edicoes]);
+  }, [salvo, t, ocultos, opacidade, ajustes, excluidas, espessura, edicoes]);
 
   /**
    * Fechar com calibração pendente perdia o trabalho sem aviso (X, clique fora
@@ -1032,6 +1176,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               {modo === "objeto" && "Clique diretamente numa quadra, lote ou polilinha fechada. Ela vira uma peça independente e já fica pronta para arrastar."}
               {modo === "vertices" && (linhaSelecionada ? "Arraste um ponto laranja para reajustar só aquela linha. A planta inteira é recalculada apenas ao soltar." : "Clique na linha que quer reajustar; depois arraste os vértices laranja.")}
               {modo === "navegar" && "Arraste para navegar no mapa. Volte para “mover planta” quando quiser ajustar."}
+              {modo === "apagar" && "Clique em cima de uma linha para apagá-la do mapa (aproxime para acertar a linha certa). Ctrl+Z desfaz; nada muda no mapa público antes de salvar."}
               {modo === "pontos" && (pendente
                 ? "Agora clique no MESMO ponto no satélite."
                 : "Clique num ponto da planta (um cruzamento, um canto de quadra).")}
@@ -1081,6 +1226,15 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               title="Calibra a planta inteira por pares de pontos"><Crosshair className="size-4" /> Pontos de controle</button>
             <button className={chip(modo === "parte")} onClick={() => { desenhoRef.current = []; setDesenho([]); setModo("parte"); }}
               title="Desenhe uma área para mover só aquele trecho da planta"><PenLine className="size-4" /> Nova parte</button>
+            <button className={chip(modo === "apagar")} onClick={() => { if (modo === "parte") cancelarDesenho(); setMsg(""); setModo("apagar"); }}
+              title="Clique numa linha para apagá-la da planta (o arquivo original não muda)"><Eraser className="size-4" /> Apagar linhas</button>
+            {excluidas.size > 0 && (
+              <button onClick={restaurarApagadas}
+                className="inline-flex items-center gap-1.5 rounded-lg btn-contorno px-3 py-1.5 text-sm hover:bg-superficie-2 transition"
+                title="Volta todas as linhas apagadas">
+                <RotateCcw className="size-4" /> Restaurar {fmt(excluidas.size)} apagada{excluidas.size === 1 ? "" : "s"}
+              </button>
+            )}
 
             <span className="w-px self-stretch bg-linha mx-1" aria-hidden />
 
@@ -1127,12 +1281,14 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
             {/* a pendência vem antes do "salvo com sucesso": mexer na planta
                 depois de salvar não pode continuar mostrando confirmação */}
             {haMudancaNaoSalva
-              ? <span className="inline-flex items-center gap-1.5 font-semibold text-ouro"><span className="size-2 rounded-full bg-ouro" aria-hidden /> Alterações não salvas</span>
+              ? <span className="inline-flex items-center gap-1.5 font-semibold text-ouro"><span className="size-2 rounded-full bg-ouro" aria-hidden /> Alterações não salvas
+                  {/* no modo apagar, o retorno de cada clique aparece junto */}
+                  {modo === "apagar" && msg && <span className="font-normal text-texto-2"> · {msg}</span>}</span>
               : msg
                 ? <span className="text-verde">{msg}</span>
                 : <span className="text-texto-2">Nada para salvar — a planta está como está gravada.</span>}
             <span className="ml-auto text-texto-2 tabular-nums">
-              {carregando ? "carregando a planta…" : `${fmt(linhasVisiveis)} de ${fmt(totalLinhas)} linhas no mapa`}
+              {carregando ? "carregando a planta…" : `${fmt(Math.max(0, linhasVisiveis - excluidas.size))} de ${fmt(totalLinhas)} linhas no mapa`}
             </span>
           </div>
         </div>
@@ -1227,6 +1383,12 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
                       setOpacidade(v);
                       mapRef.current?.setPaintProperty("planta", "line-opacity", v);
                     }} />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-sm text-texto-2">Espessura das linhas: <strong className="text-texto">{espessura.toFixed(2).replace(".", ",")}×</strong></span>
+                  <input type="range" min={0.5} max={4} step={0.25} value={espessura} className="w-full"
+                    onChange={(e) => mudarEspessura(Number(e.target.value))} />
+                  <span className="block text-xs text-texto-2">Vale também no mapa público depois de salvar.</span>
                 </label>
               </div>}
 

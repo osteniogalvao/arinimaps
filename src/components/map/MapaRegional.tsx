@@ -12,13 +12,14 @@ import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, VectorTile
 import { CENTRO_REGIAO, SATELITE } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
-import { transformarGeoJSON, centroDe, TRANSFORM_ZERO, type Transform, type AjusteLocal } from "@/lib/geo/deslocar";
+import { transformarGeoJSON, centroDe, removerLinhasExcluidas, TRANSFORM_ZERO, type Transform, type AjusteLocal } from "@/lib/geo/deslocar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
 import { PainelCamadas, Legenda, VIDRO, BotaoFechar } from "@/components/map/UiMapa";
-import { ArrowRight, ChevronLeft, ChevronRight, Flag, History, Layers, Lock, ScanSearch, Search } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Flag, History, ImageUp, Layers, Lock, ScanSearch, Search } from "lucide-react";
+import BuscaPorImagem from "@/components/map/BuscaPorImagem";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
 import Ferramentas from "@/components/map/Ferramentas";
 import { guardarCarPendente } from "@/lib/map/carPendente";
@@ -58,6 +59,10 @@ type Camada = {
   centro?: [number, number] | null;
   transform?: Transform;
   ajustes?: AjusteLocal[];
+  /** linhas apagadas na calibração (só usadas se o arquivo público não veio) */
+  linhas_excluidas?: string[];
+  /** multiplicador da espessura das linhas, definido na calibração */
+  espessura?: number;
 };
 
 /**
@@ -188,6 +193,9 @@ const CARTO_CORES = {
 /** espessura por zoom: fina na visão da cidade, cheia no zoom do lote */
 const CARTO_LARGURA = ["interpolate", ["linear"], ["zoom"], 12, 0.5, 15, 1.1, 17, 1.8, 19, 2.6];
 const CARTO_CONTORNO = ["interpolate", ["linear"], ["zoom"], 12, 1.4, 15, 2.4, 17, 3.4, 19, 4.6];
+/** Espessura da planta × o multiplicador da calibração (áudio do Carlos, 05/11). */
+const comEspessura = (expr: (string | number | string[])[], k = 1) =>
+  k === 1 ? expr : expr.map((v, i) => (i >= 4 && i % 2 === 0 && typeof v === "number" ? Math.round(v * k * 100) / 100 : v));
 
 // a base vetorial acompanha o tema: dark-matter no escuro, positron no claro
 const ESTILO_RUAS = {
@@ -338,6 +346,9 @@ export default function MapaRegional({
   const [imagemAno, setImagemAno] = useState<string | null>(null);
   const [comparar, setComparar] = useState(false);
   const [seletorAno, setSeletorAno] = useState(false);
+  // busca por imagem (Revisão do Carlos, 29/10)
+  const [buscaImagem, setBuscaImagem] = useState(false);
+  const buscaInputRef = useRef<HTMLInputElement>(null);
   const [avisoPlano, setAvisoPlano] = useState("");
   const imagemAnoRef = useRef<string | null>(null);
   const compararRef = useRef(false);
@@ -473,8 +484,12 @@ export default function MapaRegional({
       }
       // calibração: giro, escala e deslocamento em torno do centro da planta,
       // mais as camadas de CAD que o operador escondeu
+      // sem o arquivo público, o original ainda tem as linhas apagadas: tira aqui
+      // (o centro continua o do arquivo completo, medido antes de apagar)
+      const centro = c.centro ?? centroDe(bruto);
+      const semApagadas = !c.geojson_publico && c.linhas_excluidas?.length ? removerLinhasExcluidas(bruto, c.linhas_excluidas) : bruto;
       const dados = transformarGeoJSON(
-        bruto, c.centro ?? centroDe(bruto), c.transform ?? TRANSFORM_ZERO, c.layers_ocultos ?? [], c.ajustes ?? []
+        semApagadas, centro, c.transform ?? TRANSFORM_ZERO, c.layers_ocultos ?? [], c.ajustes ?? []
       );
       const m = mapRef.current;
       const cores = CARTO_CORES[baseRef.current];
@@ -486,7 +501,7 @@ export default function MapaRegional({
         minzoom: c.min_zoom,
         paint: {
           "line-color": cores.contorno,
-          "line-width": CARTO_CONTORNO as never,
+          "line-width": comEspessura(CARTO_CONTORNO, c.espessura) as never,
           "line-opacity": 0.45,
         },
       }, antesDe);
@@ -495,7 +510,7 @@ export default function MapaRegional({
         minzoom: c.min_zoom,
         paint: {
           "line-color": cores.linha,
-          "line-width": CARTO_LARGURA as never,
+          "line-width": comEspessura(CARTO_LARGURA, c.espessura) as never,
           "line-opacity": Math.min(0.95, c.opacidade),
         },
       }, antesDe);
@@ -1046,6 +1061,14 @@ export default function MapaRegional({
 
   const ativos = lista.filter((p) => p.status !== "vendido").length;
 
+  /** "Não encontrei meu imóvel": leva o ponto onde a pessoa estava olhando. */
+  const irParaSolicitacao = () => {
+    const c = mapRef.current?.getCenter();
+    const z = mapRef.current?.getZoom();
+    const qs = c ? `?lng=${c.lng.toFixed(6)}&lat=${c.lat.toFixed(6)}&zoom=${(z ?? 14).toFixed(1)}` : "";
+    router.push(`/cartografia/solicitar${qs}`);
+  };
+
   // chips sobre o satélite: vidro do tema com desfoque (o ativo continua verde pelo data-ativo do .chip)
   const chipBase = "chip inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium whitespace-nowrap shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md";
 
@@ -1058,7 +1081,8 @@ export default function MapaRegional({
       }>
         <div className="p-4 space-y-3 border-b border-linha">
           <div className="relative">
-            <input value={busca} onChange={(e) => setBusca(e.target.value)}
+            <input ref={buscaInputRef} value={busca} onChange={(e) => setBusca(e.target.value)}
+              aria-label="Buscar imóveis"
               placeholder="Buscar por imóvel, município ou código"
               className="w-full rounded-full border border-linha-forte bg-superficie-2 pl-10 pr-3 py-2.5 text-sm text-texto placeholder:text-texto-2/70 transition focus:border-verde focus:outline-none focus:ring-2 focus:ring-verde/30" />
             <Search aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-texto-2" />
@@ -1130,6 +1154,10 @@ export default function MapaRegional({
             <div className="flex flex-col items-center px-6 py-12 text-center">
               <span className="grid size-12 place-items-center rounded-2xl bg-verde/10 text-verde"><Search className="size-6" /></span>
               <p className="mt-3 text-sm text-texto-2">Nada encontrado com esses filtros.</p>
+              <button onClick={irParaSolicitacao}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#D9BD6F] px-4 py-2 text-xs font-bold text-[#124431] transition hover:brightness-105">
+                <Flag className="size-3.5" /> Não encontrei meu imóvel
+              </button>
             </div>
           )}
         </div>
@@ -1151,6 +1179,23 @@ export default function MapaRegional({
         <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
 
         <div className="absolute top-3 left-3 right-14 flex gap-2 overflow-x-auto pb-1">
+          {/* Revisão do Carlos (29/10): "buscar imóveis" como opção de filtro no mapa */}
+          <button onClick={() => { setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
+            className={chipBase} title="Abrir a lista com a busca e os filtros de imóveis">
+            <Search className="size-3.5" /> Buscar imóveis
+          </button>
+          <button onClick={() => { setBuscaImagem(!buscaImagem); setSeletorAno(false); }} data-ativo={buscaImagem} className={chipBase}
+            title="Encontre o local por uma foto com GPS, um print de mapa, um croqui ou um documento">
+            <ImageUp className="size-3.5" /> Buscar por imagem
+          </button>
+          {/* requisitos cartográficos §2.1 + Revisão do Carlos (29/10): "Não encontrei
+              meu imóvel" precisa ser fácil de achar — fica em dourado, logo no começo */}
+          <button
+            onClick={irParaSolicitacao}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[#D9BD6F] px-4 py-2 text-xs font-bold text-[#124431] shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] ring-1 ring-[#124431]/20 transition hover:brightness-105"
+            title="Informar um imóvel ausente ou uma divergência do mapa à equipe de cartografia">
+            <Flag className="size-3.5" /> Não encontrei meu imóvel
+          </button>
           <button onClick={() => setCamadasAbertas(!camadasAbertas)} data-ativo={camadasAbertas}
             className={chipBase}>
             <Layers className="size-3.5" /> Camadas e Dados
@@ -1182,17 +1227,7 @@ export default function MapaRegional({
             title="Desenho completo da planta da cidade, como veio do CAD: ruas, calçadas, textos e detalhes">
             Planta completa
           </button>
-          {/* requisitos cartográficos §2.1: "Não encontrei meu imóvel no mapa" / "O mapa está divergente" */}
-          <button
-            onClick={() => {
-              const c = mapRef.current?.getCenter();
-              const z = mapRef.current?.getZoom();
-              const qs = c ? `?lng=${c.lng.toFixed(6)}&lat=${c.lat.toFixed(6)}&zoom=${(z ?? 14).toFixed(1)}` : "";
-              router.push(`/cartografia/solicitar${qs}`);
-            }}
-            className={chipBase} title="Informar um imóvel ausente ou uma divergência do mapa à equipe de cartografia">
-            <Flag className="size-3.5" /> Não encontrei meu imóvel
-          </button>
+
         </div>
 
         {carAtivo && carAviso && !carSel && (
@@ -1210,6 +1245,15 @@ export default function MapaRegional({
             </Link>
             <BotaoFechar onClick={() => setAvisoPlano("")} />
           </div>
+        )}
+
+        {buscaImagem && (
+          <BuscaPorImagem
+            logado={logado}
+            onFechar={() => setBuscaImagem(false)}
+            onIr={(lng, lat, zoom) => mapRef.current?.flyTo({ center: [lng, lat], zoom, duration: 1400 })}
+            onBuscarTexto={(termo) => { setBusca(termo); setPainelAberto(true); }}
+          />
         )}
 
         {seletorAno && (

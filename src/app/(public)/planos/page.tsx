@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, BadgeCheck, Check, CreditCard } from "lucide-react";
+import {
+  ArrowRight, BadgeCheck, Building2, Check, CreditCard, Gavel, House, Landmark, Ruler, ScanSearch, Search, Tractor, UserPlus,
+} from "lucide-react";
 import Moldura from "@/components/shell/Moldura";
 import { BTN_ACAO } from "@/components/landing/Titulo";
 import { CabecalhoPagina, Conteudo, Vazio } from "@/components/ui/Pagina";
@@ -9,7 +11,8 @@ import { currentUser } from "@/lib/supabase/server";
 import { acessoAtual } from "@/lib/planos-servidor";
 import { formatBRL } from "@/lib/format";
 import {
-  COTAS, GRUPO_RECURSO_LABEL, NICHO_LABEL, PERIODICIDADE_LABEL, RECURSOS, type Plano, type Recurso,
+  COTAS, GRUPO_RECURSO_LABEL, NICHO_LABEL, PERIODICIDADE_LABEL, PERSONAS_PLANOS, RECURSOS,
+  personaPorId, planosDaPersona, type PersonaPlano, type Plano, type Recurso,
 } from "@/lib/planos";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +22,17 @@ export const metadata: Metadata = {
 };
 
 const GRUPOS = Object.keys(GRUPO_RECURSO_LABEL) as Recurso["grupo"][];
+
+const ICONE_PERSONA: Record<PersonaPlano["icone"], typeof Search> = {
+  busca: Search, casa: House, lupa: ScanSearch, trator: Tractor, predio: Building2, martelo: Gavel, regua: Ruler, governo: Landmark,
+};
+
+/** Cadastro já no perfil da persona (o /entrar lê ?cadastro=1&papel=…&nicho=…). */
+function linkCadastro(persona: PersonaPlano | null) {
+  if (!persona?.papel) return "/entrar?cadastro=1";
+  const qs = new URLSearchParams({ cadastro: "1", papel: persona.papel, nicho: persona.nichos[0] });
+  return `/entrar?${qs}`;
+}
 
 /** Texto do preço: zero com periodicidade paga = ainda sem tabela (fala com a Arini). */
 function precoDe(p: Plano) {
@@ -31,13 +45,18 @@ function precoDe(p: Plano) {
  * Página pública dos planos. O que cada plano libera vem do banco (a Diretoria
  * edita em /admin/planos); o nome e o grupo de cada recurso vêm do registro.
  */
-export default async function Planos() {
+export default async function Planos({ searchParams }: PageProps<"/planos">) {
+  const sp = await searchParams;
+  const persona = personaPorId(typeof sp.perfil === "string" ? sp.perfil : null);
   const [{ data: planosRaw }, user, { acesso }] = await Promise.all([
     supabaseAdmin().from("plans").select("*").eq("ativo", true).order("ordem").order("id"),
     currentUser(),
     acessoAtual(),
   ]);
-  const planos = (planosRaw ?? []) as Plano[];
+  const todos = (planosRaw ?? []) as Plano[];
+  // persona escolhida: só os pacotes daquele perfil (se nenhum casar, mostra todos)
+  const daPersona = persona ? planosDaPersona(persona, todos) : [];
+  const planos = persona && daPersona.length ? daPersona : todos;
 
   const usuario = user
     ? { nome: user.nome || "Conta", papel: user.role === "admin_central" ? "Administrador" : "Usuário" }
@@ -48,27 +67,69 @@ export default async function Planos() {
       <CabecalhoPagina
         variante="faixa"
         eyebrow="Planos e acesso"
-        titulo="Um plano para cada"
-        destaque="perfil de uso"
-        subtitulo="Cada plano é pensado para um perfil de uso: quem só consulta, quem compra, quem anuncia o próprio imóvel, o profissional que precisa cruzar a área com as fontes oficiais e a organização com vários usuários."
+        titulo="Arini para cada"
+        destaque="necessidade"
+        subtitulo="O mercado imobiliário tem respostas. A Arini ajuda você a encontrá-las. Encontre o plano que acompanha seus objetivos no mercado imobiliário."
       >
-        <div className="max-w-3xl space-y-3">
-          <p className="text-base leading-relaxed text-texto-2">
-            Ao criar a conta você recebe o plano do seu perfil; a equipe da Arini pode mudar o plano de
-            uma conta a qualquer momento. A mensalidade por anúncio publicado é cobrada à parte, por imóvel.
+        {acesso.planNome && (
+          <p className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-linha-forte bg-superficie px-5 py-3 text-[15px] text-texto">
+            <BadgeCheck className="size-5 text-verde" />
+            Seu plano atual: <strong>{acesso.planNome}</strong>
+            {acesso.nicho && <span className="text-texto-2"> · perfil {NICHO_LABEL[acesso.nicho] ?? acesso.nicho}</span>}
+            {acesso.vencido && <span className="text-alerta"> · vencido — vale o acesso básico</span>}
           </p>
-          {acesso.planNome && (
-            <p className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-linha-forte bg-superficie px-5 py-3 text-[15px] text-texto">
-              <BadgeCheck className="size-5 text-verde" />
-              Seu plano atual: <strong>{acesso.planNome}</strong>
-              {acesso.nicho && <span className="text-texto-2"> · perfil {NICHO_LABEL[acesso.nicho] ?? acesso.nicho}</span>}
-              {acesso.vencido && <span className="text-alerta"> · vencido — vale o acesso básico</span>}
-            </p>
-          )}
-        </div>
+        )}
       </CabecalhoPagina>
 
+      {/* personas clicáveis: cada uma abre só os pacotes daquele perfil */}
+      <Conteudo className="pt-12 md:pt-16">
+        <section id="perfis" aria-labelledby="titulo-perfis" className="scroll-mt-24">
+          <p className="lp-eyebrow">Passo 1</p>
+          <h2 id="titulo-perfis" className="lp-display mt-2 text-3xl text-texto md:text-4xl">Qual é o seu perfil?</h2>
+          <p className="mt-2 max-w-2xl text-texto-2">Escolha o que mais combina com você e veja os planos pensados para esse objetivo.</p>
+          <ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {PERSONAS_PLANOS.map((pp) => {
+              const Icone = ICONE_PERSONA[pp.icone];
+              const ativa = persona?.id === pp.id;
+              return (
+                <li key={pp.id}>
+                  <Link href={ativa ? "/planos#planos" : `/planos?perfil=${pp.id}#planos`} scroll={false}
+                    aria-current={ativa ? "true" : undefined}
+                    className={"cartao group flex h-full items-start gap-3.5 p-5 transition hover:-translate-y-0.5 hover:border-verde/50 " +
+                      (ativa ? "!border-verde ring-2 ring-verde/30" : "")}>
+                    <span className={"grid size-11 shrink-0 place-items-center rounded-full transition " +
+                      (ativa ? "bg-verde text-fundo" : "bg-verde/12 text-verde group-hover:bg-verde/20")}>
+                      <Icone className="size-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-texto">{pp.nome}</span>
+                      <span className="mt-1 block text-sm leading-relaxed text-texto-2">{pp.chamada}</span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </Conteudo>
+
       <Conteudo className="space-y-10 py-12 md:py-16">
+        <div id="planos" className="flex scroll-mt-24 flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="lp-eyebrow">Passo 2</p>
+            <h2 className="lp-display mt-2 text-3xl text-texto md:text-4xl">
+              {persona ? <>Planos para: <span className="text-verde">{persona.nome.toLowerCase()}</span></> : "Todos os planos"}
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {persona && <Link href="/planos#planos" scroll={false} className="lp-btn lp-btn-contorno">Ver todos os planos</Link>}
+            {!user && (
+              <Link href={linkCadastro(persona)} className="lp-btn lp-btn-ouro">
+                <UserPlus /> Cadastre-se{persona?.papel ? " neste perfil" : ""}
+              </Link>
+            )}
+          </div>
+        </div>
         {!planos.length ? (
           <Vazio icone={CreditCard} titulo="Nenhum plano publicado ainda." />
         ) : (
@@ -137,6 +198,10 @@ export default async function Planos() {
 
                   {atual ? (
                     <span className="lp-btn lp-btn-contorno w-full cursor-default opacity-70">Plano atual</span>
+                  ) : !user && p.periodicidade === "gratis" && p.escopo === "conta" ? (
+                    <Link href={linkCadastro(persona)} className="w-full lp-btn lp-btn-verde">
+                      Criar conta grátis <ArrowRight />
+                    </Link>
                   ) : (
                     <Link href={`/suporte?assunto=${encodeURIComponent(`plano:${p.id}`)}`}
                       className={"w-full " + (p.destaque ? "lp-btn lp-btn-ouro" : BTN_ACAO)}>

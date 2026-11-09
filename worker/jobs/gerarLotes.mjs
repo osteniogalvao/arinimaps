@@ -12,7 +12,7 @@
 // de área. É uma leitura do desenho, não um cadastro: lote que o CAD não fechou
 // (traço faltando) não aparece.
 
-import { seletorDeMatriz, pedacosComMatriz, assinaturaAjustes, assinaturaEdicoes, aplicarEdicoes } from "./ajustes.mjs";
+import { seletorDeMatriz, pedacosComMatriz, assinaturaAjustes, assinaturaExclusoes, assinaturaEdicoes, aplicarEdicoes } from "./ajustes.mjs";
 
 const AREA_MIN = 100;      // m² — abaixo disso é detalhe de desenho
 const AREA_MAX = 5000;     // m² — acima disso é quadra ou gleba
@@ -67,7 +67,7 @@ export function afim(centro, t) {
 
 export const assinaturaDe = (c) =>
   [c.offset_leste_m ?? 0, c.offset_norte_m ?? 0, c.rotacao_graus ?? 0, c.escala ?? 1, [...(c.layers_ocultos ?? [])].sort().join("|")].join(";") +
-  assinaturaAjustes(c.ajustes_locais) + assinaturaEdicoes(c.edicoes_geometria);
+  assinaturaExclusoes(c.linhas_excluidas) + assinaturaAjustes(c.ajustes_locais) + assinaturaEdicoes(c.edicoes_geometria);
 
 /**
  * @param {{layer_id: string}} payload
@@ -80,7 +80,7 @@ export async function gerarLotes(payload, db) {
   try {
     await client.query("set statement_timeout = 0");
     const { rows: [cam] } = await client.query(
-      `select id, nome, municipality_id, tiles_path, layers_ocultos, offset_leste_m, offset_norte_m, rotacao_graus, escala, ajustes_locais, edicoes_geometria
+      `select id, nome, municipality_id, tiles_path, layers_ocultos, linhas_excluidas, offset_leste_m, offset_norte_m, rotacao_graus, escala, ajustes_locais, edicoes_geometria
        from cartography_layers where id = $1 and tipo = 'vector'`, [payload.layer_id]);
     if (!cam) throw new Error("planta vetorial não encontrada");
 
@@ -92,13 +92,21 @@ export async function gerarLotes(payload, db) {
       rot: Number(cam.rotacao_graus ?? 0), esc: Number(cam.escala ?? 1),
     }, cam.ajustes_locais);
     const ocultos = new Set(cam.layers_ocultos ?? []);
+    // linhas apagadas na calibração (chave "i" ou "i:j", posição no arquivo original)
+    const apagadas = new Set(cam.linhas_excluidas ?? []);
     const temPartes = (cam.ajustes_locais ?? []).length > 0;
 
     await client.query("begin");
     await client.query("create temp table _linhas (geom geometry(LineString, 31982)) on commit drop");
     let linhas = 0;
-    for (const f of fc.features) {
-      if (ocultos.has(String(f.properties?.layer ?? "")) || !f.geometry) continue;
+    for (const [i, f0] of fc.features.entries()) {
+      if (ocultos.has(String(f0.properties?.layer ?? "")) || !f0.geometry || apagadas.has(String(i))) continue;
+      let f = f0;
+      if (apagadas.size && f0.geometry.type === "MultiLineString") {
+        const linhasVivas = f0.geometry.coordinates.filter((_, j) => !apagadas.has(`${i}:${j}`));
+        if (!linhasVivas.length) continue;
+        f = { ...f0, geometry: { ...f0.geometry, coordinates: linhasVivas } };
+      }
       // calibra em graus (como o mapa) e só então projeta em UTM 22S para medir
       // em metros; com partes ajustadas, cada grupo de linhas vai com a sua matriz
       for (const { geometry, m: k } of pedacosComMatriz(f.geometry, matrizDe, temPartes)) {

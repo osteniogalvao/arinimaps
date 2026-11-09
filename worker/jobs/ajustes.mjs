@@ -93,6 +93,15 @@ export function assinaturaAjustes(ajustes) {
   return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}`).join("|");
 }
 
+/** Espelho de assinaturaExclusoes (src/lib/geo/deslocar.ts): linhas apagadas na calibração. */
+export function assinaturaExclusoes(excluidas) {
+  if (!excluidas?.length) return "";
+  const s = [...excluidas].sort().join(",");
+  let h = 5381;
+  for (let k = 0; k < s.length; k++) h = ((h * 33) ^ s.charCodeAt(k)) >>> 0;
+  return `;ex:${excluidas.length}-${h.toString(36)}`;
+}
+
 /** Aplica somente as polilinhas corrigidas manualmente sobre o arquivo bruto. */
 export function aplicarEdicoes(fc, edicoes = []) {
   for (const e of edicoes ?? []) {
