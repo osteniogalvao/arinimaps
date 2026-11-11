@@ -187,6 +187,12 @@ async function rodarCentral() {
     const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}) }).filter(([, v]) => Number(v) > 0);
     if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
     await emailsCriticos();
+    // publicações agendadas que chegaram na hora (Central de publicação)
+    if (process.env.SITE_URL && process.env.SAUDE_TOKEN) {
+      await fetch(`${process.env.SITE_URL}/api/interno/publicar`, {
+        method: "POST", headers: { "x-saude-token": process.env.SAUDE_TOKEN }, signal: AbortSignal.timeout(120_000),
+      }).catch((e) => console.error("[central] publicações agendadas:", e.message));
+    }
   } catch (e) {
     // banco sem a migration 0065: fica quieto até ela rodar
     if (!/fn_central_automacoes/.test(e.message)) console.error("[central] falhou:", e.message);

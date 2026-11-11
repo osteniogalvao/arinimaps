@@ -14,6 +14,14 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const { codigo, nome, telefone, email, mensagem, consentimento } = body ?? {};
+  // campanha que trouxe o lead (Central de marketing): só as chaves UTM, curtas
+  const utm: Record<string, string> = {};
+  if (body?.utm && typeof body.utm === "object") {
+    for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]) {
+      const v = (body.utm as Record<string, unknown>)[k];
+      if (typeof v === "string" && v.trim()) utm[k] = v.trim().slice(0, 100);
+    }
+  }
 
   if (!codigo || !nome?.trim() || (!telefone?.trim() && !email?.trim())) {
     return NextResponse.json(
@@ -50,6 +58,8 @@ export async function POST(request: Request) {
       email: email?.trim() || null,
       mensagem: mensagem?.trim() || null,
       origem: "pagina",
+      canal: utm.utm_source ?? null,
+      utm,
       consentimento_lgpd: true,
       consentimento_versao: assinatura("privacidade"),
       status: "em_oportunidade",

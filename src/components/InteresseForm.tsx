@@ -4,6 +4,22 @@ import { useState } from "react";
 import { CircleCheck, MessageCircle, Send } from "lucide-react";
 import { CAMPO, ROTULO } from "@/components/ui/Pagina";
 
+/** UTM da campanha que trouxe o visitante (anúncio pago): vai junto com o lead. */
+function lerUtm() {
+  const utm: Record<string, string> = {};
+  try {
+    const guardado = JSON.parse(sessionStorage.getItem("arini-utm") ?? "{}") as Record<string, string>;
+    Object.assign(utm, guardado);
+    const p = new URLSearchParams(window.location.search);
+    for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]) {
+      const v = p.get(k);
+      if (v) utm[k] = v;
+    }
+    if (Object.keys(utm).length) sessionStorage.setItem("arini-utm", JSON.stringify(utm));
+  } catch { /* armazenamento bloqueado */ }
+  return utm;
+}
+
 export default function InteresseForm({
   codigo, titulo, whatsapp,
 }: { codigo: string; titulo: string; whatsapp: string | null }) {
@@ -18,7 +34,7 @@ export default function InteresseForm({
     const res = await fetch("/api/leads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo, ...form }),
+      body: JSON.stringify({ codigo, ...form, utm: lerUtm() }),
     });
     const data = await res.json();
     if (res.ok) setEstado("ok");

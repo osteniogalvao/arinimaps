@@ -43,10 +43,21 @@ export default async function PaginaRegistro({ params, searchParams }: PageProps
   const opcoes: Opcoes = {};
   await Promise.all(r.campos.map(async (c) => {
     if (c.tipo === "ref" && c.ref) {
-      let q2 = admin.from(c.ref.tabela).select(`id, ${c.ref.rotulo}`).order(c.ref.rotulo).limit(500);
-      if (c.ref.filtroAtivo) q2 = q2.eq("ativo", true);
+      const ref = c.ref;
+      let q2 = admin.from(ref.tabela).select(`id, ${ref.rotulo}${ref.extra ? `, ${ref.extra}` : ""}`).order(ref.rotulo).limit(800);
+      if (ref.filtroAtivo) q2 = q2.eq("ativo", true);
+      if (ref.filtro) q2 = q2.in(ref.filtro.coluna, ref.filtro.valores);
       const { data: ops } = await q2;
-      opcoes[c.nome] = ((ops ?? []) as unknown as Record<string, unknown>[]).map((o) => ({ id: String(o.id), rotulo: String(o[c.ref!.rotulo] ?? "") }));
+      opcoes[c.nome] = ((ops ?? []) as unknown as Record<string, unknown>[]).map((o) => ({
+        id: String(o.id), rotulo: String(o[ref.rotulo] ?? "") + (ref.extra && o[ref.extra] ? ` · ${String(o[ref.extra]).slice(0, 60)}` : ""),
+      }));
+      // linhas antigas podem apontar para registro fora do filtro: o rótulo ainda aparece
+      const faltando = [...new Set(((data ?? []) as Record<string, unknown>[]).map((l) => l[c.nome]).filter((v): v is string => typeof v === "string"))]
+        .filter((id) => !opcoes[c.nome].some((o) => o.id === id));
+      if (faltando.length) {
+        const { data: extra } = await admin.from(ref.tabela).select(`id, ${ref.rotulo}`).in("id", faltando.slice(0, 200));
+        for (const o of (extra ?? []) as unknown as Record<string, unknown>[]) opcoes[c.nome].push({ id: String(o.id), rotulo: String(o[ref.rotulo] ?? "") });
+      }
     }
   }));
   const precisaEquipe = r.autorColuna || r.campos.some((c) => c.tipo === "membro");

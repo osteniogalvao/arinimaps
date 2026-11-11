@@ -7,6 +7,7 @@ import { ETAPA_LABEL } from "@/lib/funil";
 import OportunidadeClient, { type Atendimento } from "@/components/crm/OportunidadeClient";
 import Conversa from "@/components/admin/Conversa";
 import ResumoIa from "@/components/admin/ResumoIa";
+import WhatsAppConversa from "@/components/crm/WhatsAppConversa";
 import { equipeAtiva } from "@/components/admin/Painel";
 import SimuladorProposta from "@/components/empreendimento/SimuladorProposta";
 import { hojeBrasilia, simulacaoDaRodada } from "@/lib/simulador";
@@ -133,6 +134,7 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
       />
 
       <ResumoIa oportunidade={opp.id} />
+      <WhatsAppConversa opp={opp.id} />
       <Conversa entidade="opportunities" id={opp.id} />
 
       <SimuladorProposta

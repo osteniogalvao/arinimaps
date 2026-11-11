@@ -79,6 +79,9 @@ export const SETORES: Setor[] = [
     itens: [
       { href: "/admin/marketing", rotulo: "Painel do setor", icone: "◫" },
       { href: "/admin/ranking", rotulo: "Ranking de imóveis", icone: "★" },
+      { href: "/admin/registros/publicacoes", rotulo: "Central de publicação", icone: "↗" },
+      { href: "/admin/marketing/trafego", rotulo: "Tráfego e resultados", icone: "◢" },
+      { href: "/admin/registros/campanhas", rotulo: "Campanhas", icone: "◎" },
       { href: "/admin/conhecimento", rotulo: "Conhecimento e IA", icone: "✎" },
     ],
   },

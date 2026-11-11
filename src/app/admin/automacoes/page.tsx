@@ -37,6 +37,15 @@ export default async function Automacoes() {
     { nome: "Despesa vencida ou sem aprovação", setor: "financeiro",
       quando: "Despesa aprovada que passou do vencimento, ou pedida há mais de 2 dias sem aprovação.",
       faz: "Cria tarefa para o Financeiro pagar ou para a Diretoria aprovar. Ela se fecha sozinha quando a despesa é paga ou aprovada." },
+    { nome: "Ponto incompleto e ajuste parado", setor: "diretoria",
+      quando: "Dia anterior com marcação sem par, ou pedido de ajuste sem decisão há 2 dias.",
+      faz: "Avisa a pessoa no sino; o ajuste parado vira tarefa da Diretoria." },
+    { nome: "Publicação esperando aprovação", setor: "marketing",
+      quando: "Publicação mandada para aprovação há mais de 1 dia.",
+      faz: "Cria tarefa para o Marketing aprovar ou devolver." },
+    { nome: "WhatsApp sem resposta", setor: "comercial",
+      quando: "Cliente mandou mensagem e ninguém respondeu em 2 h (das 8 h às 18 h).",
+      faz: "Cria tarefa de alta prioridade para o corretor do lead. Fecha sozinha quando ele responde." },
   ];
 
   const { data: recentes, error } = await supabaseAdmin().from("tasks")

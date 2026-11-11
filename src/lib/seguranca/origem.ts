@@ -19,6 +19,8 @@ const METODOS_MUTAVEIS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 /** Rotas chamadas por servidores de fora, com autenticação própria. */
 const ISENTAS = [
   "/api/asaas/webhook", // token do webhook (ASAAS_WEBHOOK_TOKEN)
+  "/api/webhooks/whatsapp", // assinatura da Meta (WHATSAPP_APP_SECRET)
+  "/api/interno/publicar", // worker, com SAUDE_TOKEN
 ];
 
 function hostDe(url: string | null | undefined) {

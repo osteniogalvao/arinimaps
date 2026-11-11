@@ -23,7 +23,7 @@ export type Campo = {
   /** select: [valor, rótulo] */
   opcoes?: [string, string][];
   /** ref: tabela e coluna mostrada */
-  ref?: { tabela: string; rotulo: string; filtroAtivo?: boolean };
+  ref?: { tabela: string; rotulo: string; filtroAtivo?: boolean; filtro?: { coluna: string; valores: string[] }; extra?: string };
   /** aparece como coluna na lista */
   lista?: boolean;
   /** não aparece no formulário (preenchido pelo sistema) */
@@ -190,5 +190,57 @@ export const RECURSOS: Recurso[] = [
     ],
   },
 ];
+
+export const PUBLICACAO_STATUS: Record<string, string> = {
+  rascunho: "Rascunho", aprovacao: "Esperando aprovação", agendada: "Aprovada e agendada", publicada: "Publicada",
+  erro: "Com erro", cancelada: "Cancelada ou retirada",
+};
+export const CANAIS_PUBLICACAO: [string, string][] = [
+  ["instagram", "Instagram"], ["facebook", "Facebook"], ["portais", "Portais (feed XML)"], ["site", "Destaque no site"],
+];
+
+RECURSOS.push(
+  {
+    id: "publicacoes", tabela: "publicacoes", titulo: "Central de publicação", singular: "publicação", eyebrow: "Marketing",
+    descricao: "A edição prepara a publicação e manda para aprovação; o tráfego aprova, agenda e publica. Instagram e Facebook saem pela Meta; portais recebem pelo feed XML.",
+    ler: ["marketing", "diretoria"], escrever: ["marketing", "diretoria"],
+    codigo: "codigo", tituloColuna: "legenda", autorColuna: "criado_por", ordem: { coluna: "created_at" }, busca: ["legenda", "codigo"],
+    status: { coluna: "status", rotulos: PUBLICACAO_STATUS, abertos: ["rascunho", "aprovacao", "agendada", "erro"] },
+    campos: [
+      { nome: "property_id", rotulo: "Imóvel", tipo: "ref", obrigatorio: true, lista: true, soCriar: true,
+        ref: { tabela: "properties", rotulo: "codigo", extra: "titulo", filtro: { coluna: "status", valores: ["publicado", "em_negociacao"] } } },
+      { nome: "canal", rotulo: "Canal", tipo: "select", obrigatorio: true, lista: true, opcoes: CANAIS_PUBLICACAO },
+      { nome: "legenda", rotulo: "Legenda", tipo: "textarea", ajuda: "Vazia: use \"Gerar legenda\" para a IA escrever a partir da ficha." },
+      { nome: "agendada_para", rotulo: "Publicar em", tipo: "datahora", lista: true, ajuda: "Vazio: publica assim que for aprovada." },
+      { nome: "link_externo", rotulo: "Link", tipo: "texto", sistema: true },
+    ],
+    acoes: [
+      { id: "gerar_legenda", rotulo: "Gerar legenda", quando: ["rascunho", "erro"] },
+      { id: "enviar", rotulo: "Enviar para aprovação", quando: ["rascunho", "erro"], tom: "verde" },
+      { id: "aprovar", rotulo: "Aprovar", quando: ["aprovacao"], tom: "verde" },
+      { id: "devolver", rotulo: "Devolver", quando: ["aprovacao"], pedeMotivo: true },
+      { id: "publicar", rotulo: "Publicar agora", quando: ["agendada"], tom: "verde" },
+      { id: "cancelar", rotulo: "Cancelar ou retirar", quando: ["rascunho", "aprovacao", "agendada", "publicada", "erro"], pedeMotivo: true, tom: "critico" },
+    ],
+  },
+  {
+    id: "campanhas", tabela: "campanhas", titulo: "Campanhas de tráfego", singular: "campanha", eyebrow: "Marketing",
+    descricao: "Cada campanha paga com o seu utm_campaign. Os leads que chegam com esse código entram na conta dela em Tráfego e resultados.",
+    ler: ["marketing", "diretoria", "financeiro"], escrever: ["marketing", "diretoria"],
+    tituloColuna: "nome", autorColuna: "criado_por", ordem: { coluna: "created_at" }, busca: ["nome", "utm_campaign"],
+    campos: [
+      { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true },
+      { nome: "canal", rotulo: "Canal", tipo: "select", obrigatorio: true, lista: true, opcoes: [["meta", "Meta (Instagram/Facebook)"], ["google", "Google"], ["portal", "Portal"], ["outro", "Outro"]] },
+      { nome: "utm_campaign", rotulo: "utm_campaign", tipo: "texto", lista: true, ajuda: "O mesmo código usado no link do anúncio (?utm_campaign=…)." },
+      { nome: "property_id", rotulo: "Imóvel (se for de um só)", tipo: "ref", ref: { tabela: "properties", rotulo: "codigo", extra: "titulo", filtro: { coluna: "status", valores: ["publicado", "em_negociacao"] } } },
+      { nome: "inicio", rotulo: "Início", tipo: "data", lista: true },
+      { nome: "fim", rotulo: "Fim", tipo: "data" },
+      { nome: "orcamento", rotulo: "Orçamento", tipo: "dinheiro" },
+      { nome: "gasto", rotulo: "Gasto até agora", tipo: "dinheiro", lista: true },
+      { nome: "observacoes", rotulo: "Observações", tipo: "textarea" },
+      { nome: "ativa", rotulo: "Ativa", tipo: "bool", padrao: true, lista: true },
+    ],
+  },
+);
 
 export const recursoPorId = (id: string) => RECURSOS.find((r) => r.id === id) ?? null;
