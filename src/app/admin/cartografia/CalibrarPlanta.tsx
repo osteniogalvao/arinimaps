@@ -36,7 +36,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
 import type { Map as MLMap, GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
-import { SATELITE } from "@/lib/map/config";
+import { SATELITE, SATELITE_ALTO, ZOOM_SATELITE_ALTO } from "@/lib/map/config";
 import {
   centroDe, ajustarPorPontos, DESLOCAMENTO_DATUM, TRANSFORM_ZERO,
   afim, compor, inverter, aplicarMatriz, aplicarMatrizPonto, centroArea, partesDasLinhas,
@@ -429,7 +429,13 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       if (cancelado || !containerRef.current) return;
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: { version: 8, sources: { sat: SATELITE }, layers: [{ id: "sat", type: "raster", source: "sat" }] },
+        // calibrar é olhar telhado e meio-fio: a camada de perto entra a partir do z18
+        style: SATELITE_ALTO
+          ? {
+              version: 8, sources: { sat: SATELITE, "sat-alto": SATELITE_ALTO },
+              layers: [{ id: "sat", type: "raster", source: "sat" }, { id: "sat-alto", type: "raster", source: "sat-alto", minzoom: ZOOM_SATELITE_ALTO }],
+            }
+          : { version: 8, sources: { sat: SATELITE }, layers: [{ id: "sat", type: "raster", source: "sat" }] },
         center: [-50.196, -19.728],
         zoom: 15,
         attributionControl: { compact: true },

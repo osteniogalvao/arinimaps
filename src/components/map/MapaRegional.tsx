@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, VectorTileSource } from "maplibre-gl";
-import { CENTRO_REGIAO, SATELITE } from "@/lib/map/config";
+import { CENTRO_REGIAO, SATELITE, SATELITE_ALTO, ZOOM_SATELITE_ALTO } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
 import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeoJSON, TRANSFORM_ZERO, type Transform, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
@@ -420,7 +420,9 @@ export default function MapaRegional({
     const img = imagemHistoricaPorId(imagemAnoRef.current);
     if (!img || compararRef.current) return;
     const camadas = map.getStyle().layers;
-    const depois = camadas[camadas.findIndex((l) => l.id === "satelite") + 1]?.id;
+    // acima também da camada de perto, senão ela cobriria a imagem do ano no zoom do lote
+    const topo = map.getLayer("satelite-alto") ? "satelite-alto" : "satelite";
+    const depois = camadas[camadas.findIndex((l) => l.id === topo) + 1]?.id;
     map.addSource("historico", img.fonte);
     map.addLayer({ id: "historico", type: "raster", source: "historico" }, depois);
   }, []);
@@ -701,6 +703,14 @@ export default function MapaRegional({
         // satélite fica acima da base vetorial e abaixo das camadas de dados
         map.addSource("satelite", SATELITE);
         map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" } });
+        // imagem mais nítida no zoom do lote (ver SATELITE_ALTO em src/lib/map/config.ts)
+        if (SATELITE_ALTO) {
+          map.addSource("satelite-alto", SATELITE_ALTO);
+          map.addLayer({
+            id: "satelite-alto", type: "raster", source: "satelite-alto", minzoom: ZOOM_SATELITE_ALTO,
+            layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" },
+          });
+        }
         aplicarHistorico();
 
         // Cartografia urbana. O raster entra agora — tile só é baixado quando
@@ -1088,6 +1098,7 @@ export default function MapaRegional({
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("satelite")) return;
     map.setLayoutProperty("satelite", "visibility", base === "satelite" ? "visible" : "none");
+    if (map.getLayer("satelite-alto")) map.setLayoutProperty("satelite-alto", "visibility", base === "satelite" ? "visible" : "none");
     relevoRef.current?.mudarBase(base);
     const cores = CARTO_CORES[base];
     if (map.getLayer("lotes-borda")) {
