@@ -1646,19 +1646,35 @@ export default function MapaRegional({
             const map = mapRef.current;
             if (!map) return;
             try {
-              let kmlTexto: string;
-              if (arquivo.name.toLowerCase().endsWith(".kmz")) {
-                const JSZip = (await import("jszip")).default;
-                const zip = await JSZip.loadAsync(await arquivo.arrayBuffer());
-                const entrada = Object.values(zip.files).find((f) => f.name.toLowerCase().endsWith(".kml"));
-                if (!entrada) throw new Error("KMZ sem KML dentro");
-                kmlTexto = await entrada.async("string");
+              // KML/KMZ, GeoJSON e Shapefile em zip (ideia do Geomart, 11/11): tudo lido no navegador
+              const nome = arquivo.name.toLowerCase();
+              let dados: GeoJSON.FeatureCollection;
+              if (nome.endsWith(".geojson") || nome.endsWith(".json")) {
+                const j = JSON.parse(await arquivo.text()) as GeoJSON.GeoJSON;
+                dados = j.type === "FeatureCollection" ? j
+                  : j.type === "Feature" ? { type: "FeatureCollection", features: [j] }
+                  : { type: "FeatureCollection", features: [{ type: "Feature", geometry: j as GeoJSON.Geometry, properties: {} }] };
+              } else if (nome.endsWith(".zip")) {
+                // shapefile de polígono, reprojetado pelo .prj (o mesmo leitor da importação do CAR)
+                const { lerArquivoSicar } = await import("@/lib/geo/shapefileCar");
+                const lido = await lerArquivoSicar([arquivo]);
+                dados = { type: "FeatureCollection", features: lido.camadas.flatMap((c) => c.feicoes) };
+                if (!dados.features.length) throw new Error("zip sem shapefile de polígono");
               } else {
-                kmlTexto = await arquivo.text();
+                let kmlTexto: string;
+                if (nome.endsWith(".kmz")) {
+                  const JSZip = (await import("jszip")).default;
+                  const zip = await JSZip.loadAsync(await arquivo.arrayBuffer());
+                  const entrada = Object.values(zip.files).find((f) => f.name.toLowerCase().endsWith(".kml"));
+                  if (!entrada) throw new Error("KMZ sem KML dentro");
+                  kmlTexto = await entrada.async("string");
+                } else {
+                  kmlTexto = await arquivo.text();
+                }
+                const { kml } = await import("@tmcw/togeojson");
+                const doc = new DOMParser().parseFromString(kmlTexto, "text/xml");
+                dados = kml(doc) as GeoJSON.FeatureCollection;
               }
-              const { kml } = await import("@tmcw/togeojson");
-              const doc = new DOMParser().parseFromString(kmlTexto, "text/xml");
-              const dados = kml(doc) as GeoJSON.FeatureCollection;
 
               if (map.getSource("kml-importado")) {
                 (map.getSource("kml-importado") as GeoJSONSource).setData(dados);
@@ -1666,7 +1682,7 @@ export default function MapaRegional({
                 map.addSource("kml-importado", { type: "geojson", data: dados });
                 map.addLayer({
                   id: "kml-fill", type: "fill", source: "kml-importado",
-                  filter: ["==", ["geometry-type"], "Polygon"],
+                  filter: ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]],
                   paint: { "fill-color": "#D9BD6F", "fill-opacity": 0.2 },
                 });
                 map.addLayer({
@@ -1690,7 +1706,8 @@ export default function MapaRegional({
                 );
               }
             } catch (e) {
-              console.error("falha ao importar KML:", e);
+              console.error("falha ao importar arquivo:", e);
+              window.alert("Não consegui ler esse arquivo. Envie um KML, KMZ, GeoJSON ou Shapefile de polígono em zip (com .shp, .dbf e .prj).");
             }
           }}
           onCapturar={() => {

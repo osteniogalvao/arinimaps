@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Map as MLMap, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import type { RecursoId } from "@/lib/planos";
-import { ArrowRight, Camera, Lock, MoveHorizontal, Printer, ScanSearch, Triangle, Upload, X } from "lucide-react";
+import { ArrowRight, Camera, Download, Lock, MoveHorizontal, Printer, ScanSearch, Triangle, Upload, X } from "lucide-react";
 import { abrirAssistente } from "@/components/ia/ChatIA";
 import MarcaArini from "@/components/marca/MarcaArini";
 import { VIDRO, BotaoFechar } from "@/components/map/UiMapa";
@@ -47,6 +47,9 @@ export default function Ferramentas({
   // área desenhada para consulta, já fechada (duplo clique), esperando o "Consultar"
   const [consultaPronta, setConsultaPronta] = useState<{ pontos: [number, number][]; ha: number } | null>(null);
   const [consultando, setConsultando] = useState(false);
+  // área medida e fechada (duplo clique): dá para baixar em KML, DXF ou memorial (ideia do Geomart, 11/11)
+  const [areaMedida, setAreaMedida] = useState<[number, number][] | null>(null);
+  const [baixando, setBaixando] = useState<string | null>(null);
   const [erroConsulta, setErroConsulta] = useState<{ msg: string; planos: boolean } | null>(null);
   const liberado = (r: RecursoId) => !recursos || recursos.includes(r);
   const pontosRef = useRef<[number, number][]>([]);
@@ -163,6 +166,7 @@ export default function Ferramentas({
         const pts = pontosRef.current;
         setConsultaPronta({ pontos: pts, ha: areaPoligonoM2([[...pts, pts[0]]]) / 10000 });
       }
+      if (modoRef.current === "area" && pontosRef.current.length >= 3) setAreaMedida(pontosRef.current);
       setModo(null);
       if (mapa) mapa.getCanvas().style.cursor = "";
     };
@@ -178,6 +182,7 @@ export default function Ferramentas({
   const iniciar = (novo: Modo) => {
     pontosRef.current = [];
     setResultado("");
+    setAreaMedida(null);
     setConsultaPronta(null);
     setErroConsulta(null);
     desenhar([], false);
@@ -189,6 +194,7 @@ export default function Ferramentas({
   const limpar = () => {
     pontosRef.current = [];
     setResultado("");
+    setAreaMedida(null);
     setConsultaPronta(null);
     setErroConsulta(null);
     desenhar([], false);
@@ -225,13 +231,38 @@ export default function Ferramentas({
     router.push(`/consulta/area/${data.chave.replace(/^geo:/, "")}`);
   };
 
+  /** Baixa a área medida: KML, DXF (UTM SIRGAS 2000) ou memorial descritivo (.doc). */
+  const baixarArea = async (formato: "kml" | "dxf" | "memorial") => {
+    if (!areaMedida) return;
+    if (!liberado("ferramenta_exportar")) { avisarBloqueio("Baixar a área"); return; }
+    setBaixando(formato);
+    try {
+      const lib = await import("@/lib/geo/exportarSig");
+      const geometry: GeoJSON.Polygon = { type: "Polygon", coordinates: [[...areaMedida, areaMedida[0]]] };
+      const ha = areaPoligonoM2([[...areaMedida, areaMedida[0]]]) / 10000;
+      const camada = { nome: "divisa", rotulo: "Área medida", geometry, atributos: { area_ha: Math.round(ha * 10000) / 10000, fonte: "Área desenhada no mapa da Arini" } };
+      const base = `area-${ha.toFixed(2).replace(".", "-")}ha`;
+      if (formato === "kml") lib.baixar(lib.paraKML([camada], "Área medida"), `${base}.kml`, "application/vnd.google-earth.kml+xml");
+      else if (formato === "dxf") {
+        const dxf = await lib.paraDXF([camada]);
+        lib.baixar(dxf.texto, `${base}-utm${dxf.fuso}${dxf.sul ? "s" : "n"}.dxf`, "application/dxf");
+      } else {
+        const { calcularMemorial, memorialDoc } = await import("@/lib/geo/memorial");
+        const m = calcularMemorial(geometry);
+        if (m) lib.baixar("\ufeff" + memorialDoc(m, { imovel: "Área desenhada no mapa", origem: "Área desenhada no mapa da Arini" }), `${base}-memorial-descritivo.doc`, "application/msword");
+      }
+    } finally {
+      setBaixando(null);
+    }
+  };
+
   // cada ferramenta pertence a um recurso do plano (src/lib/planos.ts); a trava
   // de verdade é no servidor — aqui o botão só avisa e aponta para os planos
   const FERRAMENTAS = [
     { id: "area", icone: Triangle, rotulo: "Medir Área", recurso: "ferramenta_medir", acao: () => iniciar("area") },
     { id: "distancia", icone: MoveHorizontal, rotulo: "Medir Distância", recurso: "ferramenta_medir", acao: () => iniciar("distancia") },
     { id: "consulta", icone: ScanSearch, rotulo: "Consultar Área", recurso: "consulta_area", acao: () => iniciar("consulta") },
-    { id: "kml", icone: Upload, rotulo: "Importar KML", recurso: "ferramenta_kml", acao: null },
+    { id: "kml", icone: Upload, rotulo: "Importar arquivo", recurso: "ferramenta_kml", acao: null },
     { id: "imprimir", icone: Printer, rotulo: "Imprimir", recurso: "ferramenta_exportar", acao: () => window.print() },
     { id: "captura", icone: Camera, rotulo: "Capturar Imagem", recurso: "ferramenta_exportar", acao: onCapturar },
   ] as const;
@@ -313,6 +344,17 @@ export default function Ferramentas({
           {botaoLimpar}
         </div>
       )}
+      {areaMedida && !modo && (
+        <div className={`flex flex-wrap items-center gap-2 px-4 py-2.5 text-xs ${VIDRO}`}>
+          <span className="inline-flex items-center gap-1.5 text-texto-2"><Download className="size-3.5 text-ouro" /> Baixar a área:</span>
+          {([["kml", "KML"], ["dxf", "DXF (UTM)"], ["memorial", "Memorial descritivo"]] as const).map(([id, rotulo]) => (
+            <button key={id} onClick={() => baixarArea(id)} disabled={!!baixando}
+              className="rounded-full border border-linha-forte px-3 py-1.5 font-semibold text-texto transition hover:border-verde hover:text-verde disabled:opacity-60">
+              {baixando === id ? "Gerando…" : rotulo}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className={`px-1.5 py-1.5 sm:px-2.5 sm:py-2 ${VIDRO}`}>
         <p className="hidden sm:block lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro px-2 pt-0.5 mb-2">Ferramentas</p>
@@ -339,8 +381,9 @@ export default function Ferramentas({
               return (
                 <label key={f.id} className={classe + " cursor-pointer"} title={f.rotulo} aria-label={f.rotulo}>
                   {miolo}
-                  <input type="file" accept=".kml,.kmz" className="hidden"
-                    onChange={(e) => e.target.files?.[0] && onImportarKml(e.target.files[0])} />
+                  <input type="file" accept=".kml,.kmz,.geojson,.json,.zip" className="hidden"
+                    title="KML, KMZ, GeoJSON ou Shapefile (zip)"
+                    onChange={(e) => { if (e.target.files?.[0]) onImportarKml(e.target.files[0]); e.target.value = ""; }} />
                 </label>
               );
             }

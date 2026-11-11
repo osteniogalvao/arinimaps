@@ -34,6 +34,9 @@ function poligonos(g: GeoJSON.Geometry | null | undefined): Poligonos {
 
 export const temPoligono = (g: GeoJSON.Geometry | null | undefined) => poligonos(g).length > 0;
 
+/** Polígonos de uma geometria, para quem precisa andar pelos vértices (memorial). */
+export const poligonosDe = poligonos;
+
 // ---------------------------------------------------------------------------
 // GeoJSON
 // ---------------------------------------------------------------------------
@@ -84,6 +87,83 @@ export function paraKML(camadas: CamadaSig[], nomeDocumento: string): string {
     return `<Placemark><name>${xml(c.rotulo)}</name><styleUrl>#${ESTILO_KML[c.nome] ? c.nome : "divisa"}</styleUrl><ExtendedData>${dados}</ExtendedData>${geom}</Placemark>`;
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xml(nomeDocumento)}</name>${estilos}${placemarks}</Document></kml>`;
+}
+
+// ---------------------------------------------------------------------------
+// DXF (pedido 11/11: "baixar o perímetro em DXF", como o Geomart)
+// ---------------------------------------------------------------------------
+
+/**
+ * DXF R12 em ASCII (o mais aceito: AutoCAD, BricsCAD, QGIS, TopoGRAPH,
+ * Métrica TOPO), em UTM SIRGAS 2000 no fuso do centro das camadas — quem
+ * abre no CAD quer metros, não graus. Uma layer por camada (DIVISA, CAR),
+ * cada anel vira uma POLYLINE fechada e cada vértice externo ganha o rótulo
+ * V1, V2… na layer VERTICES, na mesma ordem do memorial descritivo.
+ */
+export async function paraDXF(camadas: CamadaSig[]): Promise<{ texto: string; fuso: number; sul: boolean; epsg: number }> {
+  const { fusoDaGeometria, geoParaUtm, epsgSirgas } = await import("./utm");
+  const todos = camadas.flatMap((c) => poligonos(c.geometry).flatMap((p) => p.flat()));
+  const { fuso, sul } = fusoDaGeometria(todos);
+  const utm = (p: GeoJSON.Position) => geoParaUtm(p[0], p[1], fuso, sul);
+  const linhas: (string | number)[] = [];
+  const par = (codigo: number, valor: string | number) => linhas.push(codigo, valor);
+  const f3 = (n: number) => n.toFixed(3);
+
+  const layers = [...camadas.map((c) => c.nome.toUpperCase()), "VERTICES"];
+  // cores ACI: divisa verde (3), CAR amarelo (2), rótulos branco (7)
+  const cor = (l: string) => (l === "CAR" ? 2 : l === "VERTICES" ? 7 : 3);
+
+  par(0, "SECTION"); par(2, "HEADER");
+  par(9, "$ACADVER"); par(1, "AC1009");
+  par(9, "$INSUNITS"); par(70, 6); // metros
+  par(0, "ENDSEC");
+  par(0, "SECTION"); par(2, "TABLES");
+  par(0, "TABLE"); par(2, "LAYER"); par(70, layers.length);
+  for (const l of layers) { par(0, "LAYER"); par(2, l); par(70, 0); par(62, cor(l)); par(6, "CONTINUOUS"); }
+  par(0, "ENDTAB");
+  par(0, "ENDSEC");
+  par(0, "SECTION"); par(2, "ENTITIES");
+
+  let v = 0;
+  camadas.forEach((c, ic) => {
+    const layer = c.nome.toUpperCase();
+    for (const p of poligonos(c.geometry)) {
+      p.forEach((anel, i) => {
+        const aberto = anel.length > 1 && anel[0][0] === anel.at(-1)![0] && anel[0][1] === anel.at(-1)![1] ? anel.slice(0, -1) : anel;
+        if (aberto.length < 3) return;
+        par(0, "POLYLINE"); par(8, layer); par(66, 1); par(10, 0); par(20, 0); par(30, 0); par(70, 1);
+        for (const pt of aberto) {
+          const [e, n] = utm(pt);
+          par(0, "VERTEX"); par(8, layer); par(10, f3(e)); par(20, f3(n)); par(30, 0);
+        }
+        par(0, "SEQEND"); par(8, layer);
+        // rótulos só no anel externo da primeira camada (a do memorial)
+        if (ic === 0 && i === 0) {
+          for (const pt of ordemMemorial(aberto)) {
+            const [e, n] = utm(pt);
+            v++;
+            par(0, "TEXT"); par(8, "VERTICES"); par(10, f3(e + 2)); par(20, f3(n + 2)); par(30, 0); par(40, 3); par(1, `V${v}`);
+          }
+        }
+      });
+    }
+  });
+  par(0, "ENDSEC"); par(0, "EOF");
+  return { texto: linhas.join("\r\n") + "\r\n", fuso, sul, epsg: epsgSirgas(fuso, sul) };
+}
+
+/**
+ * Ordem dos vértices do memorial: sentido horário, começando no vértice mais
+ * ao norte (a convenção dos memoriais do INCRA). Recebe o anel sem repetir o
+ * primeiro ponto no fim.
+ */
+export function ordemMemorial(aberto: GeoJSON.Position[]): GeoJSON.Position[] {
+  const fechado = [...aberto, aberto[0]];
+  const horario = areaComSinal(fechado) < 0;
+  const lista = horario ? [...aberto] : [...aberto].reverse();
+  let inicio = 0;
+  lista.forEach((p, i) => { if (p[1] > lista[inicio][1]) inicio = i; });
+  return [...lista.slice(inicio), ...lista.slice(0, inicio)];
 }
 
 // ---------------------------------------------------------------------------
