@@ -12,7 +12,7 @@ import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, VectorTile
 import { CENTRO_REGIAO, SATELITE } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
-import { transformarGeoJSON, centroDe, removerLinhasExcluidas, TRANSFORM_ZERO, type Transform, type AjusteLocal } from "@/lib/geo/deslocar";
+import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeoJSON, TRANSFORM_ZERO, type Transform, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
@@ -65,6 +65,8 @@ type Camada = {
   ajustes?: AjusteLocal[];
   /** linhas apagadas na calibração (só usadas se o arquivo público não veio) */
   linhas_excluidas?: string[];
+  /** linhas corrigidas e divididas na calibração (idem: só sem o arquivo público) */
+  edicoes?: EdicaoGeometria[];
   /** multiplicador da espessura das linhas, definido na calibração */
   espessura?: number;
 };
@@ -541,7 +543,10 @@ export default function MapaRegional({
       // sem o arquivo público, o original ainda tem as linhas apagadas: tira aqui
       // (o centro continua o do arquivo completo, medido antes de apagar)
       const centro = c.centro ?? centroDe(bruto);
-      const semApagadas = !c.geojson_publico && c.linhas_excluidas?.length ? removerLinhasExcluidas(bruto, c.linhas_excluidas) : bruto;
+      // as correções de linha vêm antes das apagadas: um pedaço de linha dividida
+      // só existe depois delas, e a chave "i:j" dele conta com isso
+      const editado = !c.geojson_publico && c.edicoes?.length ? aplicarEdicoesGeoJSON(bruto, c.edicoes) : bruto;
+      const semApagadas = !c.geojson_publico && c.linhas_excluidas?.length ? removerLinhasExcluidas(editado, c.linhas_excluidas) : editado;
       const dados = transformarGeoJSON(
         semApagadas, centro, c.transform ?? TRANSFORM_ZERO, c.layers_ocultos ?? [], c.ajustes ?? []
       );

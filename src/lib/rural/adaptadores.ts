@@ -1091,3 +1091,59 @@ export const ADAPTADORES: { id: string; fn: (b: Bbox) => Promise<ResultadoFonte>
 
 const msg = (e: unknown) =>
   e instanceof Error ? (e.name === "TimeoutError" ? "serviço não respondeu a tempo" : e.message) : "falha desconhecida";
+
+/**
+ * Consulta as fontes com uma SEGUNDA RODADA para as que falharam.
+ *
+ * Vídeo do Carlos (10/11/2026): numa consulta, UCs, terras indígenas, poços,
+ * mineração, PRODES, DETER e imóvel certificado vieram "indisponível". Os
+ * serviços do governo caem por minutos e voltam; cada adaptador já repete o
+ * pedido 3 vezes em sequência, o que não cobre uma queda de 20–30 s. Aqui as
+ * que falharam são perguntadas de novo depois de uma pausa, todas juntas, uma
+ * vez só — o custo para o órgão é o de uma consulta, e só das que falharam.
+ * Fila do órgão cheia não repete (repetir só piora o pico).
+ */
+const PAUSA_SEGUNDA_RODADA_MS = 6_000;
+
+export async function consultarFontes(
+  lista: { id: string; fn: (b: Bbox) => Promise<ResultadoFonte> }[],
+  bbox: Bbox,
+  opcoes: { segundaRodada?: boolean } = {},
+): Promise<ResultadoFonte[]> {
+  const primeira = await Promise.all(lista.map((a) => a.fn(bbox)));
+  if (opcoes.segundaRodada === false) return primeira;
+  const repetir = primeira
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.erro && !/muitas consultas a este órgão/.test(r.erro));
+  if (!repetir.length) return primeira;
+  await new Promise((ok) => setTimeout(ok, PAUSA_SEGUNDA_RODADA_MS));
+  const segunda = await Promise.all(repetir.map(({ i }) => lista[i].fn(bbox)));
+  const final = [...primeira];
+  repetir.forEach(({ i }, k) => { if (!segunda[k].erro) final[i] = segunda[k]; });
+  return final;
+}
+
+/**
+ * Resultado a gravar quando a fonte falhou mas já havia uma resposta VÁLIDA
+ * guardada: mantém a anterior (com a data dela) e anota a falha nova, em vez de
+ * trocar dados reais por "indisponível". Sem resposta válida anterior, grava a
+ * falha como sempre — fonte não consultada nunca vale como "nada encontrado".
+ */
+export type LinhaConsulta = {
+  resultado: Record<string, unknown> | null;
+  quantidade: number; incide: boolean; erro: string | null; consultado_em: string;
+};
+
+export function linhaParaGravar(r: ResultadoFonte, anterior: LinhaConsulta | null | undefined, extra: Record<string, unknown> = {}): LinhaConsulta {
+  const agora = new Date().toISOString();
+  if (r.erro && anterior && !anterior.erro) {
+    return {
+      resultado: { ...(anterior.resultado ?? {}), ultima_falha: { em: agora, erro: r.erro } },
+      quantidade: anterior.quantidade, incide: anterior.incide, erro: null, consultado_em: anterior.consultado_em,
+    };
+  }
+  return {
+    resultado: { itens: r.itens, ...extra },
+    quantidade: r.quantidade, incide: r.incide, erro: r.erro ?? null, consultado_em: agora,
+  };
+}

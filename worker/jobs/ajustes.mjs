@@ -59,7 +59,7 @@ export function seletorDeMatriz(centroPlanta, global, ajustes) {
   const g = afim(centroPlanta, global);
   const partes = (ajustes ?? []).map((a) => ({
     area: a.area,
-    m: compor(g, afim(centroArea(a.area), { dx: a.t.offsetLesteM, dy: a.t.offsetNorteM, rot: a.t.rotacaoGraus, esc: 1 })),
+    m: compor(g, afim(centroArea(a.area), { dx: a.t.offsetLesteM, dy: a.t.offsetNorteM, rot: a.t.rotacaoGraus, esc: a.t.escala || 1 })),
   }));
   return (centro) => {
     if (centro) for (const p of partes) if (pontoNaArea(centro, p.area)) return p.m;
@@ -90,7 +90,8 @@ export function pedacosComMatriz(geometry, matrizDe, temPartes) {
 export function assinaturaAjustes(ajustes) {
   if (!ajustes?.length) return "";
   const r = (n) => Math.round(n * 1e4) / 1e4;
-  return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}`).join("|");
+  const esc = (a) => (a.t.escala && Math.abs(a.t.escala - 1) > 1e-9 ? `,x${r(a.t.escala)}` : "");
+  return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}${esc(a)}`).join("|");
 }
 
 /** Espelho de assinaturaExclusoes (src/lib/geo/deslocar.ts): linhas apagadas na calibração. */
@@ -106,7 +107,11 @@ export function assinaturaExclusoes(excluidas) {
 export function aplicarEdicoes(fc, edicoes = []) {
   for (const e of edicoes ?? []) {
     const g = fc.features?.[e.feature]?.geometry;
-    if (g?.type === "MultiLineString" && g.coordinates[e.linha] && e.coordinates?.length >= 2) g.coordinates[e.linha] = e.coordinates;
+    if (g?.type === "MultiLineString" && g.coordinates[e.linha] && e.coordinates?.length >= 2) {
+      g.coordinates[e.linha] = e.coordinates;
+      // pedaços de uma linha dividida entram no fim (ver EdicaoGeometria em deslocar.ts)
+      for (const x of e.extras ?? []) if (x?.length >= 2) g.coordinates.push(x);
+    }
     else if (g?.type === "LineString" && e.linha === 0 && e.coordinates?.length >= 2) g.coordinates = e.coordinates;
   }
   return fc;
@@ -115,7 +120,8 @@ export function aplicarEdicoes(fc, edicoes = []) {
 export function assinaturaEdicoes(edicoes = []) {
   if (!edicoes?.length) return "";
   let h = 2166136261;
-  const texto = edicoes.map((e) => `${e.feature}:${e.linha}:${e.coordinates.map((p) => `${Number(p[0]).toFixed(7)},${Number(p[1]).toFixed(7)}`).join(";")}`).join("|");
+  const pts = (c) => c.map((p) => `${Number(p[0]).toFixed(7)},${Number(p[1]).toFixed(7)}`).join(";");
+  const texto = edicoes.map((e) => `${e.feature}:${e.linha}:${pts(e.coordinates)}${(e.extras ?? []).map((x) => `+${pts(x)}`).join("")}`).join("|");
   for (let i = 0; i < texto.length; i++) h = Math.imul(h ^ texto.charCodeAt(i), 16777619);
   return `;ed:${(h >>> 0).toString(36)}`;
 }

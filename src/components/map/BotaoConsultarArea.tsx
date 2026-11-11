@@ -57,10 +57,14 @@ export default function BotaoConsultarArea({
       if (data.codigo === "consulta_na_fila") setSolucao("O sistema segue muito movimentado. Tente de novo em alguns minutos.");
       return;
     }
-    const falharam = Array.isArray(data.falharam) ? data.falharam : [];
+    const semResposta = Array.isArray(data.falharam) ? data.falharam : [];
     setMsg(
-      falharam.length
-        ? (falharam.length === 1 ? "1 fonte não respondeu e aparece como indisponível." : `${falharam.length} fontes não responderam e aparecem como indisponíveis.`)
+      semResposta.length
+        ? (semResposta.length === 1
+          ? "1 fonte do governo não respondeu nem na segunda tentativa."
+          : `${semResposta.length} fontes do governo não responderam nem na segunda tentativa.`) +
+          " Onde havia um resultado anterior, ele continua valendo, com a data dele." +
+          " Em alguns minutos, “Atualizar consulta” pergunta só a elas, sem gastar consulta do mês."
         : data.consultadas === 0 ? "Os dados já estavam atualizados." : ""
     );
     router.refresh();

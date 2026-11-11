@@ -15,7 +15,7 @@ import { detalhesRegistro } from "@/lib/rural/detalhes";
 type Item = { titulo: string; detalhe?: string; extra?: Record<string, string | number | null>; origem?: OrigemItem };
 type Consulta = {
   quantidade: number; incide: boolean; raio_m: number;
-  resultado: { itens?: Item[]; origem?: OrigemItem }; erro: string | null; consultado_em: string;
+  resultado: { itens?: Item[]; origem?: OrigemItem; ultima_falha?: { em: string; erro: string } }; erro: string | null; consultado_em: string;
 } | null;
 type Fonte = {
   id: string; nome: string; orgao: string; prioridade: number;
@@ -62,8 +62,12 @@ export default function ConsultaRural({ propertyId }: { propertyId: string }) {
     const data = await r.json().catch(() => ({}));
     setRodando(false);
     if (!r.ok) { setMsg(data.error ?? "Falha na consulta."); return; }
-    const comErro = (data.fontes ?? []).filter((f: { erro?: string }) => f.erro).length;
-    setMsg(comErro ? `Consulta concluída — ${comErro} fonte(s) indisponível(is) no momento.` : "Consulta concluída.");
+    const falhas = (data.fontes ?? []).filter((f: { erro?: string }) => f.erro) as { manteve_anterior?: boolean }[];
+    const mantidas = falhas.filter((f) => f.manteve_anterior).length;
+    setMsg(falhas.length
+      ? `Consulta concluída — ${falhas.length} fonte(s) não responderam nem na segunda tentativa` +
+        (mantidas ? `; em ${mantidas} delas ficou o último resultado válido.` : ".") + " Tente de novo mais tarde."
+      : "Consulta concluída.");
     carregar();
   }
 
@@ -140,6 +144,14 @@ export default function ConsultaRural({ propertyId }: { propertyId: string }) {
 
               {aberta === f.id && (
                 <div className="px-5 pb-4 space-y-2 border-t border-linha pt-4">
+                  {c && !c.erro && c.resultado?.ultima_falha && (
+                    <p className="text-sm text-alerta">
+                      <span title={c.resultado.ultima_falha.erro}>
+                        O órgão não respondeu na consulta de {new Date(c.resultado.ultima_falha.em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.
+                      </span>{" "}
+                      Mostramos o último resultado válido, de {new Date(c.consultado_em).toLocaleDateString("pt-BR")}.
+                    </p>
+                  )}
                   {c?.erro && (
                     <p className="text-sm text-alerta">
                       <span title={c.erro}>Fonte indisponível no momento.</span> Nada aqui significa ausência de registro — só que o serviço não respondeu.
