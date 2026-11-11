@@ -186,9 +186,37 @@ async function rodarCentral() {
     const m = await db.query(`select fn_central_modulos() as r`).catch(() => ({ rows: [] }));
     const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}) }).filter(([, v]) => Number(v) > 0);
     if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
+    await emailsCriticos();
   } catch (e) {
     // banco sem a migration 0065: fica quieto até ela rodar
     if (!/fn_central_automacoes/.test(e.message)) console.error("[central] falhou:", e.message);
+  }
+}
+
+// Notificações críticas criadas pelo banco (ex.: tarefa escalonada para a
+// Diretoria) também vão por e-mail. As criadas pelo site já saem de lá.
+async function emailsCriticos() {
+  if (!process.env.RESEND_API_KEY) return;
+  const { rows } = await db.query(`
+    select n.id, n.titulo, n.texto, n.link, u.email
+    from notificacoes n join auth.users u on u.id = n.user_id
+    where n.nivel = 'critico' and n.email_em is null and n.created_at > now() - interval '1 day'
+    order by n.created_at limit 20`).catch(() => ({ rows: [] }));
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://arinibrasil.com.br";
+  for (const n of rows) {
+    try {
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: process.env.RESEND_FROM ?? "Arini Imóveis Brasil <naoresponda@arinibrasil.com.br>",
+          to: [n.email], subject: n.titulo, text: `${n.texto ?? ""}\n\n${n.link ? site + n.link : ""}`.trim(),
+        }),
+      });
+      if (r.ok) await db.query(`update notificacoes set email_em = now() where id = $1`, [n.id]);
+    } catch (e) {
+      console.error("[central] e-mail crítico falhou:", e.message);
+    }
   }
 }
 

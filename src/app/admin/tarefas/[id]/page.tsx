@@ -6,6 +6,7 @@ import { exigirEquipe } from "@/lib/setores-servidor";
 import { SETORES, TAREFA_ORIGEM_LABEL, TAREFA_STATUS_LABEL, PRIORIDADE_LABEL, setorPorId, type SetorId } from "@/lib/setores";
 import { equipeAtiva } from "@/components/admin/Painel";
 import TarefaDetalhe, { type EventoLinha } from "@/components/admin/TarefaDetalhe";
+import Conversa from "@/components/admin/Conversa";
 import { CabecalhoPagina, Etiqueta } from "@/components/ui/Pagina";
 
 const nomeSetor = (id: string | null | undefined) => (id ? setorPorId(id)?.nome ?? id : "—");
@@ -91,6 +92,7 @@ export default async function TarefaPagina({ params }: PageProps<"/admin/tarefas
         setores={SETORES.filter((s) => s.id !== t.setor).map((s) => ({ id: s.id, nome: s.nome }))}
         linha={linha}
       />
+      <Conversa entidade="tasks" id={t.id} />
     </div>
   );
 }

@@ -116,6 +116,8 @@ export const SETORES: Setor[] = [
       { href: "/admin/relatorios", rotulo: "Relatórios", icone: "▤" },
       { href: "/admin/usuarios", rotulo: "Equipe e usuários", icone: "☺" },
       { href: "/admin/automacoes", rotulo: "Automações", icone: "⚙" },
+      { href: "/admin/capacidade", rotulo: "Capacidade da equipe", icone: "◔" },
+      { href: "/admin/ponto/equipe", rotulo: "Ponto da equipe", icone: "◷" },
       { href: "/admin/planos", rotulo: "Planos e nichos", icone: "◧" },
       { href: "/admin/configuracoes", rotulo: "Configurações", icone: "⚙" },
     ],

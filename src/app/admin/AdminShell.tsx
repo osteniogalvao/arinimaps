@@ -15,7 +15,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  LineChart, FileText, BookText, Truck, PieChart, ListTree,
+  Clock, CalendarClock, Gauge, Search, LineChart, FileText, BookText, Truck, PieChart, ListTree,
   BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter, Grid3x3,
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
+import Sino from "@/components/admin/Sino";
 import { SETORES, type ItemMenu, type SetorId } from "@/lib/setores";
 import Avatar from "@/components/shell/Avatar";
 import { useNaoLidosSuporte } from "@/components/suporte/useNaoLidos";
@@ -30,7 +31,9 @@ import { useNaoLidosSuporte } from "@/components/suporte/useNaoLidos";
 /** Itens que todo membro da equipe tem, qualquer que seja o setor. */
 const GERAL: ItemMenu[] = [
   { href: "/admin", rotulo: "Matriz", icone: "◈" },
+  { href: "/admin/eu", rotulo: "Meu painel", icone: "☺" },
   { href: "/admin/tarefas", rotulo: "Tarefas", icone: "☑" },
+  { href: "/admin/ponto", rotulo: "Meu ponto", icone: "◷" },
 ];
 
 /**
@@ -40,6 +43,11 @@ const GERAL: ItemMenu[] = [
 const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin": LayoutGrid,
   "/admin/tarefas": ListChecks,
+  "/admin/eu": UserRound,
+  "/admin/ponto": Clock,
+  "/admin/ponto/equipe": CalendarClock,
+  "/admin/capacidade": Gauge,
+  "/admin/busca": Search,
   "/admin/operacoes": LayoutDashboard,
   "/admin/imoveis": Building2,
   "/admin/cadastros": UserCheck,
@@ -262,6 +270,12 @@ export default function AdminShell({
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <form action="/admin/busca" className="hidden md:block" role="search">
+              <input name="q" placeholder="Buscar em tudo…" aria-label="Busca universal"
+                className="w-44 rounded-full border border-linha-forte bg-superficie-2 px-4 py-2 text-sm text-texto placeholder:text-texto-2/70 focus:w-64 focus:border-verde focus:outline-none transition-all" />
+            </form>
+            <Link href="/admin/busca" aria-label="Buscar" className="md:hidden grid size-10 place-items-center rounded-full border border-linha-forte text-texto-2"><Search className="size-[18px]" /></Link>
+            <Sino />
             <BotaoTema />
             <Link href="/mapa" title="Ver mapa público" className={"hidden md:inline-flex " + LINK_TOPO}>
               <IconeMapa className="size-4" /> Mapa

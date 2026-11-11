@@ -1,3 +1,4 @@
+import Conversa from "@/components/admin/Conversa";
 import { notFound } from "next/navigation";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -61,7 +62,8 @@ function mediaUrl(path: string) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`;
 }
 
-export default async function AnaliseImovel({ params }: PageProps<"/admin/imoveis/[id]">) {
+export default async function AnaliseImovel
+({ params }: PageProps<"/admin/imoveis/[id]">) {
   await exigirSetor("operacoes");
   const { id } = await params;
   const admin = supabaseAdmin();
@@ -327,6 +329,8 @@ export default async function AnaliseImovel({ params }: PageProps<"/admin/imovei
       <Bloco titulo="Decisão" className="border-l-4 border-l-verde">
         <DecisaoBotoes propertyId={p.id} />
       </Bloco>
+
+      <Conversa entidade="properties" id={p.id} />
     </div>
   );
 }

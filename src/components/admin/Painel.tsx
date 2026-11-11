@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ResumoIa from "./ResumoIa";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight, Building2, Crown, Handshake, Headset, Map as IconeMapa, Megaphone, Scale, ShieldCheck, Wallet,
@@ -143,10 +144,13 @@ export async function TarefasDoSetor({ setor, souEu }: { setor: SetorId; souEu: 
   const nome = new Map(equipe.map((m) => [m.user_id, m.nome]));
   const lista: Tarefa[] = tarefas.map((t) => ({ ...t, responsavel_nome: t.responsavel ? nome.get(t.responsavel) ?? null : null }));
   return (
-    <Secao titulo="Tarefas do setor">
-      <Tarefas setor={setor} tarefas={lista} equipe={equipe} souEu={souEu}
-        setoresNome={Object.fromEntries(SETORES.map((s) => [s.id, s.nome]))} />
-    </Secao>
+    <>
+      <ResumoIa escopo={`setor:${setor}`} titulo="Resumo do dia do setor" />
+      <Secao titulo="Tarefas do setor">
+        <Tarefas setor={setor} tarefas={lista} equipe={equipe} souEu={souEu}
+          setoresNome={Object.fromEntries(SETORES.map((s) => [s.id, s.nome]))} />
+      </Secao>
+    </>
   );
 }
 

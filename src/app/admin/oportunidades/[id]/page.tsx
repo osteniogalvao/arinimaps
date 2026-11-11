@@ -5,6 +5,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, STATUS_LABEL } from "@/lib/format";
 import { ETAPA_LABEL } from "@/lib/funil";
 import OportunidadeClient, { type Atendimento } from "@/components/crm/OportunidadeClient";
+import Conversa from "@/components/admin/Conversa";
+import ResumoIa from "@/components/admin/ResumoIa";
 import { equipeAtiva } from "@/components/admin/Painel";
 import SimuladorProposta from "@/components/empreendimento/SimuladorProposta";
 import { hojeBrasilia, simulacaoDaRodada } from "@/lib/simulador";
@@ -129,6 +131,9 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
         percentualPadrao={Number(pctPadrao?.valor ?? 1)}
         atendimento={atendimento}
       />
+
+      <ResumoIa oportunidade={opp.id} />
+      <Conversa entidade="opportunities" id={opp.id} />
 
       <SimuladorProposta
         oportunidadeId={opp.id}

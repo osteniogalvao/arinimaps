@@ -9,6 +9,7 @@ import { enviarJson } from "@/lib/api/enviar";
 import { lerNumeroBR, numeroParaCampo } from "@/lib/simulador";
 import { resumoRelatorio, type RelatorioVisita } from "@/lib/visitas";
 import RelatorioVisitaForm from "./RelatorioVisitaForm";
+import { enfileirar } from "@/lib/filaOffline";
 
 type Parceiro = { id: string; razao_social: string; tipo: string };
 type Evento = { id: string; tipo: string; descricao: string; created_at: string; autor: string | null };
@@ -169,7 +170,15 @@ export default function OportunidadeClient(props: Props) {
               {relatorioDe?.id === v.id && (
                 <RelatorioVisitaForm ocupado={ocupado} onCancelar={() => setRelatorioDe(null)}
                   onEnviar={async (relatorio) => {
-                    if (await chamar("POST", { tipo: relatorioDe.tipo, visita_id: v.id, status: "realizada", relatorio })) setRelatorioDe(null);
+                    const corpo = { tipo: relatorioDe.tipo, visita_id: v.id, status: "realizada", relatorio };
+                    // modo de campo: sem internet, o relatório fica no aparelho e sai quando a conexão voltar
+                    if (typeof navigator !== "undefined" && !navigator.onLine) {
+                      enfileirar({ url: base, method: "POST", corpo, rotulo: "Relatório de visita" });
+                      setRelatorioDe(null);
+                      setErro("Sem internet: o relatório ficou guardado no aparelho e será enviado quando a conexão voltar.");
+                      return;
+                    }
+                    if (await chamar("POST", corpo)) setRelatorioDe(null);
                   }} />
               )}
             </div>
