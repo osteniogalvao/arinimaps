@@ -30,7 +30,10 @@ export default async function OportunidadeParceiro({ params }: PageProps<"/paine
       .select("lead:leads(nome, telefone, email, mensagem), property:properties(codigo, titulo, valor, owner_id, partner_id)")
       .eq("id", id).single(),
     admin.from("opportunity_events").select("id, tipo, descricao, created_at, autor:profiles(nome)").eq("opportunity_id", id).order("created_at", { ascending: false }).limit(50),
-    admin.from("visits").select("id, data_hora, status, feedback").eq("opportunity_id", id).order("data_hora", { ascending: false }),
+    admin.from("visits").select("id, data_hora, status, feedback, relatorio").eq("opportunity_id", id).order("data_hora", { ascending: false })
+      .then(async (r) => (r.error
+        ? await admin.from("visits").select("id, data_hora, status, feedback").eq("opportunity_id", id).order("data_hora", { ascending: false })
+        : r)),
     admin.from("proposals").select("id, numero_rodada, autor_lado, valor, entrada, prazo, condicoes, observacoes, status, created_at, parcelamento").eq("opportunity_id", id).order("numero_rodada", { ascending: false }),
   ]);
 

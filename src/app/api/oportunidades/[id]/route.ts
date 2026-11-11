@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
-import { ator, podeOperarOportunidade } from "@/lib/authz";
+import { ator, podeOperarOportunidade, temSetor } from "@/lib/authz";
 import { CONTRATO_LABEL, ETAPAS, ETAPA_LABEL, RESPONSAVEL_LABEL } from "@/lib/funil";
 import { sendEmail, ariniEmail } from "@/lib/notify";
 import { avisarVisitaAoProprietario } from "@/lib/acompanhamento/servidor";
+import { concluirTarefaDoEvento, marcarPrimeiroAtendimento } from "@/lib/central";
+import { relatorioParaProprietario, resumoRelatorio, validarRelatorio } from "@/lib/visitas";
 
 async function contexto(id: string) {
   const a = await ator();
@@ -31,6 +33,47 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/oportunida
   const admin = supabaseAdmin();
   const { data: antes } = await admin.from("opportunities").select("etapa, property_id").eq("id", id).single();
   if (!antes) return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
+
+  // Central operacional (0065): o corretor assume o lead; o rodízio para de girar
+  if (body.acao === "assumir") {
+    if (!a!.ehArini) return NextResponse.json({ error: "Só a equipe assume leads." }, { status: 403 });
+    const { error } = await admin.from("opportunities").update({
+      responsavel_user_id: a!.userId,
+      primeiro_atendimento_em: new Date().toISOString(),
+      prazo_atendimento: null,
+    }).eq("id", id);
+    if (error) return NextResponse.json({ error: "A Central ainda não foi atualizada (migration 0065)." }, { status: 400 });
+    await admin.from("opportunity_atribuicoes").insert({ opportunity_id: id, user_id: a!.userId, motivo: "assumiu", autor: a!.userId });
+    await evento(id, "contato", "Primeiro atendimento registrado: lead assumido", a!.userId);
+    await logAudit({ user_id: a!.userId, acao: "lead_assumido", entidade: "opportunities", entidade_id: id, opportunity_id: id, property_id: antes.property_id });
+    return NextResponse.json({ ok: true });
+  }
+
+  // gerência ou diretoria troca o corretor responsável
+  if (body.acao === "repassar") {
+    if (!temSetor(a, "comercial", "diretoria")) return NextResponse.json({ error: "Só o Comercial repassa leads." }, { status: 403 });
+    const para = String(body.responsavel_user_id ?? "");
+    const { data: membro } = await admin.from("profiles").select("user_id, nome, role, ativo")
+      .eq("user_id", para).maybeSingle();
+    if (!membro || !["admin_central", "analista_arini"].includes(membro.role) || membro.ativo === false) {
+      return NextResponse.json({ error: "Escolha alguém da equipe." }, { status: 400 });
+    }
+    const minutos = Number(body.minutos) > 0 ? Number(body.minutos) : null;
+    const { error } = await admin.from("opportunities").update({
+      responsavel_user_id: para,
+      atribuida_em: new Date().toISOString(),
+      // repasse manual: recomeça o prazo do primeiro contato, se ainda não houve
+      ...(minutos ? { prazo_atendimento: new Date(Date.now() + minutos * 60_000).toISOString() } : {}),
+    }).eq("id", id);
+    if (error) return NextResponse.json({ error: "A Central ainda não foi atualizada (migration 0065)." }, { status: 400 });
+    await admin.from("opportunity_atribuicoes").insert({ opportunity_id: id, user_id: para, motivo: "manual", autor: a!.userId });
+    await evento(id, "encaminhamento", `Lead repassado para ${membro.nome ?? "outro corretor"}`, a!.userId);
+    await logAudit({ user_id: a!.userId, acao: "lead_repassado", entidade: "opportunities", entidade_id: id, opportunity_id: id, property_id: antes.property_id, dados_depois: { responsavel_user_id: para } });
+    return NextResponse.json({ ok: true });
+  }
+
+  // qualquer ação da equipe na oportunidade conta como primeiro atendimento
+  if (a!.ehArini && ["etapa", "qualificar", "encaminhar"].includes(body.acao)) await marcarPrimeiroAtendimento(id, a!.userId);
 
   if (body.acao === "etapa") {
     const etapa = body.etapa as string;
@@ -97,6 +140,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/oportunidad
   const admin = supabaseAdmin();
   const { data: opp } = await admin.from("opportunities").select("etapa, property_id, codigo").eq("id", id).single();
   if (!opp) return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
+  if (a!.ehArini && ["evento", "visita", "proposta"].includes(body.tipo)) await marcarPrimeiroAtendimento(id, a!.userId);
 
   switch (body.tipo) {
     case "evento": {
@@ -123,17 +167,41 @@ export async function POST(request: Request, ctx: RouteContext<"/api/oportunidad
       return NextResponse.json({ ok: true });
     }
 
-    case "visita_status": {
-      const { visita_id, status, feedback } = body;
+    case "visita_status":
+    case "visita_relatorio": {
+      // "visita_relatorio": relatório de uma visita já marcada como realizada
+      const visitaId = body.visita_id;
+      const status = body.tipo === "visita_relatorio" ? "realizada" : body.status;
+      let feedback: string | null = body.feedback ?? null;
       // "cancelada" existe a partir da migration 0060 (item 28)
       if (!["realizada", "remarcada", "nao_compareceu", "cancelada"].includes(status)) {
         return NextResponse.json({ error: "Status de visita inválido." }, { status: 400 });
       }
-      const { error: errVisita } = await admin.from("visits").update({ status, feedback: feedback ?? null }).eq("id", visita_id).eq("opportunity_id", id);
+      const patch: Record<string, unknown> = { status };
+      // Central (0065): visita realizada exige o relatório estruturado
+      if (status === "realizada") {
+        const v = validarRelatorio(body.relatorio);
+        if ("erro" in v) return NextResponse.json({ error: v.erro }, { status: 400 });
+        feedback = relatorioParaProprietario(v.relatorio);
+        Object.assign(patch, { relatorio: v.relatorio, relatorio_em: new Date().toISOString(), relatorio_por: a!.userId });
+      }
+      patch.feedback = feedback;
+      let { error: errVisita } = await admin.from("visits").update(patch).eq("id", visitaId).eq("opportunity_id", id);
+      if (errVisita && /relatorio/.test(errVisita.message)) {
+        // banco sem a 0065: guarda só o texto, como antes
+        ({ error: errVisita } = await admin.from("visits").update({ status, feedback }).eq("id", visitaId).eq("opportunity_id", id));
+      }
       if (errVisita) return NextResponse.json({ error: errVisita.message }, { status: 400 });
-      await evento(id, "anotacao", `Visita ${status}${feedback ? `: ${feedback}` : ""}`, a!.userId);
-      await logAudit({ user_id: a!.userId, acao: `visita_${status}`, entidade: "visits", entidade_id: visita_id, opportunity_id: id, property_id: opp.property_id });
-      await avisarVisitaAoProprietario({ opportunityId: id, autorId: a!.userId, status, feedback: feedback ?? null });
+      const resumo = status === "realizada" && patch.relatorio ? resumoRelatorio(patch.relatorio as never) : feedback;
+      await evento(id, "anotacao", `Visita ${status}${resumo ? `: ${resumo}` : ""}`, a!.userId);
+      await logAudit({ user_id: a!.userId, acao: body.tipo === "visita_relatorio" ? "visita_relatorio" : `visita_${status}`, entidade: "visits", entidade_id: visitaId, opportunity_id: id, property_id: opp.property_id, dados_depois: patch.relatorio ?? null });
+      if (status === "realizada" || status === "cancelada" || status === "nao_compareceu") {
+        await concluirTarefaDoEvento(`visita_sem_relatorio:${visitaId}`, a!.userId,
+          status === "realizada" ? "Relatório da visita preenchido" : `Visita marcada como ${status.replace("_", " ")}`);
+      }
+      if (body.tipo !== "visita_relatorio" || feedback) {
+        await avisarVisitaAoProprietario({ opportunityId: id, autorId: a!.userId, status, feedback });
+      }
       return NextResponse.json({ ok: true });
     }
 

@@ -4,7 +4,8 @@ import {
   ArrowRight, Building2, Crown, Handshake, Headset, Map as IconeMapa, Megaphone, Scale, ShieldCheck, Wallet,
 } from "lucide-react";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { setorPorId, type SetorId } from "@/lib/setores";
+import { SETORES, setorPorId, type SetorId } from "@/lib/setores";
+import { buscarTarefas } from "@/lib/central";
 import Tarefas, { type Membro, type Tarefa } from "./Tarefas";
 import { LINK_ACAO } from "./estilos";
 
@@ -134,19 +135,17 @@ export async function equipeAtiva(): Promise<Membro[]> {
 
 /** Bloco de tarefas de um setor, já com os dados carregados. */
 export async function TarefasDoSetor({ setor, souEu }: { setor: SetorId; souEu: string }) {
-  const admin = supabaseAdmin();
-  const [{ data: tarefas }, equipe] = await Promise.all([
-    admin.from("tasks")
-      .select("id, titulo, descricao, setor, status, prioridade, prazo, responsavel")
-      .eq("setor", setor).neq("status", "cancelada")
-      .order("status").order("prazo", { ascending: true, nullsFirst: false }).limit(60),
+  const [tarefas, equipe] = await Promise.all([
+    buscarTarefas((q) => q.eq("setor", setor).neq("status", "cancelada")
+      .order("status").order("prazo", { ascending: true, nullsFirst: false }), 60),
     equipeAtiva(),
   ]);
   const nome = new Map(equipe.map((m) => [m.user_id, m.nome]));
-  const lista: Tarefa[] = (tarefas ?? []).map((t) => ({ ...t, responsavel_nome: t.responsavel ? nome.get(t.responsavel) ?? null : null }));
+  const lista: Tarefa[] = tarefas.map((t) => ({ ...t, responsavel_nome: t.responsavel ? nome.get(t.responsavel) ?? null : null }));
   return (
     <Secao titulo="Tarefas do setor">
-      <Tarefas setor={setor} tarefas={lista} equipe={equipe} souEu={souEu} />
+      <Tarefas setor={setor} tarefas={lista} equipe={equipe} souEu={souEu}
+        setoresNome={Object.fromEntries(SETORES.map((s) => [s.id, s.nome]))} />
     </Secao>
   );
 }

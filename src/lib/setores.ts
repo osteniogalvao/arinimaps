@@ -44,6 +44,7 @@ export const SETORES: Setor[] = [
       { href: "/admin/funil", rotulo: "Funil comercial", icone: "⇉" },
       { href: "/admin/empreendimentos", rotulo: "Espelho de vendas", icone: "▦" },
       { href: "/admin/leads", rotulo: "Leads", icone: "◎" },
+      { href: "/admin/rodizio", rotulo: "Rodízio de leads", icone: "⟳" },
       { href: "/admin/demandas", rotulo: "Demandas sem imóvel", icone: "⌖" },
       { href: "/admin/organizacoes", rotulo: "Organizações", icone: "▣" },
     ],
@@ -70,6 +71,7 @@ export const SETORES: Setor[] = [
     descricao: "Origem dos leads, imóveis mais procurados, materiais de divulgação e vitrine do site.",
     itens: [
       { href: "/admin/marketing", rotulo: "Painel do setor", icone: "◫" },
+      { href: "/admin/ranking", rotulo: "Ranking de imóveis", icone: "★" },
       { href: "/admin/conhecimento", rotulo: "Conhecimento e IA", icone: "✎" },
     ],
   },
@@ -106,6 +108,7 @@ export const SETORES: Setor[] = [
     itens: [
       { href: "/admin/relatorios", rotulo: "Relatórios", icone: "▤" },
       { href: "/admin/usuarios", rotulo: "Equipe e usuários", icone: "☺" },
+      { href: "/admin/automacoes", rotulo: "Automações", icone: "⚙" },
       { href: "/admin/planos", rotulo: "Planos e nichos", icone: "◧" },
       { href: "/admin/configuracoes", rotulo: "Configurações", icone: "⚙" },
     ],
@@ -123,5 +126,11 @@ export function setoresDe(role: string, setores: string[] | null | undefined): S
 
 export const PRIORIDADE_LABEL: Record<string, string> = { baixa: "Baixa", normal: "Normal", alta: "Alta" };
 export const TAREFA_STATUS_LABEL: Record<string, string> = {
-  aberta: "Aberta", andamento: "Em andamento", concluida: "Concluída", cancelada: "Cancelada",
+  aberta: "Aberta", andamento: "Em andamento", aguardando: "Aguardando terceiros", bloqueada: "Bloqueada",
+  concluida: "Concluída", cancelada: "Cancelada",
 };
+/** Origem da tarefa (migration 0065): quem a criou. */
+export const TAREFA_ORIGEM_LABEL: Record<string, string> = {
+  manual: "Criada pela equipe", encaminhada: "Encaminhada por outro setor", automatica: "Gerada pelo sistema",
+};
+export const TAREFA_STATUS_ABERTOS = ["aberta", "andamento", "aguardando", "bloqueada"];

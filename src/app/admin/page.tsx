@@ -8,6 +8,7 @@ import { contar, ICONE_SETOR, LinkAcao, Secao } from "@/components/admin/Painel"
 import { CabecalhoPagina, Etiqueta, Vazio } from "@/components/ui/Pagina";
 import { LISTA, LINHA_LISTA } from "@/components/admin/estilos";
 import { STATUS_ABERTOS } from "@/lib/cartografia/solicitacoes";
+import Excecoes from "@/components/admin/Excecoes";
 
 type Fila = { rotulo: string; n: number | string; href: string; urgente?: boolean };
 
@@ -55,10 +56,10 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
     contar("cartographic_requests", (q) => q.in("status", STATUS_ABERTOS)),
     contar("cartographic_requests", (q) => q.eq("status", "recebida")),
     admin.from("tasks").select("id, titulo, setor, prazo, prioridade")
-      .eq("responsavel", user.id).in("status", ["aberta", "andamento"])
+      .eq("responsavel", user.id).in("status", ["aberta", "andamento", "aguardando", "bloqueada"])
       .order("prazo", { ascending: true, nullsFirst: false }).limit(8)
       .then(({ data }) => data ?? []),
-    admin.from("tasks").select("setor").in("status", ["aberta", "andamento"])
+    admin.from("tasks").select("setor").in("status", ["aberta", "andamento", "aguardando", "bloqueada"])
       .then(({ data }) => {
         const m = new Map<string, number>();
         for (const t of data ?? []) m.set(t.setor, (m.get(t.setor) ?? 0) + 1);
@@ -136,6 +137,8 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
           texto="Sua conta ainda não foi colocada em nenhum setor. Peça à diretoria para definir os seus setores." />
       )}
 
+      {meus.length > 0 && <Excecoes userId={user.id} setores={user.setores} />}
+
       {meus.length > 0 && (
         <Secao titulo="Setores">
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -190,7 +193,7 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
           {minhasTarefas.map((t) => {
             const atrasada = !!t.prazo && t.prazo < hoje;
             return (
-              <Link key={t.id} href={`/admin/tarefas?setor=${t.setor}`} className={LINHA_LISTA}>
+              <Link key={t.id} href={`/admin/tarefas/${t.id}`} className={LINHA_LISTA}>
                 <span className="flex-1 min-w-48 font-medium text-texto">
                   {t.titulo}
                   {t.prioridade === "alta" && <Etiqueta tom="critico" className="ml-2 align-middle !py-0.5">Alta</Etiqueta>}

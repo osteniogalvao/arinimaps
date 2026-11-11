@@ -175,6 +175,21 @@ async function agendarLembretes() {
   }
 }
 
+// Central operacional (migration 0065): a cada 10 min roda as regras que cobram
+// o que ficou parado (lead sem corretor ou sem contato, visita sem relatório,
+// encaminhamento sem aceite, cadastro parado). Chamada direta, sem passar pela
+// fila: é uma função SQL curta e idempotente (cada ocorrência gera uma tarefa só).
+async function rodarCentral() {
+  try {
+    const { rows: [r] } = await db.query(`select fn_central_automacoes() as r`);
+    const feitos = Object.entries(r?.r ?? {}).filter(([, v]) => Number(v) > 0);
+    if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
+  } catch (e) {
+    // banco sem a migration 0065: fica quieto até ela rodar
+    if (!/fn_central_automacoes/.test(e.message)) console.error("[central] falhou:", e.message);
+  }
+}
+
 console.log("Arini Imóveis Brasil worker iniciado.");
 // monitoramento: confere /api/saude a cada 5 min e alerta (jobs/monitorar.mjs)
 if (!process.env.WORKER_UMA_VEZ) {
@@ -191,4 +206,8 @@ agendarLembretes();
 setInterval(agendarLembretes, 15 * 60 * 1000);
 agendarCotacoes();
 setInterval(agendarCotacoes, 20 * 60 * 1000);
+if (!process.env.WORKER_UMA_VEZ) {
+  setTimeout(rodarCentral, 60_000);
+  setInterval(rodarCentral, 10 * 60 * 1000);
+}
 loop();

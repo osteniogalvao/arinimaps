@@ -18,7 +18,7 @@ import {
   BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter, Grid3x3,
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
-  Settings, Shield, ShieldCheck, UserCheck, UserRound, Users, UsersRound, Wallet, X,
+  Settings, Shield, ShieldCheck, UserCheck, UserRound, Users, UsersRound, Wallet, X, Bot, Shuffle, Trophy,
 } from "lucide-react";
 import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
@@ -46,6 +46,9 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/funil": Filter,
   "/admin/empreendimentos": Grid3x3,
   "/admin/leads": Users,
+  "/admin/rodizio": Shuffle,
+  "/admin/ranking": Trophy,
+  "/admin/automacoes": Bot,
   "/admin/demandas": SearchX,
   "/admin/organizacoes": Landmark,
   "/admin/financeiro": LayoutDashboard,

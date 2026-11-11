@@ -7,10 +7,18 @@ import { Workflow, CalendarDays, HandCoins, FileSignature, BadgeDollarSign, Mess
 import { CAMPO, Etiqueta } from "@/components/ui/Pagina";
 import { enviarJson } from "@/lib/api/enviar";
 import { lerNumeroBR, numeroParaCampo } from "@/lib/simulador";
+import { resumoRelatorio, type RelatorioVisita } from "@/lib/visitas";
+import RelatorioVisitaForm from "./RelatorioVisitaForm";
 
 type Parceiro = { id: string; razao_social: string; tipo: string };
 type Evento = { id: string; tipo: string; descricao: string; created_at: string; autor: string | null };
-type Visita = { id: string; data_hora: string; status: string; feedback: string | null };
+type Visita = { id: string; data_hora: string; status: string; feedback: string | null; relatorio?: RelatorioVisita | null };
+/** Quem atende o lead na equipe (rodízio, migration 0065). Só na Central. */
+export type Atendimento = {
+  responsavelId: string | null; responsavelNome: string | null; souEu: string;
+  prazo: string | null; primeiroAtendimento: string | null; podeRepassar: boolean;
+  equipe: { user_id: string; nome: string }[];
+};
 type Proposta = { id: string; numero_rodada: number; autor_lado: string; valor: number; entrada: number | null; prazo: string | null; condicoes: string | null; observacoes: string | null; status: string; created_at: string };
 
 type Props = {
@@ -27,6 +35,7 @@ type Props = {
   contrato: { status: string; documento_path: string | null; assinado_at: string | null } | null;
   venda: { valor_final: number; data_venda: string; comissao: { valor: number; percentual: number; status: string } | null } | null;
   percentualPadrao: number;
+  atendimento?: Atendimento | null;
 };
 
 const input = CAMPO;
@@ -53,6 +62,7 @@ export default function OportunidadeClient(props: Props) {
   // ---------- estados de formulários ----------
   const [nota, setNota] = useState("");
   const [visitaData, setVisitaData] = useState("");
+  const [relatorioDe, setRelatorioDe] = useState<{ id: string; tipo: "visita_status" | "visita_relatorio" } | null>(null);
   const [prop, setProp] = useState({ autor_lado: "comprador", valor: "", entrada: "", prazo: "", condicoes: "", observacoes: "" });
   const [venda, setVenda] = useState({
     // formato brasileiro no campo: "350000.5".toString() lido como milhar gravava a venda 10× maior
@@ -67,6 +77,8 @@ export default function OportunidadeClient(props: Props) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       {erro && <p className="lg:col-span-2 rounded-xl border border-critico/30 bg-critico/10 px-4 py-3 text-sm text-critico">{erro}</p>}
+
+      {props.atendimento && <CartaoAtendimento at={props.atendimento} ocupado={ocupado} chamar={chamar} />}
 
       {/* ---------- etapa + encaminhamento ---------- */}
       <section className="cartao space-y-4 p-5 md:p-6">
@@ -129,20 +141,36 @@ export default function OportunidadeClient(props: Props) {
         <div className="space-y-2">
           {props.visitas.map((v) => (
             <div key={v.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-superficie-2 px-4 py-3 text-[0.95rem]">
-              <span className="flex-1">{new Date(v.data_hora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} — <strong>{v.status}</strong>{v.feedback ? ` · ${v.feedback}` : ""}</span>
+              <span className="flex-1">
+                {new Date(v.data_hora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} — <strong>{v.status}</strong>
+                {v.relatorio ? ` · ${resumoRelatorio(v.relatorio)}` : v.feedback ? ` · ${v.feedback}` : ""}
+              </span>
               {v.status === "agendada" && (
                 <span className="flex gap-1">
                   {(["realizada", "remarcada", "nao_compareceu"] as const).map((s) => (
                     <button key={s} disabled={ocupado}
                       className="btn-contorno px-2.5 py-1.5 text-xs"
                       onClick={() => {
-                        const feedback = s === "realizada" ? prompt("Como foi a visita? (opcional)") ?? "" : "";
-                        chamar("POST", { tipo: "visita_status", visita_id: v.id, status: s, feedback });
+                        // realizada exige o relatório (Central, 0065)
+                        if (s === "realizada") { setRelatorioDe({ id: v.id, tipo: "visita_status" }); return; }
+                        chamar("POST", { tipo: "visita_status", visita_id: v.id, status: s });
                       }}>
                       {s === "nao_compareceu" ? "não veio" : s}
                     </button>
                   ))}
                 </span>
+              )}
+              {v.status === "realizada" && !v.relatorio && v.relatorio !== undefined && (
+                <button disabled={ocupado} className="btn-contorno border-ouro px-2.5 py-1.5 text-xs text-ouro"
+                  onClick={() => setRelatorioDe({ id: v.id, tipo: "visita_relatorio" })}>
+                  Preencher relatório
+                </button>
+              )}
+              {relatorioDe?.id === v.id && (
+                <RelatorioVisitaForm ocupado={ocupado} onCancelar={() => setRelatorioDe(null)}
+                  onEnviar={async (relatorio) => {
+                    if (await chamar("POST", { tipo: relatorioDe.tipo, visita_id: v.id, status: "realizada", relatorio })) setRelatorioDe(null);
+                  }} />
               )}
             </div>
           ))}
@@ -339,5 +367,52 @@ function Titulo({ icone: Icone, children }: { icone: LucideIcon; children: React
       </span>
       {children}
     </h2>
+  );
+}
+
+/** Quem atende o lead: assumir (registra o primeiro contato) ou repassar a outro corretor. */
+function CartaoAtendimento({ at, ocupado, chamar }: {
+  at: Atendimento; ocupado: boolean;
+  chamar: (method: "PATCH" | "POST", body: unknown) => Promise<boolean>;
+}) {
+  const [para, setPara] = useState("");
+  const vencido = !at.primeiroAtendimento && !!at.prazo && new Date(at.prazo) < new Date();
+  const meu = at.responsavelId === at.souEu;
+  return (
+    <section className={"cartao lg:col-span-2 flex flex-wrap items-center gap-4 p-5 md:p-6 " + (vencido ? "border-critico/40" : "")}>
+      <div className="flex-1 min-w-60">
+        <p className="text-sm text-texto-2">Atendimento do lead</p>
+        <p className="mt-1 text-[0.95rem] text-texto">
+          {at.responsavelNome ? <><strong>{meu ? "Você" : at.responsavelNome}</strong> atende este lead</> : "Ainda sem corretor"}
+          {at.primeiroAtendimento
+            ? <span className="text-texto-2"> · primeiro contato em {new Date(at.primeiroAtendimento).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+            : at.prazo && (
+              <span className={vencido ? "font-semibold text-critico" : "text-ouro"}>
+                {" "}· primeiro contato {vencido ? "atrasado desde" : "até"} {new Date(at.prazo).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+              </span>
+            )}
+        </p>
+        {!at.primeiroAtendimento && (
+          <p className="mt-1 text-xs text-texto-2">Sem registro de contato no prazo, o rodízio passa o lead para o próximo corretor.</p>
+        )}
+      </div>
+      {!at.primeiroAtendimento && (
+        <button disabled={ocupado} className={`${btn} btn-verde`} onClick={() => chamar("PATCH", { acao: "assumir" })}>
+          {meu ? "Registrar primeiro contato" : "Assumir este lead"}
+        </button>
+      )}
+      {at.podeRepassar && (
+        <span className="flex flex-wrap items-center gap-2">
+          <select className={input + " max-w-56"} value={para} onChange={(e) => setPara(e.target.value)} aria-label="Repassar para">
+            <option value="">Repassar para…</option>
+            {at.equipe.filter((m) => m.user_id !== at.responsavelId).map((m) => <option key={m.user_id} value={m.user_id}>{m.nome || "—"}</option>)}
+          </select>
+          <button disabled={ocupado || !para} className={`${btn} btn-contorno`}
+            onClick={async () => { if (await chamar("PATCH", { acao: "repassar", responsavel_user_id: para, minutos: at.primeiroAtendimento ? 0 : 30 })) setPara(""); }}>
+            Repassar
+          </button>
+        </span>
+      )}
+    </section>
   );
 }

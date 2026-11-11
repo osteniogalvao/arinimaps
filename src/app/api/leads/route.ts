@@ -4,6 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { assinatura } from "@/lib/juridico";
 import { ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
+import { distribuirLead } from "@/lib/central";
 
 // Formulário público "Tenho interesse" → lead + oportunidade + auditoria + e-mail à Arini.
 export async function POST(request: Request) {
@@ -70,6 +71,8 @@ export async function POST(request: Request) {
     descricao: `Lead recebido pelo site para ${property.codigo} — ${property.titulo}`,
   });
   void registrarEventoImovel({ propertyId: property.id, tipo: "lead", request, detalhe: { lead_id: lead.id, opportunity: opp.codigo } });
+  // Central operacional (migration 0065): rodízio entre os corretores da equipe
+  await distribuirLead(opp.id, opp.codigo, property.titulo);
 
   await logAudit({
     acao: "lead_criado",

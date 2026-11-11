@@ -4,7 +4,8 @@ import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, STATUS_LABEL } from "@/lib/format";
 import { ETAPA_LABEL } from "@/lib/funil";
-import OportunidadeClient from "@/components/crm/OportunidadeClient";
+import OportunidadeClient, { type Atendimento } from "@/components/crm/OportunidadeClient";
+import { equipeAtiva } from "@/components/admin/Painel";
 import SimuladorProposta from "@/components/empreendimento/SimuladorProposta";
 import { hojeBrasilia, simulacaoDaRodada } from "@/lib/simulador";
 import { nomeAnunciante } from "@/lib/empreendimento/espelho";
@@ -13,7 +14,7 @@ import { ArrowRight, Building2, Mail, Phone, Radio } from "lucide-react";
 import { Etiqueta } from "@/components/ui/Pagina";
 
 export default async function OportunidadeAdmin({ params }: PageProps<"/admin/oportunidades/[id]">) {
-  await exigirSetor("comercial");
+  const user = await exigirSetor("comercial");
   const { id } = await params;
   const admin = supabaseAdmin();
 
@@ -32,13 +33,32 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
 
   const [{ data: eventos }, { data: visitas }, { data: propostas }, { data: contrato }, { data: venda }, { data: parceiros }, { data: pctPadrao }] = await Promise.all([
     admin.from("opportunity_events").select("id, tipo, descricao, created_at, autor:profiles(nome)").eq("opportunity_id", id).order("created_at", { ascending: false }).limit(50),
-    admin.from("visits").select("id, data_hora, status, feedback").eq("opportunity_id", id).order("data_hora", { ascending: false }),
+    // relatório da visita (0065); sem a coluna, cai para a lista antiga
+    admin.from("visits").select("id, data_hora, status, feedback, relatorio").eq("opportunity_id", id).order("data_hora", { ascending: false })
+      .then(async (r) => (r.error
+        ? await admin.from("visits").select("id, data_hora, status, feedback").eq("opportunity_id", id).order("data_hora", { ascending: false })
+        : r)),
     admin.from("proposals").select("id, numero_rodada, autor_lado, valor, entrada, prazo, condicoes, observacoes, status, created_at, parcelamento").eq("opportunity_id", id).order("numero_rodada", { ascending: false }),
     admin.from("contracts").select("status, documento_path, assinado_at").eq("opportunity_id", id).maybeSingle(),
     admin.from("sales").select("id, valor_final, data_venda, commission:commissions(valor, percentual, status)").eq("opportunity_id", id).maybeSingle(),
     admin.from("partners").select("id, razao_social, tipo").in("status", ["aprovado", "ativo"]).order("razao_social"),
     admin.from("settings").select("valor").eq("chave", "comissao_percentual_padrao").single(),
   ]);
+
+  // atendimento do lead (rodízio, 0065): só existe com a migration aplicada
+  const [{ data: atend }, equipe] = await Promise.all([
+    admin.from("opportunities").select("responsavel_user_id, prazo_atendimento, primeiro_atendimento_em").eq("id", id).maybeSingle(),
+    equipeAtiva(),
+  ]);
+  const atendimento: Atendimento | null = atend ? {
+    responsavelId: atend.responsavel_user_id,
+    responsavelNome: equipe.find((m) => m.user_id === atend.responsavel_user_id)?.nome ?? null,
+    souEu: user.id,
+    prazo: atend.prazo_atendimento,
+    primeiroAtendimento: atend.primeiro_atendimento_em,
+    podeRepassar: user.setores.includes("comercial") || user.setores.includes("diretoria"),
+    equipe,
+  } : null;
 
   const lead = opp.lead as unknown as { nome: string; telefone: string | null; email: string | null; mensagem: string | null; origem: string } | null;
   const prop = opp.property as unknown as { id: string; codigo: string; titulo: string; tipo: string; status: string; valor: number | null; owner_id: string | null; partner_id: string | null; municipality: { nome: string } | null } | null;
@@ -107,6 +127,7 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
           comissao: venda.commission as unknown as { valor: number; percentual: number; status: string } | null,
         } : null}
         percentualPadrao={Number(pctPadrao?.valor ?? 1)}
+        atendimento={atendimento}
       />
 
       <SimuladorProposta
