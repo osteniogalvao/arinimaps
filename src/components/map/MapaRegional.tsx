@@ -1227,6 +1227,45 @@ export default function MapaRegional({
     });
   }, [router]);
 
+  /**
+   * Parcela do SIGEF por código da certificação, CCIR ou matrícula (ideia do
+   * Geomart, 11/11): procura nas UFs da tela, desenha as parcelas achadas em
+   * azul (a cor da camada SIGEF) e enquadra.
+   */
+  const abrirSigef = useCallback(async (campo: "parcela" | "ccir" | "matricula", valor: string) => {
+    const map = mapRef.current;
+    if (!map) return;
+    setBuscaAviso("Procurando no SIGEF do INCRA…");
+    const b = map.getBounds();
+    const qs = new URLSearchParams({ tipo: campo, valor, bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((n) => n.toFixed(4)).join(",") });
+    const r = await fetch(`/api/geo/sigef/busca?${qs}`).catch(() => null);
+    const j = r ? await r.json().catch(() => null) as {
+      parcelas?: { nome: string; matricula: string; codigoIncra: string; parcela: string; geometria: GeoJSON.MultiPolygon }[];
+      ufs?: string[]; error?: string;
+    } | null : null;
+    if (!r?.ok || !j?.parcelas) { setBuscaAviso(j?.error ?? "O SIGEF do INCRA não respondeu agora. Tente de novo em instantes."); return; }
+    if (!j.parcelas.length) {
+      setBuscaAviso(`Nada encontrado no SIGEF em ${j.ufs?.join(", ") || "nenhum estado"}. A busca olha os estados da tela: leve o mapa até o estado do imóvel e tente de novo.`);
+      return;
+    }
+    const dado: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: j.parcelas.map((p) => ({ type: "Feature", geometry: p.geometria, properties: { nome: p.nome, matricula: p.matricula } })),
+    };
+    const fonte = map.getSource("busca-sigef") as GeoJSONSource | undefined;
+    if (fonte) fonte.setData(dado);
+    else {
+      map.addSource("busca-sigef", { type: "geojson", data: dado });
+      map.addLayer({ id: "busca-sigef-fill", type: "fill", source: "busca-sigef", paint: { "fill-color": "#5BC0EB", "fill-opacity": 0.18 } });
+      map.addLayer({ id: "busca-sigef-linha", type: "line", source: "busca-sigef", paint: { "line-color": "#5BC0EB", "line-width": 3 } });
+    }
+    const coords: number[][] = j.parcelas.flatMap((p) => p.geometria.coordinates.flat(2));
+    const lngs = coords.map((c) => c[0]), lats = coords.map((c) => c[1]);
+    map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 80, duration: 1200 });
+    setBuscaAviso(j.parcelas.map((p) =>
+      `${p.nome}${p.matricula ? ` · matrícula ${p.matricula}` : ""}${p.codigoIncra ? ` · INCRA ${p.codigoIncra}` : ""}`).join(" | ") + " (fonte: INCRA/SIGEF)");
+  }, []);
+
   /** Código de anúncio: abre na lista do mapa se estiver nela; senão, a página do imóvel. */
   const abrirAnuncio = useCallback((codigo: string) => {
     const f = dadosRef.current?.features.find((x) => (x.properties as ImovelProps).codigo?.toUpperCase() === codigo);
@@ -1240,6 +1279,7 @@ export default function MapaRegional({
     if (b.tipo === "coordenada") escolherSugestao(() => irParaPonto(b.lat, b.lng), true);
     else if (b.tipo === "car") escolherSugestao(() => void abrirCar(b.cod));
     else if (b.tipo === "anuncio") escolherSugestao(() => abrirAnuncio(b.codigo));
+    else if (b.tipo === "sigef") escolherSugestao(() => void abrirSigef(b.campo, b.valor));
     else if (municipioSugerido) escolherSugestao(irParaMunicipio);
     else if (municipiosBrasil[0]) { const cod = municipiosBrasil[0].cod; escolherSugestao(() => void irParaMunicipioIbge(cod)); }
   };
@@ -1381,6 +1421,15 @@ export default function MapaRegional({
               className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-verde/25 bg-verde/12 text-verde px-3.5 py-2.5 hover:bg-verde/20 transition">
               <span className="min-w-0">Abrir o imóvel do CAR
                 <strong className="block truncate font-mono text-[11px]">{buscaLida.cod}</strong>
+              </span>
+              <ArrowRight className="size-4 shrink-0" />
+            </button>
+          )}
+          {buscaLida.tipo === "sigef" && (
+            <button onClick={() => escolherSugestao(() => void abrirSigef(buscaLida.campo, buscaLida.valor))}
+              className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-verde/25 bg-verde/12 text-verde px-3.5 py-2.5 hover:bg-verde/20 transition">
+              <span className="min-w-0">Procurar no SIGEF ({buscaLida.rotulo})
+                <strong className="block truncate font-mono text-[11px]">{buscaLida.valor}</strong>
               </span>
               <ArrowRight className="size-4 shrink-0" />
             </button>
