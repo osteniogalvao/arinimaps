@@ -110,6 +110,22 @@ export const GRUPOS: Grupo[] = [
     ],
   },
   {
+    id: "financeiro_central",
+    titulo: "Financeiro e notas fiscais",
+    descricao: "Alçada de aprovação de despesas e dados da nota fiscal de serviço emitida pelo Asaas (migration 0066).",
+    icone: "🧾",
+    campos: [
+      { chave: "despesa_alcada_diretoria", rotulo: "Despesa que só a Diretoria aprova", tipo: "dinheiro", padrao: 5000, min: 0,
+        ajuda: "Acima deste valor, o Financeiro não aprova sozinho." },
+      { chave: "nf_servico_nome", rotulo: "Serviço da nota fiscal", tipo: "texto", padrao: "Intermediação de negócios imobiliários",
+        ajuda: "Nome do serviço municipal, como cadastrado na prefeitura." },
+      { chave: "nf_servico_codigo", rotulo: "Código do serviço municipal", tipo: "texto", padrao: "",
+        ajuda: "Código da lista de serviços da prefeitura (o contador informa). Vazio: o Asaas usa o padrão da conta." },
+      { chave: "nf_iss_aliquota", rotulo: "Alíquota do ISS", tipo: "percentual", padrao: 2, min: 0, max: 5, sufixo: "%",
+        ajuda: "Percentual do ISS sobre o valor da nota." },
+    ],
+  },
+  {
     id: "juridico",
     titulo: "Dados jurídicos",
     descricao: "Qualificação da empresa e prazos que entram nos termos de uso, na autorização de venda e na regra de remuneração.",

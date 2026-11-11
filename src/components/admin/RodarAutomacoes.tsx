@@ -7,6 +7,7 @@ import { Play } from "lucide-react";
 const ROTULO: Record<string, string> = {
   leads_atribuidos: "leads entregues", leads_repassados: "leads repassados", leads_sem_atendimento: "leads para a gerência",
   visitas_sem_relatorio: "visitas sem relatório", encaminhamentos_sem_aceite: "encaminhamentos escalonados", cadastros_parados: "cadastros parados",
+  despesas_cobradas: "despesas cobradas",
 };
 
 /** Botão "Rodar agora" das automações, com o resumo do que foi feito. */

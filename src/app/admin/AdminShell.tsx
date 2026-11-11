@@ -15,6 +15,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  LineChart, FileText, BookText, Truck, PieChart, ListTree,
   BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter, Grid3x3,
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
@@ -54,6 +55,13 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/financeiro": LayoutDashboard,
   "/admin/comissoes": Percent,
   "/admin/mensalidades": Receipt,
+  "/admin/registros/despesas": Wallet,
+  "/admin/financeiro/resultado": LineChart,
+  "/admin/registros/notas-fiscais": FileText,
+  "/admin/registros/lancamentos": BookText,
+  "/admin/registros/fornecedores": Truck,
+  "/admin/registros/centros-custo": PieChart,
+  "/admin/registros/plano-contas": ListTree,
   "/admin/juridico": LayoutDashboard,
   "/admin/juridico/lgpd": Shield,
   "/admin/marketing": LayoutDashboard,

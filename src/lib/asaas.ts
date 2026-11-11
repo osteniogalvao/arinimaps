@@ -108,3 +108,47 @@ export async function asaasCriarCobranca(dados: {
   // UNDEFINED = cliente escolhe Pix/boleto/cartão na fatura
   return chamar<AsaasCobranca>("/payments", { method: "POST", body: { billingType: "UNDEFINED", ...dados } });
 }
+
+// ---------------------------------------------------------------------------
+// Central fiscal (migration 0066): nota fiscal de serviço (NFS-e) pelo Asaas.
+// A conta precisa ter a emissão de notas configurada no painel do Asaas
+// (certificado, inscrição municipal e serviço municipal).
+// ---------------------------------------------------------------------------
+export type AsaasNota = {
+  id: string; status: string; number?: string | null; pdfUrl?: string | null; xmlUrl?: string | null;
+  statusDescription?: string | null;
+};
+
+export async function asaasEmitirNota(dados: {
+  customer: string;
+  serviceDescription: string;
+  observations: string;
+  value: number;
+  effectiveDate: string; // yyyy-mm-dd
+  municipalServiceCode?: string;
+  municipalServiceName: string;
+  iss: number;
+  externalReference: string;
+}) {
+  if (!asaasConfigurado()) return null;
+  const { iss, ...resto } = dados;
+  const nota = await chamar<AsaasNota>("/invoices", {
+    method: "POST",
+    body: {
+      ...resto, deductions: 0,
+      taxes: { retainIss: false, iss, cofins: 0, csll: 0, inss: 0, ir: 0, pis: 0 },
+    },
+  });
+  // agendada no Asaas: pede a emissão já
+  return chamar<AsaasNota>(`/invoices/${encodeURIComponent(nota.id)}/authorize`, { method: "POST" }).catch(() => nota);
+}
+
+export async function asaasBuscarNota(id: string) {
+  if (!asaasConfigurado()) return null;
+  return chamar<AsaasNota>(`/invoices/${encodeURIComponent(id)}`);
+}
+
+export async function asaasCancelarNota(id: string) {
+  if (!asaasConfigurado()) return null;
+  return chamar<AsaasNota>(`/invoices/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+}

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { timingSafeEqual } from "node:crypto";
+import type { AsaasNota } from "@/lib/asaas";
+import { camposDaNota } from "@/lib/modulos/financeiro";
 
 /** Comparação em tempo constante: o tempo de resposta não revela quantos caracteres acertaram. */
 function tokenConfere(recebido: string | null, esperado: string) {
@@ -167,7 +169,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as { id?: unknown; event?: unknown; payment?: Pagamento } | null;
+  const body = (await request.json().catch(() => null)) as { id?: unknown; event?: unknown; payment?: Pagamento; invoice?: AsaasNota } | null;
+
+  // nota fiscal (central fiscal, migration 0066): só atualiza a situação da nota nossa
+  if (typeof body?.event === "string" && body.event.startsWith("INVOICE_") && body.invoice && typeof body.invoice.id === "string") {
+    const admin = supabaseAdmin();
+    const { data: nota } = await admin.from("notas_fiscais").select("id, status").eq("gateway_id", body.invoice.id).maybeSingle();
+    if (!nota) return NextResponse.json({ ok: true, ignorado: "nota de outro sistema" });
+    const campos = camposDaNota(body.invoice);
+    const { error } = await admin.from("notas_fiscais").update(campos).eq("id", nota.id);
+    if (error) return NextResponse.json({ error: "Falha ao gravar." }, { status: 500 });
+    if (campos.status !== nota.status) {
+      await logAudit({ acao: "nota_fiscal_asaas", entidade: "notas_fiscais", entidade_id: nota.id, dados_antes: { status: nota.status }, dados_depois: campos });
+    }
+    return NextResponse.json({ ok: true });
+  }
   const evento = typeof body?.event === "string" ? body.event : undefined;
   const pagamento = body?.payment && typeof body.payment.id === "string" ? body.payment : undefined;
   const eventoId = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;

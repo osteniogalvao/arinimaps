@@ -56,6 +56,13 @@ export const SETORES: Setor[] = [
       { href: "/admin/financeiro", rotulo: "Painel do setor", icone: "◫" },
       { href: "/admin/comissoes", rotulo: "Comissões", icone: "％" },
       { href: "/admin/mensalidades", rotulo: "Mensalidades", icone: "$" },
+      { href: "/admin/registros/despesas", rotulo: "Despesas", icone: "−" },
+      { href: "/admin/financeiro/resultado", rotulo: "Resultado e contabilidade", icone: "▤" },
+      { href: "/admin/registros/notas-fiscais", rotulo: "Notas fiscais", icone: "▧" },
+      { href: "/admin/registros/lancamentos", rotulo: "Lançamentos", icone: "≡" },
+      { href: "/admin/registros/fornecedores", rotulo: "Fornecedores", icone: "☺" },
+      { href: "/admin/registros/centros-custo", rotulo: "Centros de custo", icone: "◩" },
+      { href: "/admin/registros/plano-contas", rotulo: "Plano de contas", icone: "#" },
     ],
   },
   {

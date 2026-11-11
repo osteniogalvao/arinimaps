@@ -34,6 +34,9 @@ export default async function Automacoes() {
     { nome: "Cadastro parado", setor: "operacoes",
       quando: `Imóvel aguardando análise há mais de ${n("cadastro_parado_dias", 2)} dia(s).`,
       faz: "Cria tarefa para Operações analisar o cadastro." },
+    { nome: "Despesa vencida ou sem aprovação", setor: "financeiro",
+      quando: "Despesa aprovada que passou do vencimento, ou pedida há mais de 2 dias sem aprovação.",
+      faz: "Cria tarefa para o Financeiro pagar ou para a Diretoria aprovar. Ela se fecha sozinha quando a despesa é paga ou aprovada." },
   ];
 
   const { data: recentes, error } = await supabaseAdmin().from("tasks")

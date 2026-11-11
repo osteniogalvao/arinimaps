@@ -182,7 +182,9 @@ async function agendarLembretes() {
 async function rodarCentral() {
   try {
     const { rows: [r] } = await db.query(`select fn_central_automacoes() as r`);
-    const feitos = Object.entries(r?.r ?? {}).filter(([, v]) => Number(v) > 0);
+    // regras dos módulos (0066 em diante); sem a migration, só as da 0065
+    const m = await db.query(`select fn_central_modulos() as r`).catch(() => ({ rows: [] }));
+    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}) }).filter(([, v]) => Number(v) > 0);
     if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
   } catch (e) {
     // banco sem a migration 0065: fica quieto até ela rodar
