@@ -46,6 +46,9 @@ export default async function Automacoes() {
     { nome: "WhatsApp sem resposta", setor: "comercial",
       quando: "Cliente mandou mensagem e ninguém respondeu em 2 h (das 8 h às 18 h).",
       faz: "Cria tarefa de alta prioridade para o corretor do lead. Fecha sozinha quando ele responde." },
+    { nome: "Prazo da etapa do CRM do setor", setor: "diretoria",
+      quando: "Item de um CRM de setor passou do prazo definido para a etapa em que está.",
+      faz: "Cria tarefa no setor do funil para o responsável do item. Fecha sozinha quando o item avança." },
   ];
 
   const { data: recentes, error } = await supabaseAdmin().from("tasks")

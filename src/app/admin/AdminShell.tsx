@@ -15,7 +15,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Send, TrendingUp, Target, Clock, CalendarClock, Gauge, Search, LineChart, FileText, BookText, Truck, PieChart, ListTree,
+  Kanban, Send, TrendingUp, Target, Clock, CalendarClock, Gauge, Search, LineChart, FileText, BookText, Truck, PieChart, ListTree,
   BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter, Grid3x3,
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
@@ -34,6 +34,7 @@ const GERAL: ItemMenu[] = [
   { href: "/admin/eu", rotulo: "Meu painel", icone: "☺" },
   { href: "/admin/tarefas", rotulo: "Tarefas", icone: "☑" },
   { href: "/admin/ponto", rotulo: "Meu ponto", icone: "◷" },
+  { href: "/admin/crm", rotulo: "CRMs dos setores", icone: "⇉" },
 ];
 
 /**
@@ -45,6 +46,7 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/tarefas": ListChecks,
   "/admin/eu": UserRound,
   "/admin/ponto": Clock,
+  "/admin/crm": Kanban,
   "/admin/ponto/equipe": CalendarClock,
   "/admin/capacidade": Gauge,
   "/admin/busca": Search,
