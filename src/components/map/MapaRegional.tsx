@@ -1243,6 +1243,45 @@ export default function MapaRegional({
     });
   }, [router]);
 
+  /**
+   * Parcela do SIGEF por código da certificação, CCIR ou matrícula (ideia do
+   * Geomart, 11/11): procura nas UFs da tela, desenha as parcelas achadas em
+   * azul (a cor da camada SIGEF) e enquadra.
+   */
+  const abrirSigef = useCallback(async (campo: "parcela" | "ccir" | "matricula", valor: string) => {
+    const map = mapRef.current;
+    if (!map) return;
+    setBuscaAviso("Procurando no SIGEF do INCRA…");
+    const b = map.getBounds();
+    const qs = new URLSearchParams({ tipo: campo, valor, bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((n) => n.toFixed(4)).join(",") });
+    const r = await fetch(`/api/geo/sigef/busca?${qs}`).catch(() => null);
+    const j = r ? await r.json().catch(() => null) as {
+      parcelas?: { nome: string; matricula: string; codigoIncra: string; parcela: string; geometria: GeoJSON.MultiPolygon }[];
+      ufs?: string[]; error?: string;
+    } | null : null;
+    if (!r?.ok || !j?.parcelas) { setBuscaAviso(j?.error ?? "O SIGEF do INCRA não respondeu agora. Tente de novo em instantes."); return; }
+    if (!j.parcelas.length) {
+      setBuscaAviso(`Nada encontrado no SIGEF em ${j.ufs?.join(", ") || "nenhum estado"}. A busca olha os estados da tela: leve o mapa até o estado do imóvel e tente de novo.`);
+      return;
+    }
+    const dado: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: j.parcelas.map((p) => ({ type: "Feature", geometry: p.geometria, properties: { nome: p.nome, matricula: p.matricula } })),
+    };
+    const fonte = map.getSource("busca-sigef") as GeoJSONSource | undefined;
+    if (fonte) fonte.setData(dado);
+    else {
+      map.addSource("busca-sigef", { type: "geojson", data: dado });
+      map.addLayer({ id: "busca-sigef-fill", type: "fill", source: "busca-sigef", paint: { "fill-color": "#5BC0EB", "fill-opacity": 0.18 } });
+      map.addLayer({ id: "busca-sigef-linha", type: "line", source: "busca-sigef", paint: { "line-color": "#5BC0EB", "line-width": 3 } });
+    }
+    const coords: number[][] = j.parcelas.flatMap((p) => p.geometria.coordinates.flat(2));
+    const lngs = coords.map((c) => c[0]), lats = coords.map((c) => c[1]);
+    map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 80, duration: 1200 });
+    setBuscaAviso(j.parcelas.map((p) =>
+      `${p.nome}${p.matricula ? ` · matrícula ${p.matricula}` : ""}${p.codigoIncra ? ` · INCRA ${p.codigoIncra}` : ""}`).join(" | ") + " (fonte: INCRA/SIGEF)");
+  }, []);
+
   /** Código de anúncio: abre na lista do mapa se estiver nela; senão, a página do imóvel. */
   const abrirAnuncio = useCallback((codigo: string) => {
     const f = dadosRef.current?.features.find((x) => (x.properties as ImovelProps).codigo?.toUpperCase() === codigo);
@@ -1256,6 +1295,7 @@ export default function MapaRegional({
     if (b.tipo === "coordenada") escolherSugestao(() => irParaPonto(b.lat, b.lng), true);
     else if (b.tipo === "car") escolherSugestao(() => void abrirCar(b.cod));
     else if (b.tipo === "anuncio") escolherSugestao(() => abrirAnuncio(b.codigo));
+    else if (b.tipo === "sigef") escolherSugestao(() => void abrirSigef(b.campo, b.valor));
     else if (municipioSugerido) escolherSugestao(irParaMunicipio);
     else if (municipiosBrasil[0]) { const cod = municipiosBrasil[0].cod; escolherSugestao(() => void irParaMunicipioIbge(cod)); }
   };
@@ -1397,6 +1437,15 @@ export default function MapaRegional({
               className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-verde/25 bg-verde/12 text-verde px-3.5 py-2.5 hover:bg-verde/20 transition">
               <span className="min-w-0">Abrir o imóvel do CAR
                 <strong className="block truncate font-mono text-[11px]">{buscaLida.cod}</strong>
+              </span>
+              <ArrowRight className="size-4 shrink-0" />
+            </button>
+          )}
+          {buscaLida.tipo === "sigef" && (
+            <button onClick={() => escolherSugestao(() => void abrirSigef(buscaLida.campo, buscaLida.valor))}
+              className="flex w-full items-center justify-between gap-2 text-left text-sm rounded-full border border-verde/25 bg-verde/12 text-verde px-3.5 py-2.5 hover:bg-verde/20 transition">
+              <span className="min-w-0">Procurar no SIGEF ({buscaLida.rotulo})
+                <strong className="block truncate font-mono text-[11px]">{buscaLida.valor}</strong>
               </span>
               <ArrowRight className="size-4 shrink-0" />
             </button>
@@ -1662,19 +1711,35 @@ export default function MapaRegional({
             const map = mapRef.current;
             if (!map) return;
             try {
-              let kmlTexto: string;
-              if (arquivo.name.toLowerCase().endsWith(".kmz")) {
-                const JSZip = (await import("jszip")).default;
-                const zip = await JSZip.loadAsync(await arquivo.arrayBuffer());
-                const entrada = Object.values(zip.files).find((f) => f.name.toLowerCase().endsWith(".kml"));
-                if (!entrada) throw new Error("KMZ sem KML dentro");
-                kmlTexto = await entrada.async("string");
+              // KML/KMZ, GeoJSON e Shapefile em zip (ideia do Geomart, 11/11): tudo lido no navegador
+              const nome = arquivo.name.toLowerCase();
+              let dados: GeoJSON.FeatureCollection;
+              if (nome.endsWith(".geojson") || nome.endsWith(".json")) {
+                const j = JSON.parse(await arquivo.text()) as GeoJSON.GeoJSON;
+                dados = j.type === "FeatureCollection" ? j
+                  : j.type === "Feature" ? { type: "FeatureCollection", features: [j] }
+                  : { type: "FeatureCollection", features: [{ type: "Feature", geometry: j as GeoJSON.Geometry, properties: {} }] };
+              } else if (nome.endsWith(".zip")) {
+                // shapefile de polígono, reprojetado pelo .prj (o mesmo leitor da importação do CAR)
+                const { lerArquivoSicar } = await import("@/lib/geo/shapefileCar");
+                const lido = await lerArquivoSicar([arquivo]);
+                dados = { type: "FeatureCollection", features: lido.camadas.flatMap((c) => c.feicoes) };
+                if (!dados.features.length) throw new Error("zip sem shapefile de polígono");
               } else {
-                kmlTexto = await arquivo.text();
+                let kmlTexto: string;
+                if (nome.endsWith(".kmz")) {
+                  const JSZip = (await import("jszip")).default;
+                  const zip = await JSZip.loadAsync(await arquivo.arrayBuffer());
+                  const entrada = Object.values(zip.files).find((f) => f.name.toLowerCase().endsWith(".kml"));
+                  if (!entrada) throw new Error("KMZ sem KML dentro");
+                  kmlTexto = await entrada.async("string");
+                } else {
+                  kmlTexto = await arquivo.text();
+                }
+                const { kml } = await import("@tmcw/togeojson");
+                const doc = new DOMParser().parseFromString(kmlTexto, "text/xml");
+                dados = kml(doc) as GeoJSON.FeatureCollection;
               }
-              const { kml } = await import("@tmcw/togeojson");
-              const doc = new DOMParser().parseFromString(kmlTexto, "text/xml");
-              const dados = kml(doc) as GeoJSON.FeatureCollection;
 
               if (map.getSource("kml-importado")) {
                 (map.getSource("kml-importado") as GeoJSONSource).setData(dados);
@@ -1682,7 +1747,7 @@ export default function MapaRegional({
                 map.addSource("kml-importado", { type: "geojson", data: dados });
                 map.addLayer({
                   id: "kml-fill", type: "fill", source: "kml-importado",
-                  filter: ["==", ["geometry-type"], "Polygon"],
+                  filter: ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]],
                   paint: { "fill-color": "#D9BD6F", "fill-opacity": 0.2 },
                 });
                 map.addLayer({
@@ -1706,7 +1771,8 @@ export default function MapaRegional({
                 );
               }
             } catch (e) {
-              console.error("falha ao importar KML:", e);
+              console.error("falha ao importar arquivo:", e);
+              window.alert("Não consegui ler esse arquivo. Envie um KML, KMZ, GeoJSON ou Shapefile de polígono em zip (com .shp, .dbf e .prj).");
             }
           }}
           onCapturar={() => {

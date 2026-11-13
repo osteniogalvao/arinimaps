@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import BotaoMapaOnr from "./BotaoMapaOnr";
@@ -86,6 +87,11 @@ export default function MatriculaSigef({ cod, compacto = false }: { cod: string;
         Fonte: INCRA / SIGEF (parcela certificada). Com o número, peça o espelho da matrícula no cartório de registro de imóveis.
       </p>
       {ponto && !compacto && <BotaoMapaOnr lat={ponto.lat} lng={ponto.lng} />}
+      {!compacto && (
+        <Link href="/ferramentas/matricula" className="block text-xs font-semibold text-verde hover:underline">
+          Já tem a certidão? A Ari lê e resume os ônus →
+        </Link>
+      )}
     </div>
   );
 }

@@ -8,6 +8,9 @@
  *  - coordenada em graus decimais: `-19.72, -50.19`, `-19,72 -50,19`;
  *  - graus, minutos e segundos: `19°43'12"S 50°11'24"O` (O ou W, L ou E);
  *  - UTM: `22K 612345 7818123` (zona, banda opcional, E e N em metros);
+ *  - SIGEF (ideia do Geomart, 11/11): código da parcela certificada (UUID),
+ *    código do imóvel no INCRA/CCIR (13 dígitos, `950.068.035.645-8`) e
+ *    matrícula (`matrícula 12345`, com a palavra, para não confundir com número solto);
  *  - qualquer outra coisa é texto: imóvel, município, ponto de referência.
  *
  * Datum assumido: WGS 84 / SIRGAS 2000 (diferença de centímetros entre eles).
@@ -17,6 +20,7 @@ export type ResultadoBusca =
   | { tipo: "coordenada"; lat: number; lng: number; formato: "decimal" | "gms" | "utm"; rotulo: string }
   | { tipo: "car"; cod: string }
   | { tipo: "anuncio"; codigo: string }
+  | { tipo: "sigef"; campo: "parcela" | "ccir" | "matricula"; valor: string; rotulo: string }
   | { tipo: "texto"; termo: string };
 
 /** Retângulo folgado do Brasil, para decidir hemisfério e ordem lat/lng. */
@@ -37,6 +41,17 @@ function lerCar(t: string): string | null {
 function lerAnuncio(t: string): string | null {
   const m = t.trim().match(/^AIB[\s-]?(\d{1,6})$/i);
   return m ? `AIB-${m[1].padStart(6, "0")}` : null;
+}
+
+// ---------------------------------------------------------------- SIGEF / INCRA
+function lerSigef(t: string): Extract<ResultadoBusca, { tipo: "sigef" }> | null {
+  const uuid = t.trim().match(/^(?:sigef\s*)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+  if (uuid) return { tipo: "sigef", campo: "parcela", valor: uuid[1].toLowerCase(), rotulo: "Parcela do SIGEF" };
+  const ccir = t.trim().match(/^(?:ccir|incra|sncr)?[\s:nº°.]*(\d{3}\.?\d{3}\.?\d{3}\.?\d{3}-?\d)$/i);
+  if (ccir) return { tipo: "sigef", campo: "ccir", valor: ccir[1].replace(/\D/g, ""), rotulo: "Código do imóvel no INCRA (CCIR)" };
+  const mat = t.trim().match(/^(?:matr[ií]cula|mat\.?|m-)\s*(?:n[º°o.]*\s*)?(\d{1,3}(?:\.\d{3})+|\d{1,8})$/i);
+  if (mat) return { tipo: "sigef", campo: "matricula", valor: mat[1].replace(/\D/g, ""), rotulo: "Matrícula (parcelas do SIGEF)" };
+  return null;
 }
 
 // ---------------------------------------------------------------- graus decimais
@@ -145,6 +160,8 @@ function interpretar(texto: string): ResultadoBusca {
   if (car) return { tipo: "car", cod: car };
   const anuncio = lerAnuncio(t);
   if (anuncio) return { tipo: "anuncio", codigo: anuncio };
+  const sigef = lerSigef(t);
+  if (sigef) return sigef;
   const dec = lerDecimal(t);
   if (dec) return { tipo: "coordenada", lat: dec[0], lng: dec[1], formato: "decimal", rotulo: rotuloCoordenada(dec[0], dec[1]) };
   const gms = /[°º˚]|graus/i.test(t) ? lerGms(t) : null;
@@ -159,6 +176,9 @@ export const FORMATOS_BUSCA: { rotulo: string; exemplo: string }[] = [
   { rotulo: "Imóvel, município ou lugar", exemplo: "Iturama" },
   { rotulo: "Código do anúncio", exemplo: "AIB-000029" },
   { rotulo: "Código do CAR", exemplo: "MG-3134202-0A1B…" },
+  { rotulo: "Parcela do SIGEF", exemplo: "6f1c2a3e-…-9b2d (código da certificação)" },
+  { rotulo: "CCIR / código INCRA", exemplo: "950.068.035.645-8" },
+  { rotulo: "Matrícula", exemplo: "matrícula 12345" },
   { rotulo: "Graus decimais", exemplo: "-19.72, -50.19" },
   { rotulo: "Graus, minutos e segundos", exemplo: "19°43'12\"S 50°11'24\"O" },
   { rotulo: "UTM (zona, E, N)", exemplo: "22K 612345 7818123" },

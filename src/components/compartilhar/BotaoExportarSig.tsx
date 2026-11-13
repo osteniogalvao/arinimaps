@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Download, FileArchive, FileCode2, Globe2, LoaderCircle } from "lucide-react";
+import { ChevronDown, Download, FileArchive, FileCode2, FileText, Globe2, LoaderCircle, PencilRuler } from "lucide-react";
 import type { Atributos, CamadaSig } from "@/lib/geo/exportarSig";
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
   className?: string;
 };
 
-type Formato = "kml" | "geojson" | "shp";
+type Formato = "kml" | "geojson" | "shp" | "dxf" | "memorial";
 
 const BOTAO_PADRAO =
   "flex w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-linha-forte py-3 text-sm font-bold text-texto transition hover:border-verde hover:text-verde";
@@ -83,7 +83,26 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
       const base = nomeArquivo(nomeBase);
       if (formato === "geojson") lib.baixar(lib.paraGeoJSON(camadas), `${base}.geojson`, "application/geo+json");
       else if (formato === "kml") lib.baixar(lib.paraKML(camadas, nomeBase), `${base}.kml`, "application/vnd.google-earth.kml+xml");
-      else lib.baixar(await lib.paraShapefileZip(camadas), `${base}-shapefile.zip`, "application/zip");
+      else if (formato === "shp") lib.baixar(await lib.paraShapefileZip(camadas), `${base}-shapefile.zip`, "application/zip");
+      else if (formato === "dxf") {
+        const dxf = await lib.paraDXF(camadas);
+        lib.baixar(dxf.texto, `${base}-utm${dxf.fuso}${dxf.sul ? "s" : "n"}.dxf`, "application/dxf");
+      } else {
+        // memorial da primeira camada (a divisa do imóvel; sem ela, a do CAR)
+        const { calcularMemorial, memorialDoc } = await import("@/lib/geo/memorial");
+        const alvo = camadas[0];
+        const m = calcularMemorial(alvo.geometry);
+        if (!m) { setErro("A divisa não tem vértices suficientes para o memorial."); return; }
+        const a = { ...(car?.atributos ?? {}), ...alvo.atributos };
+        const texto = (k: string) => (a[k] == null || a[k] === "" ? null : String(a[k]));
+        lib.baixar("\ufeff" + memorialDoc(m, {
+          imovel: texto("titulo") ? `${texto("titulo")} (${nomeBase})` : nomeBase,
+          municipio: texto("municipio"),
+          car: texto("cod_car") ?? carCodigo ?? null,
+          matricula: texto("matricula"),
+          origem: alvo.nome === "car" ? "CAR (SICAR)" : texto("fonte") ?? alvo.rotulo,
+        }), `${base}-memorial-descritivo.doc`, "application/msword");
+      }
       if (carCodigo && !car) setErro("A divisa do CAR não pôde ser carregada; o arquivo saiu só com a divisa.");
       else setAberto(false);
     } catch {
@@ -97,6 +116,8 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
     { id: "kml", rotulo: "KML", ajuda: "Google Earth e a maioria dos apps de mapa", icone: Globe2 },
     { id: "geojson", rotulo: "GeoJSON", ajuda: "QGIS, web e sistemas próprios", icone: FileCode2 },
     { id: "shp", rotulo: "Shapefile (zip)", ajuda: "ArcGIS, QGIS e órgãos públicos", icone: FileArchive },
+    { id: "dxf", rotulo: "DXF (UTM SIRGAS 2000)", ajuda: "AutoCAD e softwares de topografia, em metros", icone: PencilRuler },
+    { id: "memorial", rotulo: "Memorial descritivo (Word)", ajuda: "Vértices, azimutes e distâncias, para o técnico revisar", icone: FileText },
   ];
 
   return (
@@ -109,8 +130,8 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
       {aberto && (
         <div role="menu" className="absolute left-0 top-full z-50 mt-2 w-full min-w-[17rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-linha-forte bg-fundo p-1.5 shadow-xl">
           <p className="px-3 pb-1 pt-2 text-xs text-texto-2">
-            {divisa && carCodigo ? "Divisa do imóvel e divisa do CAR, em graus (WGS 84)."
-              : carCodigo ? "Divisa do CAR, em graus (WGS 84)." : "Divisa, em graus (WGS 84)."}
+            {divisa && carCodigo ? "Divisa do imóvel e divisa do CAR."
+              : carCodigo ? "Divisa do CAR." : "Divisa."} KML, GeoJSON e Shapefile em graus (WGS 84); DXF e memorial em UTM.
           </p>
           {opcoes.map((o) => (
             <button key={o.id} type="button" role="menuitem" className={ITEM} disabled={!!gerando} onClick={() => exportar(o.id)}>
