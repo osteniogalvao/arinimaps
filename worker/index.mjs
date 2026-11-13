@@ -21,7 +21,11 @@ const MAX_TENTATIVAS = 3;
 export const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL, // postgres://postgres:SENHA@db.REF.supabase.co:5432/postgres
   ssl: { rejectUnauthorized: false },
-  max: 2,
+  max: 3,
+  connectionTimeoutMillis: 15000,
+  query_timeout: 360_000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 15000,
 });
 
 const HANDLERS = {
@@ -183,19 +187,23 @@ async function rodarCentral() {
   try {
     const { rows: [r] } = await db.query(`select fn_central_automacoes() as r`);
     // regras dos módulos (0066 em diante); sem a migration, só as da 0065
-    const m = await db.query(`select fn_central_modulos() as r`).catch(() => ({ rows: [] }));
+    const m = await db.query(`select fn_central_modulos() as r`).catch((e) => {
+      if (e.code === "42883") return { rows: [] };
+      throw e;
+    });
     const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}) }).filter(([, v]) => Number(v) > 0);
     if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
     await emailsCriticos();
     // publicações agendadas que chegaram na hora (Central de publicação)
     if (process.env.SITE_URL && process.env.SAUDE_TOKEN) {
-      await fetch(`${process.env.SITE_URL}/api/interno/publicar`, {
+      const resposta = await fetch(`${process.env.SITE_URL}/api/interno/publicar`, {
         method: "POST", headers: { "x-saude-token": process.env.SAUDE_TOKEN }, signal: AbortSignal.timeout(120_000),
-      }).catch((e) => console.error("[central] publicações agendadas:", e.message));
+      });
+      if (!resposta.ok) throw new Error(`Publicações agendadas: HTTP ${resposta.status}`);
     }
   } catch (e) {
     // banco sem a migration 0065: fica quieto até ela rodar
-    if (!/fn_central_automacoes/.test(e.message)) console.error("[central] falhou:", e.message);
+    if (e.code !== "42883" || !/fn_central_automacoes/.test(e.message)) console.error("[central] falhou:", e.message);
   }
 }
 

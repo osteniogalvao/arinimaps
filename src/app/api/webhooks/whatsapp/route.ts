@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
-import { assinaturaWebhookOk } from "@/lib/meta";
+import { assinaturaWebhookOk, telefoneWhatsapp } from "@/lib/meta";
 import { notificar } from "@/lib/notificacoes";
 
 /**
@@ -41,16 +41,18 @@ export async function POST(request: Request) {
         const texto = m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? `[${m.type}]`;
         const final = m.from.slice(-8);
         // oportunidade aberta mais recente com telefone que termina igual
-        const { data: leads } = await admin.from("leads").select("id, nome").ilike("telefone", `%${final.slice(0, 4)}%${final.slice(4)}%`).limit(20);
+        const { data: leads } = await admin.from("leads").select("id, telefone").ilike("telefone", `%${final.slice(0, 4)}%${final.slice(4)}%`).limit(20);
         let opp: { id: string; codigo: string; responsavel_user_id: string | null } | null = null;
-        if (leads?.length) {
+        const correspondentes = leads?.filter((l) => telefoneWhatsapp(l.telefone) === m.from);
+        if (correspondentes?.length) {
           const { data } = await admin.from("opportunities").select("id, codigo, responsavel_user_id")
-            .in("lead_id", leads.map((l) => l.id)).not("etapa", "in", "(fechado,pos_venda,perdido)").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+            .in("lead_id", correspondentes.map((l) => l.id)).not("etapa", "in", "(fechado,pos_venda,perdido)").order("updated_at", { ascending: false }).limit(1).maybeSingle();
           opp = data;
         }
         const { error } = await admin.from("whatsapp_mensagens").insert({
           wa_id: m.id, telefone: m.from, direcao: "entrada", tipo: m.type, texto, opportunity_id: opp?.id ?? null,
         });
+        if (error && error.code !== "23505") return NextResponse.json({ ok: false }, { status: 503 });
         if (error?.code === "23505") continue; // a Meta reenviou
         const nome = v.contacts?.find((c) => c.wa_id === m.from)?.profile?.name ?? m.from;
         if (opp) {

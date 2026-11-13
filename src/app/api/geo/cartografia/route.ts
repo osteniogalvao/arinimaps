@@ -64,15 +64,7 @@ export async function GET(request: Request) {
     const b = diag?.bbox;
     const bbox = Array.isArray(b) && b.length === 4 && b.every((n) => Number.isFinite(n)) ? b : null;
     const original = c.tipo === "vector" ? `${base}/${c.tiles_path}` : undefined;
-    // Planta antiga sem arquivo público e sem nada escondido, apagado ou
-    // corrigido: o original é idêntico ao público, então pode ser servido até a
-    // próxima calibração gerar a cópia (senão ela sumiria do mapa público).
-    const nadaFiltrado = !(c.layers_ocultos as string[] | null)?.length &&
-      !(c.linhas_excluidas as string[] | null)?.length &&
-      !(c.edicoes_geometria as unknown[] | null)?.length;
-    const publico = c.tipo !== "vector" ? undefined
-      : c.publico_path ? `${base}/${c.publico_path}`
-      : nadaFiltrado ? original : undefined;
+    const publico = c.tipo === "vector" && c.publico_path ? `${base}/${c.publico_path}` : undefined;
     return {
       id: c.id,
       nome: c.nome,
@@ -110,7 +102,7 @@ export async function GET(request: Request) {
       zona: equipe ? diag?.zona ?? null : null,
       // partes da planta com ajuste próprio (src/lib/geo/deslocar.ts)
       ajustes: (c.ajustes_locais ?? []) as AjusteLocal[],
-      edicoes: (c.edicoes_geometria ?? []) as EdicaoGeometria[],
+      edicoes: equipe ? (c.edicoes_geometria ?? []) as EdicaoGeometria[] : [],
       transform: {
         offsetLesteM: Number(c.offset_leste_m ?? 0),
         offsetNorteM: Number(c.offset_norte_m ?? 0),

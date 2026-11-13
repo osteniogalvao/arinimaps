@@ -64,14 +64,15 @@ export async function gerarPlantaPublica(
   camada: { id: string; tiles_path: string; publico_path?: string | null },
   ocultos: string[],
   excluidas: string[] = [],
-  edicoes: EdicaoGeometria[] = []
+  edicoes: EdicaoGeometria[] = [],
+  patch: Record<string, unknown> = {}
 ): Promise<{ path: string | null; bytes: number; linhas: number; linhasTotal: number; centro: [number, number] }> {
   const { data: arquivo, error } = await admin.storage.from("media").download(camada.tiles_path);
   if (error || !arquivo) throw new Error(`não consegui ler a planta original: ${error?.message ?? "arquivo vazio"}`);
 
   const original = JSON.parse(await arquivo.text()) as GeoJSON.FeatureCollection;
   const fc = aplicarEdicoesGeoJSON(original, edicoes);
-  const centro = centroDe(fc);
+  const centro = centroDe(original);
   const esconder = new Set(ocultos);
   // apaga as linhas pela posição no arquivo ORIGINAL, antes de filtrar as camadas
   const semApagadas = removerLinhasExcluidas(fc, excluidas);
@@ -92,12 +93,17 @@ export async function gerarPlantaPublica(
     bytes = corpo.length;
   }
 
-  const { error: dbErro } = await admin.from("cartography_layers").update({
-    publico_path: path,
+  let gravar = admin.from("cartography_layers").update({
+    ...patch, publico_path: path,
     publico_bytes: path ? bytes : null,
     publico_centro: centro,
   }).eq("id", camada.id);
-  if (dbErro) throw new Error(`a planta filtrada subiu, mas o banco não gravou: ${dbErro.message}`);
+  gravar = anterior ? gravar.eq("publico_path", anterior) : gravar.is("publico_path", null);
+  const { data, error: dbErro } = await gravar.select("id").maybeSingle();
+  if (dbErro || !data) {
+    await admin.storage.from("media").remove([path]);
+    throw new Error(dbErro?.message ?? "Outro operador salvou a planta. Reabra a calibração.");
+  }
 
   if (anterior && anterior !== path) await admin.storage.from("media").remove([anterior]);
 

@@ -61,7 +61,7 @@ type Camada = {
   offset: { leste_m: number; norte_m: number };
 };
 
-type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar" | "objeto" | "vertices" | "selecao";
+type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar" | "objeto" | "vertices" | "selecao" | "lote";
 type LinhaSelecionada = { feature: number; linha: number };
 /** O que o clique faz na linha escolhida em "Ajustar linha". */
 type FerramentaLinha = "vertices" | "dividir" | "trecho";
@@ -166,36 +166,6 @@ function coordenadasLinha(fc: GeoJSON.FeatureCollection, s: LinhaSelecionada): [
   return null;
 }
 
-const distanciaSegmento2 = (p: [number, number], a: [number, number], b: [number, number]) => {
-  const dx = b[0] - a[0], dy = b[1] - a[1];
-  const den = dx * dx + dy * dy;
-  const u = den ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / den)) : 0;
-  const x = a[0] + u * dx, y = a[1] + u * dy;
-  return (p[0] - x) ** 2 + (p[1] - y) ** 2;
-};
-
-/** Procura a polilinha mais perto do clique no desenho cru. Só roda ao clicar. */
-function linhaMaisProxima(
-  fc: GeoJSON.FeatureCollection, p: [number, number], limite: number, apagadas: Set<string> = new Set(),
-): LinhaSelecionada | null {
-  let melhor = limite * limite, achou: LinhaSelecionada | null = null;
-  fc.features.forEach((f, feature) => {
-    const linhas = f.geometry?.type === "MultiLineString" ? f.geometry.coordinates
-      : f.geometry?.type === "LineString" ? [f.geometry.coordinates] : [];
-    if (apagadas.has(String(feature))) return;
-    const multi = f.geometry?.type === "MultiLineString";
-    linhas.forEach((linha, i) => {
-      // linha apagada não aparece no mapa, então não pode ser escolhida
-      if (multi && apagadas.has(`${feature}:${i}`)) return;
-      for (let j = 1; j < linha.length; j++) {
-        const d = distanciaSegmento2(p, linha[j - 1] as [number, number], linha[j] as [number, number]);
-        if (d < melhor) { melhor = d; achou = { feature, linha: i }; }
-      }
-    });
-  });
-  return achou;
-}
-
 /** Contorno convexo (cadeia monótona) — junta várias caixas de seleção numa área só. */
 function contornoConvexo(pts: [number, number][]): [number, number][] {
   const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
@@ -247,6 +217,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const [ocultos, setOcultos] = useState<Set<string>>(new Set(camada.layers_ocultos ?? []));
   const [opacidade, setOpacidade] = useState(camada.opacidade ?? 0.85);
   const [modo, setModo] = useState<Modo>("mover");
+  type LoteAlvo = { id: string; numero: string | null; quadra: string | null; area: number; versao: string; geometria: GeoJSON.Polygon; lng: number; lat: number };
+  const [loteAlvo, setLoteAlvo] = useState<LoteAlvo | null>(null);
+  const [excluindoLote, setExcluindoLote] = useState(false);
+  const buscaLote = useRef(0);
   const [passo, setPasso] = useState(10);
   const [pares, setPares] = useState<ParDeControle[]>([]);
   const [pendente, setPendente] = useState<[number, number] | null>(null);
@@ -277,6 +251,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   // null = ajustando a planta inteira; id = só aquela parte
   const [ativa, setAtiva] = useState<string | null>(null);
   // vértices da área sendo desenhada (posição na tela, em graus)
+  const [novoPoligono, setNovoPoligono] = useState(false);
   const [desenho, setDesenho] = useState<[number, number][]>([]);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
@@ -293,6 +268,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const desenhoRef = useRef(desenho); desenhoRef.current = desenho;
   const excluidasRef = useRef(excluidas); excluidasRef.current = excluidas;
   // o clique de apagar é registrado uma vez; a busca da linha usa o estado do momento
+  type HitLinha = LinhaSelecionada & { chave: string; camada: string };
+  const linhaVisivelRef = useRef<(e: MapMouseEvent, somenteLinhas?: boolean) => HitLinha | null>(() => null);
   const apagarNoPontoRef = useRef<(e: MapMouseEvent) => void>(() => undefined);
   const edicoesRef = useRef(edicoes); edicoesRef.current = edicoes;
   const linhaSelecionadaRef = useRef(linhaSelecionada); linhaSelecionadaRef.current = linhaSelecionada;
@@ -467,7 +444,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         return;
       }
       brutoRef.current = bruto;
-      centroRef.current = centroDe(bruto);
+      centroRef.current = centroDe(original ?? bruto);
 
       const aoCarregar = () => {
         // a primeira montagem já separa as partes; daqui em diante é o redesenhar()
@@ -798,6 +775,17 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       // primeiro ponto (ou duplo clique). O MapLibre manda dois "click" antes
       // do "dblclick", então o duplo clique só fecha — o vértice já entrou.
       map.on("click", (e: MapMouseEvent) => {
+        if (modoRef.current === "lote") {
+          const seq = ++buscaLote.current;
+          const { lng, lat } = e.lngLat;
+          setLoteAlvo(null);
+          void enviarJson<LoteAlvo>(`/api/admin/cartografia/${camada.id}/lote`, "POST", { lng, lat }).then((r) => {
+            if (seq !== buscaLote.current || modoRef.current !== "lote") return;
+            if (r.ok) { setLoteAlvo({ ...r.dados, lng, lat }); setErro(null); }
+            else setErro(r.erro);
+          });
+          return;
+        }
         // dividir ou apagar um trecho da linha já escolhida
         if (modoRef.current === "vertices" && ferramentaLinhaRef.current !== "vertices" && linhaSelecionadaRef.current) {
           if (editarLinhaNoPontoRef.current(e)) return;
@@ -812,12 +800,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               return;
             }
           }
-          const inv = inverter(afim(centroRef.current, tRef.current));
-          const cru = aplicarMatrizPonto(inv, [e.lngLat.lng, e.lngLat.lat]);
-          const lado = map.unproject([e.point.x + 14, e.point.y]);
-          const cruLado = aplicarMatrizPonto(inv, [lado.lng, lado.lat]);
-          const limite = Math.hypot(cruLado[0] - cru[0], cruLado[1] - cru[1]);
-          const s = linhaMaisProxima(brutoRef.current ?? bruto, cru, limite, excluidasRef.current);
+          const hit = linhaVisivelRef.current(e);
+          const s = hit ? { feature: hit.feature, linha: hit.linha } : null;
           if (!s) { setMsg("Clique mais perto de uma linha da planta."); return; }
           linhaSelecionadaRef.current = s; setLinhaSelecionada(s);
           if (modoRef.current === "objeto") criarParteDaLinhaRef.current(s);
@@ -950,14 +934,28 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   function reconstruir(i: number, lista: EdicaoGeometria[]) {
     const original = originalRef.current, bruto = brutoRef.current;
     const o = original?.features[i];
-    if (!o || !bruto) return;
+    if (!original || !bruto) return;
+    if (!o) {
+      const manuais = lista.filter((e) => e.feature >= original.features.length)
+        .map((e) => ({ ...e, feature: e.feature - original.features.length }));
+      bruto.features.splice(original.features.length, Infinity, ...aplicarEdicoesGeoJSON<GeoJSON.FeatureCollection>({ type: "FeatureCollection", features: [] }, manuais).features);
+      return;
+    }
     const minhas = lista.filter((e) => e.feature === i).map((e) => ({ ...e, feature: 0 }));
     bruto.features[i] = aplicarEdicoesGeoJSON({ type: "FeatureCollection", features: [o] }, minhas).features[0];
   }
 
   function trocarEdicoes(lista: EdicaoGeometria[], tocados: Iterable<number>) {
     edicoesRef.current = lista; setEdicoes(lista);
-    for (const i of new Set(tocados)) reconstruir(i, lista);
+    const indices = new Set(tocados);
+    let manuaisRefeitos = false;
+    for (const i of indices) {
+      if (i >= (originalRef.current?.features.length ?? Infinity)) {
+        if (manuaisRefeitos) continue;
+        manuaisRefeitos = true;
+      }
+      reconstruir(i, lista);
+    }
     membrosRef.current.chave = "";
     redesenhar(tRef.current, ocultosRef.current);
   }
@@ -972,7 +970,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     const lista = [...edicoesRef.current];
     let ultima = -1;
     lista.forEach((x, k) => { if (x.feature === nova.feature && x.linha === nova.linha) ultima = k; });
-    if (!nova.extras?.length && ultima >= 0 && !lista[ultima].extras?.length) lista[ultima] = nova;
+    if (!nova.extras?.length && ultima >= 0 && !lista[ultima].extras?.length && !lista[ultima].criar) lista[ultima] = nova;
     else lista.push(nova);
     trocarEdicoes(lista, [nova.feature]);
   };
@@ -1017,10 +1015,6 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       linhaSelecionadaRef.current = null; setLinhaSelecionada(null);
       redesenhar(tRef.current, ocultosRef.current);
       setMsg("A linha tinha um trecho só e foi apagada inteira. Ctrl+Z desfaz.");
-      return true;
-    }
-    if (ok1 && ok2 && !multi) {
-      setMsg("Esta linha é um objeto avulso do CAD: dá para encurtar pelas pontas ou apagar inteira, mas não partir em duas.");
       return true;
     }
     registrar();
@@ -1174,6 +1168,24 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     const inv = inverter(afim(centroRef.current, tRef.current));
     const area = pts.map((p) => aplicarMatrizPonto(inv, p));
     const atuais = ajustesRef.current;
+    if (novoPoligono) {
+      // O mesmo critério de pertencimento usado na publicação e no worker.
+      const g = afim(centroRef.current, tRef.current);
+      const candidatos = atuais.map((a) => pts.map((p) => aplicarMatrizPonto(inverter(compor(g, afim(centroArea(a.area), a.t))), p)));
+      const k = candidatos.findIndex((cru, i) => pontoNaArea(centroArea(cru), atuais[i].area));
+      const cru = k >= 0 ? candidatos[k] : area;
+      if (k < 0 && atuais.some((a) => pontoNaArea(centroArea(cru), a.area))) {
+        setMsg("Essa parte foi deslocada. Desenhe no local atual da parte ou ajuste sua posição primeiro."); return;
+      }
+      if (new Set(cru.map((p) => p.join(","))).size < 3) { setMsg("Marque três cantos diferentes."); return; }
+      registrar();
+      const feature = bruto.features.length;
+      gravarEdicaoRef.current({ criar: true, feature, linha: 0, coordinates: [...cru, cru[0]] });
+      desenhoRef.current = []; setDesenho([]); setNovoPoligono(false);
+      const alvo = { feature, linha: 0 };
+      linhaSelecionadaRef.current = alvo; setLinhaSelecionada(alvo); setFerramentaLinha("vertices"); setModo("vertices");
+      setErro(null); setMsg("Polígono desenhado. Ajuste os vértices ou salve a planta."); return;
+    }
     const encosta = atuais.find((a) => areasSeSobrepoem(a.area, area));
     if (encosta) {
       setErro({
@@ -1217,19 +1229,16 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
    * calibração da planta ou da parte daquela linha) e a distância é medida lá,
    * sem projetar as dezenas de milhares de vértices na tela a cada clique.
    */
-  apagarNoPontoRef.current = (e: MapMouseEvent) => {
+  linhaVisivelRef.current = (e, somenteLinhas = true) => {
     const map = mapRef.current, bruto = brutoRef.current;
-    if (!map || !bruto) return;
-    const tol = 7;
+    if (!map || !bruto) return null;
+    const tol = 9;
     const achados = map.queryRenderedFeatures(
       [[e.point.x - tol, e.point.y - tol], [e.point.x + tol, e.point.y + tol]],
       { layers: ["planta", "planta-parte"].filter((id) => map.getLayer(id)) }
     );
     const indices = [...new Set(achados.map((f) => Number(f.properties?.__i)).filter((n) => Number.isInteger(n)))];
-    if (!indices.length) {
-      setMsg("Nenhuma linha da planta neste ponto. Aproxime o mapa e clique em cima da linha.");
-      return;
-    }
+    if (!indices.length) return null;
     const g = afim(centroRef.current, tRef.current);
     const ajs = ajustesRef.current;
     const invs = ajs.map((a) => inverter(compor(g, afim(centroArea(a.area), a.t))));
@@ -1244,10 +1253,11 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       return Math.hypot(px - (ax + u * dx), py - (ay + u * dy));
     };
     const pontoCru = (k: number) => aplicarMatrizPonto(k >= 0 ? invs[k] : invG, clique) as [number, number];
-    let melhor: { chave: string; d: number; camada: string } | null = null;
+    let melhor: (HitLinha & { d: number }) | null = null;
     for (const i of indices) {
       const f = bruto.features[i];
       if (!f?.geometry) continue;
+      if (somenteLinhas && f.geometry.type !== "MultiLineString" && f.geometry.type !== "LineString") continue;
       const camadaCad = String(f.properties?.layer ?? "");
       const linhas: GeoJSON.Position[][] =
         f.geometry.type === "MultiLineString" ? f.geometry.coordinates
@@ -1263,15 +1273,20 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         const p = pontoCru(k);
         for (let v = 1; v < l.length; v++) {
           const d = dist(p, l[v - 1], l[v]);
-          if (!melhor || d < melhor.d) melhor = { chave, d, camada: camadaCad };
+          if (!melhor || d < melhor.d) melhor = { feature: i, linha: j, chave, d, camada: camadaCad };
         }
       });
     }
     // aceita até ~2× a tolerância do clique, convertida de pixels para graus
     const a = map.unproject([e.point.x, e.point.y]), b = map.unproject([e.point.x + tol * 2, e.point.y]);
     const limite = Math.abs(b.lng - a.lng) * cosLat;
-    const achado = melhor as { chave: string; d: number; camada: string } | null;
-    if (!achado || achado.d > limite) {
+    const achado = melhor as (HitLinha & { d: number }) | null;
+    return achado && achado.d <= limite ? achado : null;
+  };
+
+  apagarNoPontoRef.current = (e) => {
+    const achado = linhaVisivelRef.current(e, false);
+    if (!achado) {
       setMsg("Nenhuma linha da planta neste ponto. Aproxime o mapa e clique em cima da linha.");
       return;
     }
@@ -1460,10 +1475,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     // as partes voltam arredondadas do servidor (cm e 1e-4°): a tela passa a
     // usar o que foi gravado, senão acusaria pendência logo depois de salvar
     const gravadas = (r.dados.aplicado as { ajustes_locais?: AjusteLocal[] } | undefined)?.ajustes_locais;
-    if (gravadas) { ajustesRef.current = gravadas; setAjustes(gravadas); }
+    if (gravadas && ajustesRef.current === ajustes) { ajustesRef.current = gravadas; setAjustes(gravadas); }
     setSalvo({
-      t: tRef.current, ocultos: [...ocultos].sort(), opacidade, ajustes: JSON.stringify(ajustesRef.current),
-      excluidas: [...excluidas].sort().join(","), espessura, edicoes: JSON.stringify(edicoesRef.current),
+      t, ocultos: [...ocultos].sort(), opacidade, ajustes: JSON.stringify(gravadas ?? ajustes),
+      excluidas: [...excluidas].sort().join(","), espessura, edicoes: JSON.stringify(edicoes),
     });
 
     const g = r.dados.aplicado ?? {};
@@ -1543,8 +1558,30 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     const id = window.setTimeout(() => { void salvarRef.current(true); }, ESPERA_AUTOSALVAR_MS);
     return () => window.clearTimeout(id);
   }, [autoSalvar, haMudancaNaoSalva, salvando, carregando, modo, pedirConfirmacao, t, ajustes, excluidas, edicoes, ocultos, opacidade, espessura]);
+  async function excluirLote() {
+    if (!loteAlvo || excluindoLote) return;
+    setExcluindoLote(true);
+    const { id, versao, lng, lat } = loteAlvo;
+    const r = await enviarJson(`/api/admin/cartografia/${camada.id}/lote`, "POST", { confirmar: id, versao, lng, lat });
+    setExcluindoLote(false);
+    setLoteAlvo(null);
+    if (!r.ok) { setErro(r.erro); return; }
+    setErro(null); setMsg("Lote clicável excluído. As linhas do CAD foram preservadas."); setModo("navegar");
+  }
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.getSource("planta")) return;
+    if (!map.getSource("lote-alvo")) {
+      map.addSource("lote-alvo", { type: "geojson", data: VAZIO });
+      map.addLayer({ id: "lote-alvo", type: "fill", source: "lote-alvo", paint: { "fill-color": "#f97316", "fill-opacity": 0.55 } });
+    }
+    (map.getSource("lote-alvo") as GeoJSONSource).setData(modo === "lote" && loteAlvo ? loteAlvo.geometria : VAZIO);
+  }, [modo, loteAlvo, carregando]);
+
   function fechar() {
-    if (haMudancaNaoSalva && !salvando) setPedirConfirmacao(true);
+    if (salvando) return;
+    if (haMudancaNaoSalva) setPedirConfirmacao(true);
     else onFechar();
   }
 
@@ -1569,7 +1606,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
             <p className="mt-0.5 text-[13px] leading-snug text-texto-2">
               {modo === "mover" && !parteAtual && "Arraste a planta com o mouse até bater no satélite. Segure Shift enquanto arrasta para andar devagar; setas do teclado para o ajuste fino (Shift = 1 m). Ctrl+Z desfaz."}
               {modo === "mover" && parteAtual && `Movendo só “${parteAtual.nome}” (linhas laranja). O resto da planta fica parado. Arraste, use as setas ou gire no painel abaixo. Para voltar a mover tudo, escolha “Planta inteira”.`}
-              {modo === "parte" && (desenho.length < 3
+              {modo === "parte" && novoPoligono && "Clique nos cantos do novo polígono. Enter fecha o contorno."}
+              {modo === "parte" && !novoPoligono && (desenho.length < 3
                 ? "Clique em volta da quadra ou do trecho que quer mover separado — um clique por canto."
                 : "Feche a área clicando no primeiro ponto, com duplo clique ou Enter. Esc desiste.")}
               {modo === "objeto" && "Clique diretamente numa quadra, lote ou polilinha fechada. Ela vira uma peça independente e já fica pronta para arrastar."}
@@ -1629,10 +1667,23 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               title="Calibra a planta inteira por pares de pontos"><Crosshair className="size-4" /> Pontos de controle</button>
             <button className={chip(modo === "selecao")} onClick={() => { if (modo === "parte") cancelarDesenho(); setMsg(""); setModo("selecao"); }}
               title="Arraste um retângulo para pegar várias linhas de uma vez — apagar ou mover juntas"><BoxSelect className="size-4" /> Selecionar área</button>
-            <button className={chip(modo === "parte")} onClick={() => { desenhoRef.current = []; setDesenho([]); setModo("parte"); }}
+            <button className={chip(modo === "parte" && novoPoligono)} onClick={() => { setNovoPoligono(true); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}>
+              <PenLine className="size-4" /> Desenhar polígono</button>
+            <button className={chip(modo === "parte" && !novoPoligono)} onClick={() => { setNovoPoligono(false); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}
               title="Clique em volta de um lote, quadra ou bairro para mover, girar e esticar só aquele trecho"><PenLine className="size-4" /> Desenhar perímetro</button>
             <button className={chip(modo === "apagar")} onClick={() => { if (modo === "parte") cancelarDesenho(); setMsg(""); setModo("apagar"); }}
               title="Clique numa linha para apagá-la da planta (o arquivo original não muda)"><Eraser className="size-4" /> Apagar linhas</button>
+            <button className={chip(modo === "lote")} disabled={carregando || salvando || haMudancaNaoSalva}
+              onClick={() => { setLoteAlvo(null); setModo("lote"); setMsg("Clique dentro do lote para conferir a divisa antes de excluir."); }}>
+              <Trash2 className="size-4" /> Excluir lote clicável
+            </button>
+            {modo === "lote" && loteAlvo && (
+              <div role="alert" className="flex items-center gap-2 text-sm">
+                <span>Lote {loteAlvo.numero ?? "sem número"} · {fmt(loteAlvo.area)} m². Excluir o lote destacado?</span>
+                <button disabled={excluindoLote} onClick={excluirLote} className="btn-contorno px-2 py-1">Confirmar exclusão</button>
+                <button disabled={excluindoLote} onClick={() => { setLoteAlvo(null); setModo("navegar"); }}>Cancelar</button>
+              </div>
+            )}
             {excluidas.size > 0 && (
               <button onClick={restaurarApagadas}
                 className="inline-flex items-center gap-1.5 rounded-lg btn-contorno px-3 py-1.5 text-sm hover:bg-superficie-2 transition"
@@ -1713,7 +1764,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               {modo === "parte" && (
                 <span className="inline-flex items-center gap-1.5 ml-1">
                   <button onClick={() => fecharAreaRef.current()} disabled={desenho.length < 3}
-                    className="btn-verde px-3 py-1.5 text-sm disabled:opacity-50">Concluir área ({desenho.length} pontos)</button>
+                    className="btn-verde px-3 py-1.5 text-sm disabled:opacity-50">{novoPoligono ? "Concluir polígono" : "Concluir área"} ({desenho.length} pontos)</button>
                   <button onClick={cancelarDesenho} className="rounded-lg btn-contorno px-3 py-1.5 text-sm hover:bg-superficie-2">Cancelar</button>
                 </span>
               )}

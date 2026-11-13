@@ -78,16 +78,20 @@ export async function gerarLotes(payload, db) {
   if (!base) throw new Error("SUPABASE_URL não configurada");
   const client = await db.connect();
   try {
-    await client.query("set statement_timeout = 0");
+
     const { rows: [cam] } = await client.query(
       `select id, nome, municipality_id, tiles_path, layers_ocultos, linhas_excluidas, offset_leste_m, offset_norte_m, rotacao_graus, escala, ajustes_locais, edicoes_geometria
        from cartography_layers where id = $1 and tipo = 'vector'`, [payload.layer_id]);
     if (!cam) throw new Error("planta vetorial não encontrada");
 
-    const fc = aplicarEdicoes(await (await fetch(`${base}/storage/v1/object/public/media/${cam.tiles_path}`)).json(), cam.edicoes_geometria);
-    if (!Array.isArray(fc?.features)) throw new Error("GeoJSON da planta ilegível");
+    const arquivo = await fetch(`${base}/storage/v1/object/public/media/${cam.tiles_path}`, { signal: AbortSignal.timeout(120_000) });
+    if (!arquivo.ok) throw new Error(`Falha ao ler a planta: HTTP ${arquivo.status}`);
+    const original = await arquivo.json();
+    if (!Array.isArray(original?.features)) throw new Error("GeoJSON da planta ilegível");
+    const centroOriginal = centroDe(original);
+    const fc = aplicarEdicoes(original, cam.edicoes_geometria);
     // cada linha usa a matriz da sua parte ajustada, ou a da planta (worker/jobs/ajustes.mjs)
-    const matrizDe = seletorDeMatriz(centroDe(fc), {
+    const matrizDe = seletorDeMatriz(centroOriginal, {
       dx: Number(cam.offset_leste_m ?? 0), dy: Number(cam.offset_norte_m ?? 0),
       rot: Number(cam.rotacao_graus ?? 0), esc: Number(cam.escala ?? 1),
     }, cam.ajustes_locais);
@@ -97,6 +101,7 @@ export async function gerarLotes(payload, db) {
     const temPartes = (cam.ajustes_locais ?? []).length > 0;
 
     await client.query("begin");
+    await client.query("set local statement_timeout = '5min'");
     await client.query("create temp table _linhas (geom geometry(LineString, 31982)) on commit drop");
     let linhas = 0;
     for (const [i, f0] of fc.features.entries()) {
@@ -110,11 +115,18 @@ export async function gerarLotes(payload, db) {
       // calibra em graus (como o mapa) e só então projeta em UTM 22S para medir
       // em metros; com partes ajustadas, cada grupo de linhas vai com a sua matriz
       for (const { geometry, m: k } of pedacosComMatriz(f.geometry, matrizDe, temPartes)) {
-        const r = await client.query(
-          `insert into _linhas
-           select (st_dump(st_transform(st_affine(st_setsrid(st_geomfromgeojson($1), 4326), $2, $3, $4, $5, $6, $7), 31982))).geom`,
-          [JSON.stringify(geometry), k.a, k.b, k.d, k.e, k.xoff, k.yoff]);
-        linhas += r.rowCount;
+        // Um layer pode ter dezenas de milhares de traços. Limita a mensagem
+        // enviada ao pooler, mantendo a mesma geometria e a mesma transação.
+        const multi = geometry.type === "MultiLineString";
+        const quantidade = multi ? geometry.coordinates.length : 1;
+        for (let i = 0; i < quantidade; i += 1000) {
+          const bloco = multi ? { type: geometry.type, coordinates: geometry.coordinates.slice(i, i + 1000) } : geometry;
+          const r = await client.query(
+            `insert into _linhas
+             select (st_dump(st_transform(st_affine(st_setsrid(st_geomfromgeojson($1), 4326), $2, $3, $4, $5, $6, $7), 31982))).geom`,
+            [JSON.stringify(bloco), k.a, k.b, k.d, k.e, k.xoff, k.yoff]);
+          linhas += r.rowCount;
+        }
       }
     }
 
@@ -156,31 +168,52 @@ export async function gerarLotes(payload, db) {
     }
     console.log(`[lotes] ${cam.nome}: faces em ${ladrilhos} ladrilhos de ${LADRILHO_M} m`);
 
-    await client.query("delete from urban_lots where layer_id = $1", [cam.id]);
-    const ins = await client.query(`
+    // Serializa a troca dos lotes com a exclusão individual pelo operador.
+    const { rows: [atual] } = await client.query("select * from cartography_layers where id=$1 for update", [cam.id]);
+    if (!atual || atual.tiles_path !== cam.tiles_path || assinaturaDe(atual) !== assinaturaDe(cam)) {
+      throw new Error("A planta mudou durante a geração. A fila repetirá com os ajustes atuais.");
+    }
+    const { rows: [schema] } = await client.query("select to_regclass('public.cartografia_lotes_excluidos') as tabela");
+    const exclusoes = schema.tabela
+      ? await client.query("select lng, lat from cartografia_lotes_excluidos where layer_id=$1", [cam.id])
+      : { rows: [] };
+    for (const { lng, lat } of exclusoes.rows) {
+      const m = matrizDe([lng, lat]);
+      const x = m.a * lng + m.b * lat + m.xoff, y = m.d * lng + m.e * lat + m.yoff;
+      await client.query(`delete from _faces where st_contains(geom, st_transform(st_setsrid(st_makepoint($1,$2),4326),31982))`, [x, y]);
+    }
+    await client.query(`create temp table _novos on commit drop as
       with lotes as (
         -- tira os vértices colineares que a poligonização cria em cada cruzamento:
         -- sem isso um lado de 12 m viraria três "lados" de 4 m
         select st_simplifypreservetopology(geom, 0.03) g from _faces
         where 4 * pi() * st_area(geom) / nullif(st_perimeter(geom) ^ 2, 0) > ${COMPACIDADE_MIN}
       )
-      insert into urban_lots (layer_id, municipality_id, geom, area_m2, perimetro_m, lados)
-      select $1, $2, st_transform(g, 4326), st_area(g), st_perimeter(g),
+      select st_transform(g, 4326) geom, st_area(g) area_m2, st_perimeter(g) perimetro_m,
         (select coalesce(jsonb_agg(jsonb_build_object('m', round(st_length(s.geom)::numeric, 2)) order by s.path), '[]'::jsonb)
-         from st_dumpsegments(st_exteriorring(g)) s where st_length(s.geom) >= 0.5)
-      from lotes where st_geometrytype(g) = 'ST_Polygon'`, [cam.id, cam.municipality_id]);
+         from st_dumpsegments(st_exteriorring(g)) s where st_length(s.geom) >= 0.5) lados
+      from lotes where st_geometrytype(g) = 'ST_Polygon'`);
+    await client.query("create index on _novos using gist(geom)");
+    await client.query("analyze _novos");
+    // Uma correção local deve manter id e numeração das faces idênticas.
+    await client.query(`delete from urban_lots u where layer_id=$1 and not exists
+      (select 1 from _novos n where n.geom && u.geom and st_equals(n.geom,u.geom))`, [cam.id]);
+    await client.query(`insert into urban_lots(layer_id,municipality_id,geom,area_m2,perimetro_m,lados)
+      select $1,$2,n.geom,n.area_m2,n.perimetro_m,n.lados from _novos n where not exists
+      (select 1 from urban_lots u where u.layer_id=$1 and u.geom && n.geom and st_equals(n.geom,u.geom))`, [cam.id,cam.municipality_id]);
+    const { rows: [{ total }] } = await client.query("select count(*)::int total from urban_lots where layer_id=$1", [cam.id]);
 
     await client.query(
       "update cartography_layers set lotes_total = $2, lotes_gerados_em = now(), lotes_assinatura = $3 where id = $1",
-      [cam.id, ins.rowCount, assinaturaDe(cam)]);
+      [cam.id, total, assinaturaDe(cam)]);
     await client.query("commit");
-    console.log(`[lotes] ${cam.nome}: ${linhas} linhas → ${ins.rowCount} lotes`);
+    console.log(`[lotes] ${cam.nome}: ${linhas} linhas → ${total} lotes`);
 
     // os lotes antigos sumiram: cada anúncio de lote é encaixado no equivalente
     // da planta nova (migration 0053); o que não casar vai para o admin conferir
     const { rows: [re] } = await client.query("select fn_reencaixar_anuncios($1) r", [cam.id]);
     console.log(`[lotes] ${cam.nome}: reencaixe ${JSON.stringify(re.r)}`);
-    return { planta: cam.nome, linhas, lotes: ins.rowCount, reencaixe: re.r };
+    return { planta: cam.nome, linhas, lotes: total, reencaixe: re.r };
   } catch (e) {
     await client.query("rollback").catch(() => undefined);
     throw e;

@@ -106,13 +106,20 @@ export function assinaturaExclusoes(excluidas) {
 /** Aplica somente as polilinhas corrigidas manualmente sobre o arquivo bruto. */
 export function aplicarEdicoes(fc, edicoes = []) {
   for (const e of edicoes ?? []) {
+    if (e.criar && e.feature === fc.features.length && e.linha === 0 && e.coordinates?.length >= 4) {
+      fc.features.push({ type: "Feature", properties: { layer: "Desenho manual" }, geometry: { type: "LineString", coordinates: e.coordinates } });
+      continue;
+    }
     const g = fc.features?.[e.feature]?.geometry;
     if (g?.type === "MultiLineString" && g.coordinates[e.linha] && e.coordinates?.length >= 2) {
       g.coordinates[e.linha] = e.coordinates;
       // pedaços de uma linha dividida entram no fim (ver EdicaoGeometria em deslocar.ts)
       for (const x of e.extras ?? []) if (x?.length >= 2) g.coordinates.push(x);
     }
-    else if (g?.type === "LineString" && e.linha === 0 && e.coordinates?.length >= 2) g.coordinates = e.coordinates;
+    else if (g?.type === "LineString" && e.linha === 0 && e.coordinates?.length >= 2) {
+        if (e.extras?.length) fc.features[e.feature].geometry = { type: "MultiLineString", coordinates: [e.coordinates, ...e.extras] };
+        else g.coordinates = e.coordinates;
+      }
   }
   return fc;
 }
@@ -121,7 +128,7 @@ export function assinaturaEdicoes(edicoes = []) {
   if (!edicoes?.length) return "";
   let h = 2166136261;
   const pts = (c) => c.map((p) => `${Number(p[0]).toFixed(7)},${Number(p[1]).toFixed(7)}`).join(";");
-  const texto = edicoes.map((e) => `${e.feature}:${e.linha}:${pts(e.coordinates)}${(e.extras ?? []).map((x) => `+${pts(x)}`).join("")}`).join("|");
+  const texto = edicoes.map((e) => `${e.criar ? "novo:" : ""}${e.feature}:${e.linha}:${pts(e.coordinates)}${(e.extras ?? []).map((x) => `+${pts(x)}`).join("")}`).join("|");
   for (let i = 0; i < texto.length; i++) h = Math.imul(h ^ texto.charCodeAt(i), 16777619);
   return `;ed:${(h >>> 0).toString(36)}`;
 }

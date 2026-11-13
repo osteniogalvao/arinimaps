@@ -6,7 +6,7 @@ import { conferirOrigem, respostaOrigemNegada } from "@/lib/seguranca/origem";
 import { falha, falhaBanco } from "@/lib/erros";
 import { gerarPlantaPublica } from "@/lib/geo/plantaPublica";
 import {
-  afim, compor, inverter, centroArea, centroDe, areasSeSobrepoem, assinaturaAjustes, TRANSFORM_ZERO, CHAVE_LINHA,
+  afim, compor, inverter, centroArea, centroDe, areasSeSobrepoem, assinaturaAjustes, assinaturaEdicoes, TRANSFORM_ZERO, CHAVE_LINHA,
   type AjusteLocal, type EdicaoGeometria, type Matriz, type Transform,
 } from "@/lib/geo/deslocar";
 
@@ -69,7 +69,12 @@ function lerEdicoes(v: unknown): { ok: true; edicoes: EdicaoGeometria[] } | { ok
       }
     }
     if (totalVertices > LIMITES.verticesEditadosTotal) return { ok: false, motivo: `correções acima de ${LIMITES.verticesEditadosTotal} vértices no total` };
+    if (e.criar && (e.linha !== 0 || e.coordinates.length < 4 ||
+      e.coordinates[0][0] !== e.coordinates.at(-1)![0] || e.coordinates[0][1] !== e.coordinates.at(-1)![1])) {
+      return { ok: false, motivo: "O novo polígono deve ter um contorno fechado." };
+    }
     edicoes.push({
+      ...(e.criar === true ? { criar: true } : {}),
       feature: e.feature!, linha: e.linha!, coordinates: e.coordinates.map((p) => [Number(p[0]), Number(p[1])]),
       ...(extras.length ? { extras } : {}),
     });
@@ -235,14 +240,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
     });
   }
 
-  const { error } = await admin.from("cartography_layers").update(patch).eq("id", id);
-  if (error) return falhaBanco("calibracao_nao_gravou", error);
-
-  // seleção de camadas mudou → regrava o arquivo que o mapa público baixa.
-  // A calibração já está salva; se isto falhar, o mapa segue filtrando no
-  // navegador como antes, só mais pesado — por isso vira aviso, não erro.
   let publico: Awaited<ReturnType<typeof gerarPlantaPublica>> | null = null;
-  let avisoPublico: string | null = null;
   const mudouCamadas = Array.isArray(patch.layers_ocultos) &&
     [...(patch.layers_ocultos as string[])].sort().join("|") !== [...((antes.layers_ocultos as string[] | null) ?? [])].sort().join("|");
   const excluidasAntes = ((antes.linhas_excluidas as string[] | null) ?? []);
@@ -259,11 +257,14 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
         admin, { id, tiles_path: antes.tiles_path, publico_path: antes.publico_path },
         (patch.layers_ocultos as string[] | undefined) ?? ((antes.layers_ocultos as string[] | null) ?? []),
         excluidasDepois,
-        (patch.edicoes_geometria as EdicaoGeometria[] | undefined) ?? ((antes.edicoes_geometria as EdicaoGeometria[] | null) ?? [])
+        (patch.edicoes_geometria as EdicaoGeometria[] | undefined) ?? ((antes.edicoes_geometria as EdicaoGeometria[] | null) ?? []), patch
       );
     } catch (e) {
-      avisoPublico = e instanceof Error ? e.message : String(e);
+      return falha(409, "planta_nao_publicada", "A calibração não foi publicada.", { motivo: e instanceof Error ? e.message : String(e) });
     }
+  } else {
+    const { error } = await admin.from("cartography_layers").update(patch).eq("id", id);
+    if (error) return falhaBanco("calibracao_nao_gravou", error);
   }
 
   // mexeu na posição da planta inteira ou nas camadas: os lotes clicáveis
@@ -310,7 +311,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   return NextResponse.json({
     ok: true, aplicado: patch,
     publico: publico && { bytes: publico.bytes, linhas: publico.linhas, linhas_total: publico.linhasTotal },
-    aviso_publico: avisoPublico,
+    aviso_publico: null,
     lotes_movidos: lotesMovidos,
     aviso_lotes: avisoLotes,
   });
@@ -371,12 +372,13 @@ async function moverLotesDasPartes(
   }
 
   const assinatura = String(antes.lotes_assinatura ?? "");
-  const sufixoVelho = assinaturaAjustes(velhos);
+  const ed = assinaturaEdicoes((antes.edicoes_geometria ?? []) as EdicaoGeometria[]);
+  const sufixoVelho = assinaturaAjustes(velhos) + ed;
   const emDia = sufixoVelho ? assinatura.endsWith(sufixoVelho) : !assinatura.includes(";aj:");
   if (emDia && assinatura) {
     const base = sufixoVelho ? assinatura.slice(0, -sufixoVelho.length) : assinatura;
     await admin.from("cartography_layers")
-      .update({ lotes_assinatura: base + assinaturaAjustes(novos), lotes_gerados_em: new Date().toISOString() })
+      .update({ lotes_assinatura: base + assinaturaAjustes(novos) + ed, lotes_gerados_em: new Date().toISOString() })
       .eq("id", id);
   }
   return total;

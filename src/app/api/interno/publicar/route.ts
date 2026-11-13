@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const admin = supabaseAdmin();
   const { data, error } = await admin.from("publicacoes").select("*").eq("status", "agendada")
     .lte("agendada_para", new Date().toISOString()).order("agendada_para").limit(10);
-  if (error) return NextResponse.json({ ok: true, publicadas: 0 });
+  if (error) return NextResponse.json({ ok: false, error: "Falha ao consultar publicações." }, { status: 503 });
   let publicadas = 0;
   for (const p of data ?? []) {
     const mudanca = await publicarAgora(p);

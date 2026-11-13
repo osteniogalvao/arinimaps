@@ -25,6 +25,7 @@ export const TRANSFORM_ZERO: Transform = {
 
 /** Uma polilinha do CAD corrigida manualmente, identificada sem duplicar o arquivo inteiro. */
 export type EdicaoGeometria = {
+  criar?: true;
   feature: number;
   linha: number;
   coordinates: [number, number][];
@@ -47,6 +48,10 @@ export function aplicarEdicoesGeoJSON<T extends GeoJSON.FeatureCollection>(fc: T
   if (!edicoes.length) return fc;
   const features = [...fc.features];
   for (const e of edicoes) {
+    if (e.criar && e.feature === features.length && e.linha === 0 && e.coordinates.length >= 4) {
+      features.push({ type: "Feature", properties: { layer: "Desenho manual" }, geometry: { type: "LineString", coordinates: e.coordinates } });
+      continue;
+    }
     const f = features[e.feature];
     if (!f?.geometry || e.coordinates.length < 2) continue;
     if (f.geometry.type === "MultiLineString") {
@@ -56,7 +61,9 @@ export function aplicarEdicoesGeoJSON<T extends GeoJSON.FeatureCollection>(fc: T
       for (const x of e.extras ?? []) if (x.length >= 2) coordinates.push(x);
       features[e.feature] = { ...f, geometry: { ...f.geometry, coordinates } };
     } else if (f.geometry.type === "LineString" && e.linha === 0) {
-      features[e.feature] = { ...f, geometry: { ...f.geometry, coordinates: e.coordinates } };
+      features[e.feature] = { ...f, geometry: e.extras?.length
+        ? { type: "MultiLineString", coordinates: [e.coordinates, ...e.extras] }
+        : { type: "LineString", coordinates: e.coordinates } };
     }
   }
   return { ...fc, features } as T;
@@ -524,7 +531,7 @@ export function assinaturaEdicoes(edicoes: EdicaoGeometria[]): string {
   // geração de lotes quando uma coordenada corrigida muda.
   let h = 2166136261;
   const pts = (c: [number, number][]) => c.map((p) => `${p[0].toFixed(7)},${p[1].toFixed(7)}`).join(";");
-  const texto = edicoes.map((e) => `${e.feature}:${e.linha}:${pts(e.coordinates)}${(e.extras ?? []).map((x) => `+${pts(x)}`).join("")}`).join("|");
+  const texto = edicoes.map((e) => `${e.criar ? "novo:" : ""}${e.feature}:${e.linha}:${pts(e.coordinates)}${(e.extras ?? []).map((x) => `+${pts(x)}`).join("")}`).join("|");
   for (let i = 0; i < texto.length; i++) h = Math.imul(h ^ texto.charCodeAt(i), 16777619);
   return `;ed:${(h >>> 0).toString(36)}`;
 }
