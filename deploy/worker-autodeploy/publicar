@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+site=arini-brasil-arini-app-j51jds
+worker=arini-worker
+
+# Aguarde o Swarm concluir a publicação e escolha uma única réplica ativa.
+site_container() {
+    docker ps -q --filter "label=com.docker.swarm.service.name=$site" --filter status=running
+}
+stable_site() {
+    local state
+    state=$(docker service inspect "$site" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{end}}')
+    [[ -z "$state" || "$state" == completed || "$state" == rollback_completed ]]
+}
+stable_site || exit 0
+container=$(site_container)
+[[ "$container" =~ ^[0-9a-f]+$ ]] || exit 0
+tree=$(docker exec "$container" git -C /app rev-parse --verify HEAD:worker)
+[[ "$tree" =~ ^[0-9a-f]{40}$ ]]
+image="arini-worker:tree-$tree"
+current=$(docker service inspect "$worker" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')
+[[ "$current" != "$image" ]] || exit 0
+
+if ! docker image inspect "$image" > /dev/null 2>&1; then
+    echo "Construindo $image"
+    docker exec "$container" git -C /app archive HEAD:worker | docker build --tag "$image" -
+fi
+stable_site && [[ "$(site_container)" == "$container" ]] || exit 0
+echo "Publicando $image"
+docker service update --detach=false --no-resolve-image --stop-grace-period 20m \
+    --update-failure-action rollback --image "$image" "$worker"

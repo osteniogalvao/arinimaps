@@ -3,15 +3,29 @@
 Desde 07/11/2026, o site é publicado pela aplicação **Arini App**, no projeto
 **Arini Brasil**, ambiente **production** do Dokploy.
 
-- Repositório: `steniodsb/arinimaps`, branch `main`.
+- Repositório: `osteniogalvao/arinimaps`, branch `main`.
 - Build: Nixpacks, Node.js 22, diretório `/`, porta 3000.
 - Domínio: https://arinibrasil.com.br, com certificado Let's Encrypt.
 - Pushes em `main` acionam o webhook do GitHub e o Autodeploy do Dokploy.
 - Variáveis de produção ficam em **Environment**; nunca incluir seus valores no Git.
 - Acompanhar cada publicação em **Deployments**, incluindo status e log do build.
 
-O worker `arini-worker` continua como serviço Docker Swarm separado. Alterações
-nele ainda exigem build e atualização próprios; o webhook da aplicação publica o site.
+O timer `arini-worker-deploy.timer` da VPS confere a cada dois minutos a pasta
+`worker/` do commit que o site está servindo. Se ela mudou, constrói a imagem
+e atualiza o serviço Swarm existente. Uma alteração só no site preserva o worker.
+A identificação da imagem usa o hash Git da pasta. O timer também acompanha uma
+reversão do site. Consulte a última execução com
+`journalctl -u arini-worker-deploy.service -n 30`.
+
+Para instalar ou atualizar essa integração na VPS, copie os arquivos de
+`deploy/worker-autodeploy/` para os destinos abaixo e ative o timer.
+
+```sh
+install -m 0755 deploy/worker-autodeploy/publicar /usr/local/sbin/arini-worker-deploy
+install -m 0644 deploy/worker-autodeploy/arini-worker-deploy.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now arini-worker-deploy.timer
+```
 
 ## Verificação após publicação
 

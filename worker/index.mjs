@@ -65,7 +65,15 @@ async function proximoJob() {
   return rows[0] ?? null;
 }
 
+// O Swarm envia SIGTERM antes de trocar a imagem. Termine o job já obtido
+// antes de sair, para a próxima réplica continuar da mesma fila.
+let encerrando = false;
+function encerrar() { encerrando = true; }
+process.on("SIGTERM", encerrar);
+process.on("SIGINT", encerrar);
+
 async function loop() {
+  if (encerrando) { await db.end(); process.exit(0); }
   const job = await proximoJob().catch((e) => {
     console.error("erro ao buscar job:", e.message);
     return null;
@@ -88,7 +96,7 @@ async function loop() {
     return;
   }
   // teste local (scripts/worker-local.mjs --uma-vez): fila vazia = fim
-  if (process.env.WORKER_UMA_VEZ) { await db.end(); process.exit(0); }
+  if (encerrando || process.env.WORKER_UMA_VEZ) { await db.end(); process.exit(0); }
   setTimeout(loop, INTERVALO_MS);
 }
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=Publicar o worker ARINI da versao ativa do site
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/arini-worker-deploy
+TimeoutStartSec=45min

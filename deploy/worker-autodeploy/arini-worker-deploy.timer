@@ -1,0 +1,11 @@
+[Unit]
+Description=Verificar atualizacoes do worker ARINI
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=2min
+AccuracySec=10s
+Unit=arini-worker-deploy.service
+
+[Install]
+WantedBy=timers.target
