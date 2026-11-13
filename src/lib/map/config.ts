@@ -119,6 +119,37 @@ export const SATELITE: RasterSourceSpecification = PROVEDOR_SATELITE === "esri"
     };
 
 /**
+ * SATÉLITE DE PERTO (11/11/2026, áudio do Carlos: "o mapa, quando se aproxima,
+ * está com a qualidade muito ruim (...) ver os telhados, as divisões").
+ *
+ * O release fixo do Wayback para no z17 na região, e daí para perto o MapLibre
+ * só amplia o último tile, por isso a imagem borra no zoom do lote. O mosaico
+ * ATUAL da Esri, pelo endpoint licenciado com a chave da conta, costuma ter
+ * z18–z19 nas cidades. Ele entra como uma segunda camada só a partir do z18,
+ * por cima do Wayback. Onde o mosaico atual não tiver o tile, a camada fica
+ * transparente e aparece o Wayback ampliado, como antes. A nuvem que levou ao
+ * Wayback foi medida no z14–z16; no z18 ainda falta medir (escolha do Stenio
+ * em 11/11/2026: testar antes de pagar outra fonte).
+ *
+ * Só existe com a chave da Esri. Para desligar sem mexer no código:
+ * NEXT_PUBLIC_SATELITE_ALTO=0 no ambiente (pede novo build).
+ */
+export const SATELITE_ALTO: RasterSourceSpecification | null =
+  PROVEDOR_SATELITE === "esri" && process.env.NEXT_PUBLIC_SATELITE_ALTO !== "0"
+    ? {
+        type: "raster",
+        tiles: [`https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${ARCGIS_KEY}`],
+        tileSize: 256,
+        minzoom: 18,
+        maxzoom: 19,
+        attribution: "Powered by Esri · Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      }
+    : null;
+
+/** A partir de que zoom a camada de perto aparece (o mesmo minzoom da fonte). */
+export const ZOOM_SATELITE_ALTO = 18;
+
+/**
  * Sentinel-2 cloudless (EOX) — imagem de satélite verdadeiramente aberta
  * (CC BY 4.0, uso comercial permitido). Resolução de 10 m: mostra a divisa
  * de uma fazenda, mas não resolve lote urbano. Fica como camada alternativa.

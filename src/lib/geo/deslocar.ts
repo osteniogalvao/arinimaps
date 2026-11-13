@@ -28,6 +28,14 @@ export type EdicaoGeometria = {
   feature: number;
   linha: number;
   coordinates: [number, number][];
+  /**
+   * Pedaços que saíram desta linha ao DIVIDI-LA (áudio do Carlos, 10/11/2026:
+   * "a ponta dela não era necessária, a outra já era"). Entram no FIM da
+   * MultiLineString, então as chaves "i:j" das linhas que já existiam não mudam.
+   * As edições valem na ordem da lista: um pedaço criado aqui pode ser editado
+   * ou apagado depois pela posição nova.
+   */
+  extras?: [number, number][][];
 };
 
 /**
@@ -45,6 +53,7 @@ export function aplicarEdicoesGeoJSON<T extends GeoJSON.FeatureCollection>(fc: T
       if (e.linha < 0 || e.linha >= f.geometry.coordinates.length) continue;
       const coordinates = [...f.geometry.coordinates];
       coordinates[e.linha] = e.coordinates;
+      for (const x of e.extras ?? []) if (x.length >= 2) coordinates.push(x);
       features[e.feature] = { ...f, geometry: { ...f.geometry, coordinates } };
     } else if (f.geometry.type === "LineString" && e.linha === 0) {
       features[e.feature] = { ...f, geometry: { ...f.geometry, coordinates: e.coordinates } };
@@ -300,8 +309,9 @@ export const DESLOCAMENTO_DATUM: Record<string, { leste: number; norte: number; 
  *   primeira parte que a contém vence (a API recusa áreas sobrepostas).
  * - Posição final = calibração da planta ∘ ajuste da parte (o ajuste da parte
  *   é em metros, em torno do centro da área, antes do giro da planta).
- * - Parte é rígida: desloca e gira, não muda de tamanho — o lote continua com
- *   a área medida.
+ * - A parte desloca, gira e, desde 10/11/2026, também estica (escala da parte,
+ *   pedido do Carlos: "dar uma esticada, aumentar o tamanho"). Sem escala o
+ *   lote mantém a área medida; com escala, a área acompanha o desenho.
  *
  * As mesmas contas existem em JS no worker (worker/jobs/ajustes.mjs) para gerar
  * os lotes e no banco (fn_ajustar_lotes_parte) para mover os lotes no lugar.
@@ -459,7 +469,9 @@ export function areasSeSobrepoem(a: [number, number][], b: [number, number][]): 
 export function assinaturaAjustes(ajustes: AjusteLocal[]): string {
   if (!ajustes.length) return "";
   const r = (n: number) => Math.round(n * 1e4) / 1e4;
-  return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}`).join("|");
+  // a escala só entra quando existe, para as assinaturas antigas continuarem valendo
+  const esc = (a: AjusteLocal) => (a.t.escala && Math.abs(a.t.escala - 1) > 1e-9 ? `,x${r(a.t.escala)}` : "");
+  return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}${esc(a)}`).join("|");
 }
 
 /* ---------------------------------------------------------------------------
@@ -511,7 +523,8 @@ export function assinaturaEdicoes(edicoes: EdicaoGeometria[]): string {
   // Assinatura compacta e determinística; não é criptográfica, só invalida a
   // geração de lotes quando uma coordenada corrigida muda.
   let h = 2166136261;
-  const texto = edicoes.map((e) => `${e.feature}:${e.linha}:${e.coordinates.map((p) => `${p[0].toFixed(7)},${p[1].toFixed(7)}`).join(";")}`).join("|");
+  const pts = (c: [number, number][]) => c.map((p) => `${p[0].toFixed(7)},${p[1].toFixed(7)}`).join(";");
+  const texto = edicoes.map((e) => `${e.feature}:${e.linha}:${pts(e.coordinates)}${(e.extras ?? []).map((x) => `+${pts(x)}`).join("")}`).join("|");
   for (let i = 0; i < texto.length; i++) h = Math.imul(h ^ texto.charCodeAt(i), 16777619);
   return `;ed:${(h >>> 0).toString(36)}`;
 }

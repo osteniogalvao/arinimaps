@@ -24,6 +24,9 @@ const LIMITES = {
   escalaMax: 2,
   // parte da planta: é ajuste fino de quadra ou bairro, não de datum
   parteOffset: 500,
+  // esticar uma quadra ou bairro (áudio do Carlos, 09/11/2026): ajuste fino, não redesenho
+  parteEscalaMin: 0.8,
+  parteEscalaMax: 1.25,
   partes: 100,
   verticesArea: 300,
   // linhas apagadas à mão (áudio do Carlos, 05/11/2026): limpeza pontual, não
@@ -52,8 +55,24 @@ function lerEdicoes(v: unknown): { ok: true; edicoes: EdicaoGeometria[] } | { ok
       return { ok: false, motivo: `correção ${i + 1} precisa de 2 a ${LIMITES.verticesLinha} vértices válidos` };
     }
     totalVertices += e.coordinates.length;
+    // pedaços de uma linha dividida (ver EdicaoGeometria.extras)
+    const extras: [number, number][][] = [];
+    if (e.extras !== undefined) {
+      if (!Array.isArray(e.extras) || e.extras.length > 50) return { ok: false, motivo: `correção ${i + 1} com pedaços inválidos` };
+      for (const x of e.extras) {
+        if (!Array.isArray(x) || x.length < 2 || x.length > LIMITES.verticesLinha ||
+            !x.every((p) => Array.isArray(p) && p.length >= 2 && fin(p[0]) && fin(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90)) {
+          return { ok: false, motivo: `correção ${i + 1}: cada pedaço precisa de 2 a ${LIMITES.verticesLinha} vértices válidos` };
+        }
+        totalVertices += x.length;
+        extras.push(x.map((p) => [Number(p[0]), Number(p[1])] as [number, number]));
+      }
+    }
     if (totalVertices > LIMITES.verticesEditadosTotal) return { ok: false, motivo: `correções acima de ${LIMITES.verticesEditadosTotal} vértices no total` };
-    edicoes.push({ feature: e.feature!, linha: e.linha!, coordinates: e.coordinates.map((p) => [Number(p[0]), Number(p[1])]) });
+    edicoes.push({
+      feature: e.feature!, linha: e.linha!, coordinates: e.coordinates.map((p) => [Number(p[0]), Number(p[1])]),
+      ...(extras.length ? { extras } : {}),
+    });
   }
   return { ok: true, edicoes };
 }
@@ -83,6 +102,10 @@ function lerAjustes(v: unknown): { ok: true; ajustes: AjusteLocal[] } | { ok: fa
       return { ok: false, motivo: `${nomeParte}: deslocamento acima de ${LIMITES.parteOffset} m` };
     }
     if (Math.abs(t.rotacaoGraus!) > LIMITES.rotacao) return { ok: false, motivo: `${nomeParte}: giro acima de ${LIMITES.rotacao}°` };
+    const escalaParte = t.escala === undefined || t.escala === null ? 1 : t.escala;
+    if (!fin(escalaParte) || escalaParte < LIMITES.parteEscalaMin || escalaParte > LIMITES.parteEscalaMax) {
+      return { ok: false, motivo: `${nomeParte}: tamanho fora de ${LIMITES.parteEscalaMin * 100}% a ${LIMITES.parteEscalaMax * 100}%` };
+    }
     ajustes.push({
       id: a.id,
       nome: (typeof a.nome === "string" && a.nome.trim() ? a.nome.trim() : nomeParte).slice(0, 60),
@@ -91,7 +114,8 @@ function lerAjustes(v: unknown): { ok: true; ajustes: AjusteLocal[] } | { ok: fa
         offsetLesteM: Math.round(t.offsetLesteM! * 100) / 100,
         offsetNorteM: Math.round(t.offsetNorteM! * 100) / 100,
         rotacaoGraus: Math.round(t.rotacaoGraus! * 1e4) / 1e4,
-        escala: 1, // parte é rígida: o lote mantém a área medida
+        // esticar a parte (09/11/2026): 1 = só desloca e gira, o lote mantém a área medida
+        escala: Math.round(escalaParte * 1e6) / 1e6,
       },
     });
   }

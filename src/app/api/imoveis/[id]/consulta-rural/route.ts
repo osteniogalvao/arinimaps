@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { ator, temSetor } from "@/lib/authz";
-import { ADAPTADORES, type Bbox, type ResultadoFonte } from "@/lib/rural/adaptadores";
+import { ADAPTADORES, consultarFontes, linhaParaGravar, type Bbox, type LinhaConsulta, type ResultadoFonte } from "@/lib/rural/adaptadores";
 import { buscarEVincularPois } from "@/lib/overpass";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
 
@@ -27,19 +27,23 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
   }
   const bbox = bboxRaw as Bbox;
 
-  // todas as fontes ao vivo em paralelo; nenhuma derruba a consulta
-  const resultados: ResultadoFonte[] = await Promise.all(ADAPTADORES.map((a) => a.fn(bbox)));
+  // todas as fontes ao vivo em paralelo, e as que falharem de novo depois de uma
+  // pausa (órgão fora do ar por alguns segundos); nenhuma derruba a consulta
+  const [resultados, { data: guardadas }] = await Promise.all([
+    consultarFontes(ADAPTADORES, bbox) as Promise<ResultadoFonte[]>,
+    admin.from("consultas_rurais").select("fonte_id, resultado, quantidade, incide, erro, consultado_em")
+      .eq("property_id", id).eq("raio_m", raio_m),
+  ]);
+  const anteriores = new Map((guardadas ?? []).map((c) => [c.fonte_id as string, c as unknown as LinhaConsulta]));
 
   for (const r of resultados) {
+    // fonte que caiu agora não apaga a resposta válida de antes: fica a anterior, com a data dela
+    const linha = linhaParaGravar(r, anteriores.get(r.fonte_id), { origem: r.origem ?? null }); // origem: 3.15
     await admin.from("consultas_rurais").upsert({
       property_id: id,
       fonte_id: r.fonte_id,
       raio_m,
-      resultado: { itens: r.itens, origem: r.origem ?? null }, // origem: 3.15
-      quantidade: r.quantidade,
-      incide: r.incide,
-      erro: r.erro ?? null,
-      consultado_em: new Date().toISOString(),
+      ...linha,
     }, { onConflict: "property_id,fonte_id,raio_m" });
     await admin.from("fontes_externas")
       .update({ ultima_consulta: new Date().toISOString() })
@@ -60,7 +64,11 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
     ok: true,
     raio_m,
     pois_vinculados: pois,
-    fontes: resultados.map((r) => ({ id: r.fonte_id, quantidade: r.quantidade, incide: r.incide, erro: r.erro })),
+    fontes: resultados.map((r) => ({
+      id: r.fonte_id, quantidade: r.quantidade, incide: r.incide, erro: r.erro,
+      // havia resposta válida guardada: ela continua no relatório
+      manteve_anterior: !!r.erro && !!anteriores.get(r.fonte_id) && !anteriores.get(r.fonte_id)!.erro,
+    })),
   });
 }
 

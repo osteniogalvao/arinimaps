@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { currentUser } from "@/lib/supabase/server";
-import { ADAPTADORES, type Bbox, type ResultadoFonte } from "@/lib/rural/adaptadores";
+import { ADAPTADORES, consultarFontes, linhaParaGravar, type Bbox, type LinhaConsulta, type ResultadoFonte } from "@/lib/rural/adaptadores";
 import { processamentoLigado } from "@/lib/sentinel/copernicus";
 import { ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { EsperaEsgotada, fila, inteiroDoAmbiente, type Liberar } from "@/lib/seguranca/fila";
@@ -93,7 +93,7 @@ export async function executarConsultaArea(request: Request, alvo: AlvoConsulta)
   // dia custa aos órgãos uma consulta só
   const admin = supabaseAdmin();
   const { data: emCache } = await admin.from("consultas_area")
-    .select("fonte_id, erro, consultado_em").eq("chave", alvo.chave).eq("raio_m", alvo.raioM);
+    .select("fonte_id, erro, consultado_em, quantidade, incide, resultado").eq("chave", alvo.chave).eq("raio_m", alvo.raioM);
   const frescas = new Set(
     (emCache ?? [])
       .filter((c) => !c.erro && Date.now() - new Date(c.consultado_em).getTime() < VALIDADE_CONSULTA_MS)
@@ -101,6 +101,16 @@ export async function executarConsultaArea(request: Request, alvo: AlvoConsulta)
   );
   const excluir = new Set(alvo.excluir ?? []);
   const pendentes = ADAPTADORES.filter((a) => !excluir.has(a.id) && !frescas.has(a.id));
+  // "tentar de novo" só das fontes que acabaram de falhar não gasta a cota do mês:
+  // a pessoa não pediu uma consulta nova, o órgão é que não respondeu
+  const anteriores = new Map((emCache ?? []).map((c) => [c.fonte_id as string, c]));
+  const RECENTE_MS = 30 * 60_000;
+  const reTentativa = pendentes.length > 0 && pendentes.every((a) => {
+    const c = anteriores.get(a.id);
+    const falha = (c?.resultado as { ultima_falha?: { em?: string } } | null)?.ultima_falha?.em;
+    const quando = c?.erro ? c.consultado_em : falha;
+    return !!quando && Date.now() - new Date(quando).getTime() < RECENTE_MS;
+  });
 
   // Fila ANTES do limite por usuário e do registro: quem volta da fila (o
   // navegador tenta de novo sozinho) não pode gastar a cota do mês nem o
@@ -122,14 +132,16 @@ export async function executarConsultaArea(request: Request, alvo: AlvoConsulta)
     const limite = await limitar(`consulta:${user.id}`, 20, 3600);
     if (!limite.permitido) return respostaLimite(limite, "consulta");
 
-    await admin.from("consultas_area_log").insert({ user_id: user.id, chave: alvo.chave, acao: "consulta", ip: ipDoPedido(request) });
+    await admin.from("consultas_area_log").insert({
+      user_id: user.id, chave: alvo.chave, acao: reTentativa ? "reconsulta" : "consulta", ip: ipDoPedido(request),
+    });
 
-    const resultados: ResultadoFonte[] = await Promise.all(pendentes.map((a) => a.fn(bbox)));
+    const resultados: ResultadoFonte[] = await consultarFontes(pendentes, bbox);
     for (const r of resultados) {
+      // fonte que caiu agora não apaga a resposta válida de antes (ver linhaParaGravar)
+      const linha = linhaParaGravar(r, anteriores.get(r.fonte_id) as LinhaConsulta | undefined);
       await admin.from("consultas_area").upsert({
-        chave: alvo.chave, fonte_id: r.fonte_id, raio_m: alvo.raioM,
-        resultado: { itens: r.itens }, quantidade: r.quantidade, incide: r.incide,
-        erro: r.erro ?? null, consultado_em: new Date().toISOString(),
+        chave: alvo.chave, fonte_id: r.fonte_id, raio_m: alvo.raioM, ...linha,
       }, { onConflict: "chave,fonte_id,raio_m" });
     }
     return respostaConsulta(alvo.chave, resultados, frescas.size);

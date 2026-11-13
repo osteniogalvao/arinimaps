@@ -33,7 +33,7 @@ export type FonteConsultada = {
   atualizacao?: string | null;
   consulta: {
     quantidade: number; raio_m: number; erro: string | null; consultado_em: string;
-    resultado: { itens?: ItemFonte[]; origem?: OrigemItem };
+    resultado: { itens?: ItemFonte[]; origem?: OrigemItem; ultima_falha?: { em: string; erro: string } };
   } | null;
 };
 
@@ -70,6 +70,14 @@ export default function FontesLista({ fontes, alvo = "a área" }: { fontes: Font
               </Etiqueta>
             </div>
 
+            {c && !c.erro && c.resultado?.ultima_falha && (
+              <p className="text-sm text-alerta mt-3 leading-relaxed">
+                <span title={c.resultado.ultima_falha.erro}>
+                  O órgão não respondeu na consulta de {new Date(c.resultado.ultima_falha.em).toLocaleDateString("pt-BR")}.
+                </span>{" "}
+                Este é o último resultado válido, de {new Date(c.consultado_em).toLocaleDateString("pt-BR")}.
+              </p>
+            )}
             {c?.erro && (
               <p className="text-sm text-alerta mt-3 leading-relaxed">
                 <span title={c.erro}>O serviço do órgão estava indisponível no momento da consulta.</span> Ausência de dados aqui não significa ausência de registro no órgão.
