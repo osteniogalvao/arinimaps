@@ -48,7 +48,7 @@ export default async function AdminFontes() {
         variante="simples"
         eyebrow="Central · Cartografia"
         titulo="Fontes oficiais"
-        subtitulo="De onde vem cada informação do relatório territorial. A verificação automática pergunta a cada fonte ativa, a cada 6 horas, por um quadrado de 2 km em Iturama; três falhas seguidas marcam a fonte como instável, e o relatório passa a avisar em vez de dizer “nada encontrado”."
+        subtitulo="A cada 6 horas, o sistema consulta as fontes ativas que têm sonda configurada. Três falhas seguidas marcam a fonte como instável e geram um aviso no relatório territorial."
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
@@ -97,6 +97,7 @@ export default async function AdminFontes() {
                     <td className="px-3 py-3.5"><SeloClassificacao valor={f.classificacao} /></td>
                     <td className="px-3 py-3.5">
                       <SeloSituacao valor={f.situacao} />
+                      {!f.sonda_url && <p className="mt-1 text-xs text-texto-2">Sem sonda configurada</p>}
                       {f.situacao_desde && <p className="mt-1 text-xs text-texto-2 tabular-nums">desde {quando(f.situacao_desde)}</p>}
                     </td>
                     <td className="px-3 py-3.5 text-sm text-texto-2 tabular-nums">{quando(f.ultima_verificacao)}</td>

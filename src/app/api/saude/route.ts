@@ -72,10 +72,18 @@ export async function GET(request: Request) {
     }),
     medir(async () => {
       // situação mantida pelo job verificar_fontes (3 falhas seguidas = instável)
-      const { data, error } = await admin.from("fontes_externas").select("nome, situacao").eq("ativa", true);
+      const { data, error } = await admin.from("fontes_externas").select("nome, situacao, sonda_url").eq("ativa", true);
       if (error) throw new Error("Falha ao consultar a saúde das fontes.");
-      const instaveis = (data ?? []).filter((f) => f.situacao && f.situacao !== "ok");
-      if (instaveis.length) return `${instaveis.length} fonte(s) instável(is): ${instaveis.map((f) => f.nome).join(", ")}`;
+      const fontesAtivas = data ?? [];
+      const instaveis = fontesAtivas.filter((f) => f.situacao === "instavel");
+      const semVerificacao = fontesAtivas.filter((f) => f.situacao === "sem_verificacao");
+      const detalhes = [];
+      if (instaveis.length) detalhes.push(`Instáveis (${instaveis.length}): ${instaveis.map((f) => f.nome).join(", ")}`);
+      if (semVerificacao.length) {
+        const nomes = semVerificacao.map((f) => f.sonda_url ? f.nome : f.nome + " (sem sonda)");
+        detalhes.push(`Sem verificação (${nomes.length}): ${nomes.join(", ")}`);
+      }
+      return detalhes.join(". ");
     }),
   ]);
   const ia: Item = { ok: true, detalhe: iaConfigurada() ? "chave configurada" : "sem ANTHROPIC_API_KEY (assistente desligado)" };

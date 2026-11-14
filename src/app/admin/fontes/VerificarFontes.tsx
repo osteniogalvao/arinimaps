@@ -38,7 +38,7 @@ export default function VerificarFontes() {
       )}
       {resumo && (
         <p className={`max-w-md text-sm font-semibold ${fora.length ? "text-alerta" : "text-verde"}`}>
-          {resumo.no_ar} de {resumo.total} fontes no ar.
+          {resumo.no_ar} de {resumo.total} fontes sondadas responderam com sucesso.
           {fora.length > 0 && <> Fora: {fora.map((f) => `${f.fonte_id} (${f.erro ?? "falha"})`).join(", ")}.</>}
         </p>
       )}
