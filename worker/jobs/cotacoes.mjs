@@ -431,6 +431,9 @@ export async function coletarCotacoes(payload, db) {
   const resultado = await coletar({ historico });
   const r = await gravar(db, resultado);
   console.log(`[cotacoes] ${r.series} série(s), ${r.valores} valor(es) novos ou alterados, ${r.falhas} falha(s)${historico ? " · carga de 1 ano" : ""}`);
+  if (r.falhas && !resultado.some((serie) => serie.pontos.length)) {
+    throw new Error("Nenhuma fonte retornou cotações e pelo menos uma falhou");
+  }
 }
 
 export { gravar as gravarCotacoes };

@@ -148,7 +148,7 @@ export async function POST(request: Request) {
       if (t) descricao = `${descricao}\n\nTranscrição do áudio do anunciante:\n${t}`.trim();
       else avisos.push("Não consegui transcrever o áudio agora; usei só o texto e os arquivos.");
     } else {
-      avisos.push("O áudio foi recebido, mas a transcrição ainda não está ligada: ele será transcrito quando o serviço for ativado. Por enquanto, usei o texto e os arquivos.");
+      avisos.push("Transcrição indisponível. A análise usa o texto, as fotos e os documentos enviados.");
     }
   }
 

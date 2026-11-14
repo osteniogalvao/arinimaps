@@ -23,7 +23,7 @@ export const facebookConfigurado = () => !!process.env.FACEBOOK_PAGE_ID && !!(pr
 export const whatsappConfigurado = () => !!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_ID;
 
 export class MetaErro extends Error {
-  constructor(public mensagem: string) { super(mensagem); }
+  constructor(public mensagem: string, public codigo?: number, public entregaIncerta = false) { super(mensagem); }
 }
 
 async function graph<T>(caminho: string, params: Record<string, string>, token: string): Promise<T> {
@@ -33,12 +33,13 @@ async function graph<T>(caminho: string, params: Record<string, string>, token: 
     body: new URLSearchParams({ ...params, access_token: token }),
     signal: AbortSignal.timeout(30_000),
   }).catch(() => null);
-  if (!r) throw new MetaErro("A Meta não respondeu a tempo.");
+  if (!r) throw new MetaErro("A Meta não respondeu a tempo.", undefined, true);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     console.error(`Meta ${caminho} → ${r.status}:`, JSON.stringify(j).slice(0, 400));
-    throw new MetaErro(j?.error?.error_user_msg || j?.error?.message || `A Meta recusou (HTTP ${r.status}).`);
+    throw new MetaErro(j?.error?.error_user_msg || j?.error?.message || `A Meta recusou (HTTP ${r.status}).`, j?.error?.code, r.status >= 500);
   }
+  if (!j?.id) throw new MetaErro("A resposta da Meta não trouxe o identificador.", undefined, true);
   return j as T;
 }
 
@@ -64,7 +65,8 @@ export async function publicarInstagram(imagens: string[], legenda: string) {
       const pub = await graph<{ id: string }>(`/${ig}/media_publish`, { creation_id: criacao }, token);
       return { id: pub.id, link: null as string | null };
     } catch (e) {
-      if (i === 5) throw e;
+      // 9007 indica explicitamente que o contêiner ainda não está pronto.
+      if (!(e instanceof MetaErro) || e.codigo !== 9007 || i === 5) throw e;
       await new Promise((ok) => setTimeout(ok, 4000));
     }
   }

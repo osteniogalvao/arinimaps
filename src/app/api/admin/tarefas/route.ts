@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
 type Antes = {
   setor: string; status: string; responsavel: string | null; titulo: string; origem?: string | null;
-  setor_origem?: string | null; aceite_em?: string | null; prioridade: string; prazo: string | null;
+  setor_origem?: string | null; aceite_em?: string | null; prioridade: string; prazo: string | null; updated_at: string;
 };
 
 /**
@@ -89,9 +89,9 @@ export async function PATCH(request: Request) {
   const b = await request.json().catch(() => ({}));
   const admin = supabaseAdmin();
   const primeira = await admin.from("tasks")
-    .select("setor, status, responsavel, titulo, origem, setor_origem, aceite_em, prioridade, prazo").eq("id", b.id).maybeSingle<Antes>();
+    .select("setor, status, responsavel, titulo, origem, setor_origem, aceite_em, prioridade, prazo, updated_at").eq("id", b.id).maybeSingle<Antes>();
   let antes = primeira.data;
-  if (primeira.error) ({ data: antes } = await admin.from("tasks").select("setor, status, responsavel, titulo, prioridade, prazo").eq("id", b.id).maybeSingle<Antes>());
+  if (primeira.error) ({ data: antes } = await admin.from("tasks").select("setor, status, responsavel, titulo, prioridade, prazo, updated_at").eq("id", b.id).maybeSingle<Antes>());
   if (!antes) return NextResponse.json({ error: "Tarefa não encontrada." }, { status: 404 });
 
   const doSetor = temSetor(a, antes.setor as SetorId);
@@ -109,18 +109,20 @@ export async function PATCH(request: Request) {
   if (!doSetor) return NextResponse.json({ error: "Esta tarefa é de um setor em que você não atua." }, { status: 403 });
 
   const agora = new Date().toISOString();
+  const versao = antes.updated_at;
   const atualizar = async (patch: Record<string, unknown>) => {
-    const { error } = await admin.from("tasks").update(patch).eq("id", b.id);
-    return error;
+    const { data, error } = await admin.from("tasks").update(patch).eq("id", b.id).eq("updated_at", versao).select("id").maybeSingle();
+    if (error) return { message: error.message, status: 400 };
+    return data ? null : { message: "A tarefa foi alterada por outra pessoa. Atualize a página.", status: 409 };
   };
 
   if (acao === "aceitar") {
-    if (antes.aceite_em) return NextResponse.json({ error: "Esta tarefa já foi aceita." }, { status: 400 });
+    if (antes.aceite_em) return NextResponse.json({ error: "Esta tarefa já foi aceita." }, { status: 409 });
     const err = await atualizar({
       aceite_em: agora, aceite_por: a.userId, responsavel: antes.responsavel ?? a.userId,
       status: antes.status === "aberta" ? "andamento" : antes.status,
     });
-    if (err) return NextResponse.json({ error: err.message }, { status: 400 });
+    if (err) return NextResponse.json({ error: err.message }, { status: err.status });
     await eventoTarefa({ task_id: b.id, tipo: "aceita", autor: a.userId, para_setor: antes.setor, texto: "Recebida e assumida pelo setor" });
     await logAudit({ user_id: a.userId, acao: "tarefa_aceita", entidade: "tasks", entidade_id: b.id });
     return NextResponse.json({ ok: true });
@@ -134,7 +136,7 @@ export async function PATCH(request: Request) {
       setor: antes.setor_origem, setor_origem: antes.setor, responsavel: null, status: "aberta",
       aceite_em: null, aceite_por: null, prazo_aceite: await prazoAceite(), escalonada_em: null, motivo,
     });
-    if (err) return NextResponse.json({ error: err.message }, { status: 400 });
+    if (err) return NextResponse.json({ error: err.message }, { status: err.status });
     await eventoTarefa({ task_id: b.id, tipo: "recusada", autor: a.userId, de_setor: antes.setor, para_setor: antes.setor_origem, texto: motivo });
     await logAudit({ user_id: a.userId, acao: "tarefa_recusada", entidade: "tasks", entidade_id: b.id, dados_depois: { motivo, devolvida_para: antes.setor_origem } });
     return NextResponse.json({ ok: true });
@@ -148,7 +150,7 @@ export async function PATCH(request: Request) {
       setor: para, setor_origem: antes.setor, origem: "encaminhada", responsavel: null, status: "aberta",
       aceite_em: null, aceite_por: null, prazo_aceite: await prazoAceite(), escalonada_em: null,
     });
-    if (err) return NextResponse.json({ error: err.message }, { status: 400 });
+    if (err) return NextResponse.json({ error: err.message }, { status: err.status });
     await eventoTarefa({ task_id: b.id, tipo: "encaminhada", autor: a.userId, de_setor: antes.setor, para_setor: para, texto: motivo });
     await logAudit({ user_id: a.userId, acao: "tarefa_encaminhada", entidade: "tasks", entidade_id: b.id, dados_antes: { setor: antes.setor }, dados_depois: { setor: para, motivo } });
     return NextResponse.json({ ok: true });
@@ -158,7 +160,7 @@ export async function PATCH(request: Request) {
     const texto = String(b.texto ?? "").trim().slice(0, 2000);
     if (!texto) return NextResponse.json({ error: "Descreva o que foi feito." }, { status: 400 });
     const err = await atualizar({ evidencia: texto });
-    if (err) return NextResponse.json({ error: err.message }, { status: 400 });
+    if (err) return NextResponse.json({ error: err.message }, { status: err.status });
     await eventoTarefa({ task_id: b.id, tipo: "evidencia", autor: a.userId, texto });
     return NextResponse.json({ ok: true });
   }
@@ -188,7 +190,7 @@ export async function PATCH(request: Request) {
     delete patch.aceite_em; delete patch.aceite_por; delete patch.evidencia; delete patch.motivo;
     err = await atualizar(patch);
   }
-  if (err) return NextResponse.json({ error: err.message }, { status: 400 });
+  if (err) return NextResponse.json({ error: err.message }, { status: err.status });
 
   if (patch.status && patch.status !== antes.status) {
     await eventoTarefa({ task_id: b.id, tipo: "status", autor: a.userId, texto: [b.motivo, b.evidencia].filter(Boolean).join(" · ") || null, dados: { de: antes.status, para: patch.status } });

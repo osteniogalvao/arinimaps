@@ -13,45 +13,45 @@ const CATEGORIAS = [
 /*
   O Overpass público vive sobrecarregado: na fila de 26/10/2026, 11 imóveis
   falharam com 429/502/504 em sequência, porque o job tentava um servidor só e
-  o worker repetia na hora. Agora: três espelhos públicos, espera crescente
-  entre as voltas e uma pausa curta depois de cada consulta, por cortesia.
+  o worker repetia na hora. Cada tentativa passa pelos três espelhos uma vez.
+  A fila controla o intervalo entre tentativas.
 */
 const ESPELHOS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
 ];
-const ESPERAS_MS = [0, 20_000, 60_000];
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function consultarOverpass(consulta) {
   let ultimo = "";
-  for (const espera of ESPERAS_MS) {
-    if (espera) await dormir(espera);
-    for (const url of ESPELHOS) {
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          body: "data=" + encodeURIComponent(consulta),
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "AriniImoveisBrasil/1.0 (contato@arinibrasil.com.br)",
-            Accept: "application/json",
-          },
-          signal: AbortSignal.timeout(40_000),
-        });
-        if (res.ok) {
-          const json = await res.json();
-          await dormir(2_000);
-          return json;
-        }
-        ultimo = `Overpass ${res.status} (${new URL(url).host})`;
-        // 4xx que não é limite de uso: a consulta está errada, outro espelho não resolve
-        if (res.status < 500 && res.status !== 429) throw new Error(ultimo);
-      } catch (e) {
-        if (e instanceof Error && e.message === ultimo) throw e;
-        ultimo = `Overpass ${e instanceof Error ? e.message : e} (${new URL(url).host})`;
+  for (const url of ESPELHOS) {
+    let status;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        body: "data=" + encodeURIComponent(consulta),
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "AriniImoveisBrasil/1.0 (contato@arinibrasil.com.br)",
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(40_000),
+      });
+      status = res.status;
+      if (!res.ok) {
+        await res.body?.cancel();
+        throw new Error(`HTTP ${status}`);
       }
+      const json = await res.json();
+      // Overpass também responde HTTP 200 com "remark" e elementos parciais
+      // quando a consulta expira. Conserve a atualização anterior nesse caso.
+      if (json?.remark || !Array.isArray(json?.elements)) throw new Error("resposta incompleta");
+      await dormir(2_000);
+      return json;
+    } catch (e) {
+      ultimo = `Overpass ${e instanceof Error ? e.message : e} (${new URL(url).host})`;
+      if (status === 400) break;
     }
   }
   throw new Error(ultimo);

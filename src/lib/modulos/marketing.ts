@@ -19,7 +19,7 @@ async function imovel(id: string) {
 }
 
 /** Publica de verdade no canal. Devolve o que gravar na publicação. */
-export async function publicarAgora(linha: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function publicarNoCanal(linha: Record<string, unknown>): Promise<Record<string, unknown>> {
   const p = await imovel(String(linha.property_id));
   if (!p || !["publicado", "em_negociacao"].includes(p.status)) {
     return { status: "erro", erro: "O imóvel não está publicado no site." };
@@ -44,9 +44,27 @@ export async function publicarAgora(linha: Record<string, unknown>): Promise<Rec
         return { status: "publicada", publicado_em: agora, erro: null, link_externo: linha.canal === "portais" ? `${site()}/api/feeds/portais` : link };
     }
   } catch (e) {
-    if (e instanceof MetaErro) return { status: "erro", erro: e.mensagem };
+    if (e instanceof MetaErro) return { status: e.entregaIncerta ? "conferir" : "erro", erro: e.mensagem };
     throw e;
   }
+}
+
+/** A aprovação, o botão manual e o worker disputam a mesma versão da linha. */
+export async function publicarAgora(linha: Record<string, unknown>, aprovacao = {}) {
+  const admin = supabaseAdmin();
+  const { data: reserva, error } = await admin.from("publicacoes")
+    .update({ ...aprovacao, status: "enviando", erro: null })
+    .eq("id", linha.id).eq("status", linha.status).eq("updated_at", linha.updated_at)
+    .select("*").maybeSingle();
+  if (error) throw new ErroRegistro("Não foi possível reservar a publicação.", 503);
+  if (!reserva) return null;
+
+  const resultado = await publicarNoCanal(reserva);
+  const { data: gravada, error: falha } = await admin.from("publicacoes").update(resultado)
+    .eq("id", reserva.id).eq("status", "enviando").eq("updated_at", reserva.updated_at)
+    .select("id").maybeSingle();
+  if (falha || !gravada) throw new ErroRegistro("Não foi possível registrar o resultado. Confira a publicação no canal.", 503);
+  return resultado;
 }
 
 registrarAntesCriar("publicacoes", async (ator, linha) => {
@@ -78,16 +96,30 @@ registrarAcoes("publicacoes", {
     if (linha.criado_por === ator.userId && !ator.setores.includes("diretoria")) {
       throw new ErroRegistro("Quem preparou a publicação não aprova a própria; peça para o tráfego ou a Diretoria.", 403);
     }
-    await concluirTarefaDoEvento(`publicacao_aprovacao:${linha.id}`, ator.userId, "Publicação aprovada");
     const base = { aprovado_por: ator.userId, aprovado_em: new Date().toISOString() };
-    if (linha.agendada_para && +new Date(String(linha.agendada_para)) > Date.now()) return { ...base, status: "agendada" };
-    return { ...base, ...(await publicarAgora(linha)) };
+    if (linha.agendada_para && +new Date(String(linha.agendada_para)) > Date.now()) {
+      const { data, error } = await supabaseAdmin().from("publicacoes").update({ ...base, status: "agendada" })
+        .eq("id", linha.id).eq("status", "aprovacao").eq("updated_at", linha.updated_at).select("id").maybeSingle();
+      if (error) throw new ErroRegistro("Não foi possível agendar.", 503);
+      if (!data) throw new ErroRegistro("A publicação foi alterada. Atualize a página.", 409);
+    } else if (!await publicarAgora(linha, base)) {
+      throw new ErroRegistro("A publicação foi alterada. Atualize a página.", 409);
+    }
+    await concluirTarefaDoEvento(`publicacao_aprovacao:${linha.id}`, ator.userId, "Publicação aprovada");
+    return null;
   },
   async devolver({ motivo }) {
     return { status: "rascunho", motivo };
   },
   async publicar({ linha }) {
-    return publicarAgora(linha);
+    if (!await publicarAgora(linha)) throw new ErroRegistro("A publicação foi alterada. Atualize a página.", 409);
+    return null;
+  },
+  async confirmar_entrega({ motivo }) {
+    return { status: "publicada", publicado_em: new Date().toISOString(), motivo, erro: null };
+  },
+  async confirmar_ausencia({ motivo }) {
+    return { status: "rascunho", motivo, erro: null, aprovado_por: null, aprovado_em: null };
   },
   async cancelar({ motivo }) {
     return { status: "cancelada", motivo };

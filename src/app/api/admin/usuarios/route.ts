@@ -37,13 +37,21 @@ export async function POST(request: Request) {
     const msg = /already/i.test(error.message) ? "Já existe conta com este e-mail." : error.message;
     return NextResponse.json({ error: msg }, { status: 400 });
   }
-  await admin.from("profiles").update({
+  const { error: erroPerfil } = await admin.from("profiles").update({
     role, nome: nome.trim(),
     setores: role === "admin_central" ? [] : setoresValidos(setores),
-  }).eq("user_id", data.user.id);
+  }).eq("user_id", data.user.id).select("user_id").single();
+  if (erroPerfil) {
+    const { error: erroDesfazer } = await admin.auth.admin.deleteUser(data.user.id);
+    return NextResponse.json({
+      error: erroDesfazer
+        ? "O login foi criado, mas houve falha ao confirmar o perfil. Confira a conta em Equipe e usuários."
+        : "Não foi possível salvar o perfil da equipe. Tente criar a conta novamente.",
+    }, { status: 500 });
+  }
   await logAudit({
     user_id: a.userId, acao: "usuario_equipe_criado", entidade: "profiles",
-    entidade_id: data.user.id, dados_depois: { email, role },
+    entidade_id: data.user.id, dados_depois: { email, role, setores: role === "admin_central" ? [] : setoresValidos(setores) },
   });
   return NextResponse.json({ ok: true });
 }

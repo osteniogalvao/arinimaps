@@ -15,8 +15,7 @@
  * gravados quando o anunciante enviar o anúncio, no fluxo de sempre.
  *
  * Vídeo: só anexa (vai para a etapa "Fotos e vídeos"). Áudio: transcrito se
- * houver serviço configurado (src/lib/ia/transcricao.ts); senão é aceito e a
- * tela avisa.
+ * houver serviço configurado (src/lib/ia/transcricao.ts).
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -111,8 +110,8 @@ export default function CadastroRapidoAri({ onAplicar, onFotos }: {
 
   async function ler() {
     setErro("");
-    if (!texto.trim() && !fotos.length && !docs.length) {
-      setErro("Escreva sobre o imóvel ou anexe fotos e documentos.");
+    if (!texto.trim() && !fotos.length && !docs.length && !(audio && estado?.transcricao)) {
+      setErro(estado?.transcricao ? "Descreva o imóvel por texto ou áudio, ou anexe fotos ou documentos." : "Escreva sobre o imóvel ou anexe fotos e documentos.");
       return;
     }
     if (videos.some((v) => v.size > VIDEO_MAX_MB * 1024 * 1024)) {
@@ -141,9 +140,6 @@ export default function CadastroRapidoAri({ onAplicar, onFotos }: {
       }
       const extracao = d.extracao as ExtracaoAnuncio;
       const avisos: string[] = [...(d.avisos ?? [])];
-      if (audio && !estado?.transcricao) {
-        avisos.unshift("O áudio foi aceito, mas a transcrição ainda não está ligada: ele será transcrito quando o serviço for ativado. Por enquanto, a Ari usou o texto e os arquivos.");
-      }
       // fotos marcadas como ruins já começam retiradas; o anunciante devolve com um clique
       const ruins = new Set(extracao.fotos.problemas.map((p) => p.indice));
       setRetiradas(ruins);
@@ -240,7 +236,7 @@ export default function CadastroRapidoAri({ onAplicar, onFotos }: {
                   <label className={ROTULO} htmlFor="ari-audio">
                     <span className="inline-flex items-center gap-1.5"><Mic className="size-4 text-texto-2" /> Áudio (opcional)</span>
                   </label>
-                  <input id="ari-audio" type="file" accept={ACEITA_AUDIO} className={CAMPO}
+                  <input id="ari-audio" type="file" accept={ACEITA_AUDIO} className={CAMPO} disabled={!estado?.transcricao}
                     onChange={(e) => {
                       const a = e.target.files?.[0] ?? null;
                       setAudio(a && a.size <= (lim?.audioMb ?? 20) * 1048576 ? a : null);
@@ -248,7 +244,7 @@ export default function CadastroRapidoAri({ onAplicar, onFotos }: {
                     }} />
                   <p className="mt-1.5 text-sm text-texto-2">
                     {estado && !estado.transcricao
-                      ? "A transcrição de áudio ainda não está ligada: o áudio é aceito e será transcrito quando o serviço for ativado."
+                      ? "Transcrição indisponível. Escreva a descrição do imóvel ou anexe fotos e documentos."
                       : "Fale sobre o imóvel como falaria com um comprador."}
                   </p>
                 </div>

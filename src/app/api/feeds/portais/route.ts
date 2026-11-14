@@ -18,20 +18,32 @@ export async function GET() {
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://arinibrasil.com.br";
   const midia = (p: string) => `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${p}`;
   const cfg = await lerConfiguracoes();
-  const { data: pubs } = await admin.from("publicacoes").select("property_id").eq("canal", "portais").eq("status", "publicada");
-  const ids = [...new Set((pubs ?? []).map((p) => p.property_id))];
-  const { data: imoveis } = ids.length ? await admin.from("properties")
-    .select("id, codigo, titulo, descricao, tipo, valor, area_declarada, updated_at, municipio:municipalities(nome, uf), media:property_media(storage_path, capa, ordem, tipo)")
-    .in("id", ids).in("status", ["publicado", "em_negociacao"]) : { data: [] };
-
-  const listagens = (imoveis ?? []).map((p) => {
-    const mun = p.municipio as unknown as { nome: string; uf: string } | null;
-    const fotos = ((p.media ?? []) as { storage_path: string; capa: boolean; ordem: number; tipo: string }[])
-      .filter((m) => m.tipo === "foto").sort((a, b) => Number(b.capa) - Number(a.capa) || a.ordem - b.ordem).slice(0, 30);
-    const areaM2 = p.area_declarada ? (p.tipo === "rural" ? Number(p.area_declarada) * 10_000 : Number(p.area_declarada)) : null;
-    return `  <Listing>
+  const listagens: string[] = [];
+  let ultimoId: string | null = null;
+  for (;;) {
+    // A consulta parte do imóvel, mesmo quando ele tem duas publicações no portal.
+    let consulta = admin.from("properties")
+      .select("id, codigo, titulo, descricao, tipo, valor, area_declarada, updated_at, municipio:municipalities(nome, uf), media:property_media(storage_path, capa, ordem, tipo), publicacoes!inner(id)")
+      .in("status", ["publicado", "em_negociacao"])
+      .eq("publicacoes.canal", "portais").eq("publicacoes.status", "publicada")
+      .limit(1, { referencedTable: "publicacoes" }).order("id").limit(200);
+    if (ultimoId) consulta = consulta.gt("id", ultimoId);
+    const { data: imoveis, error } = await consulta;
+    if (error || !imoveis) {
+      return new Response("Listagem de imóveis temporariamente indisponível.", {
+        status: 503, headers: { "Cache-Control": "no-store" },
+      });
+    }
+    if (!imoveis.length) break;
+    ultimoId = imoveis[imoveis.length - 1].id;
+    for (const p of imoveis) {
+      const mun = p.municipio as unknown as { nome: string; uf: string } | null;
+      const fotos = ((p.media ?? []) as { storage_path: string; capa: boolean; ordem: number; tipo: string }[])
+        .filter((m) => m.tipo === "foto").sort((a, b) => Number(b.capa) - Number(a.capa) || a.ordem - b.ordem).slice(0, 30);
+      const areaM2 = p.area_declarada ? (p.tipo === "rural" ? Number(p.area_declarada) * 10_000 : Number(p.area_declarada)) : null;
+      listagens.push(`  <Listing>
     <ListingID>${esc(p.codigo)}</ListingID>
-    <Title><![CDATA[${String(p.titulo ?? "").replace(/]]>/g, "")}]]></Title>
+    <Title>${esc(p.titulo)}</Title>
     <TransactionType>For Sale</TransactionType>
     <DetailViewUrl>${esc(`${site}/imovel/${p.codigo}`)}</DetailViewUrl>
     <ListDate>${esc(new Date(p.updated_at).toISOString())}</ListDate>
@@ -40,7 +52,7 @@ ${fotos.map((f, i) => `      <Item medium="image" caption="${esc(p.codigo)}"${i 
     </Media>
     <Details>
       <PropertyType>${TIPO_VRSYNC[p.tipo] ?? "Residential / Land Lot"}</PropertyType>
-      <Description><![CDATA[${String(p.descricao ?? "").replace(/]]>/g, "")}]]></Description>
+      <Description>${esc(p.descricao)}</Description>
       ${p.valor ? `<ListPrice currency="BRL">${Math.round(Number(p.valor))}</ListPrice>` : ""}
       ${areaM2 ? `<LotArea unit="square metres">${Math.round(areaM2)}</LotArea>` : ""}
     </Details>
@@ -55,8 +67,9 @@ ${fotos.map((f, i) => `      <Item medium="image" caption="${esc(p.codigo)}"${i 
       <Telephone>${esc(texto(cfg, "telefone_contato", ""))}</Telephone>
       <Website>${esc(site)}</Website>
     </ContactInfo>
-  </Listing>`;
-  });
+  </Listing>`);
+    }
+  }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <ListingDataFeed xmlns="http://www.vivareal.com/schemas/1.0/VRSync" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">

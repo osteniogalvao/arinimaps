@@ -174,11 +174,24 @@ export async function POST(request: Request) {
   // nota fiscal (central fiscal, migration 0066): só atualiza a situação da nota nossa
   if (typeof body?.event === "string" && body.event.startsWith("INVOICE_") && body.invoice && typeof body.invoice.id === "string") {
     const admin = supabaseAdmin();
-    const { data: nota } = await admin.from("notas_fiscais").select("id, status").eq("gateway_id", body.invoice.id).maybeSingle();
+    const buscarNota = () => admin.from("notas_fiscais").select("id, status, updated_at");
+    let consulta = await buscarNota().eq("gateway_id", body.invoice.id).maybeSingle();
+    const referencia = body.invoice.externalReference;
+    if (!consulta.error && !consulta.data && typeof referencia === "string" && UUID.test(referencia)) {
+      // O webhook pode chegar antes da resposta do POST ou depois de um timeout.
+      consulta = await buscarNota().eq("id", referencia).is("gateway_id", null)
+        .in("status", ["emitindo", "conferir"]).maybeSingle();
+    }
+    if (consulta.error) return NextResponse.json({ error: "Falha ao localizar a nota." }, { status: 503 });
+    const nota = consulta.data;
     if (!nota) return NextResponse.json({ ok: true, ignorado: "nota de outro sistema" });
     const campos = camposDaNota(body.invoice);
-    const { error } = await admin.from("notas_fiscais").update(campos).eq("id", nota.id);
-    if (error) return NextResponse.json({ error: "Falha ao gravar." }, { status: 500 });
+    if (nota.status === "cancelada" || (nota.status === "emitida" && !["emitida", "cancelada"].includes(campos.status))) {
+      return NextResponse.json({ ok: true });
+    }
+    const { data: salva, error } = await admin.from("notas_fiscais").update(campos)
+      .eq("id", nota.id).eq("updated_at", nota.updated_at).select("id").maybeSingle();
+    if (error || !salva) return NextResponse.json({ error: "Falha ao gravar. Reenvie o evento." }, { status: 503 });
     if (campos.status !== nota.status) {
       await logAudit({ acao: "nota_fiscal_asaas", entidade: "notas_fiscais", entidade_id: nota.id, dados_antes: { status: nota.status }, dados_depois: campos });
     }

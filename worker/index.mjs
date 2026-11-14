@@ -1,7 +1,9 @@
 // Worker do Arini Imóveis Brasil — polling da tabela jobs (Postgres/Supabase).
 // Processa: otimizar_video · render_video · screenshot_og · tile_raster · fetch_pois · refresh_pois · gerar_lotes · descarte_retencao · verificar_fontes · inteligencia_mercado · coletar_cotacoes
-// 1 job por vez, teto de memória no container (ver docker-compose).
+// Uma fila para os jobs gerais e uma para consultas de POIs.
 import pg from "pg";
+import { setTimeout as esperar } from "node:timers/promises";
+import { executarJob, proximoJob, recuperarInterrompidos } from "./fila.mjs";
 import { renderVideo } from "./jobs/renderVideo.mjs";
 import { screenshotOg } from "./jobs/screenshotOg.mjs";
 import { tileRaster } from "./jobs/tileRaster.mjs";
@@ -16,7 +18,6 @@ import { lembretesProprietario } from "./jobs/lembretesProprietario.mjs";
 import { coletarCotacoes } from "./jobs/cotacoes.mjs";
 
 const INTERVALO_MS = Number(process.env.WORKER_INTERVALO_MS ?? 15000);
-const MAX_TENTATIVAS = 3;
 
 export const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL, // postgres://postgres:SENHA@db.REF.supabase.co:5432/postgres
@@ -49,22 +50,6 @@ const HANDLERS = {
   coletar_cotacoes: coletarCotacoes,
 };
 
-async function proximoJob() {
-  // claim atômico: só um worker pega cada job
-  const { rows } = await db.query(`
-    update jobs set status = 'processando', tentativas = tentativas + 1, updated_at = now()
-    where id = (
-      select id from jobs
-      where status = 'pendente' or (status = 'erro' and tentativas < $1)
-      order by created_at
-      limit 1
-      for update skip locked
-    )
-    returning id, tipo, payload, tentativas
-  `, [MAX_TENTATIVAS]);
-  return rows[0] ?? null;
-}
-
 // O Swarm envia SIGTERM antes de trocar a imagem. Termine o job já obtido
 // antes de sair, para a próxima réplica continuar da mesma fila.
 let encerrando = false;
@@ -72,32 +57,22 @@ function encerrar() { encerrando = true; }
 process.on("SIGTERM", encerrar);
 process.on("SIGINT", encerrar);
 
-async function loop() {
-  if (encerrando) { await db.end(); process.exit(0); }
-  const job = await proximoJob().catch((e) => {
-    console.error("erro ao buscar job:", e.message);
-    return null;
-  });
-
-  if (job) {
-    console.log(`[job ${job.id}] ${job.tipo} (tentativa ${job.tentativas})`);
-    const handler = HANDLERS[job.tipo];
+async function loop(apenasPois) {
+  while (!encerrando) {
     try {
-      if (!handler) throw new Error(`tipo desconhecido: ${job.tipo}`);
-      await handler(job.payload, db, job);
-      await db.query(`update jobs set status = 'concluido', erro = null where id = $1`, [job.id]);
-      console.log(`[job ${job.id}] concluído`);
+      const job = await proximoJob(db, apenasPois);
+      if (job) {
+        console.log(`[job ${job.id}] ${job.tipo} (tentativa ${job.tentativas})`);
+        await executarJob(db, job, HANDLERS[job.tipo]);
+        continue;
+      }
+      if (process.env.WORKER_UMA_VEZ) return;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(`[job ${job.id}] falhou: ${msg}`);
-      await db.query(`update jobs set status = 'erro', erro = $2 where id = $1`, [job.id, msg.slice(0, 2000)]);
+      console.error("falha ao processar a fila:", e.message);
+      if (process.env.WORKER_UMA_VEZ) throw e;
     }
-    setImmediate(loop); // tem fila? segue direto
-    return;
+    if (!encerrando) await esperar(INTERVALO_MS);
   }
-  // teste local (scripts/worker-local.mjs --uma-vez): fila vazia = fim
-  if (encerrando || process.env.WORKER_UMA_VEZ) { await db.end(); process.exit(0); }
-  setTimeout(loop, INTERVALO_MS);
 }
 
 // Rotinas diárias: enfileira o descarte por prazo de guarda (item 6.4) uma vez
@@ -114,7 +89,8 @@ async function agendarRotinas() {
         insert into jobs (tipo, payload)
         select $1::text, '{}'::jsonb
         where not exists (
-          select 1 from jobs where tipo = $1::text and created_at > now() - interval '23 hours'
+          select 1 from jobs where tipo = $1::text
+            and (status = 'pendente' or created_at > now() - interval '23 hours')
         )`, [tipo]);
     } catch (e) {
       console.error(`agendar ${tipo} falhou:`, e.message);
@@ -132,7 +108,7 @@ async function agendarVerificacaoFontes() {
       select 'verificar_fontes', '{"origem":"worker"}'::jsonb
       where not exists (
         select 1 from jobs where tipo = 'verificar_fontes'
-          and created_at > now() - make_interval(mins => $1::int)
+          and (status = 'pendente' or created_at > now() - make_interval(mins => $1::int))
       )`, [Math.max(10, Math.round(VERIFICA_FONTES_HORAS * 60) - 10)]);
   } catch (e) {
     console.error("agendar verificação das fontes falhou:", e.message);
@@ -180,7 +156,7 @@ async function agendarLembretes() {
       select 'lembretes_proprietario', '{}'::jsonb
       where not exists (
         select 1 from jobs where tipo = 'lembretes_proprietario'
-          and created_at > now() - interval '55 minutes'
+          and (status = 'pendente' or created_at > now() - interval '55 minutes')
       )`);
   } catch (e) {
     console.error("agendar lembretes falhou:", e.message);
@@ -243,23 +219,30 @@ async function emailsCriticos() {
 }
 
 console.log("Arini Imóveis Brasil worker iniciado.");
+async function verificarInterrompidos() {
+  try {
+    const total = await recuperarInterrompidos(db);
+    if (total) console.log(`[fila] ${total} coleta(s) interrompida(s) registrada(s)`);
+  } catch (e) {
+    console.error("falha ao verificar coletas interrompidas:", e.message);
+  }
+}
 // monitoramento: confere /api/saude a cada 5 min e alerta (jobs/monitorar.mjs)
 if (!process.env.WORKER_UMA_VEZ) {
+  setInterval(verificarInterrompidos, 5 * 60_000);
   setInterval(() => void monitorar(db).catch((e) => console.error("[monitor]", e.message)), 5 * 60_000);
   setTimeout(() => void monitorar(db).catch((e) => console.error("[monitor]", e.message)), 30_000);
 }
-agendarPois();
+await Promise.all([verificarInterrompidos(), agendarPois(), agendarVerificacaoFontes(), agendarRotinas(), agendarLembretes(), agendarCotacoes()]);
 setInterval(agendarPois, 24 * 60 * 60 * 1000);
-agendarVerificacaoFontes();
 setInterval(agendarVerificacaoFontes, 30 * 60 * 1000);
-agendarRotinas();
 setInterval(agendarRotinas, 60 * 60 * 1000);
-agendarLembretes();
 setInterval(agendarLembretes, 15 * 60 * 1000);
-agendarCotacoes();
 setInterval(agendarCotacoes, 20 * 60 * 1000);
 if (!process.env.WORKER_UMA_VEZ) {
   setTimeout(rodarCentral, 60_000);
   setInterval(rodarCentral, 10 * 60 * 1000);
 }
-loop();
+await Promise.all([loop(false), loop(true)]);
+await db.end();
+process.exit(0);

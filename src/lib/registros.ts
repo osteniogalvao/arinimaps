@@ -40,6 +40,7 @@ export type Acao = {
   /** status em que a ação aparece */
   quando: string[];
   pedeMotivo?: boolean;
+  pergunta?: string;
   tom?: "verde" | "critico" | "neutro";
   /** só quem atua nestes setores vê a ação */
   setores?: SetorId[];
@@ -57,7 +58,7 @@ export type Recurso = {
   campos: Campo[];
   ordem: { coluna: string; asc?: boolean };
   /** coluna de status (abas de filtro e ações) */
-  status?: { coluna: string; rotulos: Record<string, string>; abertos?: string[] };
+  status?: { coluna: string; rotulos: Record<string, string>; abertos?: string[]; editaveis?: string[] };
   acoes?: Acao[];
   /** coluna de código mostrada antes do título */
   codigo?: string;
@@ -76,6 +77,7 @@ export const DESPESA_STATUS: Record<string, string> = {
 };
 export const NF_STATUS: Record<string, string> = {
   rascunho: "Rascunho", enviada: "Enviada à prefeitura", emitida: "Emitida", cancelada: "Cancelada", erro: "Com erro",
+  emitindo: "Em emissão", conferir: "Conferir no Asaas",
 };
 
 export const RECURSOS: Recurso[] = [
@@ -172,7 +174,7 @@ export const RECURSOS: Recurso[] = [
     ler: ["financeiro", "diretoria"], escrever: ["financeiro", "diretoria"],
     codigo: "codigo", tituloColuna: "tomador_nome", autorColuna: "criado_por", ordem: { coluna: "created_at" },
     busca: ["tomador_nome", "tomador_doc", "codigo", "numero"],
-    status: { coluna: "status", rotulos: NF_STATUS, abertos: ["rascunho", "enviada", "erro"] },
+    status: { coluna: "status", rotulos: NF_STATUS, abertos: ["rascunho", "emitindo", "conferir", "enviada", "erro"], editaveis: ["rascunho"] },
     campos: [
       { nome: "tomador_nome", rotulo: "Tomador (quem recebe a nota)", tipo: "texto", obrigatorio: true },
       { nome: "tomador_doc", rotulo: "CPF ou CNPJ do tomador", tipo: "texto", obrigatorio: true, lista: true },
@@ -184,8 +186,10 @@ export const RECURSOS: Recurso[] = [
       { nome: "erro", rotulo: "Erro", tipo: "texto", sistema: true },
     ],
     acoes: [
-      { id: "emitir", rotulo: "Emitir", quando: ["rascunho", "erro"], tom: "verde" },
-      { id: "atualizar", rotulo: "Consultar situação", quando: ["enviada"] },
+      { id: "emitir", rotulo: "Emitir", quando: ["rascunho"], tom: "verde" },
+      { id: "atualizar", rotulo: "Consultar situação", quando: ["enviada", "erro"] },
+      { id: "vincular", rotulo: "Vincular nota do Asaas", quando: ["conferir", "emitindo"], pedeMotivo: true, pergunta: "Informe o ID da nota localizada no Asaas." },
+      { id: "confirmar_ausencia", rotulo: "Confirmei no Asaas que a nota não existe", quando: ["conferir", "emitindo"], pedeMotivo: true },
       { id: "cancelar", rotulo: "Cancelar nota", quando: ["rascunho", "enviada", "emitida", "erro"], pedeMotivo: true, tom: "critico" },
     ],
   },
@@ -193,7 +197,7 @@ export const RECURSOS: Recurso[] = [
 
 export const PUBLICACAO_STATUS: Record<string, string> = {
   rascunho: "Rascunho", aprovacao: "Esperando aprovação", agendada: "Aprovada e agendada", publicada: "Publicada",
-  erro: "Com erro", cancelada: "Cancelada ou retirada",
+  enviando: "Em publicação", conferir: "Conferir no canal", erro: "Com erro", cancelada: "Cancelada ou retirada",
 };
 export const CANAIS_PUBLICACAO: [string, string][] = [
   ["instagram", "Instagram"], ["facebook", "Facebook"], ["portais", "Portais (feed XML)"], ["site", "Destaque no site"],
@@ -205,7 +209,8 @@ RECURSOS.push(
     descricao: "A edição prepara a publicação e manda para aprovação; o tráfego aprova, agenda e publica. Instagram e Facebook saem pela Meta; portais recebem pelo feed XML.",
     ler: ["marketing", "diretoria"], escrever: ["marketing", "diretoria"],
     codigo: "codigo", tituloColuna: "legenda", autorColuna: "criado_por", ordem: { coluna: "created_at" }, busca: ["legenda", "codigo"],
-    status: { coluna: "status", rotulos: PUBLICACAO_STATUS, abertos: ["rascunho", "aprovacao", "agendada", "erro"] },
+    status: { coluna: "status", rotulos: PUBLICACAO_STATUS,
+      abertos: ["rascunho", "aprovacao", "agendada", "enviando", "conferir", "erro"], editaveis: ["rascunho", "erro"] },
     campos: [
       { nome: "property_id", rotulo: "Imóvel", tipo: "ref", obrigatorio: true, lista: true, soCriar: true,
         ref: { tabela: "properties", rotulo: "codigo", extra: "titulo", filtro: { coluna: "status", valores: ["publicado", "em_negociacao"] } } },
@@ -220,6 +225,8 @@ RECURSOS.push(
       { id: "aprovar", rotulo: "Aprovar", quando: ["aprovacao"], tom: "verde" },
       { id: "devolver", rotulo: "Devolver", quando: ["aprovacao"], pedeMotivo: true },
       { id: "publicar", rotulo: "Publicar agora", quando: ["agendada"], tom: "verde" },
+      { id: "confirmar_entrega", rotulo: "Conferi no canal: foi publicada", quando: ["conferir"], pedeMotivo: true, tom: "verde" },
+      { id: "confirmar_ausencia", rotulo: "Conferi no canal: voltar ao rascunho", quando: ["conferir"], pedeMotivo: true },
       { id: "cancelar", rotulo: "Cancelar ou retirar", quando: ["rascunho", "aprovacao", "agendada", "publicada", "erro"], pedeMotivo: true, tom: "critico" },
     ],
   },

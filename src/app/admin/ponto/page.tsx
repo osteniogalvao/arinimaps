@@ -62,7 +62,7 @@ export default async function Ponto({ searchParams }: PageProps<"/admin/ponto">)
           <p className="lp-display mt-1 text-2xl text-texto">{deHoje.length ? deHoje.map((m) => horaSP(m.marcado_em)).join(" · ") : "Nenhuma marcação"}</p>
           <p className="mt-1 text-sm text-texto-2">Saldo do mês: <strong className={saldo < 0 ? "text-critico" : "text-verde"}>{minutosEmHoras(saldo)}</strong></p>
         </div>
-        <BaterPonto proxima={deHoje.length % 2 === 0 ? "entrada" : "saída"} />
+        <BaterPonto userId={user.id} proxima={deHoje.length % 2 === 0 ? "entrada" : "saída"} />
       </section>
 
       <Secao titulo="Espelho do mês" acao={

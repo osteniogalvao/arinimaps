@@ -73,14 +73,18 @@ export async function PATCH(request: Request, ctx: Ctx) {
       acaoAudit = `${r.tabela}_${acao}`;
     } else {
       // edição: não mexe em registro que já saiu do fluxo aberto
-      if (r.status?.abertos && !r.status.abertos.includes(String(antes[r.status.coluna]))) {
-        throw new ErroRegistro("Este registro já foi fechado e não pode mais ser editado.");
+      const editaveis = r.status?.editaveis ?? r.status?.abertos;
+      if (r.status && editaveis && !editaveis.includes(String(antes[r.status.coluna]))) {
+        throw new ErroRegistro("Este registro não permite edição na situação atual.");
       }
       mudanca = validarRegistro(r, corpo, false);
     }
     if (mudanca && Object.keys(mudanca).length) {
-      const { error } = await admin.from(r.tabela).update(mudanca).eq("id", corpo.id);
+      let escrita = admin.from(r.tabela).update(mudanca).eq("id", corpo.id);
+      if (r.id === "publicacoes" || r.id === "notas-fiscais") escrita = escrita.eq("updated_at", antes.updated_at);
+      const { data: gravada, error } = await escrita.select("id").maybeSingle();
       if (error) throw new ErroRegistro(error.message);
+      if (!gravada) throw new ErroRegistro("O registro foi alterado. Atualize a página.", 409);
     }
     await logAudit({ user_id: a.userId, acao: acaoAudit, entidade: r.tabela, entidade_id: corpo.id, dados_antes: antes, dados_depois: mudanca });
     return NextResponse.json({ ok: true });

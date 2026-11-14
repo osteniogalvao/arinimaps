@@ -1,9 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { lerEmLotes } from "@/lib/supabase/lotes";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { CircleDollarSign, Download, Receipt, Repeat, Wallet } from "lucide-react";
 import { formatBRL, plural } from "@/lib/format";
 import { CabecalhoSetor, Indicadores, Secao, TarefasDoSetor, dataBR, LinkAcao } from "@/components/admin/Painel";
 import { LISTA, LISTA_VAZIA, TABELA, TABELA_CAIXA, TBODY, TH, THEAD, TR } from "@/components/admin/estilos";
+import { Vazio } from "@/components/ui/Pagina";
 
 type Mes = {
   mes: string; vendas: number; volume_vendido: number;
@@ -19,22 +21,29 @@ export default async function PainelFinanceiro() {
   const user = await exigirSetor("financeiro");
   const admin = supabaseAdmin();
 
-  const [{ data: mensal }, { data: comissoes }, { data: faturas }, { data: assinaturas }] = await Promise.all([
+  const [mensal, comissoes, faturas, atrasadas, assinaturas] = await Promise.all([
     admin.rpc("fn_financeiro_mensal", { p_meses: 12 }),
-    admin.from("commissions")
+    lerEmLotes((de, ate) => admin.from("commissions")
       .select("id, valor, status, created_at, sale:sales(data_venda, property:properties(codigo, titulo))")
-      .in("status", ["registrada", "cobrada"]).order("created_at"),
+      .in("status", ["registrada", "cobrada"]).order("created_at").order("id").range(de, ate), { maximo: Infinity }),
     admin.from("invoices")
       .select("id, competencia, valor, status, subscription:subscriptions(property:properties(codigo, titulo))")
-      .in("status", ["aberta", "vencida"]).order("competencia").limit(40),
-    admin.from("subscriptions").select("valor_mensal, status"),
+      .in("status", ["aberta", "vencida"]).order("competencia").order("id").limit(40),
+    lerEmLotes((de, ate) => admin.from("invoices").select("valor").eq("status", "vencida")
+      .order("id").range(de, ate), { maximo: Infinity }),
+    lerEmLotes((de, ate) => admin.from("subscriptions").select("valor_mensal").eq("status", "ativa")
+      .order("id").range(de, ate), { maximo: Infinity }),
   ]);
+  if (mensal.error || comissoes.error || faturas.error || atrasadas.error || assinaturas.error) {
+    return <><CabecalhoSetor setor="financeiro" /><Vazio icone={Receipt} titulo="Financeiro indisponível"
+      texto="Não foi possível carregar todos os dados do período. Tente novamente." /></>;
+  }
 
-  const meses = (mensal ?? []) as Mes[];
+  const meses = (mensal.data ?? []) as Mes[];
   const atual = meses[0];
-  const aReceber = (comissoes ?? []).reduce((s, c) => s + Number(c.valor), 0);
-  const vencidas = (faturas ?? []).filter((f) => f.status === "vencida");
-  const recorrente = (assinaturas ?? []).filter((a) => a.status === "ativa").reduce((s, a) => s + Number(a.valor_mensal), 0);
+  const aReceber = comissoes.data.reduce((s, c) => s + Number(c.valor), 0);
+  const vencidas = atrasadas.data;
+  const recorrente = assinaturas.data.reduce((s, a) => s + Number(a.valor_mensal), 0);
   const recebido12 = meses.reduce((s, m) => s + Number(m.comissao_recebida) + Number(m.mensalidade_recebida), 0);
   const brl = (v: number) => (Number(v) ? formatBRL(Number(v)) : "—");
 
@@ -86,7 +95,7 @@ export default async function PainelFinanceiro() {
       <div className="grid gap-10 lg:gap-6 lg:grid-cols-2">
         <Secao titulo="Comissões a receber" acao={<LinkAcao href="/admin/comissoes">Abrir comissões</LinkAcao>}>
           <div className={LISTA}>
-            {(comissoes ?? []).map((c) => {
+            {comissoes.data.map((c) => {
               const venda = c.sale as unknown as { data_venda: string; property: { codigo: string; titulo: string } | null } | null;
               return (
                 <div key={c.id} className="flex items-center justify-between gap-4 px-5 py-3.5 text-[0.95rem]">
@@ -98,13 +107,13 @@ export default async function PainelFinanceiro() {
                 </div>
               );
             })}
-            {!comissoes?.length && <p className={LISTA_VAZIA}>Nenhuma comissão em aberto.</p>}
+            {!comissoes.data.length && <p className={LISTA_VAZIA}>Nenhuma comissão em aberto.</p>}
           </div>
         </Secao>
 
         <Secao titulo="Faturas em aberto" acao={<LinkAcao href="/admin/mensalidades">Abrir mensalidades</LinkAcao>}>
           <div className={LISTA}>
-            {(faturas ?? []).map((f) => {
+            {(faturas.data ?? []).map((f) => {
               const p = (f.subscription as unknown as { property: { codigo: string; titulo: string } | null } | null)?.property;
               return (
                 <div key={f.id} className="flex items-center justify-between gap-4 px-5 py-3.5 text-[0.95rem]">
@@ -118,7 +127,7 @@ export default async function PainelFinanceiro() {
                 </div>
               );
             })}
-            {!faturas?.length && <p className={LISTA_VAZIA}>Nenhuma fatura em aberto.</p>}
+            {!faturas.data?.length && <p className={LISTA_VAZIA}>Nenhuma fatura em aberto.</p>}
           </div>
         </Secao>
       </div>

@@ -54,17 +54,26 @@ export async function GET(request: Request) {
       if (error) throw new Error(error.message);
     }),
     medir(async () => {
-      // job pendente há mais de 30 min = ninguém está processando a fila
       const corte = new Date(Date.now() - 30 * 60_000).toISOString();
-      const { count, error } = await admin.from("jobs").select("id", { count: "exact", head: true })
-        .eq("status", "pendente").lt("created_at", corte);
-      if (error) throw new Error(error.message);
-      if (count) throw new Error(`${count} tarefa(s) esperando há mais de 30 min — o worker parou?`);
+      const [pendentes, processando] = await Promise.all([
+        admin.from("jobs").select("id", { count: "exact", head: true }).eq("status", "pendente").lt("created_at", corte),
+        admin.from("jobs").select("id", { count: "exact", head: true }).eq("status", "processando").lt("updated_at", corte),
+      ]);
+      if (pendentes.error) throw new Error(pendentes.error.message);
+      if (processando.error) throw new Error(processando.error.message);
+      if (processando.count) throw new Error(`${processando.count} tarefa(s) em processamento sem atualização há mais de 30 min.`);
+      if (!pendentes.count) return;
+      const progresso = await admin.from("jobs").select("id").in("status", ["processando", "concluido", "erro"])
+        .gte("updated_at", corte).limit(1);
+      if (progresso.error) throw new Error(progresso.error.message);
+      const espera = `${pendentes.count} tarefa(s) aguardam há mais de 30 min.`;
+      if (!progresso.data?.length) throw new Error(`${espera} Nenhuma atividade recente do worker.`);
+      return `${espera} Worker com atividade recente.`;
     }),
     medir(async () => {
       // situação mantida pelo job verificar_fontes (3 falhas seguidas = instável)
       const { data, error } = await admin.from("fontes_externas").select("nome, situacao").eq("ativa", true);
-      if (error) return "sem dados de saúde das fontes";
+      if (error) throw new Error("Falha ao consultar a saúde das fontes.");
       const instaveis = (data ?? []).filter((f) => f.situacao && f.situacao !== "ok");
       if (instaveis.length) return `${instaveis.length} fonte(s) instável(is): ${instaveis.map((f) => f.nome).join(", ")}`;
     }),

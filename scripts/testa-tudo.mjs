@@ -57,8 +57,8 @@ const resultados = [];
 for (const [nome, arquivo, precisaServidor] of PASSOS) {
   if (somente && !arquivo.includes(somente)) continue;
   if (precisaServidor) {
-    const ok = await fetch(`${BASE}/acesso`).then((r) => r.status < 500).catch(() => false);
-    if (!ok) { resultados.push([nome, "pulado (servidor fora do ar em " + BASE + ")"]); continue; }
+    const ok = await fetch(`${BASE}/acesso`, { signal: AbortSignal.timeout(15000) }).then((r) => r.ok).catch(() => false);
+    if (!ok) { resultados.push([nome, "FALHOU (servidor indisponível em " + BASE + ")"]); continue; }
   }
   console.log(`\n━━ ${nome} (${arquivo})`);
   await zerarLimitesDeTeste();
@@ -69,4 +69,5 @@ for (const [nome, arquivo, precisaServidor] of PASSOS) {
 
 console.log("\n━━ Resumo");
 for (const [nome, r] of resultados) console.log(`${r.startsWith("ok") ? "✓" : r.startsWith("pulado") ? "–" : "✗"} ${nome}: ${r}`);
-process.exit(resultados.some(([, r]) => r.startsWith("FALHOU")) ? 1 : 0);
+if (!resultados.length) console.error("Nenhuma etapa corresponde ao filtro informado.");
+process.exit(!resultados.length || resultados.some(([, r]) => r.startsWith("FALHOU")) ? 1 : 0);

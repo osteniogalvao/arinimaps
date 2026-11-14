@@ -13,33 +13,27 @@ export async function POST(request: Request) {
   const a = await ator();
   if (!a?.ehArini) return NextResponse.json({ error: "Restrito à equipe." }, { status: 403 });
   const b = await request.json().catch(() => ({}));
+  if (b.user_id !== undefined && b.user_id !== a.userId) return NextResponse.json({ error: "Esta marcação pertence a outra conta." }, { status: 403 });
+  if (b.registro_cliente != null && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(b.registro_cliente)) {
+    return NextResponse.json({ error: "Identificador da marcação inválido." }, { status: 400 });
+  }
   const num = (v: unknown, min: number, max: number) => {
+    if (v == null || v === "") return null;
     const n = Number(v);
     return Number.isFinite(n) && n >= min && n <= max ? n : null;
   };
-  const linha: Record<string, unknown> = {
-    user_id: a.userId, origem: "web",
-    ip: (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 60) || null,
-    user_agent: (request.headers.get("user-agent") ?? "").slice(0, 300) || null,
-    latitude: num(b.latitude, -90, 90), longitude: num(b.longitude, -180, 180), precisao_m: num(b.precisao, 0, 100_000),
-  };
-  if (b.offline_em) {
-    const t = new Date(String(b.offline_em));
-    if (Number.isNaN(+t) || +t > Date.now() + 60_000 || +t < Date.now() - 12 * 3_600_000) {
-      return NextResponse.json({ error: "Marcação offline fora do prazo. Peça um ajuste." }, { status: 400 });
-    }
-    linha.origem = "offline";
-    linha.marcado_em = t.toISOString();
-  }
-  const admin = supabaseAdmin();
-  // duas marcações no mesmo minuto quase sempre são clique duplo
-  const { data: ultima } = await admin.from("ponto_marcacoes").select("marcado_em").eq("user_id", a.userId)
-    .order("marcado_em", { ascending: false }).limit(1).maybeSingle();
-  if (ultima && Math.abs(+new Date(String(linha.marcado_em ?? new Date().toISOString())) - +new Date(ultima.marcado_em)) < 60_000) {
-    return NextResponse.json({ error: "Você acabou de bater o ponto." }, { status: 409 });
-  }
-  const { data, error } = await admin.from("ponto_marcacoes").insert(linha).select("id, nsr, marcado_em, hash").single();
-  if (error) return NextResponse.json({ error: "O ponto ainda não foi ativado (migration 0067)." }, { status: 503 });
-  await logAudit({ user_id: a.userId, acao: "ponto_marcado", entidade: "ponto_marcacoes", entidade_id: data.id, dados_depois: { nsr: data.nsr, origem: linha.origem } });
-  return NextResponse.json({ ok: true, comprovante: data });
+  const offline = b.offline_em ? new Date(String(b.offline_em)) : null;
+  if (offline && Number.isNaN(+offline)) return NextResponse.json({ error: "Horário de marcação inválido." }, { status: 400 });
+  const { data, error } = await supabaseAdmin().rpc("fn_registrar_ponto", {
+    p_user: a.userId, p_registro: b.registro_cliente ?? null, p_offline_em: offline?.toISOString() ?? null,
+    p_ip: (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 60) || null,
+    p_agente: (request.headers.get("user-agent") ?? "").slice(0, 300) || null,
+    p_lat: num(b.latitude, -90, 90), p_lng: num(b.longitude, -180, 180), p_precisao: num(b.precisao, 0, 100_000),
+  });
+  if (error || !data) return NextResponse.json({ error: "Não foi possível registrar o ponto agora." }, { status: 503 });
+  if (data.erro === "fora_do_prazo") return NextResponse.json({ error: "Marcação offline fora do prazo. Peça um ajuste." }, { status: 400 });
+  if (data.erro === "proxima") return NextResponse.json({ error: "Já há uma marcação a menos de um minuto desse horário. Confira o espelho." }, { status: 409 });
+  if (data.novo) await logAudit({ user_id: a.userId, acao: "ponto_marcado", entidade: "ponto_marcacoes", entidade_id: data.comprovante.id,
+    dados_depois: { nsr: data.comprovante.nsr, origem: offline ? "offline" : "web" } });
+  return NextResponse.json({ ok: true, comprovante: data.comprovante });
 }

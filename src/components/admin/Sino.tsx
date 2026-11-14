@@ -14,7 +14,7 @@ const COR = { info: "text-texto-2", atencao: "text-ouro", critico: "text-critico
  * Sino de notificações da Central (3 níveis) e envio do que ficou guardado
  * sem internet (modo de campo). Atualiza a cada minuto e quando a aba volta.
  */
-export default function Sino() {
+export default function Sino({ userId }: { userId: string }) {
   const [itens, setItens] = useState<Item[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
   const [aberto, setAberto] = useState(false);
@@ -23,6 +23,8 @@ export default function Sino() {
 
   useEffect(() => {
     let vivo = true;
+    let sincronizando = false;
+    const total = () => lerFila().filter((i) => !i.corpo.user_id || i.corpo.user_id === userId).length;
     async function carregar() {
       const r = await fetch("/api/admin/notificacoes").catch(() => null);
       if (!r?.ok || !vivo) return;
@@ -30,18 +32,21 @@ export default function Sino() {
       setItens(j.itens); setNaoLidas(j.naoLidas);
     }
     async function sync() {
-      setFila(lerFila().length);
-      if (navigator.onLine && lerFila().length) { await sincronizar(); setFila(lerFila().length); }
+      setFila(total());
+      if (navigator.onLine && total() && !sincronizando) {
+        sincronizando = true;
+        try { await sincronizar(userId); } finally { sincronizando = false; if (vivo) setFila(total()); }
+      }
     }
     void carregar(); void sync();
     const t = setInterval(() => { void carregar(); void sync(); }, 60_000);
     const vis = () => { if (document.visibilityState === "visible") { void carregar(); void sync(); } };
-    const mudouFila = () => setFila(lerFila().length);
+    const mudouFila = () => setFila(total());
     document.addEventListener("visibilitychange", vis);
     window.addEventListener("online", sync);
     window.addEventListener("arini-fila", mudouFila);
     return () => { vivo = false; clearInterval(t); document.removeEventListener("visibilitychange", vis); window.removeEventListener("online", sync); window.removeEventListener("arini-fila", mudouFila); };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (!aberto) return;
@@ -74,7 +79,7 @@ export default function Sino() {
             <p className="text-sm font-semibold text-texto">Notificações</p>
             {naoLidas > 0 && <button type="button" onClick={lerTodas} className="text-xs font-semibold text-verde hover:underline">Marcar todas como lidas</button>}
           </div>
-          {fila > 0 && <p className="border-b border-linha bg-alerta/10 px-4 py-2 text-xs text-alerta">{fila} registro(s) feito(s) sem internet aguardando envio.</p>}
+          {fila > 0 && <p className="border-b border-linha bg-alerta/10 px-4 py-2 text-xs text-alerta">{fila} registro(s) no aparelho. <Link className="underline" href="/admin/ponto">Conferir marcações de ponto</Link></p>}
           <div className="max-h-[60vh] divide-y divide-linha overflow-y-auto">
             {itens.map((i) => {
               const Icone = ICONE[i.nivel];

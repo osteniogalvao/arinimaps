@@ -11,8 +11,9 @@ export async function GET(request: Request) {
   if (!temSetor(a, "comercial", "diretoria")) return NextResponse.json({ error: "Restrito ao Comercial." }, { status: 403 });
   const opp = new URL(request.url).searchParams.get("opp") ?? "";
   const { data, error } = await supabaseAdmin().from("whatsapp_mensagens").select("id, direcao, texto, status, erro, created_at")
-    .eq("opportunity_id", opp).order("created_at").limit(200);
-  return NextResponse.json({ configurado: whatsappConfigurado(), mensagens: error ? [] : data ?? [] });
+    .eq("opportunity_id", opp).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(200);
+  if (error) return NextResponse.json({ error: "Não foi possível carregar a conversa." }, { status: 503 });
+  return NextResponse.json({ configurado: whatsappConfigurado(), mensagens: (data ?? []).reverse() });
 }
 
 export async function POST(request: Request) {

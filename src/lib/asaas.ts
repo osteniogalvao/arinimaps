@@ -116,7 +116,7 @@ export async function asaasCriarCobranca(dados: {
 // ---------------------------------------------------------------------------
 export type AsaasNota = {
   id: string; status: string; number?: string | null; pdfUrl?: string | null; xmlUrl?: string | null;
-  statusDescription?: string | null;
+  statusDescription?: string | null; externalReference?: string | null;
 };
 
 export async function asaasEmitirNota(dados: {
@@ -146,6 +146,13 @@ export async function asaasEmitirNota(dados: {
 export async function asaasBuscarNota(id: string) {
   if (!asaasConfigurado()) return null;
   return chamar<AsaasNota>(`/invoices/${encodeURIComponent(id)}`);
+}
+
+/** Em conciliação, uma resposta vazia é diferente de uma consulta indisponível. */
+export async function asaasNotasPorReferencia(referencia: string) {
+  if (!asaasConfigurado()) throw new AsaasErro(503, "O Asaas não está configurado para conferir a nota.");
+  const lista = await chamar<Lista<AsaasNota>>(`/invoices?externalReference=${encodeURIComponent(referencia)}&limit=2`);
+  return lista.data;
 }
 
 export async function asaasCancelarNota(id: string) {

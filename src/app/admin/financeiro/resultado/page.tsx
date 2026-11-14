@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CalendarClock, CheckCircle2, Download, FileText, TrendingDown, TrendingUp } from "lucide-react";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { lerEmLotes } from "@/lib/supabase/lotes";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { formatBRL } from "@/lib/format";
 import { CabecalhoPagina, Vazio } from "@/components/ui/Pagina";
@@ -19,34 +20,39 @@ const nomeMes = (m: string) =>
 export default async function Resultado() {
   await exigirSetor("financeiro", "diretoria");
   const admin = supabaseAdmin();
-  const em7 = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
-  const inicioMes = new Date().toISOString().slice(0, 8) + "01";
-  const ha12 = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  const [ano, mes, dia] = hoje.split("-").map(Number);
+  const em7 = new Date(Date.UTC(ano, mes - 1, dia + 7)).toISOString().slice(0, 10);
+  const inicioMes = hoje.slice(0, 8) + "01T00:00:00-03:00";
+  const ha12 = new Date(Date.UTC(ano, mes - 12, 1)).toISOString().slice(0, 10);
 
-  const [{ data: meses, error }, { data: pendentes }, { data: aPagar }, { data: porCentro }, { data: notas }] = await Promise.all([
+  const [mensal, pendentes, proximas, gastos, notas] = await Promise.all([
     admin.rpc("fn_resultado_mensal", { p_meses: 12 }),
-    admin.from("despesas").select("id, codigo, descricao, valor").eq("status", "pendente").order("created_at").limit(20),
-    admin.from("despesas").select("id, codigo, descricao, valor, vencimento").eq("status", "aprovada").lte("vencimento", em7).order("vencimento").limit(20),
-    admin.from("lancamentos_contabeis").select("valor, centro:centros_custo(nome)").eq("natureza", "saida").eq("estornado", false).gte("data", ha12),
-    admin.from("notas_fiscais").select("valor, status").gte("created_at", inicioMes),
+    admin.from("despesas").select("id", { count: "exact", head: true }).eq("status", "pendente"),
+    admin.from("despesas").select("id, codigo, descricao, valor, vencimento").eq("status", "aprovada")
+      .lte("vencimento", em7).order("vencimento").order("id").limit(20),
+    lerEmLotes((de, ate) => admin.from("lancamentos_contabeis").select("valor, centro:centros_custo(nome)")
+      .eq("natureza", "saida").eq("estornado", false).gte("data", ha12).lte("data", hoje).order("id").range(de, ate), { maximo: Infinity }),
+    lerEmLotes((de, ate) => admin.from("notas_fiscais").select("valor")
+      .eq("status", "emitida").gte("emitida_em", inicioMes).order("id").range(de, ate), { maximo: Infinity }),
   ]);
-  if (error) {
+  if (mensal.error || pendentes.error || pendentes.count === null || proximas.error || gastos.error || notas.error) {
     return (
       <div className="max-w-4xl space-y-6">
         <CabecalhoPagina eyebrow="Financeiro" titulo="Resultado e contabilidade" />
-        <Vazio icone={FileText} titulo="Falta atualizar o banco" texto="Esta tela precisa da migration 0066 (financeiro central)." />
+        <Vazio icone={FileText} titulo="Resultado indisponível" texto="Não foi possível carregar todos os dados do período. Tente novamente." />
       </div>
     );
   }
-  const lista = (meses ?? []) as Mes[];
+  const lista = (mensal.data ?? []) as Mes[];
   const atual = lista[0];
   const centros = new Map<string, number>();
-  for (const l of porCentro ?? []) {
+  for (const l of gastos.data) {
     const nome = (l.centro as unknown as { nome: string } | null)?.nome ?? "Sem centro de custo";
     centros.set(nome, (centros.get(nome) ?? 0) + Number(l.valor));
   }
   const totalCentros = [...centros.values()].reduce((a, b) => a + b, 0);
-  const emitidas = (notas ?? []).filter((n) => n.status === "emitida");
+  const emitidas = notas.data;
 
   return (
     <div className="max-w-6xl space-y-10">
@@ -57,7 +63,7 @@ export default async function Resultado() {
       <Indicadores itens={[
         { rotulo: "Entradas no mês", icone: TrendingUp, valor: formatBRL(Number(atual?.entradas ?? 0)) },
         { rotulo: "Saídas no mês", icone: TrendingDown, valor: formatBRL(Number(atual?.saidas ?? 0)) },
-        { rotulo: "Aguardando aprovação", icone: CheckCircle2, valor: pendentes?.length ?? 0, href: "/admin/registros/despesas?status=pendente", destaque: !!pendentes?.length },
+        { rotulo: "Aguardando aprovação", icone: CheckCircle2, valor: pendentes.count, href: "/admin/registros/despesas?status=pendente", destaque: pendentes.count > 0 },
         { rotulo: "Notas emitidas no mês", icone: FileText, valor: emitidas.length, href: "/admin/registros/notas-fiscais?status=todos",
           nota: emitidas.length ? formatBRL(emitidas.reduce((s, n) => s + Number(n.valor), 0)) : undefined },
       ]} />
@@ -96,18 +102,18 @@ export default async function Resultado() {
         </Secao>
         <Secao titulo="Vence nos próximos 7 dias">
           <div className={LISTA}>
-            {(aPagar ?? []).map((d) => (
+            {(proximas.data ?? []).map((d) => (
               <Link key={d.id} href="/admin/registros/despesas?status=aprovada" className="flex items-center justify-between gap-4 px-5 py-3.5 text-[0.95rem] hover:bg-superficie-2/70">
                 <span className="min-w-0">
                   <span className="font-medium text-texto">{d.descricao}</span>
-                  <span className={"mt-0.5 flex items-center gap-1 text-sm " + (d.vencimento < new Date().toISOString().slice(0, 10) ? "text-critico" : "text-texto-2")}>
+                  <span className={"mt-0.5 flex items-center gap-1 text-sm " + (d.vencimento < hoje ? "text-critico" : "text-texto-2")}>
                     <CalendarClock className="size-3.5" /> {d.codigo} · {new Date(d.vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
                   </span>
                 </span>
                 <span className="lp-display text-lg tabular-nums text-texto">{formatBRL(Number(d.valor))}</span>
               </Link>
             ))}
-            {!aPagar?.length && <p className={LISTA_VAZIA}>Nada vencendo.</p>}
+            {!proximas.data?.length && <p className={LISTA_VAZIA}>Nada vencendo.</p>}
           </div>
         </Secao>
       </div>

@@ -72,17 +72,18 @@ export default function Registros({ recursoId, linhas, opcoes, podeEscrever, nom
     }
   }
 
-  async function acao(l: Linha, id: string, pedeMotivo?: boolean, rotulo?: string) {
+  async function acao(l: Linha, id: string, pedeMotivo?: boolean, rotulo?: string, pergunta?: string) {
     let motivo = "";
     if (pedeMotivo) {
-      motivo = window.prompt(`${rotulo}: explique o motivo`) ?? "";
+      motivo = window.prompt(pergunta ?? `${rotulo}: explique o motivo`) ?? "";
       if (!motivo.trim()) return;
     }
     await enviar("PATCH", { id: l.id, acao: id, motivo });
   }
 
   const statusDe = (l: Linha) => (r.status ? String(l[r.status.coluna] ?? "") : "");
-  const editavel = (l: Linha) => podeEscrever && (!r.status?.abertos || r.status.abertos.includes(statusDe(l)));
+  const estadosEditaveis = r.status?.editaveis ?? r.status?.abertos;
+  const editavel = (l: Linha) => podeEscrever && (!estadosEditaveis || estadosEditaveis.includes(statusDe(l)));
 
   return (
     <div className="space-y-4">
@@ -150,7 +151,7 @@ export default function Registros({ recursoId, linhas, opcoes, podeEscrever, nom
                   <td className={TD}>
                     <span className="flex flex-wrap justify-end gap-1.5">
                       {podeEscrever && acoes.map((x) => (
-                        <button key={x.id} type="button" disabled={ocupado} onClick={() => acao(l, x.id, x.pedeMotivo, x.rotulo)}
+                        <button key={x.id} type="button" disabled={ocupado} onClick={() => acao(l, x.id, x.pedeMotivo, x.rotulo, x.pergunta)}
                           className={"rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60 " +
                             (x.tom === "verde" ? "border-verde bg-verde text-fundo" : x.tom === "critico" ? "border-critico/40 text-critico" : "border-linha-forte text-texto-2 hover:text-texto")}>
                           {x.rotulo}

@@ -117,8 +117,8 @@ const LINK_TOPO =
   "items-center gap-2 rounded-full border border-linha-forte px-4 py-2 text-sm font-semibold text-texto-2 transition-colors hover:border-verde hover:text-verde";
 
 export default function AdminShell({
-  children, nome, papel, setores, avatar = null,
-}: { children: React.ReactNode; nome: string; papel: string; setores: SetorId[]; avatar?: string | null }) {
+  children, userId, nome, papel, setores, avatar = null,
+}: { children: React.ReactNode; userId: string; nome: string; papel: string; setores: SetorId[]; avatar?: string | null }) {
   const caminho = usePathname();
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
@@ -299,7 +299,7 @@ export default function AdminShell({
                 className="w-44 rounded-full border border-linha-forte bg-superficie-2 px-4 py-2 text-sm text-texto placeholder:text-texto-2/70 focus:w-64 focus:border-verde focus:outline-none transition-all" />
             </form>
             <Link href="/admin/busca" aria-label="Buscar" className="md:hidden grid size-10 place-items-center rounded-full border border-linha-forte text-texto-2"><Search className="size-[18px]" /></Link>
-            <Sino />
+            <Sino userId={userId} />
             <BotaoTema />
             <Link href="/mapa" title="Ver mapa público" className={"hidden md:inline-flex " + LINK_TOPO}>
               <IconeMapa className="size-4" /> Mapa

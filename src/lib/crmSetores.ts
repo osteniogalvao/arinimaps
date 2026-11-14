@@ -28,7 +28,7 @@ export function camposFaltando(campos: CampoCrm[], etapas: Etapa[], destino: str
     const desde = etapas.find((e) => e.id === c.exigido_desde)?.ordem ?? Infinity;
     if (ordemDestino < desde) return false;
     const v = dados[c.chave];
-    return v === undefined || v === null || v === "" || (c.tipo === "bool" && v !== true);
+    return v === undefined || v === null || (typeof v === "string" && !v.trim()) || (c.tipo === "bool" && v !== true);
   });
 }
 
