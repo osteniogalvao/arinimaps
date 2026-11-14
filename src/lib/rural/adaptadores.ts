@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { ufsDoEnvelope } from "./ufs";
 // relativo (não "@/"): scripts/testa-apis-rurais.mjs carrega este arquivo pelo jiti, sem os aliases do Next
 import { EsperaEsgotada, fila, inteiroDoAmbiente } from "../seguranca/fila";
-import { getComCadeia } from "../geo/tlsOrgaos";
+import { buscarFonte } from "../geo/tlsOrgaos";
 import { supabaseAdmin } from "../supabase/admin";
 import { TEMAS_CAR, type TemaCar } from "../geo/temasCar";
 import { buscarCenas, ndviDaArea, processamentoLigado, type EstatisticaNdvi } from "../sentinel/copernicus";
@@ -97,14 +97,8 @@ const contexto = new AsyncLocalStorage<AbortSignal>();
 async function pedir(url: string, opcoes: RequestInit, cancelado?: AbortSignal): Promise<Response> {
   const host = new URL(url).host;
   return fila(`orgao:${host}`, MAX_POR_ORGAO).executar({ esperaMs: ESPERA_FONTE, signal: cancelado }, async () => {
-    // FUNAI: o servidor não manda o certificado intermediário e o fetch do
-    // Node recusa (UNABLE_TO_VERIFY_LEAF_SIGNATURE) — ver ../geo/tlsOrgaos.ts
-    if (host === "geoserver.funai.gov.br") {
-      const r = await getComCadeia(url, { "User-Agent": UA, Accept: "application/json", ...(opcoes.headers as Record<string, string> ?? {}) }, TIMEOUT);
-      return new Response(r.corpo, { status: r.status });
-    }
     const tempo = AbortSignal.timeout(TIMEOUT);
-    const r = await fetch(url, {
+    const r = await buscarFonte(url, {
       ...opcoes,
       headers: { "User-Agent": UA, Accept: "application/json", ...(opcoes.headers ?? {}) },
       signal: cancelado ? AbortSignal.any([tempo, cancelado]) : tempo,

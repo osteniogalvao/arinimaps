@@ -3,7 +3,7 @@ import "server-only";
 import { simplify } from "@turf/simplify";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ufsDoEnvelope } from "@/lib/rural/ufs";
-import { getComCadeia } from "@/lib/geo/tlsOrgaos";
+import { buscarFonte } from "@/lib/geo/tlsOrgaos";
 import type { CamadaOficialId } from "@/lib/map/camadasOficiais";
 
 /**
@@ -41,7 +41,7 @@ async function pedir(url: string, aceitar = "application/json") {
   let ultimo = "";
   for (let i = 0; i < 3; i++) {
     try {
-      const r = await fetch(url, { headers: { "User-Agent": UA, Accept: aceitar }, signal: AbortSignal.timeout(45_000) });
+      const r = await buscarFonte(url, { headers: { "User-Agent": UA, Accept: aceitar }, signal: AbortSignal.timeout(45_000) });
       if (r.ok) return r;
       ultimo = `HTTP ${r.status}`;
       if (r.status !== 404 && r.status < 500) break;
@@ -54,26 +54,10 @@ async function pedir(url: string, aceitar = "application/json") {
   throw new Error(ultimo || "falha desconhecida");
 }
 
-async function pedirComCadeia(url: string) {
-  let ultimo = "";
-  for (let i = 0; i < 3; i++) {
-    try {
-      const r = await getComCadeia(url, { "User-Agent": UA, Accept: "application/json" });
-      if (r.status === 200) return JSON.parse(r.corpo);
-      ultimo = `HTTP ${r.status}`;
-    } catch (e) {
-      ultimo = e instanceof Error ? e.message : String(e);
-    }
-    await new Promise((ok) => setTimeout(ok, 600 * (i + 1)));
-  }
-  throw new Error(ultimo);
-}
-
 async function wfs(base: string, camada: string, env: Env, max = 2000) {
   const url = `${base}?service=WFS&version=1.0.0&request=GetFeature&typeName=${camada}&outputFormat=application/json` +
     `&maxFeatures=${max}&bbox=${env.xmin},${env.ymin},${env.xmax},${env.ymax},EPSG:4326`;
-  // FUNAI: cadeia de certificado incompleta no servidor (ver tlsOrgaos.ts)
-  const j = base.includes("funai.gov.br") ? await pedirComCadeia(url) : await (await pedir(url)).json();
+  const j = await (await pedir(url)).json();
   if (j.exceptions) throw new Error(String(j.exceptions[0]?.text ?? "erro do WFS"));
   return (j.features ?? []) as { geometry: GeoJSON.Geometry; properties: Record<string, unknown> }[];
 }

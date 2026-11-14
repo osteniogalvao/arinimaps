@@ -6,6 +6,8 @@
 // ~2 km em Iturama, pedindo só a CONTAGEM (hits / returnCountOnly), para medir
 // o serviço sem pesar nele.
 
+import { buscarFonte } from "./tlsOrgaos.mjs";
+
 const UA = "AriniImoveisBrasil/1.0 (contato@arinibrasil.com.br)";
 /** acima disso a fonte conta como fora: o relatório não espera mais que 40 s */
 export const LIMITE_MS = 30_000;
@@ -24,7 +26,7 @@ export async function sondarFonte(fonte) {
     return { fonte_id: fonte.id, ok: false, status_http: null, ms: 0, erro: "fonte sem sonda cadastrada" };
   }
   try {
-    const r = await fetch(fonte.sonda_url, {
+    const r = await buscarFonte(fonte.sonda_url, {
       headers: { "User-Agent": UA },
       signal: AbortSignal.timeout(LIMITE_MS),
     });
