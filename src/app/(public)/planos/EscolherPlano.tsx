@@ -158,7 +158,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
       </div>
     </fieldset>
 
-    <fieldset disabled={enviando} id="configuracao" className="cartao scroll-mt-24 space-y-5 p-5 md:p-7">
+    <fieldset disabled={enviando} id="configuracao" className="cartao min-w-0 scroll-mt-24 space-y-5 p-5 md:p-7">
       <legend className="sr-only">Configuração e complementos</legend>
       <div><h3 className="lp-display text-2xl">Complementos do plano</h3><p className="mt-1 text-texto-2">Pacote selecionado · {plano.nome}</p></div>
       {plano.exigeProfissao && <label className="block max-w-lg text-sm font-semibold">Profissão do escritório
@@ -201,7 +201,8 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
         <div className="mt-2 flex flex-wrap gap-3">{["Levantamento com drone", "Análise de agronomia de precisão"].map((nome) => {
           const numero = whatsapp.replace(/\D/g, "");
           const href = numero ? "https://wa.me/" + numero + "?text=" + encodeURIComponent("Olá, gostaria de um orçamento para " + nome.toLowerCase() + ".") : "/suporte?assunto=" + encodeURIComponent(nome);
-          return <a key={nome} href={href} target={numero ? "_blank" : undefined} rel="noopener noreferrer" className="lp-btn lp-btn-contorno"><MessageCircle />{nome}</a>;
+          return <a key={nome} href={href} target={numero ? "_blank" : undefined} rel="noopener noreferrer"
+            className="lp-btn lp-btn-contorno max-w-full whitespace-normal! text-center leading-snug!"><MessageCircle className="shrink-0" />{nome}</a>;
         })}</div>
       </section>}
       <div className="border-t border-linha pt-4" aria-live="polite">
