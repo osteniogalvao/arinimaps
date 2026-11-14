@@ -13,7 +13,7 @@ const site = () => process.env.NEXT_PUBLIC_SITE_URL ?? "https://arinibrasil.com.
 
 async function imovel(id: string) {
   const { data } = await supabaseAdmin().from("properties")
-    .select("id, codigo, titulo, descricao, tipo, valor, area_declarada, status, caracteristicas, municipio:municipalities(nome, uf), media:property_media(storage_path, capa, ordem, tipo)")
+    .select("id, codigo, titulo, descricao, tipo, valor, area_declarada, status, caracteristicas, municipio:municipalities!properties_municipality_id_fkey(nome, uf), media:property_media(storage_path, capa, ordem, tipo)")
     .eq("id", id).maybeSingle();
   return data;
 }

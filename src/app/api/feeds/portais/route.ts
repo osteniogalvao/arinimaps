@@ -23,7 +23,7 @@ export async function GET() {
   for (;;) {
     // A consulta parte do imóvel, mesmo quando ele tem duas publicações no portal.
     let consulta = admin.from("properties")
-      .select("id, codigo, titulo, descricao, tipo, valor, area_declarada, updated_at, municipio:municipalities(nome, uf), media:property_media(storage_path, capa, ordem, tipo), publicacoes!inner(id)")
+      .select("id, codigo, titulo, descricao, tipo, valor, area_declarada, updated_at, municipio:municipalities!properties_municipality_id_fkey(nome, uf), media:property_media(storage_path, capa, ordem, tipo), publicacoes!inner(id)")
       .in("status", ["publicado", "em_negociacao"])
       .eq("publicacoes.canal", "portais").eq("publicacoes.status", "publicada")
       .limit(1, { referencedTable: "publicacoes" }).order("id").limit(200);
