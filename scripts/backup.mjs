@@ -22,11 +22,12 @@
 // PG_DUMP (caminho do pg_dump, se não estiver no PATH).
 // Uso: node scripts/backup.mjs [--local <pasta>]
 import { createCipheriv, randomBytes, scryptSync } from "node:crypto";
-import { createReadStream, createWriteStream, mkdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { createReadStream, createWriteStream, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { join, dirname, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { pipeline } from "node:stream/promises";
+import pg from "pg";
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), "..");
 try {
@@ -45,22 +46,29 @@ if (!CHAVE || CHAVE.length < 16) {
   process.exit(1);
 }
 const PG_DUMP = process.env.PG_DUMP ?? "pg_dump";
+const raizTLS = process.env.BACKUP_PGSSLROOTCERT || process.env.PGSSLROOTCERT;
+const emLoopback = ["127.0.0.1", "::1"].includes(process.env.BACKUP_PGHOST);
 const conexao = {
   // BACKUP_PGHOST/BACKUP_PGUSER: o host direto db.<ref> é só IPv6 e a VPS não sai por IPv6;
   // lá se usa o pooler em modo sessão (aws-0-sa-east-1.pooler.supabase.com, usuário postgres.<ref>).
-  PGHOST: process.env.BACKUP_PGHOST ?? `db.${process.env.SUPABASE_PROJECT_REF}.supabase.co`, PGPORT: "5432",
+  PGHOST: process.env.BACKUP_PGHOST ?? `db.${process.env.SUPABASE_PROJECT_REF}.supabase.co`, PGPORT: process.env.BACKUP_PGPORT ?? "5432",
   PGUSER: process.env.BACKUP_PGUSER ?? "postgres",
-  PGPASSWORD: process.env.SUPABASE_DB_PASSWORD, PGDATABASE: "postgres", PGSSLMODE: "require",
+  PGPASSWORD: process.env.SUPABASE_DB_PASSWORD, PGDATABASE: "postgres",
+  PGSSLMODE: emLoopback ? "disable" : "verify-full",
+  PGSSLROOTCERT: emLoopback ? undefined : raizTLS || "system",
 };
 
 const hoje = new Date();
 const dia = hoje.toISOString().slice(0, 10);
-mkdirSync(PASTA, { recursive: true });
+const sal = randomBytes(16);
+const geracao = sal.toString("hex");
+const dir = join(PASTA, geracao);
+mkdirSync(dir, { recursive: true, mode: 0o700 });
 
-function dump(nome, extra) {
-  const arquivo = join(PASTA, `${dia}-${nome}.dump`);
+function dump(nome, extra, snapshot) {
+  const arquivo = join(dir, `${dia}-${nome}.dump`);
   return new Promise((ok, falha) => {
-    const p = spawn(PG_DUMP, ["-Fc", "-Z", "6", "--no-owner", "--no-privileges", "-f", arquivo, ...extra],
+    const p = spawn(PG_DUMP, ["-Fc", "-Z", "6", "--snapshot", snapshot, "-f", arquivo, ...extra],
       { env: { ...process.env, ...conexao }, stdio: ["ignore", "inherit", "pipe"] });
     let erro = "";
     p.stderr.on("data", (d) => { erro += d; });
@@ -69,14 +77,16 @@ function dump(nome, extra) {
   });
 }
 
-/** Formato do arquivo: "ARINIBK1" + sal(16) + iv(12) + dados cifrados + tag(16). */
+/** O sal aleatório identifica o par do mesmo snapshot. Cada arquivo tem seu próprio IV. */
+const chave = scryptSync(CHAVE, sal, 32);
 async function cifrar(arquivo) {
-  const sal = randomBytes(16), iv = randomBytes(12);
-  const chave = scryptSync(CHAVE, sal, 32);
+  const iv = randomBytes(12);
+  const cab = Buffer.concat([Buffer.from("ARINIBK2"), sal, iv]);
   const cifra = createCipheriv("aes-256-gcm", chave, iv);
+  cifra.setAAD(cab);
   const destino = `${arquivo}.enc`;
   const saida = createWriteStream(destino);
-  saida.write(Buffer.concat([Buffer.from("ARINIBK1"), sal, iv]));
+  saida.write(cab);
   await pipeline(createReadStream(arquivo), cifra, saida, { end: false });
   saida.end(cifra.getAuthTag());
   await new Promise((ok) => saida.on("close", ok));
@@ -86,25 +96,44 @@ async function cifrar(arquivo) {
 
 const t0 = Date.now();
 const arquivos = [];
-arquivos.push(await cifrar(await dump("public", ["-n", "public"])));
-// contas e registro dos arquivos: só dados (a estrutura vem com o projeto Supabase novo)
-arquivos.push(await cifrar(await dump("auth-storage", ["--data-only", "-n", "auth", "-n", "storage",
-  "--exclude-table=auth.sessions", "--exclude-table=auth.refresh_tokens", "--exclude-table=auth.audit_log_entries"])));
+const controle = new pg.Client({
+  host: conexao.PGHOST, port: Number(conexao.PGPORT), database: conexao.PGDATABASE,
+  user: conexao.PGUSER, password: conexao.PGPASSWORD,
+  ssl: conexao.PGSSLMODE === "disable" ? false : {
+    rejectUnauthorized: true, ...(raizTLS && raizTLS !== "system" ? { ca: readFileSync(raizTLS, "utf8") } : {}),
+  },
+});
+await controle.connect();
+try {
+  await controle.query("begin isolation level repeatable read read only");
+  const { rows: [estado] } = await controle.query("select pg_export_snapshot() as snapshot");
+  arquivos.push(await cifrar(await dump("public", ["-n", "public"], estado.snapshot)));
+  // Os serviços do destino fornecem seus históricos de migração e estrutura.
+  arquivos.push(await cifrar(await dump("auth-storage", ["--data-only", "-n", "auth", "-n", "storage",
+    "--exclude-table=auth.sessions", "--exclude-table=auth.refresh_tokens", "--exclude-table=auth.audit_log_entries",
+    "--exclude-table=auth.schema_migrations", "--exclude-table=storage.migrations"], estado.snapshot)));
+} finally {
+  await controle.end();
+}
 for (const a of arquivos) console.log(`${a} · ${(statSync(a).size / 1e6).toFixed(1)} MB`);
+const manifesto = JSON.stringify({ formato: 2, dia, geracao, arquivos: arquivos.map(a => ({ nome: basename(a), bytes: statSync(a).size })) });
+writeFileSync(join(dir, "completo.json"), manifesto, { flag: "wx", mode: 0o600 });
 
 // ---------------------------------------------------------------- envio e retenção
 const r2 = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"].every((v) => process.env[v]);
 const Bucket = process.env.R2_BUCKET_BACKUP ?? process.env.R2_BUCKET;
-if (r2 && Bucket) {
+if (iLocal < 0 && r2 && Bucket) {
   const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = await import("@aws-sdk/client-s3");
   const s3 = new S3Client({
     region: "auto", endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY },
   });
+  const prefixo = `backups/banco/${dia}/${geracao}/`;
   for (const a of arquivos) {
-    await s3.send(new PutObjectCommand({ Bucket, Key: `backups/banco/${dia}/${a.split(/[\\/]/).pop()}`, Body: readFileSync(a) }));
+    await s3.send(new PutObjectCommand({ Bucket, Key: prefixo + basename(a), Body: readFileSync(a), IfNoneMatch: "*" }));
   }
-  console.log(`enviado para r2://${Bucket}/backups/banco/${dia}/`);
+  await s3.send(new PutObjectCommand({ Bucket, Key: prefixo + "completo.json", Body: manifesto, ContentType: "application/json", IfNoneMatch: "*" }));
+  console.log(`enviado para r2://${Bucket}/${prefixo}`);
 
   // retenção: 7 diários + domingos das últimas 4 semanas + dia 1 dos últimos 12 meses
   const dias = new Set();
@@ -120,12 +149,19 @@ if (r2 && Bucket) {
   };
   const apagar = [...dias].filter((d) => d && !manter(d));
   for (const d of apagar) {
-    const r = await s3.send(new ListObjectsV2Command({ Bucket, Prefix: `backups/banco/${d}/` }));
-    const objs = (r.Contents ?? []).map((o) => ({ Key: o.Key }));
-    if (objs.length) await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects: objs } }));
+    let pagina;
+    do {
+      const r = await s3.send(new ListObjectsV2Command({ Bucket, Prefix: `backups/banco/${d}/`, ContinuationToken: pagina }));
+      const objs = (r.Contents ?? []).map((o) => ({ Key: o.Key }));
+      if (objs.length) {
+        const resposta = await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects: objs } }));
+        if (resposta.Errors?.length) throw new Error("Falha na retenção de backups");
+      }
+      pagina = r.NextContinuationToken;
+    } while (pagina);
   }
   if (apagar.length) console.log(`retenção: ${apagar.length} dia(s) antigo(s) apagado(s)`);
 } else {
-  console.log("R2 não configurada: backup ficou só na pasta local (configure R2_* para a cópia externa).");
+  console.log("Backup gravado na pasta local.");
 }
 console.log(`backup concluído em ${Math.round((Date.now() - t0) / 1000)} s`);
