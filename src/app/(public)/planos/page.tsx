@@ -9,7 +9,9 @@ import { CabecalhoPagina, Conteudo, Vazio } from "@/components/ui/Pagina";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { currentUser } from "@/lib/supabase/server";
 import { acessoAtual } from "@/lib/planos-servidor";
-import { formatBRL } from "@/lib/format";
+import { lerConfiguracoes, texto } from "@/lib/settings";
+import EscolherPlano from "./EscolherPlano";
+import { PLANOS_CATALOGO, type PersonaCatalogoId, type PrecoVigente } from "@/lib/planos-catalogo";
 import {
   COTAS, GRUPO_RECURSO_LABEL, NICHO_LABEL, PERIODICIDADE_LABEL, PERSONAS_PLANOS, RECURSOS,
   personaPorId, planosDaPersona, type PersonaPlano, type Plano, type Recurso,
@@ -22,6 +24,9 @@ export const metadata: Metadata = {
 };
 
 const GRUPOS = Object.keys(GRUPO_RECURSO_LABEL) as Recurso["grupo"][];
+const CATALOGOS: Record<string, PersonaCatalogoId | undefined> = {
+  vender: "proprietario", corretor: "corretor_imobiliaria", produtor: "produtor_rural", tecnico: "profissional_tecnico",
+};
 
 const ICONE_PERSONA: Record<PersonaPlano["icone"], typeof Search> = {
   busca: Search, casa: House, lupa: ScanSearch, trator: Tractor, predio: Building2, martelo: Gavel, regua: Ruler, governo: Landmark,
@@ -38,7 +43,7 @@ function linkCadastro(persona: PersonaPlano | null) {
 function precoDe(p: Plano) {
   if (p.periodicidade === "gratis") return { valor: "Gratuito", nota: "" };
   if (!Number(p.preco_mensal)) return { valor: "Sob consulta", nota: "fale com a Arini" };
-  return { valor: formatBRL(Number(p.preco_mensal)), nota: PERIODICIDADE_LABEL[p.periodicidade] ?? p.periodicidade };
+  return { valor: Number(p.preco_mensal).toLocaleString("pt-BR", { style:"currency", currency:"BRL" }), nota: PERIODICIDADE_LABEL[p.periodicidade] ?? p.periodicidade };
 }
 
 /**
@@ -47,16 +52,19 @@ function precoDe(p: Plano) {
  */
 export default async function Planos({ searchParams }: PageProps<"/planos">) {
   const sp = await searchParams;
-  const persona = personaPorId(typeof sp.perfil === "string" ? sp.perfil : null);
-  const [{ data: planosRaw }, user, { acesso }] = await Promise.all([
+  const persona = personaPorId(typeof sp.perfil === "string" ? sp.perfil : "vender") ?? PERSONAS_PLANOS[0];
+  const catalogo = persona && CATALOGOS[persona.id];
+  const [{ data: planosRaw }, user, { acesso }, cfg] = await Promise.all([
     supabaseAdmin().from("plans").select("*").eq("ativo", true).order("ordem").order("id"),
     currentUser(),
     acessoAtual(),
+    lerConfiguracoes(),
   ]);
-  const todos = (planosRaw ?? []) as Plano[];
-  // persona escolhida: só os pacotes daquele perfil (se nenhum casar, mostra todos)
+  const todos = (planosRaw ?? []) as (Plano & PrecoVigente)[];
+  const precos = todos.filter((p) => PLANOS_CATALOGO.some((c) => c.id === p.id && c.personaId === catalogo))
+    .map(({id, preco_mensal, preco_anual_centavos, primeiro_mes_centavos}) => ({id, preco_mensal, preco_anual_centavos, primeiro_mes_centavos}));
   const daPersona = persona ? planosDaPersona(persona, todos) : [];
-  const planos = persona && daPersona.length ? daPersona : todos;
+  const planos = persona ? daPersona : todos;
 
   const usuario = user
     ? { nome: user.nome || "Conta", papel: user.role === "admin_central" ? "Administrador" : "Usuário" }
@@ -67,9 +75,9 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
       <CabecalhoPagina
         variante="faixa"
         eyebrow="Planos e acesso"
-        titulo="Arini para cada"
-        destaque="necessidade"
-        subtitulo="O mercado imobiliário tem respostas. A Arini ajuda você a encontrá-las. Encontre o plano que acompanha seus objetivos no mercado imobiliário."
+        titulo="Planos para o seu perfil"
+        subtitulo="Escolha como você usa a ARINI para comparar pacotes, limites e complementos."
+        compacta
       >
         {acesso.planNome && (
           <p className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-linha-forte bg-superficie px-5 py-3 text-[15px] text-texto">
@@ -84,7 +92,6 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
       {/* personas clicáveis: cada uma abre só os pacotes daquele perfil */}
       <Conteudo className="pt-12 md:pt-16">
         <section id="perfis" aria-labelledby="titulo-perfis" className="scroll-mt-24">
-          <p className="lp-eyebrow">Passo 1</p>
           <h2 id="titulo-perfis" className="lp-display mt-2 text-3xl text-texto md:text-4xl">Qual é o seu perfil?</h2>
           <p className="mt-2 max-w-2xl text-texto-2">Escolha o que mais combina com você e veja os planos pensados para esse objetivo.</p>
           <ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -93,7 +100,7 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
               const ativa = persona?.id === pp.id;
               return (
                 <li key={pp.id}>
-                  <Link href={ativa ? "/planos#planos" : `/planos?perfil=${pp.id}#planos`} scroll={false}
+                  <Link href={`/planos?perfil=${pp.id}#planos`}
                     aria-current={ativa ? "true" : undefined}
                     className={"cartao group flex h-full items-start gap-3.5 p-5 transition hover:-translate-y-0.5 hover:border-verde/50 " +
                       (ativa ? "!border-verde ring-2 ring-verde/30" : "")}>
@@ -116,13 +123,13 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
       <Conteudo className="space-y-10 py-12 md:py-16">
         <div id="planos" className="flex scroll-mt-24 flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="lp-eyebrow">Passo 2</p>
             <h2 className="lp-display mt-2 text-3xl text-texto md:text-4xl">
-              {persona ? <>Planos para: <span className="text-verde">{persona.nome.toLowerCase()}</span></> : "Todos os planos"}
+              {persona ? persona.nome : "Planos de acesso ao sistema"}
             </h2>
           </div>
           <div className="flex flex-wrap gap-3">
-            {persona && <Link href="/planos#planos" scroll={false} className="lp-btn lp-btn-contorno">Ver todos os planos</Link>}
+            {persona && <Link href="/planos#perfis" className="lp-btn lp-btn-contorno">Escolher outro perfil</Link>}
+            {user && <Link href="/planos/solicitacoes" className="lp-btn lp-btn-contorno">Meus pedidos</Link>}
             {!user && (
               <Link href={linkCadastro(persona)} className="lp-btn lp-btn-ouro">
                 <UserPlus /> Cadastre-se{persona?.papel ? " neste perfil" : ""}
@@ -130,8 +137,12 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
             )}
           </div>
         </div>
-        {!planos.length ? (
-          <Vazio icone={CreditCard} titulo="Nenhum plano publicado ainda." />
+        {catalogo && !precos.length ? <Vazio titulo="As opções deste perfil estão indisponíveis no momento." /> : persona && catalogo ? (
+          <EscolherPlano key={persona.id} precos={precos} personaId={catalogo} perfil={persona.id} cadastro={linkCadastro(persona)}
+            autenticado={!!user} whatsapp={texto(cfg, "whatsapp_central")} parametros={sp} />
+        ) : !planos.length ? (
+          <Vazio icone={CreditCard} titulo="A Central prepara as opções deste perfil."
+            acao={<Link href={`/suporte?assunto=${encodeURIComponent(persona.nome)}`} className="lp-btn lp-btn-verde">Consultar a Central</Link>} />
         ) : (
           <div className="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-3">
             {planos.map((p) => {
@@ -214,10 +225,6 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
           </div>
         )}
 
-        <p className="text-sm text-texto-2">
-          Os valores e limites podem mudar; o que vale é o plano registrado na sua conta. Dúvidas em{" "}
-          <Link href="/suporte" className="font-semibold text-verde hover:underline">Suporte</Link>.
-        </p>
       </Conteudo>
     </Moldura>
   );

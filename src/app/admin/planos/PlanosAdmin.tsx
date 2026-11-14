@@ -10,24 +10,29 @@ import { AvisoErro } from "@/components/ui/Aviso";
 import { CAMPO, Etiqueta, ROTULO, Vazio } from "@/components/ui/Pagina";
 import { ChevronDown, Layers, Plus, Save, Star, Users, X } from "lucide-react";
 import { plural } from "@/lib/format";
+import { PLANOS_CATALOGO } from "@/lib/planos-catalogo";
 
 const GRUPOS = Object.keys(GRUPO_RECURSO_LABEL) as Recurso["grupo"][];
 const input = CAMPO + " disabled:opacity-60";
 const rotulo = ROTULO;
 
 type Form = {
+  anual: string; promocao: string;
   id: string; nome: string; descricao: string; preco_mensal: string; periodicidade: string; escopo: string;
   destaque: boolean; ativo: boolean; ordem: string; nichos_padrao: string[]; recursos: string[];
   cotas: Record<string, string>;
 };
 
 const NOVO: Form = {
+  anual: "", promocao: "",
   id: "", nome: "", descricao: "", preco_mensal: "0", periodicidade: "mensal", escopo: "conta",
   destaque: false, ativo: true, ordem: "100", nichos_padrao: [], recursos: [], cotas: {},
 };
 
 function formDe(p: Plano): Form {
   return {
+    anual: p.preco_anual_centavos == null ? "" : String(p.preco_anual_centavos / 100),
+    promocao: p.primeiro_mes_centavos == null ? "" : String(p.primeiro_mes_centavos / 100),
     id: p.id, nome: p.nome, descricao: p.descricao, preco_mensal: String(p.preco_mensal ?? 0),
     periodicidade: p.periodicidade, escopo: p.escopo, destaque: p.destaque, ativo: p.ativo, ordem: String(p.ordem ?? 100),
     nichos_padrao: [...(p.nichos_padrao ?? [])], recursos: [...(p.recursos ?? [])],
@@ -40,6 +45,10 @@ function corpoDe(f: Form) {
   for (const c of COTAS) if (f.cotas[c.id]?.trim() !== "" && f.cotas[c.id] != null) cotas[c.id] = Number(f.cotas[c.id]);
   return {
     id: f.id.trim(), nome: f.nome.trim(), descricao: f.descricao.trim(),
+    ...(PLANOS_CATALOGO.some(p => p.id === f.id) ? {
+      preco_anual_centavos: f.anual.trim() ? Math.round(Number(f.anual.replace(",", ".")) * 100) : null,
+      primeiro_mes_centavos: f.promocao.trim() ? Math.round(Number(f.promocao.replace(",", ".")) * 100) : null,
+    } : {}),
     preco_mensal: Number(String(f.preco_mensal).replace(",", ".")), periodicidade: f.periodicidade, escopo: f.escopo,
     destaque: f.destaque, ativo: f.ativo, ordem: Number(f.ordem), nichos_padrao: f.nichos_padrao, recursos: f.recursos, cotas,
   };
@@ -133,6 +142,12 @@ function FormPlano({
                 value={f.preco_mensal} onChange={(e) => mudar({ preco_mensal: e.target.value })} />
               <p className="text-sm text-texto-2 mt-1.5">Zero com periodicidade paga = “sob consulta” na página pública.</p>
             </div>
+            {PLANOS_CATALOGO.some(p => p.id === f.id) && <>
+              <label className={rotulo}>Valor anual em reais (opcional)
+                <input className={input} type="number" min="0" step="0.01" value={f.anual} disabled={!ehDiretoria} onChange={e => mudar({ anual:e.target.value })} /></label>
+              <label className={rotulo}>Primeiro mês em reais (opcional)
+                <input className={input} type="number" min="0" step="0.01" value={f.promocao} disabled={!ehDiretoria} onChange={e => mudar({ promocao:e.target.value })} /></label>
+            </>}
             <div>
               <label className={rotulo} htmlFor={`per-${f.id}`}>Periodicidade</label>
               <select id={`per-${f.id}`} className={input} disabled={!ehDiretoria}

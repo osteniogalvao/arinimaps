@@ -17,12 +17,14 @@
  * é conveniência; `exigirRecurso` em src/lib/planos-servidor.ts é a trava.
  */
 
+import { podeAnunciar } from "./perfis";
+
 export type RecursoId =
   | "mapa" | "ficha_basica" | "interesse" | "camada_car" | "camada_lotes" | "ferramenta_medir"
-  | "solicitacao_cartografica"
+  | "solicitacao_cartografica" | "calculadora_insumos"
   | "camadas_oficiais" | "consulta_area" | "relatorio_territorial" | "ferramenta_kml" | "ferramenta_exportar"
   | "historico_imovel" | "pre_avaliacao" | "chat_ia"
-  | "anunciar" | "painel_parceiro" | "oportunidades"
+  | "anunciar" | "painel_parceiro" | "oportunidades" | "crm_privado" | "crm_setorial"
   | "multiusuario" | "api_dados" | "territorio";
 
 export type Recurso = {
@@ -35,6 +37,7 @@ export type Recurso = {
 };
 
 export const RECURSOS: Recurso[] = [
+  { id: "calculadora_insumos", nome: "Calculadora de insumos", descricao: "Calcular quantidades e custos por área em hectares ou alqueires.", grupo: "ferramentas" },
   // consulta básica
   { id: "mapa", nome: "Mapa e imóveis publicados", descricao: "Navegar no mapa regional e ver os anúncios aprovados.", grupo: "consulta" },
   { id: "ficha_basica", nome: "Ficha do imóvel", descricao: "Página pública do anúncio com fotos, área medida e pontos de interesse.", grupo: "consulta" },
@@ -53,6 +56,8 @@ export const RECURSOS: Recurso[] = [
   { id: "pre_avaliacao", nome: "Pré-avaliação de valor", descricao: "Estimativa automatizada por comparáveis e aptidão territorial (aparece quando a Diretoria liga a função).", grupo: "profissional" },
   { id: "chat_ia", nome: "Assistente de IA", descricao: "Perguntas em linguagem natural sobre imóveis publicados, áreas do CAR e a base de conhecimento. Inclui a leitura de matrícula. Cota mensal nos planos gratuitos.", grupo: "consulta" },
   // anúncios
+  { id: "crm_privado", nome: "CRM privado do titular", descricao: "No painel de corretores e profissionais técnicos: contatos, triagem, próximos retornos e histórico exclusivos da conta.", grupo: "profissional" },
+  { id: "crm_setorial", nome: "Modelos de profissão no CRM", descricao: "Profissionais técnicos com CRM privado podem classificar atendimentos por serviço e registrar os dados próprios da profissão.", grupo: "profissional" },
   { id: "anunciar", nome: "Anunciar imóvel", descricao: "Cadastrar imóvel para análise e publicação pela Matriz.", grupo: "anuncios" },
   { id: "painel_parceiro", nome: "Painel do parceiro", descricao: "Carteira de imóveis de terceiros e atendimento das oportunidades encaminhadas.", grupo: "anuncios" },
   { id: "oportunidades", nome: "Oportunidades", descricao: "Acompanhar visitas, propostas e negociações dos próprios imóveis.", grupo: "anuncios" },
@@ -72,6 +77,7 @@ export const GRUPO_RECURSO_LABEL: Record<Recurso["grupo"], string> = {
 
 /** Cotas que um plano pode limitar. Ausente no plano = sem limite. */
 export const COTAS: { id: string; nome: string; ajuda: string }[] = [
+  { id: "propriedades_cofre", nome: "Propriedades no cofre", ajuda: "Vagas incluídas no pacote, antes dos adicionais concedidos à conta." },
   { id: "consultas_area_mes", nome: "Consultas de área por mês", ajuda: "Cruzamentos com as fontes oficiais por conta, no mês corrente." },
   { id: "imoveis_ativos", nome: "Imóveis ativos", ajuda: "Anúncios em análise ou publicados ao mesmo tempo." },
   { id: "mensagens_ia_mes", nome: "Mensagens ao assistente de IA por mês", ajuda: "Perguntas enviadas ao assistente por conta, no mês corrente." },
@@ -98,7 +104,7 @@ export const NICHOS: Nicho[] = [
   { id: "consulta", nome: "Consulta", descricao: "Só pesquisa o mapa e as informações.", papeis: ["consulta"], escolhivel: true },
   { id: "comprador_investidor", nome: "Comprador / investidor", descricao: "Procura imóvel para comprar ou investir.", papeis: ["comprador"], escolhivel: true },
   { id: "proprietario", nome: "Proprietário / vendedor", descricao: "Quer anunciar o próprio imóvel.", papeis: ["proprietario"], escolhivel: true },
-  { id: "produtor_rural", nome: "Produtor rural", descricao: "Consulta e gere as próprias áreas rurais.", papeis: ["proprietario", "consulta"], escolhivel: true, reservado: true },
+  { id: "produtor_rural", nome: "Produtor rural", descricao: "Consulta e gere as próprias áreas rurais.", papeis: ["proprietario", "consulta"], escolhivel: true },
   { id: "corretor_imobiliaria", nome: "Corretor / imobiliária", descricao: "Anuncia imóveis de terceiros e atende oportunidades.", papeis: ["corretor", "imobiliaria"], escolhivel: true },
   { id: "leiloeiro", nome: "Leiloeiro", descricao: "Publica imóveis de leilão.", papeis: ["leiloeiro"], escolhivel: true },
   { id: "engenheiro", nome: "Engenheiro / profissional técnico", descricao: "Consulta profissional e laudos.", papeis: ["engenheiro"], escolhivel: true },
@@ -144,17 +150,22 @@ export type PersonaPlano = {
 };
 
 export const PERSONAS_PLANOS: PersonaPlano[] = [
-  { id: "comprar", nome: "Quero comprar ou investir", chamada: "Encontre o imóvel certo no mapa, com a divisa e as fontes oficiais.", nichos: ["comprador_investidor"], extras: ["consulta_profissional"], papel: "comprador", icone: "busca" },
-  { id: "vender", nome: "Quero vender meu imóvel", chamada: "Anuncie com exclusividade Arini e acompanhe cada oportunidade.", nichos: ["proprietario"], papel: "proprietario", icone: "casa" },
-  { id: "consultar", nome: "Quero consultar áreas", chamada: "Pesquise o território, o CAR e os lotes urbanos antes de decidir.", nichos: ["consulta"], extras: ["consulta_profissional"], papel: "consulta", icone: "lupa" },
-  { id: "produtor", nome: "Sou produtor rural", chamada: "Consulte e acompanhe as suas áreas rurais com as fontes oficiais.", nichos: ["produtor_rural"], papel: "proprietario", icone: "trator" },
-  { id: "corretor", nome: "Sou corretor ou imobiliária", chamada: "Anuncie imóveis de terceiros e receba oportunidades encaminhadas.", nichos: ["corretor_imobiliaria"], papel: "corretor", icone: "predio" },
+  { id: "vender", nome: "Sou proprietário", chamada: "Acompanhe seus imóveis, consulte documentos e anuncie quando quiser.", nichos: ["proprietario"], papel: "proprietario", icone: "casa" },
+  { id: "corretor", nome: "Sou corretor ou imobiliária", chamada: "Organize sua carteira e acompanhe os atendimentos do escritório.", nichos: ["corretor_imobiliaria"], papel: "corretor", icone: "predio" },
+  { id: "produtor", nome: "Sou produtor rural", chamada: "Consulte suas áreas e conheça as opções para gestão da fazenda.", nichos: ["produtor_rural"], papel: "proprietario", icone: "trator" },
+  { id: "tecnico", nome: "Sou profissional técnico", chamada: "Escolha a consulta territorial ou configure o CRM da sua profissão.", nichos: ["engenheiro"], papel: "engenheiro", icone: "regua" },
+  { id: "comprar", nome: "Sou comprador ou investidor", chamada: "Encontre imóveis à venda e solicite uma visita.", nichos: ["comprador_investidor"], extras: ["consulta_profissional"], papel: "comprador", icone: "busca" },
   { id: "leiloeiro", nome: "Sou leiloeiro", chamada: "Publique imóveis de leilão com a localização exata no mapa.", nichos: ["leiloeiro"], papel: "leiloeiro", icone: "martelo" },
-  { id: "tecnico", nome: "Sou engenheiro ou técnico", chamada: "Cruze a área com as fontes oficiais e gere o relatório territorial.", nichos: ["engenheiro"], papel: "engenheiro", icone: "regua" },
-  { id: "organizacao", nome: "Empresa, holding ou prefeitura", chamada: "Vários usuários da mesma organização, com relatórios consolidados.", nichos: ["empresa_holding", "ente_publico"], icone: "governo" },
+  { id: "instituicao", nome: "Sou órgão público ou instituição", chamada: "Consulte as opções de acesso institucional ao território.", nichos: ["ente_publico"], icone: "governo" },
+  { id: "empresa", nome: "Sou empresa ou incorporadora", chamada: "Consulte as opções para a equipe e os empreendimentos.", nichos: ["empresa_holding"], icone: "predio" },
 ];
 
-export const personaPorId = (id: string | null | undefined) => PERSONAS_PLANOS.find((p) => p.id === id) ?? null;
+// URLs de planos compartilhadas antes da separação das personas.
+const PERFIS_ANTERIORES: PersonaPlano[] = [
+  { id: "consultar", nome: "Consulta de áreas", chamada: "Consulte o mapa e as fontes oficiais.", nichos: ["consulta"], extras: ["consulta_profissional"], papel: "consulta", icone: "lupa" },
+  { id: "organizacao", nome: "Organização", chamada: "Acesso para empresas e instituições.", nichos: ["empresa_holding", "ente_publico"], icone: "governo" },
+];
+export const personaPorId = (id: string | null | undefined) => [...PERSONAS_PLANOS, ...PERFIS_ANTERIORES].find((p) => p.id === id) ?? null;
 
 /** Planos que a persona vê: os do nicho primeiro, depois os extras, sem repetir. */
 export function planosDaPersona<P extends { id: string; nichos_padrao: string[] }>(persona: PersonaPlano, planos: P[]): P[] {
@@ -174,6 +185,8 @@ export type Plano = {
   recursos: string[];
   cotas: Record<string, number>;
   preco_mensal: number;
+  preco_anual_centavos?: number | null;
+  primeiro_mes_centavos?: number | null;
   periodicidade: "gratis" | "mensal" | "anual";
   escopo: "conta" | "organizacao";
   destaque: boolean;
@@ -204,18 +217,27 @@ export const ACESSO_VISITANTE: Acesso = {
 
 /** Monta o acesso a partir do papel e do plano carregado do banco. */
 export function montarAcesso(role: string | null | undefined, plano: Plano | null, nicho: string | null, validoAte: string | null): Acesso {
-  if (role && PAPEIS_EQUIPE_IDS.includes(role)) {
-    return { planId: null, planNome: "Matriz", nicho: null, vencido: false, equipe: true, cotas: {}, recursos: new Set(RECURSO_IDS) };
+  const equipe = !!role && PAPEIS_EQUIPE_IDS.includes(role);
+  const disponiveis = RECURSOS.filter((recurso) => {
+    if (recurso.reservado) return false;
+    if (recurso.id === "calculadora_insumos") return equipe || nicho === "produtor_rural";
+    if (recurso.id === "crm_privado") return !equipe && ["corretor_imobiliaria", "engenheiro"].includes(nicho ?? "");
+    if (recurso.id === "crm_setorial") return !equipe && nicho === "engenheiro" && !!plano?.recursos.includes("crm_privado");
+    if (recurso.id === "anunciar") return podeAnunciar(role, nicho);
+    return true;
+  }).map((recurso) => recurso.id);
+  if (equipe) {
+    return { planId: null, planNome: "Matriz", nicho: null, vencido: false, equipe: true, cotas: {}, recursos: new Set(disponiveis) };
   }
   const vencido = !!validoAte && new Date(validoAte).getTime() < Date.now();
-  if (!plano || vencido) {
+  if (!plano?.ativo || vencido) {
     return { ...ACESSO_VISITANTE, planId: plano?.id ?? null, planNome: plano?.nome ?? null, nicho, vencido,
       recursos: new Set([...ACESSO_VISITANTE.recursos, "solicitacao_cartografica"]) };
   }
   return {
     planId: plano.id, planNome: plano.nome, nicho, vencido: false, equipe: false,
     cotas: plano.cotas ?? {},
-    recursos: new Set(plano.recursos),
+    recursos: new Set(disponiveis.filter((id) => plano.recursos.includes(id))),
   };
 }
 

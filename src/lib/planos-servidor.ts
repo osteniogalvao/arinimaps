@@ -5,6 +5,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { ipDoPedido } from "@/lib/seguranca/limite";
 import { ACESSO_VISITANTE, montarAcesso, recursoPorId, type Acesso, type Plano, type RecursoId } from "@/lib/planos";
 import { planoDaOrganizacao } from "@/lib/organizacoes-servidor";
+import { podeAnunciar } from "@/lib/perfis";
 
 /**
  * A trava dos planos, no servidor.
@@ -45,7 +46,7 @@ export async function acessoAtual(): Promise<{ userId: string | null; acesso: Ac
   return { userId: user?.id ?? null, acesso: await acessoDe(user?.id) };
 }
 
-export type Negacao = { codigo: "sem_sessao" | "sem_plano" | "cota_esgotada"; mensagem: string; solucao: string };
+export type Negacao = { codigo: "sem_sessao" | "sem_plano" | "perfil_incompativel" | "cota_esgotada" | "consulta_indisponivel"; mensagem: string; solucao: string };
 
 /** Registra a tentativa negada (append-only). Nunca lança. */
 export async function registrarTentativa(dados: {
@@ -77,16 +78,21 @@ export async function consultasAreaNoMes(userId: string): Promise<number> {
 /** Imóveis da conta em análise ou publicados (cota `imoveis_ativos`). */
 export async function imoveisAtivosDe(userId: string): Promise<number> {
   const admin = supabaseAdmin();
-  const [{ data: owner }, { data: partner }] = await Promise.all([
+  const [owner, partner] = await Promise.all([
     admin.from("owners").select("id").eq("profile_id", userId).maybeSingle(),
     admin.from("partners").select("id").eq("profile_id", userId).maybeSingle(),
   ]);
-  if (!owner && !partner) return 0;
-  let q = admin.from("properties").select("id", { count: "exact", head: true })
-    .in("status", ["pendente", "em_analise", "correcao", "aprovado", "publicado", "em_negociacao"]);
-  q = owner ? q.eq("owner_id", owner.id) : q.eq("partner_id", partner!.id);
-  const { count } = await q;
-  return count ?? 0;
+  if (owner.error || partner.error) throw new Error("Não foi possível consultar o anunciante.");
+  const filtros = [
+    owner.data && `and(partner_id.is.null,owner_id.eq.${owner.data.id})`,
+    partner.data && `partner_id.eq.${partner.data.id}`,
+  ].filter(Boolean);
+  if (!filtros.length) return 0;
+  const { count, error } = await admin.from("properties").select("id", { count: "exact", head: true })
+    .in("status", ["pendente", "em_analise", "correcao", "aprovado", "publicado", "em_negociacao"])
+    .or(filtros.join(","));
+  if (error || count === null) throw new Error("Não foi possível consultar a cota de imóveis.");
+  return count;
 }
 
 /**
@@ -97,14 +103,16 @@ export async function conferirRecurso(
   request: Request | null,
   user: { id: string; role: string } | null,
   recurso: RecursoId,
-  opcoes: { cota?: "consultas_area_mes" | "imoveis_ativos" } = {}
+  opcoes: { cota?: "consultas_area_mes" | "imoveis_ativos"; quantidade?: number; acesso?: Acesso } = {}
 ): Promise<{ acesso: Acesso; negacao: Negacao | null }> {
-  const acesso = await acessoDe(user?.id);
+  const acesso = opcoes.acesso ?? await acessoDe(user?.id);
   const nome = recursoPorId(recurso)?.nome ?? recurso;
 
   if (!acesso.recursos.has(recurso)) {
     const negacao: Negacao = !user
       ? { codigo: "sem_sessao", mensagem: `Entre na sua conta para usar “${nome}”.`, solucao: "Crie uma conta gratuita ou entre com a sua." }
+      : recurso === "anunciar" && !podeAnunciar(user.role, acesso.nicho)
+      ? { codigo: "perfil_incompativel", mensagem: "O seu perfil não permite cadastrar anúncios.", solucao: "Fale com a Arini se também atua como anunciante." }
       : { codigo: "sem_plano", mensagem: `“${nome}” não está no seu plano${acesso.planNome ? ` (${acesso.planNome})` : ""}.`,
           solucao: "Veja os planos em /planos ou fale com a Arini para liberar." };
     await registrarTentativa({ request, userId: user?.id, role: user?.role, planId: acesso.planId, recurso, motivo: negacao.codigo });
@@ -113,14 +121,15 @@ export async function conferirRecurso(
 
   if (opcoes.cota && user && !acesso.equipe && acesso.cotas[opcoes.cota] != null) {
     const limite = Number(acesso.cotas[opcoes.cota]);
-    const usado = opcoes.cota === "consultas_area_mes" ? await consultasAreaNoMes(user.id) : await imoveisAtivosDe(user.id);
-    if (usado >= limite) {
+    const usado = opcoes.cota === "consultas_area_mes" ? await consultasAreaNoMes(user.id) : await imoveisAtivosDe(user.id).catch(() => null);
+    if (usado === null) return { acesso, negacao: { codigo: "consulta_indisponivel", mensagem: "Não foi possível conferir a cota de imóveis.", solucao: "Tente novamente em instantes." } };
+    if (usado + (opcoes.quantidade ?? 1) > limite) {
       const negacao: Negacao = {
         codigo: "cota_esgotada",
         mensagem: opcoes.cota === "consultas_area_mes"
           ? `Você já usou as ${limite} consultas de área do mês no plano ${acesso.planNome}.`
           : `Seu plano ${acesso.planNome} permite ${limite} imóveis ativos ao mesmo tempo.`,
-        solucao: "Fale com a Arini para ampliar o plano ou aguarde o próximo mês.",
+        solucao: opcoes.cota === "imoveis_ativos" ? "Reduza a quantidade de anúncios ativos ou fale com a Arini para ampliar o plano." : "Fale com a Arini para ampliar o plano ou aguarde o próximo mês.",
       };
       await registrarTentativa({ request, userId: user.id, role: user.role, planId: acesso.planId, recurso, motivo: `cota:${opcoes.cota}` });
       return { acesso, negacao };
@@ -133,6 +142,6 @@ export async function conferirRecurso(
 export function respostaNegacao(n: Negacao) {
   return NextResponse.json(
     { error: n.mensagem, solucao: n.solucao, codigo: n.codigo },
-    { status: n.codigo === "sem_sessao" ? 401 : 403 }
+    { status: n.codigo === "sem_sessao" ? 401 : n.codigo === "consulta_indisponivel" ? 503 : 403 }
   );
 }

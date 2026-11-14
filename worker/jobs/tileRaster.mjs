@@ -29,7 +29,10 @@ export async function tileRaster(payload, db) {
   const dir = await mkdtemp(join(tmpdir(), "carto-"));
   try {
     // baixa o original
-    const { data, error } = await supa.storage.from("media").download(source_path);
+    // Jobs antigos guardam o original em media. Novos originais são privados;
+    // apenas os tiles gerados são enviados ao bucket de mídia pública.
+    const bucketOrigem = payload.source_bucket === "docs" ? "docs" : "media";
+    const { data, error } = await supa.storage.from(bucketOrigem).download(source_path);
     if (error) throw new Error(`download: ${error.message}`);
     const original = join(dir, "original");
     const { writeFile } = await import("node:fs/promises");

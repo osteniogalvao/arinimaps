@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { podeOperarOportunidade, temSetor, type Ator } from "@/lib/authz";
 import { ipDoPedido } from "./limite";
+import { temPerfilCofre } from "@/lib/cofre";
 
 /**
  * Quem pode abrir cada arquivo do cofre privado (`docs`) — item 6.3.
@@ -57,6 +58,13 @@ export async function resolverArquivo(a: Ator, path: string): Promise<ArquivoRes
   const admin = supabaseAdmin();
   const [prefixo, chave] = path.split("/");
   const base = { documentoId: null, propertyId: null, opportunityId: null, requestId: null, motivo: null };
+
+  if (prefixo === "cofre") {
+    if (chave !== a.userId || !temPerfilCofre(a.role,a.nicho)) return null;
+    const { data: doc } = await admin.from("cofre_documentos").select("id,nome_arquivo")
+      .eq("titular_id",a.userId).eq("storage_path",path).maybeSingle();
+    return doc ? { ...base, categoria:"documento", permitido:true, documentoId:doc.id, nome:doc.nome_arquivo } : null;
+  }
 
   if (prefixo === "imoveis" && UUID.test(chave ?? "")) {
     const propertyId = chave;

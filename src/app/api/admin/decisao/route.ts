@@ -35,8 +35,8 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
 
   const admin = supabaseAdmin();
-  const { data: profile } = await admin.from("profiles").select("role, setores").eq("user_id", user.id).single();
-  const daEquipe = !!profile && ["admin_central", "analista_arini"].includes(profile.role);
+  const { data: profile } = await admin.from("profiles").select("role, setores, ativo").eq("user_id", user.id).single();
+  const daEquipe = !!profile && profile.ativo === true && ["admin_central", "analista_arini"].includes(profile.role);
   // aprovar e publicar é do setor de Operações (diretoria entra em todos)
   if (!daEquipe || !setoresDe(profile.role, profile.setores as string[] | null).includes("operacoes") ||
       (await mfaPendente(supabase, daEquipe))) {

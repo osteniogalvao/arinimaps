@@ -14,30 +14,6 @@ export function caminhoPlantaPublica() {
 }
 
 /**
- * Planta recém-enviada: o público é cópia do original (nada escondido ainda),
- * mas num caminho próprio, para que a URL do original nunca saia na resposta
- * pública (/api/geo/cartografia).
- */
-export async function publicarCopiaInicial(
-  admin: SupabaseClient,
-  camadaId: string,
-  corpo: Buffer,
-  fc: GeoJSON.FeatureCollection
-): Promise<void> {
-  const path = caminhoPlantaPublica();
-  const { error: upErro } = await admin.storage.from("media")
-    .upload(path, corpo, { contentType: "application/geo+json", upsert: false });
-  if (upErro) throw new Error(`o armazenamento recusou a cópia pública: ${upErro.message}`);
-  const { error } = await admin.from("cartography_layers").update({
-    publico_path: path, publico_bytes: corpo.length, publico_centro: centroDe(fc),
-  }).eq("id", camadaId);
-  if (error) {
-    await admin.storage.from("media").remove([path]).catch(() => undefined);
-    throw new Error(`a cópia pública subiu, mas o banco não gravou: ${error.message}`);
-  }
-}
-
-/**
  * Versão pública da planta: o GeoJSON sem as camadas do CAD que o operador
  * escondeu na calibração.
  *

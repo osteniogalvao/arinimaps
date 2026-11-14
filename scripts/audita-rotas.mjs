@@ -64,7 +64,8 @@ const LEITURA_PUBLICA_CONFERIDA = {
 };
 
 // executarConsultaArea (src/lib/geo/consultaArea.ts) confere sessão, plano, cota e limite por dentro
-const AUTH = /\bator\(|executarConsultaArea\(|currentUser\(|auth\.getUser\(|exigirSetor\(|exigirEquipe\(|conferirRecurso\(|cookieValido\(|senhaConfere\(|ASAAS_WEBHOOK_TOKEN|asaas-access-token/;
+// sessaoCrm verifica o usuário no Supabase e a permissão do CRM privado.
+const AUTH = /\bator\(|executarConsultaArea\(|currentUser\(|auth\.getUser\(|sessaoCrm\(|exigirSetor\(|exigirEquipe\(|conferirRecurso\(|cookieValido\(|senhaConfere\(|ASAAS_WEBHOOK_TOKEN|asaas-access-token/;
 const LIMITE = /\blimitar\(|executarConsultaArea\(|fn_rate_limit|limiteMemoria\(|limitarMemoria\(|limiteLeituraMapa\(|rateLimit|respostaLimite\(/;
 const SQL_TEXTO = /\.query\(\s*`[^`]*\$\{|`\s*(select|insert|update|delete|with)\b[^`]*\$\{/i;
 const FILTRO_INTERPOLADO = /\.(or|filter|textSearch)\(\s*`[^`]*\$\{/;

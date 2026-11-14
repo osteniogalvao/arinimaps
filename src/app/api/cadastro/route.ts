@@ -103,27 +103,34 @@ export async function POST(request: Request) {
     aceite_termos_versao: versao,
     aceite_termos_ip: ip,
     ...(nichoEscolhido ? { nicho: nichoEscolhido } : {}),
-  }).eq("user_id", userId);
+  }).eq("user_id", userId).select("user_id").single();
   if (perfilErro) {
     // corrida no índice único: desfaz o usuário para não deixar conta órfã
-    await admin.auth.admin.deleteUser(userId);
+    const { error: desfazer } = await admin.auth.admin.deleteUser(userId);
     return NextResponse.json(
-      { error: "Este CPF acabou de ser cadastrado em outra conta." },
-      { status: 400 }
+      { error: desfazer ? "A conta requer conferência da Central antes de tentar novamente." :
+        perfilErro.code === "23505" ? "Este CPF acabou de ser cadastrado em outra conta." : "Falha ao concluir o cadastro. Tente novamente." },
+      { status: perfilErro.code === "23505" && !desfazer ? 409 : 503 }
     );
   }
 
+  let erroVinculo;
   if (role === "proprietario") {
-    await admin.from("owners").insert({ profile_id: userId, aceite_termos_at: agora, aceite_termos_versao: versao });
+    ({ error: erroVinculo } = await admin.from("owners").insert({ profile_id: userId, aceite_termos_at: agora, aceite_termos_versao: versao }));
   } else if (ehParceiro) {
-    await admin.from("partners").insert({
+    ({ error: erroVinculo } = await admin.from("partners").insert({
       profile_id: userId,
       tipo: role,
       razao_social: razao_social?.trim() || nome.trim(),
       registro_profissional: registro_profissional?.trim() || null,
       aceite_termos_at: agora,
       aceite_termos_versao: versao,
-    });
+    }));
+  }
+  if (erroVinculo) {
+    const { error: desfazer } = await admin.auth.admin.deleteUser(userId);
+    return NextResponse.json({ error: desfazer ? "A conta requer conferência da Central antes de tentar novamente." :
+      "Falha ao vincular o perfil ao cadastro. Tente novamente." }, { status: 503 });
   }
 
   await logAudit({

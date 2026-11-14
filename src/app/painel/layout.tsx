@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
-import { currentUser } from "@/lib/supabase/server";
+import { currentUser, supabaseServer } from "@/lib/supabase/server";
 import { acessoDe } from "@/lib/planos-servidor";
 import { PAPEL_LABEL, ehParceiro } from "@/lib/perfis";
+import { temPerfilCofre } from "@/lib/cofre";
 import AjudaTour from "@/components/ajuda/AjudaTour";
 import AppShell from "@/components/shell/AppShell";
 import MarcaArini from "@/components/marca/MarcaArini";
@@ -13,11 +14,18 @@ export default async function PainelLayout({ children }: LayoutProps<"/painel">)
   if (["admin_central", "analista_arini"].includes(user.role)) redirect("/admin");
 
   // só para a saudação: o plano nunca derruba o painel
-  const plano = await acessoDe(user.id).then((a) => a.planNome ?? null).catch(() => null);
+  const [acesso, crm] = await Promise.all([
+    acessoDe(user.id).catch(() => null),
+    ["corretor_imobiliaria", "engenheiro"].includes(user.nicho ?? "")
+      ? supabaseServer().then(async db => (await db.rpc("crm_privado_liberado")).data === true).catch(() => false)
+      : Promise.resolve(false),
+  ]);
+  const plano = acesso?.planNome;
+  const anunciar = acesso?.recursos.has("anunciar") ?? false;
   const primeiroNome = (user.nome || "").trim().split(/\s+/)[0];
 
   return (
-    <AppShell usuario={{ nome: user.nome || "Conta", papel: "Anunciante", avatar: user.avatarUrl }} busca={false}>
+    <AppShell usuario={{ nome: user.nome || "Conta", papel: PAPEL_LABEL[user.role] ?? "Cliente", avatar: user.avatarUrl }} busca={false} anunciar={anunciar}>
       <div className="mx-auto w-full max-w-[1280px] md:px-4 md:pt-4">
         {/* capa de prancha: Verde Profundo, linhas de mapa e o radar no canto */}
         <header className="lp-escuro lp-malha-escura relative mb-8 overflow-hidden rounded-3xl p-6 md:mb-10 md:p-9">
@@ -32,7 +40,7 @@ export default async function PainelLayout({ children }: LayoutProps<"/painel">)
             {plano && <> · plano <strong className="font-semibold text-texto">{plano}</strong></>}
           </p>
           <div className="mt-7">
-            <AbasPainel />
+            <AbasPainel crm={crm} anunciar={anunciar} cofre={temPerfilCofre(user.role, user.nicho)} insumos={acesso?.recursos.has("calculadora_insumos")} />
           </div>
         </header>
         <div className="pb-12">{children}</div>

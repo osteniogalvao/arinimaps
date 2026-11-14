@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Building2, Clock, CheckCircle2, Handshake, Plus, AlertTriangle, FileWarning, ArrowRight } from "lucide-react";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { acessoDe } from "@/lib/planos-servidor";
 import { formatBRL, STATUS_LABEL } from "@/lib/format";
 import { Secao, Estatistica, Vazio, Etiqueta, BotaoLink } from "@/components/ui/Pagina";
 import MiniaturaDivisa, { type GeoDivisa } from "@/components/imovel/MiniaturaDivisa";
@@ -38,12 +39,14 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
   const docsFalharam = Math.max(0, Math.min(99, Number(umParam(sp.docs_falharam)) || 0));
 
   // cadastro (owner/partner) do PRÓPRIO usuário — a equipe enxerga todos pela RLS
-  const [{ data: owner }, { data: partner }] = user
+  const [{ data: owner }, { data: partner }, acesso] = user
     ? await Promise.all([
         supabase.from("owners").select("id, status").eq("profile_id", user.id).maybeSingle(),
         supabase.from("partners").select("id, status").eq("profile_id", user.id).maybeSingle(),
+        acessoDe(user.id).catch(() => null),
       ])
-    : [{ data: null }, { data: null }];
+    : [{ data: null }, { data: null }, null];
+  const anunciar = acesso?.recursos.has("anunciar") ?? false;
   const statusCadastro = owner?.status ?? partner?.status;
 
   // A RLS libera anúncio publicado para todos: o filtro pelo dono é obrigatório
@@ -107,7 +110,7 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
           <AlertTriangle className="mt-0.5 size-5 shrink-0" />
           <p>
             Seu cadastro está <strong>{STATUS_LABEL[statusCadastro!] ?? statusCadastro}</strong> na análise da Arini.
-            Você poderá anunciar assim que for aprovado.
+            {anunciar && " A equipe acompanhará os anúncios enviados para análise."}
           </p>
         </div>
       )}
@@ -124,14 +127,14 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
         eyebrow="Seus anúncios"
         titulo="Meus imóveis"
         subtitulo="Acompanhe seus anúncios e o status de análise."
-        acao={<BotaoLink href="/painel/novo" seta={false}><Plus /> Anunciar imóvel</BotaoLink>}
+        acao={anunciar && <BotaoLink href="/painel/novo" seta={false}><Plus /> Anunciar imóvel</BotaoLink>}
       >
         {meus.length === 0 ? (
           <Vazio
             icone={Building2}
             titulo="Nenhum imóvel ainda"
-            texto={<>Clique em <strong>Anunciar imóvel</strong> para começar. A Arini analisa o cadastro antes de publicar.</>}
-            acao={<BotaoLink href="/painel/novo">Anunciar imóvel</BotaoLink>}
+            texto={anunciar ? <>Clique em <strong>Anunciar imóvel</strong> para começar. A Arini analisa o cadastro antes de publicar.</> : undefined}
+            acao={anunciar && <BotaoLink href="/painel/novo">Anunciar imóvel</BotaoLink>}
           />
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">

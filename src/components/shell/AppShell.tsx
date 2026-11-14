@@ -83,13 +83,14 @@ export function Logo({ compacto = false, negativa = false }: {
 }
 
 export default function AppShell({
-  children, usuario, semPadding = false, busca = true, cheia = false,
+  children, usuario, semPadding = false, busca = true, cheia = false, anunciar = true,
 }: {
   children: React.ReactNode;
   usuario?: Usuario;
   /** telas de mapa ocupam tudo; as demais recebem respiro */
   semPadding?: boolean;
   busca?: boolean;
+  anunciar?: boolean;
   /**
    * Tela cheia (mapa): a moldura trava na altura da janela. Sem isso, um painel
    * comprido dentro do mapa (lista com dezenas de imóveis) esticava a página e
@@ -280,12 +281,12 @@ export default function AppShell({
         {NAV_MOBILE.slice(0, 2).map((m) => <ItemInferior key={m.href} item={m} ativo={ativo(m.href)} />)}
 
         {/* círculo: não usa .btn-verde porque o raio daquela classe venceria o rounded-full */}
-        <Link href="/painel/novo"
+        {anunciar && <Link href="/painel/novo"
           aria-label="Anunciar imóvel"
           className="-mt-7 grid size-14 shrink-0 place-items-center rounded-full border-4 border-superficie text-[#124431] shadow-xl"
           style={{ background: "#D9BD6F" }}>
           <Plus className="size-6" strokeWidth={2.5} />
-        </Link>
+        </Link>}
 
         {NAV_MOBILE.slice(2).map((m) => <ItemInferior key={m.href} item={m} ativo={ativo(m.href)} />)}
       </nav>

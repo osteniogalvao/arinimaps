@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { ator } from "@/lib/authz";
+import { ator, temSetor } from "@/lib/authz";
 import { falha } from "@/lib/erros";
 import { logAudit } from "@/lib/audit";
 import { lerConfiguracoes } from "@/lib/settings";
@@ -52,9 +52,9 @@ async function conferirAcesso() {
   }
   const a = await ator();
   if (!a) return { erro: falha(401, "sem_sessao", "Entre na sua conta para anunciar.") };
-  if (!podeAnunciar(a.role)) {
+  if (!podeAnunciar(a.role, a.nicho) || !a.acesso.recursos.has("anunciar") || (a.ehArini && !temSetor(a, "operacoes", "comercial"))) {
     return { erro: falha(403, "sem_permissao", "Sua conta não anuncia imóveis.", {
-      solucao: "Proprietários e parceiros aprovados anunciam. Fale com a Arini para mudar o perfil.",
+      solucao: "Confira o perfil de anunciante e os recursos do seu plano com a Arini.",
     }) };
   }
   // mesma regra do POST /api/imoveis: conta recusada ou suspensa não usa a Ari

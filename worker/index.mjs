@@ -10,6 +10,7 @@ import { tileRaster } from "./jobs/tileRaster.mjs";
 import { fetchPois } from "./jobs/fetchPois.mjs";
 import { gerarLotes } from "./jobs/gerarLotes.mjs";
 import { descarteRetencao } from "./jobs/descarteRetencao.mjs";
+import { limparCofre } from "./jobs/limparCofre.mjs";
 import { verificarFontes } from "./jobs/verificarFontes.mjs";
 import { inteligenciaMercado } from "./jobs/inteligenciaMercado.mjs";
 import { otimizarVideo } from "./jobs/otimizarVideo.mjs";
@@ -38,6 +39,7 @@ const HANDLERS = {
   refresh_pois: fetchPois,
   gerar_lotes: gerarLotes,
   descarte_retencao: descarteRetencao,
+  limpar_cofre: limparCofre,
   // teste de queda e lentidão das fontes oficiais (PENDENCIAS 3.16)
   verificar_fontes: verificarFontes,
   // preço por ha/m² por município para o assistente (migration 0040)
@@ -81,7 +83,7 @@ async function loop(apenasPois) {
 // Também recalcula, uma vez por dia, a inteligência de mercado do assistente
 // (preço por ha/m² por município). Cada rotina no seu try: uma falha não
 // impede a outra de ser agendada.
-const ROTINAS_DIARIAS = ["descarte_retencao", "inteligencia_mercado"];
+const ROTINAS_DIARIAS = ["descarte_retencao", "inteligencia_mercado", "limpar_cofre"];
 async function agendarRotinas() {
   for (const tipo of ROTINAS_DIARIAS) {
     try {

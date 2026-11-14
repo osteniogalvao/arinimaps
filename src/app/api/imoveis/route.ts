@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { ator, temSetor } from "@/lib/authz";
+import { conferirRecurso, registrarTentativa, respostaNegacao } from "@/lib/planos-servidor";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { lerConfiguracoes, numero } from "@/lib/settings";
@@ -13,18 +14,20 @@ import { validarCampoTour } from "@/lib/imovel/tour";
 // Cria imóvel (multipart): dados + geometria GeoJSON + fotos.
 // Proprietário/parceiro precisa estar aprovado/ativo; Arini também pode cadastrar.
 export async function POST(request: Request) {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Faça login para anunciar." }, { status: 401 });
-
+  const conta = await ator();
+  if (!conta) return NextResponse.json({ error: "Entre e confirme sua sessão para anunciar." }, { status: 401 });
+  const user = { id: conta.userId, role: conta.role };
+  if (conta.ehArini && !temSetor(conta, "operacoes", "comercial")) {
+    return NextResponse.json({ error: "O cadastro de anúncios da Central exige o setor de Operações ou Comercial." }, { status: 403 });
+  }
+  const { negacao } = await conferirRecurso(request, user, "anunciar", { acesso: conta.acesso });
+  if (negacao) return respostaNegacao(negacao);
   const admin = supabaseAdmin();
-  const { data: profile } = await admin.from("profiles").select("role").eq("user_id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Perfil não encontrado." }, { status: 403 });
 
   // resolve o responsável pelo imóvel
   let owner_id: string | null = null;
   let partner_id: string | null = null;
-  if (profile.role === "proprietario") {
+  if (conta.role === "proprietario") {
     // Proprietário pode enviar o imóvel com a conta ainda em análise (fluxo do
     // Carlos, 24/09/2026: clica na área, cadastra, manda os documentos). O
     // imóvel só publica depois que a Arini confere a matrícula — é ali que a
@@ -37,7 +40,7 @@ export async function POST(request: Request) {
       );
     }
     owner_id = data.id;
-  } else if (ehParceiro(profile.role)) {
+  } else if (ehParceiro(conta.role)) {
     const { data } = await admin.from("partners").select("id, status").eq("profile_id", user.id).single();
     if (!data || !["aprovado", "ativo"].includes(data.status)) {
       return NextResponse.json(
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
       );
     }
     partner_id = data.id;
-  } else if (!["admin_central", "analista_arini"].includes(profile.role)) {
+  } else if (!conta.ehArini) {
     return NextResponse.json({ error: "Este perfil não cadastra imóveis." }, { status: 403 });
   }
 
@@ -71,14 +74,14 @@ export async function POST(request: Request) {
   // autorização sem exclusividade) e aceita o termo.
   // A equipe Arini cadastra sem aceite eletrônico (contrato assinado vai em Documentos)
   // e ainda pode registrar uma autorização simples.
-  const equipe = !owner_id && !partner_id;
+  const equipe = conta.ehArini;
   const condicao: "autorizacao" | "exclusividade" | "parceiro" = partner_id
     ? "parceiro"
     : equipe && dados.condicao !== "exclusividade" ? "autorizacao" : "exclusividade";
   // Leilão: só leiloeiro ou a equipe cadastram; o documento que sustenta o
   // anúncio é o edital, não a autorização do proprietário.
   const modalidade: "venda" | "leilao" =
-    profile.role === "leiloeiro" || (equipe && dados.modalidade === "leilao") ? "leilao" : "venda";
+    conta.role === "leiloeiro" || (equipe && dados.modalidade === "leilao") ? "leilao" : "venda";
   const txt = (v: unknown, max = 300) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
   const dinheiro = (v: unknown) => {
     const n = Number(String(v ?? "").replace(/\./g, "").replace(",", "."));
@@ -223,7 +226,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Código do empreendimento não encontrado." }, { status: 400 });
     }
     const mesmoDono =
-      ["admin_central", "analista_arini"].includes(profile.role) ||
+      equipe ||
       (owner_id && pai.owner_id === owner_id) ||
       (partner_id && pai.partner_id === partner_id);
     if (!mesmoDono) {
@@ -232,11 +235,10 @@ export async function POST(request: Request) {
     parent_property_id = pai.id;
   }
 
-  // Arini cadastrando em nome de alguém (F0: fica sem vínculo, ajusta no admin)
-  if (!owner_id && !partner_id) {
-    const { data: anyOwner } = await admin.from("owners").select("id").limit(1).single();
-    owner_id = anyOwner?.id ?? null;
-  }
+  const verificacao = await conferirRecurso(request, user, "anunciar", {
+    acesso: conta.acesso, cota: "imoveis_ativos", quantidade: 1 + unidades.length,
+  });
+  if (verificacao.negacao) return respostaNegacao(verificacao.negacao);
 
   const { data: property, error: propError } = await admin
     .from("properties")
@@ -244,6 +246,7 @@ export async function POST(request: Request) {
       tipo: dados.tipo,
       owner_id,
       partner_id,
+      responsavel_central: equipe,
       titulo: dados.titulo.trim(),
       descricao: dados.descricao?.trim() || "",
       // empreendimento: o preço é de cada unidade; a área, a soma dos lotes
@@ -334,6 +337,7 @@ export async function POST(request: Request) {
   });
   if (geoError) {
     await admin.from("properties").delete().eq("id", property.id);
+    if (selfiePath) await admin.storage.from("docs").remove([selfiePath]);
     return NextResponse.json({ error: `Geometria inválida: ${geoError.message}` }, { status: 400 });
   }
   await Promise.all([
@@ -380,39 +384,30 @@ export async function POST(request: Request) {
 
   // documentos de comprovação → bucket PRIVADO (docs), conferidos pela Arini
   const docsFalharam: string[] = [];
+  const arquivosPrivados = selfiePath ? [selfiePath] : [];
   for (const { tipo, nome, arquivo } of docsOk) {
     const path = `imoveis/${property.id}/${tipo}-${crypto.randomUUID()}.${arquivo.ext}`;
     const { error: upErro } = await admin.storage.from("docs")
       .upload(path, arquivo.bytes, { contentType: arquivo.contentType });
     if (upErro) { docsFalharam.push(nome); continue; }
-    await admin.from("property_documents").insert({
+    arquivosPrivados.push(path);
+    const { error: docErro } = await admin.from("property_documents").insert({
       property_id: property.id, tipo, storage_path: path, nome_arquivo: nome,
     });
+    if (docErro) docsFalharam.push(nome);
   }
   if (!equipe && docsFalharam.length === docsOk.length) {
     // nenhum documento subiu: sem comprovação o imóvel não pode ir para análise
     await admin.from("properties").delete().eq("id", property.id);
+    await Promise.all([
+      arquivosPrivados.length && admin.storage.from("docs").remove(arquivosPrivados),
+      fotosSalvas.length && admin.storage.from("media").remove(fotosSalvas),
+    ]);
     return NextResponse.json(
       { error: "Os documentos não puderam ser salvos. Tente de novo em instantes." },
       { status: 502 }
     );
   }
-
-  // envia direto para análise
-  await admin.from("properties").update({ status: "pendente" }).eq("id", property.id);
-
-  await logAudit({
-    user_id: user.id,
-    acao: "imovel_cadastrado",
-    entidade: "properties",
-    entidade_id: property.id,
-    property_id: property.id,
-    dados_depois: {
-      codigo: property.codigo, titulo: dados.titulo, condicao, aceite: equipe ? null : versao,
-      car: carCodigo, documentos: docs.length - docsFalharam.length, documentos_falharam: docsFalharam,
-      modalidade, selfie: !!selfiePath, lotes: unidades.length || undefined,
-    },
-  });
 
   // Loteamento: o imóvel acima é o empreendimento; cada lote vira uma unidade
   // apontando para ele, com a divisa do próprio lote, o mesmo aceite e as
@@ -420,11 +415,12 @@ export async function POST(request: Request) {
   // do empreendimento). Matrícula e documentos ficam no empreendimento; a de
   // cada lote pode ser anexada depois na unidade.
   const criadas: string[] = [];
+  const idsUnidades: string[] = [];
   for (const u of unidades) {
     const rotulo = [u.lote.quadra && `Quadra ${u.lote.quadra}`, u.lote.numero && `Lote ${u.lote.numero}`].filter(Boolean).join(" · ")
       || `Lote de ${Math.round(Number(u.lote.area_m2))} m²`;
     const { data: un, error: unErro } = await admin.from("properties").insert({
-      tipo: "urbano", owner_id, partner_id,
+      tipo: "urbano", owner_id, partner_id, responsavel_central: equipe,
       titulo: `${dados.titulo.trim()} — ${rotulo}`.slice(0, 200),
       descricao: dados.descricao?.trim() || "",
       valor: u.valor ?? (dados.valor || null),
@@ -464,9 +460,46 @@ export async function POST(request: Request) {
         detalhe: `Divisa do lote da base cartográfica (loteamento ${property.codigo})`,
       }),
     ]);
-    await admin.from("properties").update({ status: "pendente" }).eq("id", un.id);
+    idsUnidades.push(un.id);
     criadas.push(un.codigo);
   }
+  // O banco revalida o plano e serializa o consumo da última vaga por conta.
+  // A análise só recebe o loteamento depois de todos os rascunhos estarem preparados.
+  const { error: envioErro } = await admin.rpc("fn_enviar_cadastro_imoveis", {
+    p_criado_por: user.id, p_ids: [property.id, ...idsUnidades],
+  });
+  if (envioErro) {
+    if (!envioErro.code) {
+      return NextResponse.json({ error: `Confira o imóvel ${property.codigo} em Meus imóveis antes de reenviar. Não foi possível confirmar o envio.` }, { status: 503 });
+    }
+    if (idsUnidades.length) await admin.from("properties").delete().in("id", idsUnidades).eq("status", "rascunho");
+    const { data: removido } = await admin.from("properties").delete().eq("id", property.id).eq("status", "rascunho").select("id");
+    if (removido?.length) await Promise.all([
+      arquivosPrivados.length && admin.storage.from("docs").remove(arquivosPrivados),
+      fotosSalvas.length && admin.storage.from("media").remove(fotosSalvas),
+    ]);
+    const motivos: Record<string, string> = { P7501: "sem_plano", P7502: "cota_esgotada", P7503: "perfil_incompativel" };
+    const motivo = motivos[envioErro.code];
+    if (motivo) {
+      await registrarTentativa({ request, userId: user.id, role: user.role, planId: conta.acesso.planId, recurso: "anunciar", motivo });
+      return NextResponse.json({ error: envioErro.message, codigo: motivo }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Não foi possível enviar o cadastro para análise. Tente novamente." }, { status: 503 });
+  }
+
+  await logAudit({
+    user_id: user.id,
+    acao: "imovel_cadastrado",
+    entidade: "properties",
+    entidade_id: property.id,
+    property_id: property.id,
+    dados_depois: {
+      codigo: property.codigo, titulo: dados.titulo, condicao, aceite: equipe ? null : versao,
+      car: carCodigo, documentos: docs.length - docsFalharam.length, documentos_falharam: docsFalharam,
+      modalidade, selfie: !!selfiePath, lotes: unidades.length || undefined,
+    },
+  });
+
   if (unidades.length) {
     await logAudit({
       user_id: user.id, acao: "loteamento_cadastrado", entidade: "properties", entidade_id: property.id, property_id: property.id,

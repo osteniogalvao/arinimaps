@@ -36,7 +36,8 @@ export async function currentUser() {
     .from("profiles")
     .select("role, nome, setores, nicho, plan_id, plan_valido_ate, avatar_url")
     .eq("user_id", user.id)
-    .single();
+    .eq("ativo", true)
+    .maybeSingle();
   return profile
     ? {
         id: user.id, email: user.email, role: profile.role as string, nome: profile.nome as string,

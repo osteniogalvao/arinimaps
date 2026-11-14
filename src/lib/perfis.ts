@@ -16,8 +16,12 @@ export const PAPEIS_CADASTRO = ["comprador", "consulta", "proprietario", "imobil
 
 export const ehEquipe = (role: string | null | undefined) => (PAPEIS_EQUIPE as readonly string[]).includes(role ?? "");
 export const ehParceiro = (role: string | null | undefined) => (PAPEIS_PARCEIRO as readonly string[]).includes(role ?? "");
-/** Quem pode cadastrar imóvel: proprietário, parceiros e a equipe. */
-export const podeAnunciar = (role: string | null | undefined) => role === "proprietario" || ehParceiro(role) || ehEquipe(role);
+/** A atividade técnica preserva o cadastro de parceiro e a leitura da carteira histórica. */
+export function podeAnunciar(role: string | null | undefined, nicho?: string | null): boolean {
+  if (ehEquipe(role)) return true;
+  if (nicho && ["engenheiro", "ente_publico", "comprador_investidor", "consulta"].includes(nicho)) return false;
+  return ["proprietario", "corretor", "imobiliaria", "leiloeiro", "franqueado"].includes(role ?? "");
+}
 
 export const PAPEL_LABEL: Record<string, string> = {
   admin_central: "Diretoria", analista_arini: "Equipe Arini",
@@ -28,6 +32,6 @@ export const PAPEL_LABEL: Record<string, string> = {
 
 /** Nome do registro profissional que cada parceiro informa. */
 export const REGISTRO_LABEL: Record<string, string> = {
-  imobiliaria: "CRECI", corretor: "CRECI", engenheiro: "CREA",
+  imobiliaria: "CRECI", corretor: "CRECI", engenheiro: "Registro profissional (se aplicável)",
   leiloeiro: "Matrícula na Junta Comercial", franqueado: "CRECI",
 };

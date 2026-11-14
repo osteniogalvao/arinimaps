@@ -5,7 +5,9 @@ import { ator, temSetor } from "@/lib/authz";
 import { conferirOrigem, respostaOrigemNegada } from "@/lib/seguranca/origem";
 import { converterDxf, ErroDxf } from "@/lib/geo/dxf";
 import { falha, falhaBanco } from "@/lib/erros";
-import { publicarCopiaInicial } from "@/lib/geo/plantaPublica";
+import { caminhoPlantaPublica } from "@/lib/geo/plantaPublica";
+import { centroDe } from "@/lib/geo/deslocar";
+import { ErroRaster, lerRaster } from "@/lib/cartografia/rasterUpload";
 
 // Conversão de planta de cidade leva segundos, não milissegundos.
 export const maxDuration = 300;
@@ -137,6 +139,8 @@ export async function POST(request: Request) {
     }
 
     const corpo = Buffer.from(JSON.stringify(convertido.geojson));
+    const camada = { id:crypto.randomUUID() };
+    const publico = caminhoPlantaPublica();
     const path = `cartografia/vetor/${municipality_id}-${crypto.randomUUID()}.geojson`;
     const { error: upErro } = await admin.storage.from("media").upload(
       path, corpo, { contentType: "application/geo+json", upsert: true }
@@ -149,17 +153,17 @@ export async function POST(request: Request) {
       });
     }
 
-    // uma planta ativa por município: a nova substitui a anterior
-    await admin.from("cartography_layers")
-      .delete().eq("municipality_id", municipality_id).eq("tipo", "vector");
-
+    const media = admin.storage.from("media");
+    const {error: erroCopia} = await media.upload(publico,corpo,{contentType:"application/geo+json",upsert:false});
+    if (erroCopia) {
+      await media.remove([path,publico]);
+      return falha(502,"copia_publica_falhou","Não foi possível preparar a cópia pública. A planta anterior continua ativa.");
+    }
     const [x0, y0, x1, y1] = convertido.bbox;
-    const { data: camada, error } = await admin.from("cartography_layers").insert({
-      municipality_id, nome, tipo: "vector",
-      source_path: path, tiles_path: path,
-      status: "pronto", min_zoom: 12, max_zoom: 19, opacidade_padrao: 0.85,
-      bytes: corpo.length,
-      diagnostico: {
+    const {error} = await admin.rpc("fn_publicar_dxf",{
+      p_layer_id:camada.id,p_municipio:municipality_id,p_nome:nome,p_original:path,p_publico:publico,
+      p_bytes:corpo.length,p_centro:centroDe(convertido.geojson as GeoJSON.FeatureCollection),
+      p_diagnostico: {
         ...convertido.diagnostico,
         zona: convertido.zona,
         bbox: convertido.bbox,
@@ -173,20 +177,20 @@ export async function POST(request: Request) {
           km([x0, y0], [x0, y1]),
         ],
       },
-    }).select("id").single();
-    if (error) return falhaBanco("camada_nao_gravou", error);
-
-    // cópia pública em caminho próprio: o mapa público nunca recebe a URL do original
-    let avisoPublico: string | null = null;
-    try {
-      await publicarCopiaInicial(admin, camada.id, corpo, convertido.geojson as GeoJSON.FeatureCollection);
-    } catch (e) {
-      avisoPublico = e instanceof Error ? e.message : String(e);
+    });
+    if (error) {
+      if (/^[0-9A-Z]{5}$/.test(error.code) && !error.code.startsWith("08")) {
+        await media.remove([path,publico]);
+        if (error.code === "55000") return falha(409,"planta_em_uso","O município já tem uma planta com lotes, ajustes ou conteúdo cadastrado.", {
+          solucao:"Abra Calibrar na planta existente. Para trocar o arquivo preservando esses dados, é preciso conciliar as duas versões.",
+        });
+        return falhaBanco("camada_nao_gravou",error);
+      }
+      const {data: salva} = await admin.from("cartography_layers").select("id").eq("id",camada.id).eq("source_path",path).maybeSingle();
+      if (!salva) return falha(503,"camada_nao_confirmada","Não foi possível confirmar a publicação da planta.", {
+        solucao:"Atualize a lista de camadas antes de enviar novamente.",
+      });
     }
-
-    // planta nova → lotes clicáveis novos. A geração leva de segundos a mais de
-    // um minuto, então vai para a fila do worker (ou `node scripts/gera-lotes.mjs`).
-    await admin.from("jobs").insert({ tipo: "gerar_lotes", payload: { layer_id: camada.id } });
 
     await logAudit({
       user_id: a.userId, acao: "cartografia_dxf_publicada",
@@ -196,9 +200,6 @@ export async function POST(request: Request) {
 
     const d = convertido.diagnostico;
     const avisos: string[] = [];
-    if (avisoPublico) {
-      avisos.push(`A planta ainda não aparece no mapa público (${avisoPublico}). Salve a calibração uma vez para gerar o arquivo público.`);
-    }
     if (conferencia?.intersecta === false) {
       avisos.push(`O desenho não encosta no território de ${conferencia.nome} (${distanciaKm} km de distância) — confira se o município é o certo.`);
     } else if (conferencia?.contido === false) {
@@ -233,10 +234,21 @@ export async function POST(request: Request) {
   }
 
   // ---------- imagem georreferenciada (vira tiles no worker) ----------
-  const path = `cartografia/${municipality_id}/${crypto.randomUUID()}.${ext || "tif"}`;
-  const { error: upError } = await admin.storage.from("media")
-    .upload(path, Buffer.from(await request.arrayBuffer()), {
-      contentType: request.headers.get("content-type") || "application/octet-stream",
+  let raster;
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(municipality_id))
+    return falha(400, "municipio_invalido", "Escolha um município válido.");
+  try {
+    raster = await lerRaster(request.body, LIMITE_MB * MB);
+  } catch (e) {
+    if (e instanceof ErroRaster) return falha(e.status, "raster_invalido", e.message);
+    return falha(400, "raster_interrompido", "A leitura da imagem foi interrompida. Envie o arquivo novamente.");
+  }
+  const id = crypto.randomUUID();
+  const path = `raster/${municipality_id.toLowerCase()}/${id}.${raster.ext}`;
+  const storage = admin.storage.from("docs");
+  const { error: upError } = await storage
+    .upload(path, raster.bytes, {
+      contentType: raster.contentType,
     });
   if (upError) {
     return falha(502, "storage_recusou", "O armazenamento recusou a imagem.", {
@@ -246,19 +258,28 @@ export async function POST(request: Request) {
     });
   }
 
-  const { data: layer, error } = await admin.from("cartography_layers")
-    .insert({ municipality_id, nome, tipo: "raster", source_path: path, bytes: arquivo.size })
-    .select("id").single();
-  if (error) return falhaBanco("camada_nao_gravou", error);
-
-  await admin.from("jobs").insert({ tipo: "tile_raster", payload: { layer_id: layer.id, source_path: path } });
+  const { error } = await admin.rpc("fn_enfileirar_raster", {
+    p_layer_id:id, p_municipio:municipality_id, p_nome:nome, p_ext:raster.ext, p_bytes:raster.bytes.length,
+  });
+  if (error) {
+    if (/^[0-9A-Z]{5}$/.test(error.code) && !error.code.startsWith("08")) {
+      // Erro SQL: a transação inteira voltou. O coletor recolhe o arquivo se a remoção falhar.
+      await storage.remove([path]);
+      return falhaBanco("raster_nao_enfileirado", error);
+    }
+    // Uma resposta perdida não implica rollback. Preserve a fonte até confirmar.
+    const { data: salvo } = await admin.from("cartography_layers").select("id").eq("id",id).eq("source_path",path).maybeSingle();
+    if (!salvo) return falha(503,"raster_nao_confirmado","Não foi possível confirmar o processamento da imagem.", {
+      solucao:"Atualize a lista de camadas antes de enviar novamente.",
+    });
+  }
   await logAudit({
     user_id: a.userId, acao: "cartografia_enviada",
-    entidade: "cartography_layers", entidade_id: layer.id, dados_depois: { nome, path },
+    entidade: "cartography_layers", entidade_id: id, dados_depois: { nome, path },
   });
 
   return NextResponse.json({
-    ok: true, tipo: "raster", id: layer.id,
+    ok: true, tipo: "raster", id,
     avisos: ["A geração de tiles depende do worker. Enquanto ele não estiver no ar, a camada fica pendente."],
     mensagem: "Imagem enviada — o worker vai gerar os tiles e a camada entra no mapa.",
   });

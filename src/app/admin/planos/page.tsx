@@ -7,6 +7,7 @@ import PlanosAdmin from "./PlanosAdmin";
 import { CabecalhoPagina, Etiqueta, Secao } from "@/components/ui/Pagina";
 import { Users } from "lucide-react";
 import { plural } from "@/lib/format";
+import { LinkAcao } from "@/components/admin/Painel";
 
 /**
  * Planos e nichos (pedido do Carlos, 05/10/2026). O que cada plano libera é
@@ -38,6 +39,7 @@ export default async function AdminPlanos() {
         variante="simples"
         eyebrow="Central · Diretoria"
         titulo="Planos e nichos"
+        acoes={<><LinkAcao href="/admin/planos/solicitacoes">Solicitações de planos</LinkAcao><LinkAcao href="/admin/planos/matriz">Matriz de personas</LinkAcao></>}
         subtitulo="Cada conta externa tem um nicho (o segmento comercial) e um plano (o que ela pode usar). O que você mudar aqui vale imediatamente para todas as contas do plano. A equipe da Arini não usa plano: o papel libera tudo."
       />
 

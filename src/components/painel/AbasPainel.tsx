@@ -7,12 +7,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Building2, Handshake, PlusCircle, Map as MapIcon, Users, LifeBuoy, UserRound, ShieldCheck, Grid3x3,
-  type LucideIcon,
+  Building2, Handshake, PlusCircle, Map as MapIcon, Users, LifeBuoy, UserRound, ShieldCheck, Grid3x3, ContactRound,
+  Calculator, type LucideIcon,
 } from "lucide-react";
 
 const ABAS: { href: string; rotulo: string; icone: LucideIcon }[] = [
   { href: "/painel", rotulo: "Meus imóveis", icone: Building2 },
+  { href: "/painel/cofre", rotulo: "Cofre da propriedade", icone: ShieldCheck },
+  { href: "/painel/insumos", rotulo: "Calculadora de insumos", icone: Calculator },
+  { href: "/painel/crm", rotulo: "Meu CRM", icone: ContactRound },
   { href: "/painel/oportunidades", rotulo: "Minhas oportunidades", icone: Handshake },
   { href: "/painel/novo", rotulo: "Anunciar", icone: PlusCircle },
   { href: "/painel/empreendimentos", rotulo: "Espelho de vendas", icone: Grid3x3 },
@@ -23,17 +26,19 @@ const ABAS: { href: string; rotulo: string; icone: LucideIcon }[] = [
   { href: "/conta/seguranca", rotulo: "Segurança da conta", icone: ShieldCheck },
 ];
 
-export default function AbasPainel() {
+export default function AbasPainel({ crm = false, anunciar = false, cofre = false, insumos = false }: { crm?: boolean; anunciar?: boolean; cofre?: boolean; insumos?: boolean }) {
   const caminho = usePathname();
+  const acessiveis: Record<string, boolean> = { "/painel/crm": crm, "/painel/novo": anunciar, "/painel/cofre": cofre, "/painel/insumos": insumos };
+  const abas = ABAS.filter(a => acessiveis[a.href] !== false);
   // a aba mais específica que casa com o caminho é a ativa (/painel não "engole" /painel/novo)
-  const ativa = ABAS
+  const ativa = abas
     .filter((a) => caminho === a.href || caminho.startsWith(a.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
     <nav aria-label="Área do cliente" data-tour="abas-painel">
       <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {ABAS.map(({ href, rotulo, icone: Icone }) => {
+        {abas.map(({ href, rotulo, icone: Icone }) => {
           const ativo = href === ativa;
           return (
             <Link key={href} href={href} aria-current={ativo ? "page" : undefined}

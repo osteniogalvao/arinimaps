@@ -36,6 +36,13 @@ function validar(body: Corpo, { novo }: { novo: boolean }) {
     if (!PERIODICIDADES.includes(String(body.periodicidade))) erros.push("Periodicidade inválida.");
     else patch.periodicidade = body.periodicidade as Plano["periodicidade"];
   }
+  for (const coluna of ["preco_anual_centavos", "primeiro_mes_centavos"] as const) {
+    const valor = body[coluna];
+    if (valor === undefined) continue;
+    if (valor === null) patch[coluna] = null;
+    else if (typeof valor === "number" && Number.isInteger(valor) && valor >= 0 && valor <= 2_147_483_647) patch[coluna] = valor;
+    else erros.push("O valor anual e a promoção precisam ser expressos em centavos inteiros positivos ou zero.");
+  }
   if (body.escopo !== undefined) {
     if (!ESCOPOS.includes(String(body.escopo))) erros.push("Escopo inválido.");
     else patch.escopo = body.escopo as Plano["escopo"];
@@ -108,6 +115,7 @@ export async function POST(request: Request) {
   const novo = {
     id, nome: patch.nome!, descricao: patch.descricao ?? "", nichos_padrao: patch.nichos_padrao ?? [], recursos: patch.recursos ?? [],
     cotas: patch.cotas ?? {}, preco_mensal: patch.preco_mensal ?? 0, periodicidade: patch.periodicidade ?? "mensal",
+    preco_anual_centavos: patch.preco_anual_centavos ?? null, primeiro_mes_centavos: patch.primeiro_mes_centavos ?? null,
     escopo: patch.escopo ?? "conta", destaque: patch.destaque ?? false, ativo: patch.ativo ?? true, ordem: patch.ordem ?? 100,
   };
   const { error } = await admin.from("plans").insert(novo);

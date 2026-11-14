@@ -21,7 +21,7 @@ const PERFIS = [
   { value: "proprietario", label: "Sou proprietário" },
   { value: "imobiliaria", label: "Sou imobiliária" },
   { value: "corretor", label: "Sou corretor autônomo" },
-  { value: "engenheiro", label: "Sou engenheiro / profissional" },
+  { value: "engenheiro", label: "Sou profissional técnico" },
   { value: "leiloeiro", label: "Sou leiloeiro" },
 ];
 
