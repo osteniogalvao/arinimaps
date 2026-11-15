@@ -52,6 +52,7 @@ const EXCECOES_AUTH = {
   "/api/leads": "formulário público de interesse (limite por IP)",
   "/api/car/janela": "mapa público: só garante o CAR (dado aberto) da janela no Brasil, com limite por IP",
   "/api/saude": "monitoramento: sem o SAUDE_TOKEN só responde ok/erro, sem detalhe",
+  "/api/interno/avisos-imoveis": "worker autenticado por x-saude-token, comparação em tempo constante e rejeição quando ausente",
   "/api/interno/publicar": "chamada só pelo worker, com o SAUDE_TOKEN no cabeçalho x-saude-token",
   "/api/webhooks/whatsapp": "webhook da Meta: GET confere WHATSAPP_VERIFY_TOKEN, POST confere a assinatura HMAC (WHATSAPP_APP_SECRET)",
 };
@@ -60,6 +61,7 @@ const LEITURA_PUBLICA = [/^\/api\/geo\//, /^\/api\/tiles\//];
 // GET público revisado à mão: só entrega o que é público e trava o resto dentro.
 const LEITURA_PUBLICA_CONFERIDA = {
   "/api/imoveis/[id]/consulta-rural": "relatório público só de anúncio publicado; o resto exige equipe/responsável",
+  "/api/vitrine/abrir": "resumo de anúncio publicado, cota assinada e limite de pedidos por IP",
   "/api/feeds/portais": "feed XML para os portais: só imóveis publicados, os mesmos dados do anúncio",
 };
 

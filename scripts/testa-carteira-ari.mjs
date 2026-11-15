@@ -28,7 +28,7 @@ test("carteira da Ari: isolamento, concorrência, estorno, titular e confirmaç�
     await sql(`create table public.settings(chave text primary key, valor jsonb);
 create table public.plans(id text primary key, escopo text, preco_mensal numeric, ativo boolean, cotas jsonb);
 create table public.profiles(user_id uuid primary key,telefone text, ativo bool default true, role text, nicho text, plan_id text, plan_origem text, plan_valido_ate timestamptz,constraint chk_profiles_nicho check (true));
-create table public.organizations(id uuid primary key,plan_id text,ativo boolean,plan_valido_ate timestamptz); 
+create table public.organizations(id uuid primary key,plan_id text,ativo boolean,plan_valido_ate timestamptz);
 create table public.organization_members(user_id uuid,org_id uuid,status text,nicho_vinculo text);
 create table public.municipalities(id uuid primary key);
 create table public.properties(id uuid primary key,codigo text,modalidade text,tipo text,municipality_id uuid,valor numeric,titulo text,descricao text,aceita_financiamento bool,aceita_permuta bool,status text);
