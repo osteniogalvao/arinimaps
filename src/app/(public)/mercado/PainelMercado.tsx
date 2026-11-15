@@ -8,7 +8,7 @@
  */
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownRight, ArrowUpRight, ExternalLink, Minus, Search, TrendingDown, TrendingUp, X,
@@ -51,7 +51,8 @@ export default function PainelMercado({ catalogo, selecionada, pontos, periodoIn
   const [produto, setProduto] = useState("todos");
   const [uf, setUf] = useState("todas");
   const [regiao, setRegiao] = useState("todas");
-  const periodo = periodoInicial;
+  const periodoUrl = useSearchParams().get("periodo");
+  const periodo = PERIODOS.find(p => p.id === periodoUrl)?.id ?? periodoInicial;
   const mensal = competenciaMensal(selecionada);
   const detalhe = useRef<HTMLElement>(null);
   const primeira = useRef(true);
@@ -132,7 +133,7 @@ export default function PainelMercado({ catalogo, selecionada, pontos, periodoIn
               key={p.id}
               type="button"
               aria-pressed={periodo === p.id}
-              onClick={() => router.replace(urlSerie(selecionada.slug, comparada?.slug, p.id), { scroll: false })}
+              onClick={() => window.history.replaceState(null, "", urlSerie(selecionada.slug, comparada?.slug, p.id))}
               className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition sm:px-4 ${
                 periodo === p.id ? "border-verde bg-verde text-fundo" : "border-linha-forte text-texto-3 hover:border-verde hover:text-verde"
               }`}

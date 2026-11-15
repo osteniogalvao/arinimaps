@@ -162,11 +162,25 @@ export default function NovoImovel() {
   const [assinaturas,setAssinaturas]=useState<Partial<Record<6|12,string>>>({});
   const [selfieExigida, setSelfieExigida] = useState(false);
   const pedeSelfie = condicao === "exclusividade" && !ehEquipe && selfieExigida;
+  const [tentativaTermos, setTentativaTermos] = useState(0);
+  const [falhaTermos, setFalhaTermos] = useState(false);
   useEffect(() => {
-    fetch("/api/conta/anunciar").then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d && typeof d.selfie_exclusividade === "boolean") { setSelfieExigida(d.selfie_exclusividade); setAssinaturas(d.termos??{}); } })
-      .catch(() => undefined);
-  }, []);
+    const controle = new AbortController();
+    async function carregar() {
+      try {
+        const resposta = await fetch("/api/conta/anunciar", { signal: controle.signal });
+        if (!resposta.ok) throw Error();
+        const regras = await resposta.json();
+        if (typeof regras.selfie_exclusividade !== "boolean" || !regras.termos?.[6] || !regras.termos?.[12]) throw Error();
+        setSelfieExigida(regras.selfie_exclusividade);
+        setAssinaturas(regras.termos);
+      } catch {
+        if (!controle.signal.aborted) setFalhaTermos(true);
+      }
+    }
+    void carregar();
+    return () => controle.abort();
+  }, [tentativaTermos]);
   // anúncio criado, mas algum documento ou vídeo não subiu: mostra antes de sair da página
   const [concluido, setConcluido] = useState<{ codigo: string; docs: string[]; videos: string[]; destino: string } | null>(null);
 
@@ -674,11 +688,19 @@ export default function NovoImovel() {
                 <label key={meses} className={"flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 " +
                   (prazoMeses === meses ? "border-verde bg-verde/10" : "border-linha")}>
                   <input required type="radio" name="prazo-exclusividade" checked={prazoMeses === meses}
+                    disabled={!ehEquipe && !assinaturas[meses]}
                     onChange={() => { setPrazoMeses(meses); setAceite(false); }} />
                   <strong>{meses} meses</strong>
                 </label>
               ))}
             </div>
+            {!ehEquipe && !assinaturas[6] && <p className="mt-2 text-sm text-texto-2" role="status">
+              {falhaTermos ? <>Não foi possível carregar os termos.{" "}
+                <button type="button" className="font-semibold underline" onClick={() => {
+                  setFalhaTermos(false);
+                  setTentativaTermos(n => n + 1);
+                }}>Tentar novamente</button></> : "Carregando os termos de exclusividade…"}
+            </p>}
           </fieldset>
         )}
 
@@ -705,6 +727,7 @@ export default function NovoImovel() {
         ) : (
           <label className="flex items-start gap-3 rounded-xl bg-superficie-2 px-4 py-3.5 text-sm leading-relaxed text-texto-2">
             <input type="checkbox" required checked={aceite}
+              disabled={!ehParceiro && (!prazoMeses || !assinaturas[prazoMeses])}
               onChange={(e) => setAceite(e.target.checked)} className="mt-1 size-4 shrink-0 accent-[var(--verde)]" />
             <span>
               {ehParceiro ? (
