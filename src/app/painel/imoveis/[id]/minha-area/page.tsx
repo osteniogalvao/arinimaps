@@ -1,5 +1,6 @@
 import { PencilRuler } from "lucide-react";
 import { exigirAnunciante } from "@/lib/imovel/anunciante";
+import { areaPrivadaLiberada } from "@/lib/imovel/verificacao";
 import MinhaAreaCliente from "@/components/imovel/MinhaAreaCliente";
 
 /**
@@ -9,7 +10,8 @@ import MinhaAreaCliente from "@/components/imovel/MinhaAreaCliente";
  */
 export default async function MinhaAreaPagina({ params }: PageProps<"/painel/imoveis/[id]/minha-area">) {
   const { id } = await params;
-  await exigirAnunciante(id);
+  const {ator:a} = await exigirAnunciante(id);
+  if (!await areaPrivadaLiberada(a,id)) return <p className="cartao p-5">A área de planejamento será liberada após a aprovação do vínculo com o imóvel.</p>;
   return (
     <div className="space-y-6">
       <header className="flex items-start gap-4">

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { podeOperarOportunidade, temSetor, type Ator } from "@/lib/authz";
 import { ipDoPedido } from "./limite";
 import { temPerfilCofre } from "@/lib/cofre";
+import { areaPrivadaLiberada,cofreAprovado } from "@/lib/imovel/verificacao";
 
 /**
  * Quem pode abrir cada arquivo do cofre privado (`docs`) — item 6.3.
@@ -60,7 +61,7 @@ export async function resolverArquivo(a: Ator, path: string): Promise<ArquivoRes
   const base = { documentoId: null, propertyId: null, opportunityId: null, requestId: null, motivo: null };
 
   if (prefixo === "cofre") {
-    if (chave !== a.userId || !temPerfilCofre(a.role,a.nicho)) return null;
+    if (chave !== a.userId || !temPerfilCofre(a.role,a.nicho) || !await cofreAprovado(a.userId,path.split("/")[2]??"")) return null;
     const { data: doc } = await admin.from("cofre_documentos").select("id,nome_arquivo")
       .eq("titular_id",a.userId).eq("storage_path",path).maybeSingle();
     return doc ? { ...base, categoria:"documento", permitido:true, documentoId:doc.id, nome:doc.nome_arquivo } : null;
@@ -94,7 +95,7 @@ export async function resolverArquivo(a: Ator, path: string): Promise<ArquivoRes
       const { data: arq, error } = await admin.from("property_area_arquivos")
         .select("id, nome_arquivo, property_id").eq("storage_path", path).limit(1).maybeSingle();
       if (error || !arq || arq.property_id !== propertyId) return null;
-      const permitido = temSetor(a, "operacoes", "cartografia", "comercial") || (await responsavelPeloImovel(a, propertyId));
+      const permitido = temSetor(a, "operacoes", "cartografia", "comercial") || (await areaPrivadaLiberada(a, propertyId));
       return { ...base, categoria: "documento", permitido, motivo: permitido ? null : "não é responsável pelo imóvel",
         nome: arq.nome_arquivo ?? nomeDoPath(path), documentoId: arq.id, propertyId };
     }

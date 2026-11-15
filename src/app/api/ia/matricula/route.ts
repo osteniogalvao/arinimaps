@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ator } from "@/lib/authz";
+import { reservarAri } from "@/lib/ia/creditos";
 import { falha } from "@/lib/erros";
 import { logAudit } from "@/lib/audit";
 import { lerConfiguracoes } from "@/lib/settings";
@@ -86,27 +87,32 @@ export async function POST(request: Request) {
     ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
     : { type: "image", source: { type: "base64", media_type: tipo, data } };
 
+  const reserva = await reservarAri(a!, request, "matricula");
+  if (reserva.erro) return reserva.erro;
   let texto = "";
   try {
     const client = new Anthropic();
     const r = await client.messages.create({
-      model: process.env.ARINI_IA_MODELO_MATRICULA?.trim() || "claude-sonnet-5-5",
+      model: reserva.modelo,
       max_tokens: 8000,
       messages: [{ role: "user", content: [anexo, { type: "text", text: INSTRUCAO }] }],
     });
     texto = r.content.map((c) => (c.type === "text" ? c.text : "")).join("");
   } catch (e) {
+    await reserva.estornar();
     console.error("leitura de matrícula falhou:", e);
     return falha(502, "ia_falhou", "A Ari não conseguiu ler a matrícula agora.", { solucao: "Tente de novo em instantes." });
   }
 
   const leitura: LeituraMatricula | null = lerLeituraMatricula(texto);
   if (!leitura) {
+    await reserva.estornar();
     return falha(422, "sem_leitura", "Não reconheci uma matrícula nesse arquivo.", {
       solucao: "Confira se é a certidão de matrícula do Registro de Imóveis, inteira e legível.",
     });
   }
 
+  await reserva.concluir();
   await logAudit({
     user_id: userId, acao: "ia_leitura_matricula", entidade: "ia", entidade_id: null,
     dados_depois: { atos: leitura.atos.length, onus: leitura.onus_vigentes.length, confianca: leitura.confianca },

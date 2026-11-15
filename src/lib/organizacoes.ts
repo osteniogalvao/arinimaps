@@ -29,6 +29,7 @@ export type Organizacao = {
 };
 
 export type MembroOrg = {
+  nicho_vinculo?: string | null;
   id: string; org_id: string; user_id: string | null; email: string;
   papel_org: "admin" | "membro"; status: "pendente" | "ativo" | "recusado" | "removido";
   convidado_em: string; aceito_em: string | null;

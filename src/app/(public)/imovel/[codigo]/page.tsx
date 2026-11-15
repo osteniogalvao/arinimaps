@@ -1,3 +1,4 @@
+import { visitasDoNavegador } from "@/lib/imovel/visitas";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
@@ -70,7 +71,7 @@ export async function generateMetadata(
     .filter(Boolean).join(" · ");
   return {
     title: `${imovel.titulo} — ${imovel.codigo}`,
-    description: (imovel.descricao || resumo).slice(0, 160),
+    description: resumo,
     alternates: { canonical: `/imovel/${imovel.codigo}` },
     openGraph: {
       type: "website", siteName: OG_NOME_SITE, locale: "pt_BR",
@@ -111,7 +112,7 @@ const POI_ICONE: Record<string, LucideIcon> = {
   escola: GraduationCap, centro: Landmark, acesso_rodovia: Route,
 };
 
-export default async function PaginaImovel({ params }: PageProps<"/imovel/[codigo]">) {
+export default async function PaginaImovel({ params, searchParams }: PageProps<"/imovel/[codigo]">) {
   const { codigo } = await params;
   // código do nome antigo (ARINI-MAP-000002) → o mesmo imóvel no padrão novo
   const antigo = codigo.match(/^ARINI-MAP-(\d{6})$/i);
@@ -120,13 +121,28 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
   // tudo o que só depende do código sai junto (antes era uma fila de idas ao banco)
   const [imovel, { data: propId }, { data: matriculaConferida }, user] = await Promise.all([
     getImovel(codigo),
-    admin.from("properties").select("id, modalidade, leilao, owner_id, partner_id, car_codigo").eq("codigo", codigo).maybeSingle(),
+    admin.from("properties").select("id, modalidade, regime_comercial, leilao, owner_id, partner_id, car_codigo").eq("codigo", codigo).maybeSingle(),
     // só a DATA da conferência: o número da matrícula não vai para o site público
     admin.from("property_matriculas")
       .select("conferida_em, imovel:properties!inner(codigo)").eq("imovel.codigo", codigo).not("conferida_em", "is", null).maybeSingle(),
     currentUser(),
   ]);
-  if (!imovel) notFound();
+  if (!imovel || imovel.status==="vendido") notFound();
+  if (!user) {
+    const {lista, limite} = await visitasDoNavegador();
+    const liberado = lista.includes(imovel.codigo);
+    const destino = "/entrar?volta=" + encodeURIComponent("/imovel/" + imovel.codigo);
+    return <Moldura usuario={null}><Conteudo className="space-y-5 py-12">
+      <Link href="/imoveis" className="text-sm text-verde underline">Imóveis à venda</Link>
+      <h1 className="lp-display text-4xl">{imovel.titulo}</h1>
+      <p>{[imovel.codigo,imovel.municipio?.nome,formatBRL(imovel.valor)].filter(Boolean).join(" · ")}</p>
+      {liberado && <p>{imovel.tipo==="rural"?"Imóvel rural":"Imóvel urbano"}{imovel.area_m2 ? " · "+formatArea(imovel.area_m2,imovel.tipo):""}</p>}
+      {!liberado && lista.length<limite && (await searchParams).resumo!=="1" &&
+        <a className="mr-5 inline-flex rounded-full border border-verde px-4 py-2 text-verde" href={"/api/vitrine/abrir?codigo="+encodeURIComponent(imovel.codigo)}>Abrir resumo do imóvel</a>}
+      <Link href={destino} className="inline-flex rounded-full bg-[#124431] px-5 py-2.5 font-bold text-white">Entrar para ver a ficha completa</Link>
+      {!liberado && lista.length>=limite && <p>Você atingiu o limite de resumos por visitante. O cadastro é gratuito.</p>}
+    </Conteudo></Moldura>;
+  }
   const leilao = propId?.modalidade === "leilao" ? (propId.leilao ?? {}) as Leilao : null;
   const [{ data: tourData }, { data: video }, { data: unidades }, { data: whats }, { data: divisa }, { data: origemCadastro }, favoritos, a] = await Promise.all([
     admin.rpc("fn_property_tour", { p_codigo: codigo }),
@@ -291,6 +307,11 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
               </Secao>
             )}
 
+            {!vendido && imovel.aceita_financiamento && (
+              <Link href={`/imovel/${imovel.codigo}/financiamento`} className="lp-btn btn-verde w-full !py-3.5">
+                <Landmark /> Simular financiamento
+              </Link>
+            )}
             {imovel.geometry && (
               <Secao eyebrow="03 · Divisa no mapa" titulo="Localização e área">
                 <MiniMapa geometry={imovel.geometry} status={imovel.status}
@@ -426,7 +447,7 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
                 <Link href="/mapa" className="lp-btn lp-btn-ouro mt-5 w-full">Ver outros imóveis <ArrowRight /></Link>
               </div>
             ) : (
-              <InteresseForm codigo={imovel.codigo} titulo={imovel.titulo} whatsapp={whatsapp} />
+              <InteresseForm codigo={imovel.codigo} titulo={imovel.titulo} whatsapp={whatsapp} regime={propId?.regime_comercial} />
             )}
 
             {imovel.geometry && (
@@ -495,7 +516,8 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
               </div>
             )}
             <p className="text-center text-xs text-texto-2">
-              Intermediação: Arini Negócios Imobiliários
+              <Link className="mb-2 block text-sm font-semibold text-verde" href={`/painel/cofre?codigo=${encodeURIComponent(imovel.codigo)}&nome=${encodeURIComponent(imovel.titulo)}${propId?.car_codigo ? "&car="+encodeURIComponent(propId.car_codigo):""}`}>Este imóvel é meu</Link>
+              {propId?.regime_comercial && propId.regime_comercial !== "EXCLUSIVO_ARINI" ? "Atendimento pelo responsável pelo anúncio" : "Intermediação: Arini Negócios Imobiliários"}
             </p>
           </aside>
         </div>

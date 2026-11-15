@@ -78,7 +78,10 @@ export default async function SolicitarCartografia({ searchParams }: PageProps<"
       // RLS: só aparece se o imóvel for visível a quem está logado
       const supabase = await supabaseServer();
       const { data } = await supabase.from("properties").select("id, codigo, titulo, municipality_id").eq("id", id).maybeSingle();
-      return data ?? null;
+      if (data) return data;
+      const { data: publicado } = await admin.from("properties").select("id, codigo, titulo, municipality_id")
+        .eq("id", id).in("status", ["publicado", "em_negociacao"]).maybeSingle();
+      return publicado ?? null;
     })(),
   ]);
 

@@ -43,6 +43,8 @@ const DATA = /^\d{4}-\d{2}-\d{2}$/;
 type Pagamento = {
   id: string;
   externalReference?: string | null;
+  customer?: string;
+  value?: number;
   paymentDate?: string | null;
   clientPaymentDate?: string | null;
   confirmedDate?: string | null;
@@ -202,8 +204,22 @@ export async function POST(request: Request) {
   const eventoId = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;
 
   if (!evento || !pagamento) return NextResponse.json({ ok: true, ignorado: "payload sem evento de cobrança" });
+  const ref = typeof pagamento.externalReference === "string" ? pagamento.externalReference : "";
+  if (ref.startsWith("ari_") && UUID.test(ref.slice(4))) {
+    if (!(EVENTOS as readonly string[]).includes(evento) && evento !== "PAYMENT_PARTIALLY_REFUNDED") return NextResponse.json({ ok: true });
+    if (typeof pagamento.customer !== "string" || typeof pagamento.value !== "number" || !Number.isFinite(pagamento.value)) {
+      return NextResponse.json({ ok: true, ignorado: "cobrança sem cliente ou valor" });
+    }
+    const { error } = await supabaseAdmin().rpc("fn_ari_pagamento", { p_id: ref.slice(4), p_evento: evento,
+      p_pagamento: pagamento.id, p_cliente: pagamento.customer, p_valor: Math.round(pagamento.value * 100) });
+    if (error?.code === "22023" || error?.code === "P0002") {
+      console.error("Cobrança da Ari divergente", ref, error.code);
+      return NextResponse.json({ ok: true, ignorado: "pedido ou pagamento divergente" });
+    }
+    if (error) return NextResponse.json({ error: "Falha temporária ao atualizar a carteira." }, { status: 503 });
+    return NextResponse.json({ ok: true });
+  }
   if (!(EVENTOS as readonly string[]).includes(evento)) return NextResponse.json({ ok: true, ignorado: "evento não tratado" });
-  const ref = pagamento.externalReference ?? "";
   if (!UUID.test(ref)) return NextResponse.json({ ok: true, ignorado: "sem referência deste sistema" });
 
   const admin = supabaseAdmin();

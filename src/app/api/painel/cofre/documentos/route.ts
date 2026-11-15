@@ -1,5 +1,6 @@
 import { ator } from "@/lib/authz";
 import { temPerfilCofre } from "@/lib/cofre";
+import { cofreAprovado } from "@/lib/imovel/verificacao";
 import { falha } from "@/lib/erros";
 import { ehUuid } from "@/lib/solicitacoes-planos-servidor";
 import { ACEITA, conferirArquivo } from "@/lib/seguranca/arquivos";
@@ -16,6 +17,7 @@ async function buscarImovel(req: Request) {
   const { data, error } = await db.from("cofre_propriedades").select("id").eq("titular_id",a.userId).eq("id",id).maybeSingle();
   if (error) return falha(503,"cofre_indisponivel","O cofre está indisponível.");
   if (!data) return falha(404,"propriedade","Propriedade não encontrada.");
+  if (!await cofreAprovado(a.userId,id)) return falha(403,"verificacao","A Central precisa confirmar o vínculo antes de liberar os documentos do cofre.");
   return { id, titular: a.userId, db };
 }
 export async function GET(req: Request) {

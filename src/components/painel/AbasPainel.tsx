@@ -17,6 +17,8 @@ const ABAS: { href: string; rotulo: string; icone: LucideIcon }[] = [
   { href: "/painel/insumos", rotulo: "Calculadora de insumos", icone: Calculator },
   { href: "/painel/crm", rotulo: "Meu CRM", icone: ContactRound },
   { href: "/painel/oportunidades", rotulo: "Minhas oportunidades", icone: Handshake },
+  { href: "/painel/financiamento", rotulo: "Financiamento", icone: Calculator },
+  { href: "/painel/interesses", rotulo: "Meus interesses", icone: Handshake },
   { href: "/painel/novo", rotulo: "Anunciar", icone: PlusCircle },
   { href: "/painel/empreendimentos", rotulo: "Espelho de vendas", icone: Grid3x3 },
   { href: "/painel/cartografia", rotulo: "Mapa: solicitações", icone: MapIcon },

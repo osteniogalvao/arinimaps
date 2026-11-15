@@ -6,7 +6,7 @@
  */
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowRight, ChevronDown, List as ListIcon, Fuel, GraduationCap, Hospital, Landmark, Layers, LoaderCircle, Lock, MapPin, Pill, Route, ShoppingCart, X,
   type LucideIcon,
@@ -32,7 +32,7 @@ export { STATUS_MAPA, RADAR_ANEL };
  * separa o rural do urbano à primeira vista sobre o satélite (pedido do
  * cliente) e o Amarelo Claro marca o lote urbano.
  */
-const COR_CAR = "#FF9D3D";
+const COR_CAR = "#40cf39";
 const COR_LOTE_LEGENDA = "#FFE299";
 
 /** Botão "fechar" dos painéis do mapa (ícone X, alvo de 32 px). */
@@ -211,10 +211,7 @@ export function Legenda({ extras = [], relevo = [] }: { extras?: { cor: string; 
   // recolhível; no celular começa fechada (tampava ~40 % do mapa junto com as Ferramentas)
   // left-10, não left-3: a aba "‹" de recolher a lista (28 px, na altura do meio)
   // cobria o "L" de LEGENDA quando a legenda crescia até ela (QA 09/11)
-  const [aberta, setAberta] = useState(true);
-  useEffect(() => {
-    if (window.innerWidth < 640) setAberta(false);
-  }, []);
+  const [aberta, setAberta] = useState(false);
   if (!aberta) {
     return (
       <button type="button" onClick={() => setAberta(true)} aria-expanded={false}

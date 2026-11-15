@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ator, temSetor } from "@/lib/authz";
+import { reservarAri } from "@/lib/ia/creditos";
 import { falha } from "@/lib/erros";
 import { logAudit } from "@/lib/audit";
 import { lerConfiguracoes } from "@/lib/settings";
@@ -8,7 +9,7 @@ import { ehParceiro, podeAnunciar } from "@/lib/perfis";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { tipoReal } from "@/lib/seguranca/arquivos";
-import { iaConfigurada, modeloIa } from "@/lib/ia/config";
+import { iaConfigurada } from "@/lib/ia/config";
 import { transcricaoConfigurada, transcreverAudio } from "@/lib/ia/transcricao";
 import { extrairAnuncio, LIMITES_CADASTRO_RAPIDO as LIM, type MidiaParaIa } from "@/lib/ia/cadastroRapidoNucleo";
 
@@ -69,7 +70,7 @@ async function conferirAcesso() {
         }) };
       }
     } else if (ehParceiro(a.role)) {
-      const { data } = await admin.from("partners").select("status").eq("profile_id", a.userId).maybeSingle();
+      const { data } = await admin.from("partners").select("status").eq("tipo",a.role).eq("profile_id", a.userId).maybeSingle();
       if (!data || !["aprovado", "ativo"].includes(data.status)) {
         return { erro: falha(403, "conta_em_analise", "Seu cadastro de parceiro ainda está em análise pela Arini.") };
       }
@@ -137,21 +138,6 @@ export async function POST(request: Request) {
   const avisos: string[] = [];
   let total = 0;
 
-  // ---- áudio: transcreve se houver serviço; senão aceita e avisa
-  if (audio instanceof File && audio.size > 0) {
-    if (audio.size > LIM.audioBytes) {
-      avisos.push(`O áudio passa de ${LIM.audioBytes / 1048576} MB e foi ignorado.`);
-    } else if (!audio.type.startsWith("audio/") && !audio.type.startsWith("video/")) {
-      avisos.push("O arquivo de áudio não foi reconhecido e foi ignorado.");
-    } else if (transcricaoConfigurada()) {
-      const t = await transcreverAudio(audio);
-      if (t) descricao = `${descricao}\n\nTranscrição do áudio do anunciante:\n${t}`.trim();
-      else avisos.push("Não consegui transcrever o áudio agora; usei só o texto e os arquivos.");
-    } else {
-      avisos.push("Transcrição indisponível. A análise usa o texto, as fotos e os documentos enviados.");
-    }
-  }
-
   // ---- fotos: o tipo é conferido pelo conteúdo, não pelo nome
   const fotos: MidiaParaIa[] = [];
   const fotosLidas: number[] = [];
@@ -192,14 +178,36 @@ export async function POST(request: Request) {
       solucao: "Mande menos documentos ou PDFs menores; o restante você anexa no formulário.",
     });
   }
+  if (!descricao && !fotos.length && !documentos.length && !(audio instanceof File && audio.size > 0 && audio.size <= LIM.audioBytes && transcricaoConfigurada() && /^(audio|video)\//.test(audio.type))) {
+    return falha(400, "sem_material", "Envie uma descrição, áudio, fotos ou documentos válidos.");
+  }
+  const reserva = await reservarAri(acesso.a, request, "cadastro");
+  if (reserva.erro) return reserva.erro;
+  // ---- áudio: transcreve se houver serviço; senão aceita e avisa
+  if (audio instanceof File && audio.size > 0) {
+    if (audio.size > LIM.audioBytes) {
+      avisos.push(`O áudio passa de ${LIM.audioBytes / 1048576} MB e foi ignorado.`);
+    } else if (!audio.type.startsWith("audio/") && !audio.type.startsWith("video/")) {
+      avisos.push("O arquivo de áudio não foi reconhecido e foi ignorado.");
+    } else if (transcricaoConfigurada()) {
+      const t = await transcreverAudio(audio).catch(() => null);
+      if (t) descricao = `${descricao}\n\nTranscrição do áudio do anunciante:\n${t}`.trim();
+      else avisos.push("Não consegui transcrever o áudio agora; usei só o texto e os arquivos.");
+    } else {
+      avisos.push("Transcrição indisponível. A análise usa o texto, as fotos e os documentos enviados.");
+    }
+  }
+
   if (!descricao && !fotos.length && !documentos.length) {
+    await reserva.estornar();
     return falha(400, "sem_material", "Escreva uma descrição ou anexe fotos e documentos para a Ari ler.");
   }
 
   let resultado: Awaited<ReturnType<typeof extrairAnuncio>>;
   try {
-    resultado = await extrairAnuncio(new Anthropic(), modeloIa(), { descricao, fotos, documentos });
+    resultado = await extrairAnuncio(new Anthropic(), reserva.modelo, { descricao, fotos, documentos });
   } catch (e) {
+    await reserva.estornar();
     console.error("cadastro rápido falhou:", e);
     return falha(502, "ia_falhou", "A Ari não conseguiu ler o material agora.", {
       solucao: "Tente de novo em instantes ou preencha o formulário normalmente.",
@@ -207,6 +215,7 @@ export async function POST(request: Request) {
   }
   const ex = resultado.extracao;
   if (!ex) {
+    await reserva.estornar();
     return falha(422, "sem_extracao", "A Ari não conseguiu montar o anúncio com esse material.", {
       solucao: "Escreva um pouco mais sobre o imóvel (tipo, município, área, valor) e tente de novo.",
     });
@@ -219,11 +228,12 @@ export async function POST(request: Request) {
   ex.fotos.problemas = ex.fotos.problemas.map((p) => ({ ...p, indice: fotosLidas[p.indice] }));
   ex.documentos = ex.documentos.map((d) => ({ ...d, indice: docsLidos[d.indice] }));
 
+  await reserva.concluir();
   await logAudit({
     user_id: userId, acao: "ia_cadastro_rapido", entidade: "ia", entidade_id: null,
     dados_depois: {
       fotos: fotos.length, documentos: documentos.length, caracteres: descricao.length,
-      tokens_entrada: resultado.uso.entrada, tokens_saida: resultado.uso.saida, modelo: modeloIa(),
+      tokens_entrada: resultado.uso.entrada, tokens_saida: resultado.uso.saida, modelo: reserva.modelo,
       confianca: ex.confianca,
     },
   });

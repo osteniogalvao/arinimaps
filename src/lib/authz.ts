@@ -1,8 +1,9 @@
 import "server-only";
+import { acessoComMatriz } from "@/lib/direitos-persona-servidor";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { setoresDe, type SetorId } from "@/lib/setores";
-import { montarAcesso, type Acesso, type Plano, type RecursoId } from "@/lib/planos";
+import { type Acesso, type Plano, type RecursoId } from "@/lib/planos";
 import { planoDaOrganizacao } from "@/lib/organizacoes-servidor";
 import { lerConfiguracoes } from "@/lib/settings";
 
@@ -53,7 +54,7 @@ export async function ator(): Promise<Ator | null> {
   if (!user) return null;
   const admin = supabaseAdmin();
   const { data: profile } = await admin.from("profiles")
-    .select("role, setores, ativo, nicho, plan_id, plan_valido_ate, plan_origem").eq("user_id", user.id).single();
+    .select("role, setores, ativo, nicho, entrada_ativa, plan_id, plan_valido_ate, plan_origem").eq("user_id", user.id).single();
   if (!profile || profile.ativo === false) return null;
   const equipe = ["admin_central", "analista_arini"].includes(profile.role);
   // Segundo fator também nas APIs (testes 9.5), com a mesma regra da Central
@@ -61,8 +62,9 @@ export async function ator(): Promise<Ator | null> {
   // sessão; se a diretoria o tornou obrigatório, equipe sem MFA não opera.
   if (await mfaPendente(supabase, equipe)) return null;
   const [{ data: partner }, { data: owner }, { data: planoPessoal }, daOrg] = await Promise.all([
-    admin.from("partners").select("id").eq("profile_id", user.id).maybeSingle(),
-    admin.from("owners").select("id").eq("profile_id", user.id).maybeSingle(),
+    ["corretor","imobiliaria","engenheiro","franqueado","leiloeiro"].includes(profile.role)
+      ? admin.from("partners").select("id").eq("profile_id", user.id).eq("tipo",profile.role).maybeSingle() : Promise.resolve({ data:null }),
+    profile.role === "proprietario" ? admin.from("owners").select("id").eq("profile_id", user.id).maybeSingle() : Promise.resolve({ data:null }),
     profile.plan_id ? admin.from("plans").select("*").eq("id", profile.plan_id).maybeSingle() : Promise.resolve({ data: null }),
     // 5.9: plano da organização vale quando o pessoal é o padrão do nicho (docs/PLANOS.md §10)
     !equipe && (profile.plan_origem ?? "padrao") === "padrao" ? planoDaOrganizacao(user.id) : Promise.resolve(null),
@@ -79,7 +81,7 @@ export async function ator(): Promise<Ator | null> {
     partnerId: partner?.id ?? null,
     ownerId: owner?.id ?? null,
     nicho: (profile.nicho as string | null) ?? null,
-    acesso: montarAcesso(profile.role, (plano as Plano | null) ?? null, profile.nicho as string | null, validoAte),
+    acesso: await acessoComMatriz(profile.role, (plano as Plano | null) ?? null, profile.nicho as string | null, validoAte, profile.entrada_ativa, user.id),
   };
 }
 

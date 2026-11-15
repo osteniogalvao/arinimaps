@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, formatArea, plural } from "@/lib/format";
@@ -64,6 +64,8 @@ export async function generateMetadata({ params, searchParams }: PageProps<"/imo
 export default async function RelatorioTerritorial({ params, searchParams }: PageProps<"/imovel/[codigo]/relatorio">) {
   const { codigo } = await params;
   const escolha = lerSecoes((await searchParams).secoes);
+  const user = await currentUser();
+  if (!user) redirect("/entrar?volta="+encodeURIComponent("/imovel/"+codigo+"/relatorio"));
   const admin = supabaseAdmin();
 
   const { data: imovel } = await admin
@@ -73,18 +75,17 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
       municipality:municipalities!properties_municipality_id_fkey(nome, uf)
     `)
     .eq("codigo", codigo)
-    .in("status", ["publicado", "em_negociacao", "vendido"])
+    .in("status", ["publicado", "em_negociacao"])
     .maybeSingle();
   if (!imovel) notFound();
 
-  const [{ data: geo }, { data: relatorio }, { data: tour }, { data: publicoRaw }, cfg, user] = await Promise.all([
+  const [{ data: geo }, { data: relatorio }, { data: tour }, { data: publicoRaw }, cfg] = await Promise.all([
     admin.from("property_geometries").select("area_m2, perimeter_m, fonte").eq("property_id", imovel.id).maybeSingle(),
     admin.rpc("fn_consulta_rural", { p_property_id: imovel.id }),
     admin.rpc("fn_property_tour", { p_codigo: codigo }),
     // divisa e fotos: o mesmo que a ficha pública mostra
     admin.rpc("fn_property_public", { p_codigo: codigo }),
     lerConfiguracoes(),
-    currentUser(),
   ]);
   const publico = publicoRaw as Publico;
   // §1.1: relatório territorial aberto vira evento do imóvel

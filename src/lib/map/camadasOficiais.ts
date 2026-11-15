@@ -3,13 +3,13 @@
  * também usa: nome, cor, zoom mínimo e como cada feição vira linha de cartão.
  * A busca nos órgãos fica no servidor (src/lib/geo/camadasMapa.ts).
  *
- * Todas pertencem ao recurso `camadas_oficiais` (plano profissional para cima).
+ * São camadas públicas do mapa (D0).
  * `zoomMin` é onde a camada passa a ser pedida: SIGEF e desmatamento são
  * milhares de polígonos pequenos, só fazem sentido de perto; terras indígenas
  * e unidades de conservação são grandes e aparecem já na visão regional.
  */
 export type CamadaOficialId =
-  | "sigef" | "ibama_embargos" | "anm" | "funai" | "ucs" | "quilombolas" | "prodes_cerrado" | "inpe_queimadas" | "ibge_biomas";
+  | "snci" | "credito_rural" | "outorgas_federais" | "sigef" | "ibama_embargos" | "anm" | "funai" | "ucs" | "quilombolas" | "prodes_cerrado" | "inpe_queimadas" | "ibge_biomas";
 
 export type CamadaOficial = {
   id: CamadaOficialId;
@@ -35,9 +35,15 @@ export const CORES_BIOMAS: Record<string, string> = {
 };
 
 export const CAMADAS_OFICIAIS: CamadaOficial[] = [
-  { id: "sigef", nome: "Parcelas certificadas (SIGEF)", orgao: "INCRA", grupo: "Fundiário", cor: "#5BC0EB", zoomMin: 12,
+  { id: "sigef", nome: "Parcelas certificadas (SIGEF)", orgao: "INCRA", grupo: "Fundiário", cor: "#ff353b", zoomMin: 12,
     ajuda: "Imóveis com georreferenciamento certificado pelo INCRA." },
-  { id: "funai", nome: "Terras indígenas", orgao: "FUNAI", grupo: "Fundiário", cor: "#E4572E", zoomMin: 7,
+  { id: "snci", nome: "Imóveis certificados (SNCI)", orgao: "INCRA", grupo: "Fundiário", cor: "#374cff", zoomMin: 12,
+    ajuda: "Certificações históricas anteriores ao SIGEF. Fonte nacional do INCRA e base estadual do IAT no interior do Paraná." },
+  { id: "credito_rural", nome: "Crédito rural (SICOR)", orgao: "Banco Central", grupo: "Fundiário", cor: "#ff8c24", zoomMin: 12,
+    ajuda: "Glebas nas edições anuais do SICOR importadas para Iturama e municípios vizinhos. Cada polígono informa o ano e a data da carga." },
+  { id: "outorgas_federais", nome: "Outorgas federais", orgao: "ANA", grupo: "Ambiental", cor: "#12b8e8", zoomMin: 9, ponto: true,
+    ajuda: "Outorgas federais de uso de águas superficiais. Consulte a vigência no detalhe de cada ponto." },
+  { id: "funai", nome: "Terras indígenas", orgao: "FUNAI", grupo: "Fundiário", cor: "#a65bff", zoomMin: 7,
     ajuda: "Área indígena: compra e venda vedadas." },
   { id: "quilombolas", nome: "Territórios quilombolas", orgao: "INCRA", grupo: "Fundiário", cor: "#F3A712", zoomMin: 7,
     ajuda: "Território em reconhecimento ou titulado." },
@@ -64,6 +70,12 @@ export function descreverFeicao(id: CamadaOficialId, p: Record<string, unknown>)
   const ha = (v: unknown) => (Number(v) > 0 ? `${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} ha` : "");
   const junta = (...xs: string[]) => xs.filter(Boolean).join(" · ");
   switch (id) {
+    case "snci":
+      return { titulo: s(p.nome) || "Imóvel certificado no SNCI", detalhe: junta(s(p.natureza), s(p.certificacao), ha(p.area_ha), s(p.fonte)) };
+    case "credito_rural":
+      return { titulo: "Gleba de crédito rural", detalhe: junta("SICOR", s(p.ano), s(p.importado_em) && "Carga em " + new Date(String(p.importado_em)).toLocaleDateString("pt-BR")) };
+    case "outorgas_federais":
+      return { titulo: s(p.curso) || "Outorga federal", detalhe: junta(s(p.municipio), s(p.ato), s(p.validade), s(p.status)) };
     case "sigef":
       return { titulo: s(p.nome) || "Parcela certificada", detalhe: junta(s(p.situacao), s(p.natureza), s(p.certificada_em) && `certificada em ${s(p.certificada_em)}`) };
     case "ibama_embargos":

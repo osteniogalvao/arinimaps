@@ -34,6 +34,10 @@ export default async function MinhaConta() {
   ]);
 
   const mais = [
+    ...(user.nicho==="comprador_investidor" ? [{href:"/conta/filtros",rotulo:"Filtros de interesse",texto:"Buscas salvas e novos imóveis que combinam com você",icone:BadgeCheck}] : []),
+    ...(!daEquipe ? [{ href: "/conta/creditos", rotulo: "Carteira da Ari", texto: "Créditos do plano, compras e histórico de uso", icone: BadgeCheck }] : []),
+    { href: "/privacidade/preferencias", rotulo: "Preferências de privacidade", texto: "Histórico da Ari, navegação e avisos", icone: ShieldCheck },
+    ...(!daEquipe && user.role!=="franqueado" ? [{ href: "/conta/perfis", rotulo: "Perfis de acesso", texto: "Adicionar um perfil ou trocar o contexto ativo", icone: Users }] : []),
     { href: "/conta/seguranca", rotulo: "Segurança da conta", texto: "senha, segundo fator e histórico de acessos", icone: ShieldCheck },
     ...(!daEquipe ? [{
       href: "/painel/organizacao", rotulo: "Organização", icone: Users,

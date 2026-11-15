@@ -72,6 +72,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
   try { cotacao = cotarPlano(selecao, planos); } catch (e) { validacao = e instanceof Error ? e.message : "Confira a seleção."; }
 
   function escolher(id: typeof planoId) {
+    if (id === planoId) return;
     setPlanoId(id);
     setQtd({});
     setErro("");
@@ -132,22 +133,26 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
           {valor === "mensal" ? "Mensal" : "Anual"}
         </button>)}
       </div>
-      <div className={"grid items-start gap-3 sm:grid-cols-2 " + (planos.length === 5 ? "xl:grid-cols-5" : "xl:grid-cols-4")}>
+      <div className="vitrine-grade">
         {planos.map((p) => {
           const anual = periodo === "anual" && p.anualCentavos !== null;
           const preco = anual ? p.anualCentavos! : p.mensalCentavos;
           const economia = economiaAnualCentavos(p);
-          return <article key={p.id} className={"cartao space-y-3 p-4 " + (p.id === planoId ? "!border-verde ring-1 ring-verde" : "")}>
+          return <article key={p.id} data-selecionado={p.id === planoId} className="vitrine-card gap-3"
+            onClick={(evento) => {
+              if (p.id !== planoId && !(evento.target as HTMLElement).closest("button,details")) escolher(p.id);
+            }}>
             <h3 className="lp-display text-2xl">{p.nome}</h3>
             <p className="text-sm text-texto-2">{p.descricao}</p>
-            <p className="text-xl font-bold">{preco === 0 ? "Grátis" : reais(preco)}
+            <p className="valor">{preco === 0 ? "Grátis" : reais(preco)}
               <small className="ml-1 text-sm font-normal">{preco ? (anual ? "/ ano" : "/ mês") : p.teste ? "por " + p.teste.dias + " dias" : ""}</small></p>
             {!anual && p.primeiroMesCentavos && <p className="text-sm font-semibold text-verde">Primeiro mês por {reais(p.primeiroMesCentavos)}</p>}
             {anual && economia != null && economia > 0 && <p className="text-sm text-verde">Economia de {reais(economia)} no primeiro ano</p>}
             <p className="text-sm text-texto-2">{limitesDoPacote(p).join(" · ")}</p>
-            <p className="text-xs font-semibold text-texto-2">{DISPONIBILIDADE_CATALOGO[p.disponibilidade]}</p>
+            <p className="estado">{DISPONIBILIDADE_CATALOGO[p.disponibilidade]}</p>
+            <ul className="itens-vitrine">{p.recursos.slice(0, 4).map((id) => <li key={id}>{RECURSOS_CATALOGO[id].nome}</li>)}</ul>
             <button type="button" aria-pressed={p.id === planoId} onClick={() => escolher(p.id)}
-              className={"lp-btn w-full " + (p.id === planoId ? "lp-btn-verde" : "lp-btn-contorno")}>{p.id === planoId ? <><Check /> Selecionado</> : "Selecionar"}</button>
+              className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : "Selecionar"}</button>
             <details className="border-t border-linha pt-2 text-sm"><summary className="cursor-pointer font-semibold">Recursos e condições</summary>
               <ul className="my-3 space-y-2">{recursosDoPacote(p).map((r) => <li key={r.nome}>{r.nome} <small className="block text-texto-2">{DISPONIBILIDADE_CATALOGO[r.disponibilidade]}</small></li>)}</ul>
               <p className="text-texto-2">{p.motivoDisponibilidade}</p>
@@ -220,5 +225,15 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
         <div className="flex flex-wrap gap-3"><Link className="lp-btn lp-btn-verde" href={"/entrar?volta=" + volta}>Entrar para solicitar <ArrowRight /></Link>
           <Link className="lp-btn lp-btn-contorno" href={(plano.alcance === "global" ? "/entrar?cadastro=1&papel=consulta&nicho=consulta" : cadastro) + "&volta=" + volta}>Criar conta</Link></div>}
     </fieldset>
+    <section aria-labelledby="comparar-pacotes">
+      <h3 id="comparar-pacotes" className="lp-display mb-3 text-3xl">Compare os planos</h3>
+      <div className="vitrine-comparativo" tabIndex={0} role="region" aria-label="Recursos por plano">
+        <table><thead><tr><th scope="col">Recurso previsto</th>{planos.map((p) => <th scope="col" key={p.id}>{p.nome}</th>)}</tr></thead>
+          <tbody>{[...new Set(planos.flatMap((p) => recursosDoPacote(p)))].map((rec) => <tr key={rec.nome}>
+            <th scope="row">{rec.nome}</th>{planos.map((p) => <td key={p.id}>
+              {recursosDoPacote(p).includes(rec) ? DISPONIBILIDADE_CATALOGO[rec.disponibilidade] : "—"}</td>)}
+          </tr>)}</tbody></table>
+      </div>
+    </section>
   </div>;
 }

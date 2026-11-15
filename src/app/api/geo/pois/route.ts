@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { currentUser } from "@/lib/supabase/server";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 
 /**
@@ -12,6 +13,7 @@ import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 export async function GET(request: Request) {
   const bloqueio = await limiteLeituraMapa(request, "geo");
   if (bloqueio) return bloqueio;
+  if (!await currentUser()) return NextResponse.json({error:"Entre para consultar o entorno."},{status:401});
   const codigo = new URL(request.url).searchParams.get("codigo") ?? "";
   if (!/^[A-Z0-9-]{3,40}$/i.test(codigo)) {
     return NextResponse.json({ error: "Código de imóvel inválido.", codigo: "codigo_invalido" }, { status: 400 });
@@ -27,6 +29,6 @@ export async function GET(request: Request) {
   }[];
   return NextResponse.json(
     { pois, atualizado_em: (prop?.pois_atualizados_em as string | null) ?? null },
-    { headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=3600" } }
+    { headers: { "Cache-Control": "private, no-store" } }
   );
 }

@@ -99,7 +99,7 @@ export default function Entrar() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "Não foi possível entrar.");
-    const para = destinoDe(data.role);
+    const para = data.escolherPerfil && !volta && !lerCarPendente() ? "/conta/perfis" : destinoDe(data.role);
     if (data.mfa) {
       // conta com segundo fator: a sessão só vale depois do código
       setDestino(para);

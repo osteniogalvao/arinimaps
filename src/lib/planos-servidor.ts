@@ -1,9 +1,10 @@
 import "server-only";
+import { acessoComMatriz } from "@/lib/direitos-persona-servidor";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ipDoPedido } from "@/lib/seguranca/limite";
-import { ACESSO_VISITANTE, montarAcesso, recursoPorId, type Acesso, type Plano, type RecursoId } from "@/lib/planos";
+import { ACESSO_VISITANTE, recursoPorId, type Acesso, type Plano, type RecursoId } from "@/lib/planos";
 import { planoDaOrganizacao } from "@/lib/organizacoes-servidor";
 import { podeAnunciar } from "@/lib/perfis";
 
@@ -26,17 +27,17 @@ export async function acessoDe(userId: string | null | undefined): Promise<Acess
   if (!userId) return ACESSO_VISITANTE;
   const admin = supabaseAdmin();
   const { data: p } = await admin.from("profiles")
-    .select("role, nicho, plan_id, plan_valido_ate, plan_origem, ativo").eq("user_id", userId).maybeSingle();
+    .select("role, nicho, entrada_ativa, plan_id, plan_valido_ate, plan_origem, ativo").eq("user_id", userId).maybeSingle();
   if (!p || p.ativo === false) return ACESSO_VISITANTE;
   // 5.9: membro de organização com plano usa o plano dela enquanto o pessoal
   // for o padrão do nicho; plano manual/assinatura da conta vence (docs/PLANOS.md §10)
   const equipe = ["admin_central", "analista_arini"].includes(p.role);
   if (!equipe && (p.plan_origem ?? "padrao") === "padrao") {
     const daOrg = await planoDaOrganizacao(userId);
-    if (daOrg) return montarAcesso(p.role, daOrg.plano, p.nicho, daOrg.validoAte);
+    if (daOrg) return acessoComMatriz(p.role, daOrg.plano, p.nicho, daOrg.validoAte, p.entrada_ativa, userId);
   }
   const plano = await carregarPlano(p.plan_id);
-  return montarAcesso(p.role, plano, p.nicho, p.plan_valido_ate);
+  return acessoComMatriz(p.role, plano, p.nicho, p.plan_valido_ate, p.entrada_ativa, userId);
 }
 
 /** Acesso de quem está na sessão atual (páginas). */
@@ -76,11 +77,11 @@ export async function consultasAreaNoMes(userId: string): Promise<number> {
 }
 
 /** Imóveis da conta em análise ou publicados (cota `imoveis_ativos`). */
-export async function imoveisAtivosDe(userId: string): Promise<number> {
+export async function imoveisAtivosDe(userId: string, role: string): Promise<number> {
   const admin = supabaseAdmin();
   const [owner, partner] = await Promise.all([
-    admin.from("owners").select("id").eq("profile_id", userId).maybeSingle(),
-    admin.from("partners").select("id").eq("profile_id", userId).maybeSingle(),
+    role==="proprietario" ? admin.from("owners").select("id").eq("profile_id", userId).maybeSingle() : Promise.resolve({data:null,error:null}),
+    ["corretor","engenheiro","imobiliaria","leiloeiro","franqueado"].includes(role) ? admin.from("partners").select("id").eq("tipo",role).eq("profile_id", userId).maybeSingle() : Promise.resolve({data:null,error:null}),
   ]);
   if (owner.error || partner.error) throw new Error("Não foi possível consultar o anunciante.");
   const filtros = [
@@ -121,7 +122,7 @@ export async function conferirRecurso(
 
   if (opcoes.cota && user && !acesso.equipe && acesso.cotas[opcoes.cota] != null) {
     const limite = Number(acesso.cotas[opcoes.cota]);
-    const usado = opcoes.cota === "consultas_area_mes" ? await consultasAreaNoMes(user.id) : await imoveisAtivosDe(user.id).catch(() => null);
+    const usado = opcoes.cota === "consultas_area_mes" ? await consultasAreaNoMes(user.id) : await imoveisAtivosDe(user.id,user.role).catch(() => null);
     if (usado === null) return { acesso, negacao: { codigo: "consulta_indisponivel", mensagem: "Não foi possível conferir a cota de imóveis.", solucao: "Tente novamente em instantes." } };
     if (usado + (opcoes.quantidade ?? 1) > limite) {
       const negacao: Negacao = {

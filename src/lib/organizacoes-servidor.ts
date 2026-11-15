@@ -8,7 +8,7 @@ import type { MembroOrg, Organizacao } from "@/lib/organizacoes";
 export async function organizacaoDoUsuario(userId: string): Promise<{ org: Organizacao; membro: MembroOrg } | null> {
   const admin = supabaseAdmin();
   const { data: membro } = await admin.from("organization_members")
-    .select("id, org_id, user_id, email, papel_org, status, convidado_em, aceito_em")
+    .select("id, org_id, user_id, email, papel_org, status, convidado_em, aceito_em, nicho_vinculo")
     .eq("user_id", userId).eq("status", "ativo").maybeSingle();
   if (!membro) return null;
   const { data: org } = await admin.from("organizations")
@@ -24,7 +24,9 @@ export async function organizacaoDoUsuario(userId: string): Promise<{ org: Organ
  * `acessoDe()`/`ator()` — só quando o pessoal é o padrão do nicho.
  */
 export async function planoDaOrganizacao(userId: string): Promise<{ plano: Plano; validoAte: string | null; orgNome: string } | null> {
-  const vinculo = await organizacaoDoUsuario(userId);
+  const [vinculo, {data:contexto}] = await Promise.all([organizacaoDoUsuario(userId),
+    supabaseAdmin().from("profiles").select("nicho").eq("user_id",userId).maybeSingle()]);
+  if (!contexto || vinculo?.membro.nicho_vinculo && vinculo.membro.nicho_vinculo!==contexto.nicho) return null;
   if (!vinculo || !vinculo.org.ativo || !vinculo.org.plan_id) return null;
   const venceu = vinculo.org.plan_valido_ate && new Date(vinculo.org.plan_valido_ate).getTime() < Date.now();
   if (venceu) return null;

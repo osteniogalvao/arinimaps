@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ator } from "@/lib/authz";
+import { reservarAri } from "@/lib/ia/creditos";
 import { falha } from "@/lib/erros";
 import { logAudit } from "@/lib/audit";
 import { lerConfiguracoes } from "@/lib/settings";
 import { conferirRecurso, respostaNegacao } from "@/lib/planos-servidor";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
-import { iaConfigurada, modeloIa } from "@/lib/ia/config";
+import { iaConfigurada } from "@/lib/ia/config";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -103,11 +104,13 @@ export async function POST(request: Request) {
   }
 
   const base64 = bytes.toString("base64");
+  const reserva = await reservarAri(a!, request, "imagem");
+  if (reserva.erro) return reserva.erro;
   let texto = "";
   try {
     const client = new Anthropic();
     const r = await client.messages.create({
-      model: modeloIa(),
+      model: reserva.modelo,
       max_tokens: 600,
       messages: [{
         role: "user",
@@ -119,13 +122,18 @@ export async function POST(request: Request) {
     });
     texto = r.content.map((c) => (c.type === "text" ? c.text : "")).join("");
   } catch (e) {
+    await reserva.estornar();
     console.error("busca por imagem falhou:", e);
     return falha(502, "ia_falhou", "A Ari não conseguiu ler a imagem agora.", { solucao: "Tente de novo em instantes." });
   }
 
   const pista = lerPista(texto);
-  if (!pista) return falha(422, "sem_pista", "Não encontrei pistas de localização nessa imagem.");
+  if (!pista) {
+    await reserva.estornar();
+    return falha(422, "sem_pista", "Não encontrei pistas de localização nessa imagem.");
+  }
 
+  await reserva.concluir();
   await logAudit({
     user_id: userId, acao: "ia_busca_imagem", entidade: "ia", entidade_id: null,
     dados_depois: { tem_coordenada: pista.lat !== null, municipio: pista.municipio, confianca: pista.confianca },

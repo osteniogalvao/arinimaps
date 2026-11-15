@@ -24,7 +24,7 @@ type Fonte = { tipo: "imovel" | "car" | "conhecimento"; rotulo: string; href?: s
 type Msg = { papel: "user" | "assistant"; texto: string; fontes?: Fonte[]; erro?: boolean; aviso?: boolean; status?: string };
 type Estado = {
   ligado: boolean; motivo?: "sem_chave" | "desligado"; sessao: boolean; permitido: boolean;
-  negacao?: { mensagem: string; solucao: string }; cota?: { limite: number; usado: number } | null;
+  negacao?: { mensagem: string; solucao: string }; saldo?: number | null;
 };
 
 const CHAVE = "arini:ia:conversa";
@@ -103,16 +103,9 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
   const fimRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // a conversa da aba é restaurada ao abrir (não no carregamento da página)
-  const restaurado = useRef(false);
   function abrir() {
-    if (!restaurado.current) {
-      restaurado.current = true;
-      try {
-        const salvo = JSON.parse(sessionStorage.getItem(CHAVE) ?? "null");
-        if (salvo?.msgs) { setMsgs(salvo.msgs); setConversaId(salvo.conversaId ?? null); }
-      } catch { /* sem armazenamento: começa vazio */ }
-    }
+    // Remove o cache legado, que não distinguia contas em um computador compartilhado.
+    try { sessionStorage.removeItem(CHAVE); } catch { /* armazenamento indisponível */ }
     setAberto(true);
   }
   // os botões de fora (topo, mapa) abrem por evento; a função é recriada a
@@ -124,10 +117,6 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
     window.addEventListener(EVENTO, ouvir);
     return () => window.removeEventListener(EVENTO, ouvir);
   }, []);
-  useEffect(() => {
-    if (!restaurado.current) return;
-    try { sessionStorage.setItem(CHAVE, JSON.stringify({ conversaId, msgs: msgs.slice(-30) })); } catch { /* ignore */ }
-  }, [msgs, conversaId]);
   useEffect(() => { fimRef.current?.scrollIntoView({ block: "end" }); }, [msgs, aberto]);
 
   useEffect(() => {
@@ -155,7 +144,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
       if (ev.tipo === "ferramenta") atualizarUltima((m) => ({ ...m, status: `${String(ev.rotulo ?? "Consultando")}…` }));
       if (ev.tipo === "fim") {
         atualizarUltima((m) => ({ ...m, fontes: (ev.fontes as Fonte[]) ?? [], status: undefined }));
-        if (typeof ev.restante === "number") setEstado((e) => e?.cota ? { ...e, cota: { ...e.cota, usado: e.cota.limite - (ev.restante as number) } } : e);
+        if (typeof ev.restante === "number") setEstado((e) => e ? { ...e, saldo: Number(ev.restante) } : e);
       }
       if (ev.tipo === "erro") atualizarUltima((m) => ({ ...m, texto: (m.texto ? m.texto + "\n\n" : "") + String(ev.mensagem ?? "Falhou."), erro: true, status: undefined }));
     };
@@ -163,7 +152,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
     try {
       const res = await fetch(`/api/ia/chat${suportaFluxo ? "" : "?stream=0"}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({ mensagem: q, conversaId }),
         signal: ctrl.signal,
       });
@@ -171,6 +160,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
       if (!res.ok || !tipo.includes("text/event-stream")) {
         const corpo = await res.json().catch(() => null) as Record<string, unknown> | null;
         if (res.ok && corpo) {
+          if (typeof corpo.restante === "number") setEstado((e) => e ? { ...e, saldo: Number(corpo.restante) } : e);
           // resposta inteira (sem streaming)
           if (typeof corpo.conversaId === "string") setConversaId(corpo.conversaId);
           atualizarUltima((m) => ({ ...m, texto: String(corpo.texto ?? ""), fontes: (corpo.fontes as Fonte[]) ?? [], status: undefined }));
@@ -185,7 +175,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
         } else {
           const msg = [corpo?.error, corpo?.solucao].filter(Boolean).join(" ") || `O assistente não respondeu (${res.status}).`;
           atualizarUltima((m) => ({ ...m, texto: msg, erro: true, status: undefined }));
-          if (corpo?.codigo === "ia_desligada" || corpo?.codigo === "cota_esgotada") setEstado(null);
+          if (corpo?.codigo === "ia_desligada" || corpo?.codigo === "saldo_insuficiente") setEstado(null);
         }
         return;
       }
@@ -224,7 +214,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
     setMsgs([]); setConversaId(null);
   }
 
-  const restante = estado?.cota ? Math.max(0, estado.cota.limite - estado.cota.usado) : null;
+  const restante = estado?.saldo ?? null;
   const podeConversar = !!estado?.ligado && estado.permitido && restante !== 0;
 
   return (
@@ -366,7 +356,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
               <div className="flex items-end gap-2 rounded-3xl border border-linha-forte bg-superficie-2 p-1.5 transition focus-within:border-verde focus-within:ring-2 focus-within:ring-verde/30">
                 <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={1} maxLength={1500}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(texto); } }}
-                  placeholder={restante === 0 ? "Cota do mês esgotada" : "Escreva sua pergunta…"}
+                  placeholder={restante === 0 ? "Saldo de créditos esgotado" : "Escreva sua pergunta…"}
                   disabled={!podeConversar}
                   aria-label="Sua pergunta"
                   className="flex-1 resize-none bg-transparent px-2.5 py-2 text-sm text-texto placeholder:text-texto-2/70 focus:outline-none" />
@@ -377,7 +367,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
               </div>
               <p className="px-1 text-[10px] text-texto-2 leading-snug">
                 Respostas automáticas: confira na ficha do imóvel. Não envie dados pessoais. Conversas ficam registradas.
-                {restante != null && ` · ${restante === 1 ? "1 pergunta restante" : `${restante} perguntas restantes`} no mês.`}
+                {restante != null && <> · <Link href="/conta/creditos" className="underline">{restante} crédito(s) na carteira</Link></>}
               </p>
             </form>
           )}

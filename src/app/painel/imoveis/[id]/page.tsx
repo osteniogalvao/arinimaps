@@ -27,11 +27,13 @@ export default async function MeuImovel({ params }: PageProps<"/painel/imoveis/[
     .maybeSingle();
   if (!p) notFound();
   const admin = supabaseAdmin();
-  const [{ data: midia }, { data: revisao }] = await Promise.all([
+  const [{ data: midia }, { data: revisao }, simulacoes, verificacao] = await Promise.all([
     supabase.from("property_media").select("id, storage_path").eq("property_id", id).eq("tipo", "video").order("ordem"),
     // Fluxograma §9: proposta de alteração aguardando a Matriz
     admin.from("property_revisions").select("id, versao, dados, created_at")
       .eq("property_id", id).eq("status", "pendente").maybeSingle(),
+    admin.from("fin_simulacoes").select("id",{count:"exact",head:true}).eq("imovel_id",id),
+    admin.from("propriedade_claims").select("estado,motivo").eq("anuncio_id",id).maybeSingle(),
   ]);
   const videos = (midia ?? []).map((m) => ({
     id: m.id, url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${m.storage_path}`,
@@ -51,6 +53,8 @@ export default async function MeuImovel({ params }: PageProps<"/painel/imoveis/[
           <Etiqueta tom={TOM[p.status] ?? "neutro"}>{rotuloStatus}</Etiqueta>
           {revisao && <Etiqueta tom="alerta">alteração em análise</Etiqueta>}
         </div>
+        {verificacao.data && <p className="my-3 text-sm">Verificação do vínculo: {verificacao.data.estado==="EM_DISPUTA" ? "em análise" : verificacao.data.estado.toLowerCase().replaceAll("_"," ")}. {verificacao.data.motivo}</p>}
+        {p.aceita_financiamento && simulacoes.count != null && <p className="my-3 text-sm">Simulações de financiamento deste imóvel: {simulacoes.count}</p>}
         {p.motivo_correcao && (
           <p className="mt-5 flex items-start gap-3 rounded-2xl border border-alerta/40 bg-alerta/10 px-5 py-4 text-base text-alerta">
             <FileWarning className="mt-0.5 size-5 shrink-0" />

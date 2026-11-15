@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const cfg = await lerConfiguracoes().catch(() => ({} as Record<string, unknown>));
   return NextResponse.json(
-    { selfie_exclusividade: cfg.juridico_selfie_exclusividade !== false },
+    { selfie_exclusividade: cfg.juridico_selfie_exclusividade === true },
     { headers: { "Cache-Control": "private, max-age=60" } }
   );
 }

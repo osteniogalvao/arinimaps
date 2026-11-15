@@ -60,12 +60,18 @@ class EntradaTruncada extends Error {}
 
 export async function responder(opcoes: {
   historico: Turno[];
+  podeRegistrarLacuna?: boolean;
   pergunta: string;
+  modelo?: string;
+  consultaTerritorial?: boolean;
   aoEvento?: (e: EventoAssistente) => void;
   signal?: AbortSignal;
 }): Promise<RespostaAssistente> {
   const client = new Anthropic(); // ANTHROPIC_API_KEY do ambiente
-  const modelo = modeloIa();
+  const modelo = opcoes.modelo ?? modeloIa();
+  const ferramentasPermitidas = FERRAMENTAS.filter((f) =>
+    (opcoes.consultaTerritorial || !["consultar_area_car", "buscar_consultas_anteriores"].includes(f.name)) &&
+    (opcoes.podeRegistrarLacuna !== false || f.name !== "registrar_lacuna"));
   const emitir = opcoes.aoEvento ?? (() => {});
 
   const messages: Anthropic.Beta.BetaMessageParam[] = [
@@ -90,7 +96,7 @@ export async function responder(opcoes: {
       max_tokens: 16000,
       // prefixo estável (ferramentas + sistema) em cache: só a conversa muda
       system: [{ type: "text", text: SISTEMA, cache_control: { type: "ephemeral" } }],
-      tools: FERRAMENTAS,
+      tools: ferramentasPermitidas,
       messages,
     };
     if (!modelo.startsWith("claude-haiku")) params.output_config = { effort: esforcoIa() };
@@ -144,6 +150,9 @@ export async function responder(opcoes: {
 
     messages.push({ role: "assistant", content: msg.content });
     const resultados = await Promise.all(chamadas.map(async (c) => {
+      if (!ferramentasPermitidas.some((f) => f.name === c.name)) {
+        return { type: "tool_result" as const, tool_use_id: c.id, content: "Ferramenta fora dos direitos deste perfil.", is_error: true };
+      }
       emitir({ tipo: "ferramenta", nome: c.name, rotulo: FERRAMENTA_ROTULO[c.name] ?? c.name });
       const r = await executarFerramenta(c.name, c.input);
       ferramentas.push({ nome: c.name, entrada: c.input, ok: r.ok });

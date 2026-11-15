@@ -170,6 +170,11 @@ export default async function BuscarImoveis({ searchParams }: PageProps<"/imovei
   const botaoBarra = (on: boolean) =>
     `inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${on ? "bg-verde/15 text-verde" : "text-texto-2 hover:text-texto"}`;
 
+  const buscaSalva = new URLSearchParams();
+  for (const [nome, valor] of Object.entries({ tipo: tipo==="todos" ? "" : tipo, municipio, q,
+    preco_min: precoMin, preco_max: precoMax, area_min: areaMin, area_max: areaMax })) {
+    if (valor != null && valor !== "") buscaSalva.set(nome, String(valor));
+  }
   return (
     <Moldura usuario={usuario}>
       <CabecalhoPagina
@@ -179,7 +184,8 @@ export default async function BuscarImoveis({ searchParams }: PageProps<"/imovei
         titulo="Encontre seu"
         destaque="imóvel"
         subtitulo="Fazendas, sítios e lotes da região com a área medida e a divisa conferida no mapa."
-        acoes={<BotaoLink href="/mapa" variante="ouro">Ver no mapa</BotaoLink>}
+        acoes={<><BotaoLink href="/mapa" variante="ouro">Ver no mapa</BotaoLink>
+          <BotaoLink href={"/conta/filtros?"+buscaSalva} variante="contorno">Salvar busca e receber avisos</BotaoLink></>}
       >
         {/* tipo: pílulas que filtram na hora (link, sem JS) */}
         <nav aria-label="Tipo de imóvel" className="mb-4 flex flex-wrap gap-2">

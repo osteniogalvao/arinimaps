@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
     owner_id = data.id;
   } else if (ehParceiro(conta.role)) {
-    const { data } = await admin.from("partners").select("id, status").eq("profile_id", user.id).single();
+    const { data } = await admin.from("partners").select("id, status").eq("tipo",conta.role).eq("profile_id", user.id).single();
     if (!data || !["aprovado", "ativo"].includes(data.status)) {
       return NextResponse.json(
         { error: "Seu cadastro de parceiro ainda está em análise pela Arini." },
@@ -292,7 +292,7 @@ export async function POST(request: Request) {
   // facial — é evidência para conferência humana.
   let selfiePath: string | null = null;
   const selfie = form.get("selfie");
-  const exigeSelfie = condicao === "exclusividade" && !equipe && cfg.juridico_selfie_exclusividade !== false;
+  const exigeSelfie = condicao === "exclusividade" && !equipe && cfg.juridico_selfie_exclusividade === true;
   if (exigeSelfie) {
     const selfieOk = selfie instanceof File ? await conferirArquivo(selfie, ACEITA.imagem, 15 * 1024 * 1024) : null;
     if (!selfieOk?.ok) {

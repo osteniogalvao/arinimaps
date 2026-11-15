@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { consentimentoDaConta } from "@/lib/privacidade/consentimento";
 import { ipDoPedido } from "@/lib/seguranca/limite";
 
 /**
@@ -24,13 +25,15 @@ export async function registrarEventoImovel(dados: {
   ip?: string | null;
 }) {
   try {
+    const navegacao = ["visualizacao","ficha","tour","relatorio","camada","favorito","consulta","compartilhamento"].includes(dados.tipo);
+    if (navegacao && !await consentimentoDaConta(dados.userId,"rastro")) return;
     await supabaseAdmin().from("property_events").insert({
       property_id: dados.propertyId,
       user_id: dados.userId ?? null,
       partner_id: dados.partnerId ?? null,
       tipo: dados.tipo,
       detalhe: dados.detalhe ?? {},
-      ip: dados.ip ?? (dados.request ? ipDoPedido(dados.request) : null),
+      ip: navegacao ? null : dados.ip ?? (dados.request ? ipDoPedido(dados.request) : null),
     });
   } catch (e) {
     console.error("property_events falhou:", e);

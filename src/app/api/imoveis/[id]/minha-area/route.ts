@@ -5,6 +5,7 @@ import { falha } from "@/lib/erros";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
 import { ehAnuncianteDoImovel, podeVerAreaDoImovel } from "@/lib/acompanhamento/servidor";
+import { areaPrivadaLiberada } from "@/lib/imovel/verificacao";
 import { CATEGORIAS_DESENHO, medir, validarGeometria } from "@/lib/imovel/minhaArea";
 
 /**
@@ -25,6 +26,7 @@ async function contexto(id: string, escrita: boolean): Promise<{ a: Ator } | { e
   const a = await ator();
   if (!a) return { erro: falha(401, "sem_sessao", "Sessão expirada.") };
   const pode = escrita ? await ehAnuncianteDoImovel(a, id) : await podeVerAreaDoImovel(a, id);
+  if (!await areaPrivadaLiberada(a,id)) return {erro:falha(403,"verificacao","A área privada depende da aprovação da propriedade.")};
   if (!pode) return { erro: falha(403, "sem_acesso", "Só o dono do imóvel e a Central acessam a Minha área.") };
   if (escrita) {
     const l = await limitar(`minha-area:${a.userId}`, 240, 3600);

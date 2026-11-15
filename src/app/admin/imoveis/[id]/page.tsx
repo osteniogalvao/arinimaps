@@ -1,5 +1,6 @@
 import Conversa from "@/components/admin/Conversa";
 import { notFound } from "next/navigation";
+import RegimeComercial from "./RegimeComercial";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, formatArea, STATUS_LABEL, plural } from "@/lib/format";
@@ -73,7 +74,7 @@ export default async function AnaliseImovel
     .select(`
       id, codigo, titulo, descricao, tipo, status, valor, area_declarada,
       caracteristicas, condicoes_venda, aceita_permuta, aceita_financiamento, exclusividade, motivo_correcao,
-      pendencia_tipo, created_at, car_codigo, modalidade, leilao,
+      pendencia_tipo, created_at, car_codigo, modalidade, leilao, regime_comercial,
       municipality:municipalities!properties_municipality_id_fkey(nome, uf),
       owner:owners(id, profile:profiles(nome, telefone)),
       partner:partners(id, razao_social, tipo, profile:profiles(nome, telefone))
@@ -189,6 +190,10 @@ export default async function AnaliseImovel
         </Bloco>
       )}
 
+      <Bloco titulo="Regime comercial">
+        <a href="/admin/cadastros/verificacoes" className="mb-3 inline-block text-verde">Conferir vínculo de propriedade</a>
+        <RegimeComercial id={p.id} atual={p.regime_comercial} leilao={p.modalidade==="leilao"}/>
+      </Bloco>
       <Bloco titulo="Checklist de análise">
         <ul className="divide-y divide-linha text-[0.95rem] text-texto">
           <Item estado={p.descricao ? "ok" : "aviso"}>Descrição {p.descricao ? "preenchida" : "vazia"}</Item>

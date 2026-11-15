@@ -7,11 +7,9 @@ import { limitar, respostaLimite, ipDoPedido } from "@/lib/seguranca/limite";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
 import { STATUS_VITRINE } from "@/lib/imovel/vitrine";
 import {
-  COOKIE_FAVORITOS, MAX_FAVORITOS, codigoValido, codigosFavoritosDaConta, juntarCookieNaConta, lerCodigosDoCookie,
+  COOKIE_FAVORITOS, codigoValido, codigosFavoritosDaConta, juntarCookieNaConta, lerCodigosDoCookie,
 } from "@/lib/imovel/favoritos";
 
-const UM_ANO = 365 * 86_400;
-const opcoesCookie = { path: "/", maxAge: UM_ANO, sameSite: "lax" as const, httpOnly: true, secure: process.env.NODE_ENV === "production" };
 
 /**
  * GET  /api/favoritos                          → { codigos: [...] }
@@ -33,6 +31,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const user = await currentUser();
+  if (!user) return falha(401, "sem_sessao", "Entre para salvar favoritos.");
   const l = await limitar(`favorito:${ipDoPedido(request)}`, 120, 600);
   if (!l.permitido) return respostaLimite(l, "favoritar");
 
@@ -47,18 +47,7 @@ export async function POST(request: Request) {
     .in("status", [...STATUS_VITRINE]).maybeSingle();
   if (!imovel) return falha(404, "imovel_nao_encontrado", "Imóvel não encontrado.");
 
-  const user = await currentUser();
   const jar = await cookies();
-
-  if (!user) {
-    const atuais = lerCodigosDoCookie(jar.get(COOKIE_FAVORITOS)?.value).filter((c) => c !== codigo);
-    const codigos = marcar ? [codigo, ...atuais].slice(0, MAX_FAVORITOS) : atuais;
-    if (codigos.length) jar.set(COOKIE_FAVORITOS, codigos.join(","), opcoesCookie);
-    else jar.delete(COOKIE_FAVORITOS);
-    if (marcar) void registrarEventoImovel({ propertyId: imovel.id, tipo: "favorito", request, detalhe: { codigo } });
-    return NextResponse.json({ codigos, total: codigos.length });
-  }
-
   const doCookie = lerCodigosDoCookie(jar.get(COOKIE_FAVORITOS)?.value);
   if (doCookie.length) {
     await juntarCookieNaConta(user.id, doCookie.filter((c) => c !== codigo));

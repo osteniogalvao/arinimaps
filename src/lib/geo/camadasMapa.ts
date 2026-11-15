@@ -1,4 +1,5 @@
 import "server-only";
+import { buscarSigef } from "@/lib/geo/sigef";
 // pacote modular, não o @turf/turf inteiro: menos código no cold start do servidor
 import { simplify } from "@turf/simplify";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -80,7 +81,7 @@ async function i3geo(tema: string, env: Env, max = 2000) {
   const url = `https://acervofundiario.incra.gov.br/i3geo/ogc.php?tema=${tema}&service=WFS&version=1.0.0&request=GetFeature` +
     `&typeName=${tema}&maxFeatures=${max}&bbox=${env.xmin},${env.ymin},${env.xmax},${env.ymax}`;
   const xml = await (await pedir(url, "application/xml")).text();
-  if (xml.includes("ServiceException")) throw new Error("o INCRA recusou a consulta");
+  if (!/<(?:[\\w.-]+:)?FeatureCollection\\b/.test(xml) || xml.includes("ServiceException")) throw new Error("o INCRA não devolveu uma coleção de feições");
   const anel = (s: string) => s.trim().split(/\s+/).map((par) => par.split(",").map(Number).slice(0, 2));
   return xml.split("<gml:featureMember>").slice(1).flatMap((bloco) => {
     const props: Record<string, unknown> = {};
@@ -111,17 +112,57 @@ const DEFS: Record<CamadaOficialId, Def> = {
   sigef: {
     zCelula: 12, validadeDias: 30, tolerancia: 0.00002,
     buscar: async (env) => {
-      const temas = ufsDoEnvelope(env).flatMap((uf) => [`certificada_sigef_particular_${uf}`, `certificada_sigef_publico_${uf}`]);
-      const porTema = await Promise.all(temas.map(async (t) => (await i3geo(t, env)).map((f) => feicao(f.geometry, {
-        id: s(f.properties.parcela_codigo) ?? s(f.properties.codigo_imovel),
-        nome: s(f.properties.nome_area),
-        situacao: s(f.properties.status),
-        natureza: t.includes("publico") ? "imóvel público" : "imóvel particular",
-        certificada_em: dataBr(f.properties.data_aprovacao),
+      const { features } = await buscarSigef({ bbox: env, max: 2000, geometria: true });
+      return features.flatMap(f => f.geometry ? [feicao(f.geometry, {
+        id: s(f.properties.parcela_codigo), nome: s(f.properties.nome_area), situacao: s(f.properties.status),
+        natureza: s(f.properties.natureza), certificada_em: dataBr(f.properties.data_aprovacao),
         codigo_incra: s(f.properties.codigo_imovel),
-      }))));
-      return porTema.flat();
+      })] : []);
     },
+  },
+  snci: {
+    zCelula: 12, validadeDias: 30, tolerancia: 0.00002,
+    buscar: async (env) => {
+      const ufs = ufsDoEnvelope(env);
+      // O IAT publica as duas bases do INCRA para o Paraná. Use-o só em
+      // células internas ao estado, sem confundir uma borda com ausência.
+      if (ufs.length === 1 && ufs[0] === "pr") {
+        const base = "https://geopr.iat.pr.gov.br/server/rest/services/Hosted/Registros_de_Im%C3%B3veis___INCRA/FeatureServer";
+        const listas = await Promise.all([3,4].map(async camada => (await arcgis(base, camada, env,
+          "fid,num_certif,nome_imove,qtd_area_p")).map(f => feicao(f.geometry, {
+          id: `pr-${camada}-${f.properties.fid}`, nome: s(f.properties.nome_imove),
+          certificacao: s(f.properties.num_certif), area_ha: n(f.properties.qtd_area_p),
+          natureza: camada === 3 ? "Imóvel público" : "Imóvel particular", fonte: "INCRA / IAT-PR",
+        }))));
+        return listas.flat();
+      }
+      const temas = ufs.flatMap(uf => ["privado", "publico"].map(tipo => `imoveiscertificados_${tipo}_${uf}`));
+      const listas = await Promise.all(temas.map(async tema => (await i3geo(tema, env)).map(f => feicao(f.geometry, {
+        id: s(f.properties.num_certificacao) ?? s(f.properties.cod_imovel_rural),
+        nome: s(f.properties.nome_imovel), natureza: tema.includes("publico") ? "Imóvel público" : "Imóvel particular",
+        certificacao: s(f.properties.num_certificacao), area_ha: n(f.properties.qtd_area_peca_tecnica),
+      }))));
+      return listas.flat();
+    },
+  },
+  credito_rural: {
+    zCelula: 12, validadeDias: 7, tolerancia: 0.00002,
+    buscar: async env => {
+      const { data, error } = await supabaseAdmin().rpc("fn_sicor_glebas_mapa", {
+        p_xmin: env.xmin, p_ymin: env.ymin, p_xmax: env.xmax, p_ymax: env.ymax,
+      });
+      if (error || !Array.isArray(data)) throw new Error("A base regional do SICOR está indisponível.");
+      return data as Feicao[];
+    },
+  },
+  outorgas_federais: {
+    zCelula: 10, validadeDias: 7, tolerancia: 0,
+    buscar: async env => (await arcgis("https://www.snirh.gov.br/arcgis/rest/services/DADOSABERTOS/outorgas_federais_superficial/MapServer", 4, env,
+      "objectid,int_nm_corpohidrico,ing_nm_municipio,out_nu_ato,out_dt_outorgafinal,outorga_valida")).map(f => feicao(f.geometry, {
+        id: s(f.properties.objectid), curso: s(f.properties.int_nm_corpohidrico), municipio: s(f.properties.ing_nm_municipio),
+        ato: s(f.properties.out_nu_ato), validade: dataBr(f.properties.out_dt_outorgafinal),
+        status: f.properties.outorga_valida == null ? null : Number(f.properties.outorga_valida) === 1 ? "Vigente na base" : "Sem vigência na base",
+      })),
   },
   ibama_embargos: {
     zCelula: 10, validadeDias: 7, tolerancia: 0.00005,
@@ -261,9 +302,11 @@ export class JanelaGrande extends Error {}
 export async function camadaNaJanela(id: CamadaOficialId, env: Env) {
   const def = DEFS[id];
   const celulas: { x: number; y: number }[] = [];
-  for (let x = lon2x(env.xmin, def.zCelula); x <= lon2x(env.xmax, def.zCelula); x++)
-    for (let y = lat2y(env.ymax, def.zCelula); y <= lat2y(env.ymin, def.zCelula); y++) celulas.push({ x, y });
-  if (celulas.length > MAX_CELULAS) throw new JanelaGrande();
+  const x0 = lon2x(env.xmin, def.zCelula), x1 = lon2x(env.xmax, def.zCelula);
+  const y0 = lat2y(env.ymax, def.zCelula), y1 = lat2y(env.ymin, def.zCelula);
+  if ((x1 - x0 + 1) * (y1 - y0 + 1) > MAX_CELULAS) throw new JanelaGrande();
+  for (let x = x0; x <= x1; x++)
+    for (let y = y0; y <= y1; y++) celulas.push({ x, y });
 
   const corte = new Date(Date.now() - def.validadeDias * 86_400_000).toISOString();
   const { data: guardadas } = await supabaseAdmin().from("camadas_celulas")

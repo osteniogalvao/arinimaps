@@ -97,6 +97,11 @@ export async function asaasBuscarCobranca(id: string) {
   }
 }
 
+export async function asaasCobrancasPorReferencia(referencia: string) {
+  const resultado = await chamar<Lista<AsaasCobranca>>(`/payments?externalReference=${encodeURIComponent(referencia)}&limit=2`);
+  return resultado.data;
+}
+
 export async function asaasCriarCobranca(dados: {
   customer: string;
   value: number;

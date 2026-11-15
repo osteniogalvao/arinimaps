@@ -1,16 +1,20 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import {
-  ArrowRight, BadgeCheck, Building2, Check, CreditCard, Gavel, House, Landmark, Ruler, ScanSearch, Search, Tractor, UserPlus,
+  ArrowRight, BadgeCheck, Check, CreditCard, UserPlus,
 } from "lucide-react";
 import Moldura from "@/components/shell/Moldura";
 import { BTN_ACAO } from "@/components/landing/Titulo";
-import { CabecalhoPagina, Conteudo, Vazio } from "@/components/ui/Pagina";
+import { Conteudo, Vazio } from "@/components/ui/Pagina";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { currentUser } from "@/lib/supabase/server";
 import { acessoAtual } from "@/lib/planos-servidor";
 import { lerConfiguracoes, texto } from "@/lib/settings";
 import EscolherPlano from "./EscolherPlano";
+import CabecalhoPlanos from "./CabecalhoPlanos";
+import OfertasDoPerfil from "./OfertasDoPerfil";
+import ModulosDoPerfil from "./ModulosDoPerfil";
+import { PERFIS_COM_VITRINE, type OfertaPerfil } from "@/lib/ofertas-perfis";
 import { PLANOS_CATALOGO, type PersonaCatalogoId, type PrecoVigente } from "@/lib/planos-catalogo";
 import {
   COTAS, GRUPO_RECURSO_LABEL, NICHO_LABEL, PERIODICIDADE_LABEL, PERSONAS_PLANOS, RECURSOS,
@@ -20,16 +24,12 @@ import {
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Planos",
-  description: "Planos do Arini Imóveis Brasil por perfil de uso: consulta básica, consulta profissional, anunciante, parceiro e organização.",
+  description: "Planos do Arini Imóveis Brasil por perfil de uso: compare as dez opções, os recursos e os complementos e escolha o caminho para o seu imóvel ou organização.",
 };
 
 const GRUPOS = Object.keys(GRUPO_RECURSO_LABEL) as Recurso["grupo"][];
 const CATALOGOS: Record<string, PersonaCatalogoId | undefined> = {
   vender: "proprietario", corretor: "corretor_imobiliaria", produtor: "produtor_rural", tecnico: "profissional_tecnico",
-};
-
-const ICONE_PERSONA: Record<PersonaPlano["icone"], typeof Search> = {
-  busca: Search, casa: House, lupa: ScanSearch, trator: Tractor, predio: Building2, martelo: Gavel, regua: Ruler, governo: Landmark,
 };
 
 /** Cadastro já no perfil da persona (o /entrar lê ?cadastro=1&papel=…&nicho=…). */
@@ -54,11 +54,13 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
   const sp = await searchParams;
   const persona = personaPorId(typeof sp.perfil === "string" ? sp.perfil : "vender") ?? PERSONAS_PLANOS[0];
   const catalogo = persona && CATALOGOS[persona.id];
-  const [{ data: planosRaw }, user, { acesso }, cfg] = await Promise.all([
+  const temVitrine = PERFIS_COM_VITRINE.includes(persona.id);
+  const [{ data: planosRaw }, user, { acesso }, cfg, vitrine] = await Promise.all([
     supabaseAdmin().from("plans").select("*").eq("ativo", true).order("ordem").order("id"),
     currentUser(),
     acessoAtual(),
     lerConfiguracoes(),
+    temVitrine ? supabaseAdmin().from("ofertas_perfis").select("*").eq("perfil", persona.id).eq("ativo", true).order("ordem") : { data: [] },
   ]);
   const todos = (planosRaw ?? []) as (Plano & PrecoVigente)[];
   const precos = todos.filter((p) => PLANOS_CATALOGO.some((c) => c.id === p.id && c.personaId === catalogo))
@@ -72,55 +74,10 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
 
   return (
     <Moldura usuario={usuario} site>
-      <CabecalhoPagina
-        variante="faixa"
-        eyebrow="Planos e acesso"
-        titulo="Planos para o seu perfil"
-        subtitulo="Escolha como você usa a ARINI para comparar pacotes, limites e complementos."
-        compacta
-      >
-        {acesso.planNome && (
-          <p className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-linha-forte bg-superficie px-5 py-3 text-[15px] text-texto">
-            <BadgeCheck className="size-5 text-verde" />
-            Seu plano atual: <strong>{acesso.planNome}</strong>
-            {acesso.nicho && <span className="text-texto-2"> · perfil {NICHO_LABEL[acesso.nicho] ?? acesso.nicho}</span>}
-            {acesso.vencido && <span className="text-alerta"> · vencido — vale o acesso básico</span>}
-          </p>
-        )}
-      </CabecalhoPagina>
-
-      {/* personas clicáveis: cada uma abre só os pacotes daquele perfil */}
-      <Conteudo className="pt-12 md:pt-16">
-        <section id="perfis" aria-labelledby="titulo-perfis" className="scroll-mt-24">
-          <h2 id="titulo-perfis" className="lp-display mt-2 text-3xl text-texto md:text-4xl">Qual é o seu perfil?</h2>
-          <p className="mt-2 max-w-2xl text-texto-2">Escolha o que mais combina com você e veja os planos pensados para esse objetivo.</p>
-          <ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {PERSONAS_PLANOS.map((pp) => {
-              const Icone = ICONE_PERSONA[pp.icone];
-              const ativa = persona?.id === pp.id;
-              return (
-                <li key={pp.id}>
-                  <Link href={`/planos?perfil=${pp.id}#planos`}
-                    aria-current={ativa ? "true" : undefined}
-                    className={"cartao group flex h-full items-start gap-3.5 p-5 transition hover:-translate-y-0.5 hover:border-verde/50 " +
-                      (ativa ? "!border-verde ring-2 ring-verde/30" : "")}>
-                    <span className={"grid size-11 shrink-0 place-items-center rounded-full transition " +
-                      (ativa ? "bg-verde text-fundo" : "bg-verde/12 text-verde group-hover:bg-verde/20")}>
-                      <Icone className="size-5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block font-semibold text-texto">{pp.nome}</span>
-                      <span className="mt-1 block text-sm leading-relaxed text-texto-2">{pp.chamada}</span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      </Conteudo>
-
+      <CabecalhoPlanos persona={persona} />
       <Conteudo className="space-y-10 py-12 md:py-16">
+        {user && acesso.planNome && <p className="flex items-center gap-2 text-sm"><BadgeCheck className="size-5 text-verde" /> Seu plano atual · {acesso.planNome}
+          {acesso.nicho && <span> · {NICHO_LABEL[acesso.nicho] ?? acesso.nicho}</span>}{acesso.vencido && " · vencido"}</p>}
         <div id="planos" className="flex scroll-mt-24 flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="lp-display mt-2 text-3xl text-texto md:text-4xl">
@@ -128,16 +85,21 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
             </h2>
           </div>
           <div className="flex flex-wrap gap-3">
-            {persona && <Link href="/planos#perfis" className="lp-btn lp-btn-contorno">Escolher outro perfil</Link>}
+            {persona && <Link href="#perfis" className="lp-btn lp-btn-contorno">Escolher outro perfil</Link>}
             {user && <Link href="/planos/solicitacoes" className="lp-btn lp-btn-contorno">Meus pedidos</Link>}
-            {!user && (
+            {!user && !temVitrine && (
               <Link href={linkCadastro(persona)} className="lp-btn lp-btn-ouro">
                 <UserPlus /> Cadastre-se{persona?.papel ? " neste perfil" : ""}
               </Link>
             )}
           </div>
         </div>
-        {catalogo && !precos.length ? <Vazio titulo="As opções deste perfil estão indisponíveis no momento." /> : persona && catalogo ? (
+        {persona.id==="comprar" && <Link href="/conta/filtros" className="mb-5 inline-block font-semibold text-verde underline">
+          Criar filtro de interesse · até {Number(cfg.filtros_comprador_gratis)} grátis ou {Number(cfg.filtros_comprador_pacote)} com o pacote da Ari</Link>}
+        {temVitrine ? <OfertasDoPerfil key={persona.id} ofertas={((vitrine.data ?? []) as OfertaPerfil[]).map((o) => o.id !== "comprar_creditos" ? o : {
+          ...o, limites: [String(cfg.ari_pacote_comprados) + " créditos comprados", String(cfg.ari_pacote_cortesia) + " créditos de cortesia",
+            "Validade de " + String(cfg.ari_validade_meses) + " meses"], detalhes: ["Pacote sem mensalidade", "Saldo liberado após a confirmação do pagamento."],
+        })} autenticado={!!user} /> : catalogo && !precos.length ? <Vazio titulo="As opções deste perfil estão indisponíveis no momento." /> : persona && catalogo ? (
           <EscolherPlano key={persona.id} precos={precos} personaId={catalogo} perfil={persona.id} cadastro={linkCadastro(persona)}
             autenticado={!!user} whatsapp={texto(cfg, "whatsapp_central")} parametros={sp} />
         ) : !planos.length ? (
@@ -224,7 +186,7 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
             })}
           </div>
         )}
-
+        <ModulosDoPerfil perfil={persona.id} />
       </Conteudo>
     </Moldura>
   );

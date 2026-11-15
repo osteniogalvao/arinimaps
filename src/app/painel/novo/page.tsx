@@ -158,7 +158,7 @@ export default function NovoImovel() {
   const emLeilao = modalidade === "leilao";
   // selfie só no aceite eletrônico de exclusividade (a equipe anexa contrato assinado),
   // e só se a Central não a desligou (juridico_selfie_exclusividade, a mesma regra da API)
-  const [selfieExigida, setSelfieExigida] = useState(true);
+  const [selfieExigida, setSelfieExigida] = useState(false);
   const pedeSelfie = condicao === "exclusividade" && !ehEquipe && selfieExigida;
   useEffect(() => {
     fetch("/api/conta/anunciar").then((r) => (r.ok ? r.json() : null))

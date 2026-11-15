@@ -113,6 +113,34 @@ export async function enviarWhatsapp(telefone: string, texto: string) {
   return String(j?.messages?.[0]?.id ?? "");
 }
 
+/** O modelo aprovado usa um parâmetro de corpo {{1}} para o link público do imóvel. */
+export async function modeloFiltroWhatsapp() {
+  const id = process.env.WHATSAPP_FILTRO_TEMPLATE_ID;
+  if (!whatsappConfigurado() || !id || !/^\d+$/.test(id)) return null;
+  const r = await fetch(GRAPH + "/" + id + "?fields=name,language,status,components", {
+    headers: { Authorization: "Bearer " + process.env.WHATSAPP_TOKEN }, cache: "no-store", signal: AbortSignal.timeout(10_000),
+  });
+  if (!r.ok) return null;
+  const m = await r.json() as { name?: string; language?: string; status?: string; components?: { type: string; text?: string }[] };
+  const corpo = m.components?.find((c) => c.type === "BODY");
+  if (m.status !== "APPROVED" || !m.name || !m.language || corpo?.text?.match(/\{\{[^}]+\}\}/g)?.join("") !== "{{1}}") return null;
+  return { name: m.name, language: { code: m.language } };
+}
+
+export async function enviarFiltroWhatsapp(telefone: string, link: string, modelo: NonNullable<Awaited<ReturnType<typeof modeloFiltroWhatsapp>>>) {
+  const r = await fetch(GRAPH + "/" + process.env.WHATSAPP_PHONE_ID + "/messages", {
+    method: "POST", headers: { Authorization: "Bearer " + process.env.WHATSAPP_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", to: telefone, type: "template", template: { ...modelo,
+      components: [{ type: "body", parameters: [{ type: "text", text: link }] }] } }),
+    signal: AbortSignal.timeout(12_000),
+  }).catch(() => null);
+  if (!r || r.status >= 500) throw new MetaErro("Entrega incerta.", undefined, true);
+  if (!r.ok) throw new MetaErro("Modelo recusado.", r.status);
+  const msg = await r.json().catch(() => null);
+  if (typeof msg?.messages?.[0]?.id !== "string") throw new MetaErro("Entrega sem confirmação.", undefined, true);
+  return msg.messages[0].id as string;
+}
+
 /** Confere a assinatura X-Hub-Signature-256 do webhook. */
 export function assinaturaWebhookOk(corpo: string, assinatura: string | null) {
   const segredo = process.env.WHATSAPP_APP_SECRET;

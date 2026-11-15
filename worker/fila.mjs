@@ -1,5 +1,5 @@
 const TIPOS_POI = ["fetch_pois", "refresh_pois"];
-const RECUPERAVEIS = [...TIPOS_POI, "coletar_cotacoes"];
+const RECUPERAVEIS = [...TIPOS_POI, "coletar_cotacoes", "atualizar_glebas_sicor"];
 const MAX_TENTATIVAS = 3;
 
 // Uma consulta ao Overpass pode aguardar vários espelhos. Reserve uma vaga
@@ -22,7 +22,7 @@ export async function proximoJob(db, apenasPois) {
   return rows[0] ?? null;
 }
 
-// Os três handlers gravam os dados por chave estável. Só eles podem ser
+// Os handlers recuperáveis gravam os dados por chave estável. Só eles podem ser
 // repetidos depois de um SIGKILL sem duplicar e-mails ou outros efeitos.
 export async function recuperarInterrompidos(db) {
   const { rowCount } = await db.query(`

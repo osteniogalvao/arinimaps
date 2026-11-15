@@ -4,7 +4,7 @@ import { falha } from "@/lib/erros";
 import { corpoPedido, ehUuid } from "@/lib/solicitacoes-planos-servidor";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-const campos = "id,nome,municipio,area_ha,car,matricula";
+const campos = "id,nome,municipio,area_ha,car,matricula,claim:propriedade_claims(estado,motivo)";
 export async function GET(req: Request) {
   const a = await ator();
   if (!a || !temPerfilCofre(a.role,a.nicho)) return falha(a ? 403 : 401, "sem_acesso", "Entre com uma conta de proprietário ou produtor rural.");
@@ -17,7 +17,10 @@ export async function GET(req: Request) {
     db.rpc("cofre_limite",{ p_titular: a.userId }),
   ]);
   if (imoveis.error || limite.error) return falha(503,"cofre_indisponivel","Não foi possível abrir o cofre.");
-  return Response.json({ propriedades: imoveis.data, total: imoveis.count, limite: limite.data });
+  return Response.json({ propriedades: imoveis.data.map(p=>{
+    const claim=p.claim as unknown as {estado:string;motivo:string|null}|null;
+    return {...p,claim:claim ? {estado:claim.estado==="EM_DISPUTA"?"EM_ANALISE":claim.estado,motivo:claim.motivo}:null};
+  }), total: imoveis.count, limite: limite.data });
 }
 
 async function salvar(req: Request, nova: boolean) {

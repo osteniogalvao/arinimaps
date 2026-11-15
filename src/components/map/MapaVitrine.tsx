@@ -35,7 +35,7 @@ type Props = {
   ativo?: boolean;
 };
 
-const COR_CAR = "#FF9D3D";
+const COR_CAR = "#40cf39";
 const COR_LOTE = "#FFE299";
 const COR_MUNICIPIO = "#6FB08F";
 

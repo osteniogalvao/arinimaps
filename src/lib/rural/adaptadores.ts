@@ -1,3 +1,4 @@
+import { buscarSigef, type FeicaoSigef, type CampoBuscaSigef } from "../geo/sigef";
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { ufsDoEnvelope } from "./ufs";
@@ -549,82 +550,34 @@ export type ParcelaSigef = {
   publico: boolean; geometria: GeoJSON.MultiPolygon;
 };
 
-/** "x,y x,y …" do GML 2 → anel [[x, y], …]. */
-const anelGml = (t: string): [number, number][] =>
-  t.trim().split(/\s+/).map((par) => par.split(",").map(Number) as [number, number]).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
-
-/**
- * INCRA/SIGEF com a geometria de cada parcela (GML 2 do i3geo, que não fala
- * GeoJSON). Usado para achar a matrícula do imóvel clicado: o SIGEF traz
- * `registro_matricula` em toda parcela certificada (344 de 344 na amostra do
- * piloto, 20/10/2026). Só na janela pedida, até `max` parcelas por tema.
- */
-export async function parcelasSigefComGeometria(bbox: Bbox, max = 80): Promise<ParcelaSigef[]> {
-  const temas = ufsDoEnvelope(bbox).flatMap((uf) => ["certificada_sigef_particular", "certificada_sigef_publico"].map((p) => `${p}_${uf}`));
-  const porTema = await Promise.all(temas.map(async (tema) => {
-    const url = `${I3GEO}?tema=${tema}&service=WFS&version=1.0.0&request=GetFeature&typeName=${tema}` +
-      `&maxFeatures=${max}&bbox=${bbox.xmin},${bbox.ymin},${bbox.xmax},${bbox.ymax}`;
-    return lerParcelasGml(await (await buscar(url, { headers: { Accept: "application/xml" } })).text(), tema);
-  }));
-  return porTema.flat();
-}
-
-/** GML 2 do i3geo → parcelas do SIGEF com a divisa. */
-function lerParcelasGml(xml: string, tema: string): ParcelaSigef[] {
-  if (xml.includes("ServiceException")) throw new Error("o INCRA recusou a consulta");
-  return xml.split(`<ms:${tema}>`).slice(1).map((bloco): ParcelaSigef | null => {
-    const p: Props = {};
-    for (const m of bloco.matchAll(/<ms:([A-Za-z0-9_]+)>([^<]*)<\/ms:\1>/g)) p[m[1]] = desescapar(m[2]);
-    const poligonos = [...bloco.matchAll(/<gml:Polygon[^>]*>([\s\S]*?)<\/gml:Polygon>/g)].map(([, corpo]) => {
-      const externo = corpo.match(/<gml:outerBoundaryIs>[\s\S]*?<gml:coordinates[^>]*>([^<]+)<\/gml:coordinates>/)?.[1];
-      const internos = [...corpo.matchAll(/<gml:innerBoundaryIs>[\s\S]*?<gml:coordinates[^>]*>([^<]+)<\/gml:coordinates>/g)].map((m) => anelGml(m[1]));
-      return externo ? [anelGml(externo), ...internos] : null;
-    }).filter((x): x is [number, number][][] => !!x && x[0].length >= 4);
-    if (!poligonos.length) return null;
-    return {
+function parcelasComGeometria(features: FeicaoSigef[]): ParcelaSigef[] {
+  return features.flatMap(({ properties: p, geometry }) => {
+    if (!geometry) return [];
+    return [{
       matricula: texto(p.registro_matricula), nome: texto(p.nome_area, "Parcela sem denominação"),
       codigoIncra: texto(p.codigo_imovel), parcela: texto(p.parcela_codigo), situacao: texto(p.status),
-      publico: tema.includes("publico"), geometria: { type: "MultiPolygon", coordinates: poligonos },
-    };
-  }).filter((x): x is ParcelaSigef => !!x);
+      publico: /^p[uú]blic/i.test(texto(p.natureza)),
+      geometria: { type: "MultiPolygon", coordinates: geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates },
+    }];
+  });
 }
 
-/** Campos do SIGEF que a busca do mapa aceita (ideia do Geomart, 11/11/2026). */
-export type CampoBuscaSigef = "parcela_codigo" | "codigo_imovel" | "registro_matricula";
+export async function parcelasSigefComGeometria(bbox: Bbox, max = 80): Promise<ParcelaSigef[]> {
+  const { features } = await buscarSigef({ bbox, max, geometria: true });
+  return parcelasComGeometria(features);
+}
 
-/**
- * Parcelas do SIGEF por código, nas UFs dadas: código da parcela (UUID da
- * certificação), código do imóvel no INCRA (SNCR, o número do CCIR) ou número
- * da matrícula. O i3geo publica um tema por UF, então a busca vai às UFs da
- * tela do mapa, não ao Brasil inteiro (54 temas por busca seria abuso do
- * serviço do INCRA). Filtro OGC do WFS 1.0.0 (MapServer); cada valor vai em
- * mais de uma grafia (com e sem pontuação), porque a base mistura as duas.
- */
+export type { CampoBuscaSigef } from "../geo/sigef";
+
 export async function parcelasSigefPorCodigo(campo: CampoBuscaSigef, valores: string[], ufs: string[], max = 10): Promise<ParcelaSigef[]> {
-  const literal = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const iguais = [...new Set(valores)].map((v) =>
-    `<PropertyIsEqualTo><PropertyName>${campo}</PropertyName><Literal>${literal(v)}</Literal></PropertyIsEqualTo>`).join("");
-  const filtro = `<Filter>${valores.length > 1 ? `<Or>${iguais}</Or>` : iguais}</Filter>`;
-  const temas = ufs.flatMap((uf) => ["certificada_sigef_particular", "certificada_sigef_publico"].map((p) => `${p}_${uf}`));
-  const porTema = await Promise.allSettled(temas.map(async (tema) => {
-    const url = `${I3GEO}?tema=${tema}&service=WFS&version=1.0.0&request=GetFeature&typeName=${tema}` +
-      `&maxFeatures=${max}&FILTER=${encodeURIComponent(filtro)}`;
-    return lerParcelasGml(await (await buscar(url, { headers: { Accept: "application/xml" } })).text(), tema);
-  }));
-  const ok = porTema.filter((r): r is PromiseFulfilledResult<ParcelaSigef[]> => r.status === "fulfilled");
-  if (!ok.length && porTema.length) throw new Error("o INCRA não respondeu");
-  return ok.flatMap((r) => r.value).slice(0, max);
+  const { features } = await buscarSigef({ campo, valores, ufs, max, geometria: true });
+  return parcelasComGeometria(features);
 }
 
-/** INCRA/SIGEF — parcelas georreferenciadas e certificadas. */
 export function consultarSigef(bbox: Bbox) {
   return adaptador("sigef", async () => {
-    const { total, linhas } = await temasIncra(
-      ["certificada_sigef_particular", "certificada_sigef_publico"], bbox,
-      ["nome_area", "status", "codigo_imovel", "data_aprovacao", "registro_matricula", "codigo_municipio", "parcela_codigo"],
-    );
-    // a parcela aprovada mais recentemente mostra até onde a base está em dia
-    // (entre as baixadas: até 40 por tema, então "pelo menos até")
+    const { total, features } = await buscarSigef({ bbox, max: 40, geometria: false });
+    const linhas = features.map(f => f.properties);
     const maisRecente = linhas.map((p) => texto(p.data_aprovacao)).filter(Boolean).sort().pop();
     const ordenadas = [...linhas].sort((a, b) => texto(b.data_aprovacao).localeCompare(texto(a.data_aprovacao)));
     return {
@@ -632,12 +585,12 @@ export function consultarSigef(bbox: Bbox) {
       versao: maisRecente ? `base com certificações até pelo menos ${dataBr(maisRecente)}` : null,
       itens: ordenadas.slice(0, 40).map((p) => ({
         titulo: texto(p.nome_area, "Parcela sem denominação"),
-        detalhe: [texto(p.status), p._publico ? "imóvel público" : "imóvel particular",
+        detalhe: [texto(p.status), texto(p.natureza),
           p.data_aprovacao ? `certificada em ${dataBr(p.data_aprovacao)}` : ""].filter(Boolean).join(" · "),
         extra: {
           codigo_incra: texto(p.codigo_imovel),
           matricula: texto(p.registro_matricula),
-          municipio_ibge: texto(p.codigo_municipio),
+          municipio_ibge: texto(p.municipio_id),
           parcela: texto(p.parcela_codigo),
         },
       })),

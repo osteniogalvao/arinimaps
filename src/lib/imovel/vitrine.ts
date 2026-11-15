@@ -8,7 +8,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
  * com ESTA mesma consulta — assim ele nunca enxerga um anúncio que a busca
  * pública não mostraria (rascunho, em análise, suspenso…).
  */
-export const STATUS_VITRINE = ["publicado", "em_negociacao", "vendido"] as const;
+export const STATUS_VITRINE = ["publicado", "em_negociacao"] as const;
 
 export function imoveisDaVitrine() {
   return supabaseAdmin().from("properties")

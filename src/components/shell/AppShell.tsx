@@ -223,6 +223,7 @@ export default function AppShell({
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            {usuario && <Link href="/conta/perfis" className="shrink-0 rounded-full border border-linha px-2 py-1 text-xs font-semibold text-texto-2">Perfis</Link>}
             <BotaoTema />
             <button type="button" onClick={abrirAssistente}
               className="inline-flex h-10 items-center gap-2 rounded-full bg-[#124431] pl-1.5 pr-2 text-[#F2F2EC] ring-2 ring-[#D9BD6F]/60 transition hover:ring-[#D9BD6F] sm:pr-3.5"

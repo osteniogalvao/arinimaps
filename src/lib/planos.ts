@@ -80,12 +80,13 @@ export const COTAS: { id: string; nome: string; ajuda: string }[] = [
   { id: "propriedades_cofre", nome: "Propriedades no cofre", ajuda: "Vagas incluídas no pacote, antes dos adicionais concedidos à conta." },
   { id: "consultas_area_mes", nome: "Consultas de área por mês", ajuda: "Cruzamentos com as fontes oficiais por conta, no mês corrente." },
   { id: "imoveis_ativos", nome: "Imóveis ativos", ajuda: "Anúncios em análise ou publicados ao mesmo tempo." },
+  { id: "creditos_ari_mes", nome: "Créditos mensais da Ari", ajuda: "Franquia mensal da conta ou compartilhada pela organização." },
   { id: "mensagens_ia_mes", nome: "Mensagens ao assistente de IA por mês", ajuda: "Perguntas enviadas ao assistente por conta, no mês corrente." },
 ];
 
 export type NichoId =
   | "consulta" | "comprador_investidor" | "proprietario" | "produtor_rural" | "corretor_imobiliaria"
-  | "leiloeiro" | "engenheiro" | "empresa_holding" | "ente_publico" | "franqueado";
+  | "leiloeiro" | "engenheiro" | "empresa_holding" | "ente_publico" | "franqueado" | "correspondente_bancario";
 
 export type Nicho = {
   id: NichoId;
@@ -110,6 +111,7 @@ export const NICHOS: Nicho[] = [
   { id: "engenheiro", nome: "Engenheiro / profissional técnico", descricao: "Consulta profissional e laudos.", papeis: ["engenheiro"], escolhivel: true },
   { id: "empresa_holding", nome: "Empresa / holding", descricao: "Organização com vários usuários.", papeis: ["consulta", "comprador", "proprietario"], escolhivel: false, reservado: true },
   { id: "ente_publico", nome: "Prefeitura / ente público", descricao: "Gestão urbana e parcerias.", papeis: ["consulta"], escolhivel: false, reservado: true },
+  { id: "correspondente_bancario", nome: "Correspondente bancário", descricao: "Candidatura à vaga de atendimento de um banco na região.", papeis: ["consulta"], escolhivel: true },
   { id: "franqueado", nome: "Franqueado", descricao: "Opera o território de uma franquia da Arini.", papeis: ["franqueado"], escolhivel: false },
 ];
 
@@ -154,10 +156,12 @@ export const PERSONAS_PLANOS: PersonaPlano[] = [
   { id: "corretor", nome: "Sou corretor ou imobiliária", chamada: "Organize sua carteira e acompanhe os atendimentos do escritório.", nichos: ["corretor_imobiliaria"], papel: "corretor", icone: "predio" },
   { id: "produtor", nome: "Sou produtor rural", chamada: "Consulte suas áreas e conheça as opções para gestão da fazenda.", nichos: ["produtor_rural"], papel: "proprietario", icone: "trator" },
   { id: "tecnico", nome: "Sou profissional técnico", chamada: "Escolha a consulta territorial ou configure o CRM da sua profissão.", nichos: ["engenheiro"], papel: "engenheiro", icone: "regua" },
-  { id: "comprar", nome: "Sou comprador ou investidor", chamada: "Encontre imóveis à venda e solicite uma visita.", nichos: ["comprador_investidor"], extras: ["consulta_profissional"], papel: "comprador", icone: "busca" },
+  { id: "comprar", nome: "Sou comprador e investidor", chamada: "Encontre imóveis à venda e solicite uma visita.", nichos: ["comprador_investidor"], extras: ["consulta_profissional"], papel: "comprador", icone: "busca" },
   { id: "leiloeiro", nome: "Sou leiloeiro", chamada: "Publique imóveis de leilão com a localização exata no mapa.", nichos: ["leiloeiro"], papel: "leiloeiro", icone: "martelo" },
   { id: "instituicao", nome: "Sou órgão público ou instituição", chamada: "Consulte as opções de acesso institucional ao território.", nichos: ["ente_publico"], icone: "governo" },
   { id: "empresa", nome: "Sou empresa ou incorporadora", chamada: "Consulte as opções para a equipe e os empreendimentos.", nichos: ["empresa_holding"], icone: "predio" },
+  { id: "anunciar", nome: "Quero vender meu imóvel", chamada: "Anuncie seu imóvel e acompanhe a venda no painel do proprietário.", nichos: ["proprietario"], papel: "proprietario", icone: "casa" },
+  { id: "correspondente", nome: "Sou correspondente bancário", chamada: "Consulte as vagas por banco e região e acompanhe os financiamentos.", nichos: ["correspondente_bancario"], papel: "consulta", icone: "governo" },
 ];
 
 // URLs de planos compartilhadas antes da separação das personas.
@@ -212,7 +216,7 @@ export const PAPEIS_EQUIPE_IDS = ["admin_central", "analista_arini"];
 /** Conta sem sessão: o que o visitante vê. */
 export const ACESSO_VISITANTE: Acesso = {
   planId: null, planNome: null, nicho: null, vencido: false, equipe: false, cotas: {},
-  recursos: new Set(["mapa", "ficha_basica", "interesse", "camada_car", "camada_lotes", "ferramenta_medir"]),
+  recursos: new Set(["mapa", "ficha_basica", "interesse", "camada_car", "camada_lotes", "camadas_oficiais", "ferramenta_medir"]),
 };
 
 /** Monta o acesso a partir do papel e do plano carregado do banco. */
@@ -237,7 +241,7 @@ export function montarAcesso(role: string | null | undefined, plano: Plano | nul
   return {
     planId: plano.id, planNome: plano.nome, nicho, vencido: false, equipe: false,
     cotas: plano.cotas ?? {},
-    recursos: new Set(disponiveis.filter((id) => plano.recursos.includes(id))),
+    recursos: new Set(["mapa", "ficha_basica", "interesse", "camadas_oficiais", ...disponiveis.filter((id) => plano.recursos.includes(id))]),
   };
 }
 

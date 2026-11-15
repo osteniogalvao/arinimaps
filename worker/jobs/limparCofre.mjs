@@ -12,6 +12,8 @@ export async function limparCofre(_payload, db, _job, storage) {
         and o.created_at < now() - interval '2 hours'
         and (
           (o.name like 'cofre/%' and not exists (select 1 from public.cofre_documentos d where d.storage_path=o.name))
+          or (o.name like 'financiamento/%' and not exists (select 1 from public.fin_documentos d where d.storage_path=o.name))
+          or (o.name like 'vinculos/%' and not exists (select 1 from public.propriedade_claims c where c.prova_path=o.name))
           or (o.name like 'raster/%' and not exists (select 1 from public.cartography_layers c where c.tipo='raster' and c.source_path=o.name))
         )
       order by o.name limit 100`, [cursor]);

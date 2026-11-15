@@ -1,5 +1,6 @@
 // Grava o tour 3D como MP4: Puppeteer (SwiftShader, sem GPU) captura frame a
 // frame com clock determinístico via window.__ARINI_TOUR.seek(t); ffmpeg monta.
+import { createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,6 +35,10 @@ export async function renderVideo(payload, db) {
   try {
     const page = await browser.newPage();
     await liberarAcesso(page);
+    const expira = String(Date.now()+5*60_000);
+    const assinatura = createHmac("sha256",process.env.SAUDE_TOKEN).update("tour:"+codigo+":"+expira).digest("hex");
+    await browser.setCookie({name:"arini_render",value:expira+"."+assinatura,domain:new URL(url).hostname,
+      path:"/imovel/"+codigo+"/tour",secure:new URL(url).protocol==="https:",httpOnly:true,expires:Math.floor(Number(expira)/1000)});
     await page.setViewport({ width: LARGURA, height: ALTURA });
     await page.goto(url, { waitUntil: "networkidle2", timeout: 90000 });
     await page.waitForFunction("window.__ARINI_TOUR !== undefined", { timeout: 60000 });

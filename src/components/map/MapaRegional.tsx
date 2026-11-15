@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
+import PaletaRural, { COR_CAR_MAPA } from "./PaletaRural";
 import { PainelCamadas, Legenda, VIDRO, BotaoFechar } from "@/components/map/UiMapa";
 import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
@@ -81,10 +82,10 @@ type Camada = {
  */
 /**
  * Cor da cartografia RURAL (malha do CAR). A urbana usa CARTO_CORES — amarelo
- * claro no satélite, verde-acinzentado no mapa. Laranja separa as duas à
+ * claro no satélite, verde-acinzentado no mapa. Verde separa as duas à
  * primeira vista (pedido: "cores cartográficas distintas para urbano e rural").
  */
-const COR_RURAL = "#FF9D3D";
+const COR_RURAL = COR_CAR_MAPA;
 
 /** A partir deste zoom a malha do CAR aparece (tiles vetoriais; de longe, só as áreas grandes). */
 const CAR_ZOOM_MIN = 7;
@@ -177,6 +178,7 @@ function CartaoCar({ car, onFechar, oficiais = [] }: { car: CarProps; onFechar: 
           className="btn-ouro flex w-full items-center justify-center gap-1.5 py-2.5 text-sm">
           Esta área é minha — anunciar <ArrowRight className="size-4" />
         </Link>
+        <Link href={`/painel/cofre?car=${encodeURIComponent(car.cod)}`} className="btn-contorno flex w-full items-center justify-center py-2.5 text-sm">Verificar meu vínculo com esta área</Link>
         <Link href={`/consulta/car/${encodeURIComponent(car.cod)}`}
           className="btn-contorno flex w-full items-center justify-center gap-1.5 py-2.5 text-sm">
           <ScanSearch className="size-4" /> Consultar informações
@@ -299,13 +301,11 @@ export default function MapaRegional({
   const [busca, setBusca] = useState("");
   // busca limpa depois de ir até uma coordenada: o anel dourado fica no mapa
   const manterPontoBuscaRef = useRef(false);
-  // no celular o mapa é o protagonista: a lista começa fechada e vira gaveta
-  const [painelAberto, setPainelAberto] = useState(true);
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 1024) setPainelAberto(false);
-  }, []);
+  const [painelAberto, setPainelAberto] = useState(false);
   const [raio, setRaio] = useState(5000);
   const [camadasAbertas, setCamadasAbertas] = useState(false);
+  const [paletaAberta, setPaletaAberta] = useState(false);
+  useEffect(() => { setPaletaAberta(window.matchMedia("(min-width: 1024px)").matches); }, []);
   const [pronto, setPronto] = useState(false);
   const [lista, setLista] = useState<ImovelProps[]>([]);
   const [mapaPronto, setMapaPronto] = useState<MLMap | null>(null);
@@ -692,14 +692,6 @@ export default function MapaRegional({
         const estilo = map.getStyle();
         baseEstiloRef.current = { fontes: new Set(Object.keys(estilo.sources)), camadas: new Set(estilo.layers.map((l) => l.id)) };
         temaAplicadoRef.current = tema;
-        const [municipios, imoveis, cartografia] = await Promise.all([
-          fetch("/api/geo/municipios").then((r) => r.json()),
-          fetch("/api/geo/imoveis").then((r) => r.json()),
-          fetch("/api/geo/cartografia").then((r) => r.json()).catch(() => []),
-        ]);
-        dadosRef.current = imoveis;
-        municipiosRef.current = municipios;
-
         // satélite fica acima da base vetorial e abaixo das camadas de dados
         map.addSource("satelite", SATELITE);
         map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" } });
@@ -712,6 +704,15 @@ export default function MapaRegional({
           });
         }
         aplicarHistorico();
+
+        const [municipios, imoveis, cartografia] = await Promise.all([
+          fetch("/api/geo/municipios").then((r) => r.json()),
+          fetch("/api/geo/imoveis").then((r) => r.json()),
+          fetch("/api/geo/cartografia").then((r) => r.json()).catch(() => []),
+        ]);
+        if (cancelado) return;
+        dadosRef.current = imoveis;
+        municipiosRef.current = municipios;
 
         // Cartografia urbana. O raster entra agora — tile só é baixado quando
         // aparece na tela, o MapLibre cuida disso. A planta VETORIAL é um
@@ -1048,7 +1049,7 @@ export default function MapaRegional({
         if (pedida === "car") setCarAtivo(true);
         else if (pedida && camadaOficialPorId(pedida)) {
           setCamadasAbertas(true);
-          if ((!recursos || recursos.includes("camadas_oficiais")) && !camadasAtivasRef.current.has(pedida as CamadaOficialId)) {
+          if (!camadasAtivasRef.current.has(pedida as CamadaOficialId)) {
             alternarCamada(pedida as CamadaOficialId);
           }
         }
@@ -1351,11 +1352,6 @@ export default function MapaRegional({
 
   const chipsSecundarios = (
     <>
-      {/* Revisão do Carlos (29/10): "buscar imóveis" como opção de filtro no mapa */}
-      <button onClick={() => { setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
-        className={chipBase} title="Abrir a lista com a busca e os filtros de imóveis">
-        <Search className="size-3.5" /> Buscar imóveis
-      </button>
       <button onClick={() => { setBuscaImagem(!buscaImagem); setSeletorAno(false); }} data-ativo={buscaImagem} className={chipBase}
         title="Encontre o local por uma foto com GPS, um print de mapa, um croqui ou um documento">
         <ImageUp className="size-3.5" /> Buscar por imagem
@@ -1373,10 +1369,6 @@ export default function MapaRegional({
         data-ativo={!!imagemAno || seletorAno} className={chipBase}
         title="Imagens de satélite de anos anteriores (Esri Wayback e Sentinel-2)">
         {liberado("camadas_oficiais") ? <History className="size-3.5" /> : <Lock className="size-3.5" />} {imagemAno ? `Imagem de ${imagemHistoricaPorId(imagemAno)?.ano}` : "Imagem do ano"}
-      </button>
-      <button onClick={() => { setCarAtivo(!carAtivo); void salvarPrefs({ camada_car: !carAtivo }); }} data-ativo={carAtivo} className={chipBase}
-        title="Imóveis rurais do Cadastro Ambiental Rural (SICAR)">
-        Imóveis rurais (CAR)
       </button>
       <button onClick={() => setPlantaAtiva(!plantaAtiva)} data-ativo={plantaAtiva} className={chipBase}
         title="Desenho completo da planta da cidade, como veio do CAD: ruas, calçadas, textos e detalhes">
@@ -1565,7 +1557,7 @@ export default function MapaRegional({
             sumiam para fora da tela. Agora os de prioridade vêm primeiro e a barra
             QUEBRA em linhas; no celular o resto vai para o menu "Mais". A altura real
             da barra vira --abaixo-chips, e os painéis abrem logo abaixo dela. */}
-        <div ref={chipsRef} className="absolute top-3 left-3 right-14 z-10 flex flex-wrap items-start gap-2">
+        <div ref={chipsRef} className="absolute top-3 left-3 right-14 z-20 flex flex-wrap items-start gap-2">
           {/* requisitos cartográficos §2.1 + Revisão do Carlos (29/10): "Não encontrei
               meu imóvel" precisa ser fácil de achar — fica em dourado, logo no começo */}
           <button
@@ -1579,24 +1571,27 @@ export default function MapaRegional({
               {b === "ruas" ? "Mapa" : "Satélite"}
             </button>
           ))}
-          <button onClick={() => { setCamadasAbertas(!camadasAbertas); setMaisAberto(false); }} data-ativo={camadasAbertas}
+          <button onClick={() => { setPaletaAberta(!(camadasAbertas || paletaAberta)); setCamadasAbertas(false); setMaisAberto(false); }} aria-expanded={camadasAbertas || paletaAberta} data-ativo={camadasAbertas || paletaAberta}
             className={chipBase} data-tour="camadas">
             <Layers className="size-3.5" /> Camadas e Dados
           </button>
-          <div className="hidden sm:contents">{chipsSecundarios}</div>
-          <button onClick={() => setMaisAberto(!maisAberto)} data-ativo={maisAberto} aria-expanded={maisAberto} className={chipBase + " sm:hidden"} data-tour="mais">
+          <button onClick={() => { setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
+        className={chipBase} title="Abrir a lista com a busca e os filtros de imóveis">
+        <Search className="size-3.5" /> Buscar imóveis
+      </button>
+          <button onClick={() => setMaisAberto(!maisAberto)} data-ativo={maisAberto} aria-expanded={maisAberto} className={chipBase} data-tour="mais">
             <Ellipsis className="size-3.5" /> Mais
           </button>
           {/* ancorado na barra (não no botão): não passa da borda da tela */}
           {maisAberto && (
-            <div className={`sm:hidden absolute left-0 top-full z-30 mt-2 flex w-56 max-w-full flex-col items-stretch gap-1.5 p-2 ${VIDRO}`}
+            <div className={`absolute left-0 top-full z-30 mt-2 flex w-56 max-w-full flex-col items-stretch gap-1.5 p-2 ${VIDRO}`}
               onClick={() => setMaisAberto(false)}>
               {chipsSecundarios}
             </div>
           )}
         </div>
 
-        {carAtivo && carAviso && !carSel && (
+        {carAtivo && carAviso && !carSel && !paletaAberta && !camadasAbertas && (
           <p className={`absolute top-[var(--abaixo-chips,4rem)] left-3 right-14 sm:right-auto px-3.5 py-2 text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>
             {carAviso}
           </p>
@@ -1692,9 +1687,14 @@ export default function MapaRegional({
             onSair={() => { setAvisoVarios(""); mudarVarios(null); }} />
         )}
 
+        {paletaAberta && !camadasAbertas && !carSel && !avisoPlano && !buscaImagem && !seletorAno && !maisAberto && (
+          <PaletaRural car={carAtivo} alternarCar={() => { setCarAtivo(!carAtivo); void salvarPrefs({ camada_car: !carAtivo }); }}
+            ativas={camadasAtivas} alternar={alternarCamada} estados={estadoCamadas}
+            bloqueado={false} abrirCatalogo={() => setCamadasAbertas(true)} />
+        )}
         {camadasAbertas && (
           <PainelCamadas onFechar={() => setCamadasAbertas(false)}
-            bloqueado={!liberado("camadas_oficiais")} logado={logado}
+            bloqueado={false} logado={logado}
             ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada}
             relevoAtivas={relevoAtivas} estadoRelevo={estadoRelevo} onAlternarRelevo={alternarRelevo} />
         )}

@@ -7,6 +7,7 @@ import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { conferirArquivo, type TipoReal } from "@/lib/seguranca/arquivos";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
 import { ehAnuncianteDoImovel } from "@/lib/acompanhamento/servidor";
+import { areaPrivadaLiberada } from "@/lib/imovel/verificacao";
 
 /**
  * Arquivos de projeto da Minha área (item 29): PDF, imagem, DWG/DXF, KML/KMZ,
@@ -27,6 +28,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
   const a = await ator();
   if (!a) return falha(401, "sem_sessao", "Sessão expirada.");
   if (!(await ehAnuncianteDoImovel(a, id))) return falha(403, "sem_acesso", "Só o dono do imóvel anexa arquivos na Minha área.");
+  if (!await areaPrivadaLiberada(a,id)) return falha(403,"verificacao","O vínculo com a propriedade precisa estar aprovado.");
   const l = await limitar(`minha-area-arq:${a.userId}`, 60, 3600);
   if (!l.permitido) return respostaLimite(l, "anexar arquivos");
 
@@ -80,6 +82,7 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/imoveis/[
   const a = await ator();
   if (!a) return falha(401, "sem_sessao", "Sessão expirada.");
   if (!(await ehAnuncianteDoImovel(a, id))) return falha(403, "sem_acesso", "Sem acesso a este imóvel.");
+  if (!await areaPrivadaLiberada(a,id)) return falha(403,"verificacao","O vínculo com a propriedade precisa estar aprovado.");
   const arquivoId = new URL(request.url).searchParams.get("arquivo") ?? "";
   if (!UUID.test(arquivoId)) return falha(400, "dados_invalidos", "Arquivo inválido.");
   const admin = supabaseAdmin();

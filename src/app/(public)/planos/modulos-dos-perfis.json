@@ -1,0 +1,1774 @@
+{
+  "empresa": [
+    {
+      "nome": "Prospecção de áreas",
+      "itens": [
+        [
+          "Busca por região, tamanho e tipo",
+          "Essencial"
+        ],
+        [
+          "Valor de referência da região",
+          "Essencial"
+        ],
+        [
+          "Comparação de áreas lado a lado",
+          "Essencial"
+        ],
+        [
+          "Filtros técnicos",
+          "Profissional"
+        ],
+        [
+          "Radar de áreas",
+          "Profissional"
+        ],
+        [
+          "Mapa de calor de oportunidades",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Viabilidade territorial",
+      "itens": [
+        [
+          "Aproveitamento da área",
+          "Essencial"
+        ],
+        [
+          "Recorte de área",
+          "Essencial"
+        ],
+        [
+          "Relevo, solo e hidrografia",
+          "Essencial"
+        ],
+        [
+          "Simulação de parcelamento",
+          "Profissional"
+        ],
+        [
+          "Estudo de implantação",
+          "Profissional"
+        ],
+        [
+          "Valor da região e velocidade de venda",
+          "Profissional"
+        ],
+        [
+          "Relatório de viabilidade",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Due diligence territorial",
+      "itens": [
+        [
+          "Consulta de documentos da área",
+          "Essencial"
+        ],
+        [
+          "Sobreposições",
+          "Essencial"
+        ],
+        [
+          "Análise ambiental",
+          "Essencial"
+        ],
+        [
+          "Histórico por satélite",
+          "Profissional"
+        ],
+        [
+          "Dossiê da área",
+          "Profissional"
+        ],
+        [
+          "Parecer de profissional",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Portfólio e banco de áreas",
+      "itens": [
+        [
+          "Cadastro das suas áreas",
+          "Essencial"
+        ],
+        [
+          "Documentos e vencimentos",
+          "Profissional"
+        ],
+        [
+          "Monitoramento por satélite",
+          "Profissional"
+        ],
+        [
+          "Alertas ambientais e de incêndio",
+          "Profissional"
+        ],
+        [
+          "Servidões, linhas e arrendamentos",
+          "Profissional"
+        ],
+        [
+          "Painel do portfólio",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Empreendimentos, quadras e lotes",
+      "itens": [
+        [
+          "Cadastro de empreendimentos",
+          "Profissional"
+        ],
+        [
+          "Quadras, lotes e unidades no mapa",
+          "Profissional"
+        ],
+        [
+          "Cartografia do lançamento antes de pronto",
+          "Profissional"
+        ],
+        [
+          "Projeto 3D sobre o mapa",
+          "Profissional"
+        ],
+        [
+          "Tour 3D no celular e no computador",
+          "Profissional"
+        ],
+        [
+          "Pré-lançamento com lista de interessados",
+          "Profissional"
+        ],
+        [
+          "Atualização feita pela própria empresa",
+          "Profissional"
+        ],
+        [
+          "Disponibilidade e preços em tempo real",
+          "Profissional"
+        ],
+        [
+          "Condições comerciais",
+          "Profissional"
+        ],
+        [
+          "Materiais de divulgação",
+          "Profissional"
+        ],
+        [
+          "Divulgação de lançamentos",
+          "Profissional"
+        ],
+        [
+          "Pontos de vantagem da região",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Comercial e CRM",
+      "itens": [
+        [
+          "Leads do mapa e próprios",
+          "Profissional"
+        ],
+        [
+          "Funil de vendas",
+          "Profissional"
+        ],
+        [
+          "Espelho de vendas",
+          "Profissional"
+        ],
+        [
+          "Reserva online com status para todos",
+          "Profissional"
+        ],
+        [
+          "Corretores da empresa e parceiros",
+          "Profissional"
+        ],
+        [
+          "Rodízio de corretores",
+          "Profissional"
+        ],
+        [
+          "Gestão do loteamento",
+          "Profissional"
+        ],
+        [
+          "Indicadores comerciais",
+          "Profissional"
+        ],
+        [
+          "WhatsApp empresarial com a Ari",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Aprovação com as prefeituras",
+      "itens": [
+        [
+          "Conferência prévia de DWG e mapas",
+          "Profissional"
+        ],
+        [
+          "Dossiê de aprovação pronto",
+          "Profissional"
+        ],
+        [
+          "Acompanhamento de solicitações e pendências",
+          "Profissional"
+        ],
+        [
+          "Protocolo direto nas prefeituras que usam a ARINI",
+          "Profissional"
+        ],
+        [
+          "Checklist por município",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Ambiental, ESG e conformidade",
+      "itens": [
+        [
+          "CAR, APP, reserva legal e nascentes por área",
+          "Essencial"
+        ],
+        [
+          "Embargos e desmatamento",
+          "Essencial"
+        ],
+        [
+          "Relatórios de conformidade",
+          "Profissional"
+        ],
+        [
+          "Alertas e histórico para auditoria",
+          "Profissional"
+        ],
+        [
+          "Relatório ESG com dados públicos",
+          "Premium"
+        ],
+        [
+          "Compensação ambiental e áreas verdes",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Cooperados, fornecedores e arrendatários",
+      "itens": [
+        [
+          "Cadastro territorial da cadeia",
+          "Profissional"
+        ],
+        [
+          "Conformidade contínua",
+          "Profissional"
+        ],
+        [
+          "Mapa da cadeia",
+          "Profissional"
+        ],
+        [
+          "Assistência e acompanhamento",
+          "Premium"
+        ],
+        [
+          "Comparação de preços de insumos",
+          "Premium"
+        ],
+        [
+          "Levantamentos aéreos",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Safra, produção e resultado da área",
+      "itens": [
+        [
+          "Divisão da área em talhões",
+          "Profissional"
+        ],
+        [
+          "Uso do solo por safra",
+          "Profissional"
+        ],
+        [
+          "Histórico de colheitas e produtividade",
+          "Profissional"
+        ],
+        [
+          "Custos e manutenção por área e fornecedor",
+          "Profissional"
+        ],
+        [
+          "Resultado da área ao longo dos anos",
+          "Profissional"
+        ],
+        [
+          "Comparativo entre áreas e fornecedores",
+          "Premium"
+        ],
+        [
+          "Alertas de área abaixo do esperado",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Expansão e oportunidades de área",
+      "itens": [
+        [
+          "Confrontantes das suas áreas",
+          "Profissional"
+        ],
+        [
+          "Áreas de bom aproveitamento, automáticas",
+          "Profissional"
+        ],
+        [
+          "Uso atual por satélite",
+          "Profissional"
+        ],
+        [
+          "Alerta de oportunidade no entorno",
+          "Profissional"
+        ],
+        [
+          "Ficha da oportunidade",
+          "Profissional"
+        ],
+        [
+          "Simulação de retorno da área",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Energia e infraestrutura",
+      "itens": [
+        [
+          "Escolha de áreas para implantação",
+          "Profissional"
+        ],
+        [
+          "Faixas de servidão e áreas afetadas",
+          "Profissional"
+        ],
+        [
+          "Arrendamentos georreferenciados",
+          "Profissional"
+        ],
+        [
+          "Faixa de domínio e estradas de acesso",
+          "Profissional"
+        ],
+        [
+          "Camadas de energia e irradiação",
+          "Premium"
+        ],
+        [
+          "Acompanhamento de obra",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Gestão, crédito, dados e Ari",
+      "itens": [
+        [
+          "Ari, a assistente do território",
+          "Essencial"
+        ],
+        [
+          "Relatórios, KML e KMZ",
+          "Essencial"
+        ],
+        [
+          "Perfis de acesso e auditoria",
+          "Profissional"
+        ],
+        [
+          "Crédito e financiamento",
+          "Profissional"
+        ],
+        [
+          "Arquivos no seu Google Drive",
+          "Profissional"
+        ],
+        [
+          "Multiempresa e multiunidade",
+          "Premium"
+        ],
+        [
+          "Painel executivo",
+          "Premium"
+        ],
+        [
+          "API e integração com ERP",
+          "Premium"
+        ]
+      ]
+    }
+  ],
+  "instituicao": [
+    {
+      "nome": "Planejamento e território",
+      "itens": [
+        [
+          "Base cartográfica urbana e rural",
+          "Essencial"
+        ],
+        [
+          "Zoneamento e parâmetros por lote",
+          "Essencial"
+        ],
+        [
+          "Plano diretor e perímetro urbano",
+          "Profissional"
+        ],
+        [
+          "Imagens de satélite no tempo",
+          "Profissional"
+        ],
+        [
+          "Mapas temáticos e vazios urbanos",
+          "Profissional"
+        ],
+        [
+          "Vetores de expansão",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Mercado, valores e pauta",
+      "itens": [
+        [
+          "Painel do mercado",
+          "Essencial"
+        ],
+        [
+          "Valor de referência por imóvel",
+          "Essencial"
+        ],
+        [
+          "Histórico de aquisições",
+          "Profissional"
+        ],
+        [
+          "VGV por ano e por tipo",
+          "Profissional"
+        ],
+        [
+          "Pauta de valores",
+          "Profissional"
+        ],
+        [
+          "Simulador da planta de valores",
+          "Profissional"
+        ],
+        [
+          "Valor da terra nua por região",
+          "Profissional"
+        ],
+        [
+          "Conferência de ITBI",
+          "Profissional"
+        ],
+        [
+          "Observatório do mercado",
+          "Premium"
+        ],
+        [
+          "População e socioeconomia",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Cadastro e arrecadação",
+      "itens": [
+        [
+          "Importação do cadastro municipal",
+          "Profissional"
+        ],
+        [
+          "Omissos e divergências",
+          "Profissional"
+        ],
+        [
+          "IPTU progressivo e vazios",
+          "Profissional"
+        ],
+        [
+          "ITR e imóveis rurais",
+          "Profissional"
+        ],
+        [
+          "Integração com IPTU e ITBI",
+          "Premium"
+        ],
+        [
+          "Dívida ativa no mapa",
+          "Premium"
+        ],
+        [
+          "Contribuição de melhoria",
+          "Premium"
+        ],
+        [
+          "Painel de arrecadação",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Projetos, parcelamento e licenciamento",
+      "itens": [
+        [
+          "Projetos online",
+          "Profissional"
+        ],
+        [
+          "DWG completo e simplificado",
+          "Profissional"
+        ],
+        [
+          "Pré-análise de loteamento",
+          "Profissional"
+        ],
+        [
+          "Desmembramento, desdobro, remembramento e unificação",
+          "Profissional"
+        ],
+        [
+          "Aprovação em fluxo",
+          "Profissional"
+        ],
+        [
+          "Certidões automáticas",
+          "Profissional"
+        ],
+        [
+          "Alvará e habite-se",
+          "Premium"
+        ],
+        [
+          "Acompanhamento de implantação de loteamento",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Balcão digital para incorporadoras e profissionais",
+      "itens": [
+        [
+          "Planta e base cartográfica sob solicitação",
+          "Profissional"
+        ],
+        [
+          "Consulta de viabilidade e diretrizes",
+          "Profissional"
+        ],
+        [
+          "Protocolo online de projetos",
+          "Profissional"
+        ],
+        [
+          "Acompanhamento do processo",
+          "Profissional"
+        ],
+        [
+          "Guia e pagamento de taxas",
+          "Premium"
+        ],
+        [
+          "Assinatura eletrônica",
+          "Premium"
+        ],
+        [
+          "Cadastro de profissionais e empresas",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Meio ambiente, riscos e fiscalização",
+      "itens": [
+        [
+          "CAR, APP, reserva legal e nascentes",
+          "Essencial"
+        ],
+        [
+          "Uso do solo, queimadas e embargos",
+          "Essencial"
+        ],
+        [
+          "Licenciamento ambiental em fluxo",
+          "Profissional"
+        ],
+        [
+          "Monitoramento por satélite",
+          "Profissional"
+        ],
+        [
+          "Vistorias com registro em campo",
+          "Profissional"
+        ],
+        [
+          "Riscos e defesa civil",
+          "Profissional"
+        ],
+        [
+          "Compensação ambiental e áreas verdes",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Regularização fundiária",
+      "itens": [
+        [
+          "Núcleos urbanos informais",
+          "Profissional"
+        ],
+        [
+          "Cadastro de famílias e ocupantes",
+          "Profissional"
+        ],
+        [
+          "Terras públicas e sobreposições",
+          "Profissional"
+        ],
+        [
+          "Reurb por etapas",
+          "Profissional"
+        ],
+        [
+          "Dossiês e titulação",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Patrimônio, obras e infraestrutura",
+      "itens": [
+        [
+          "Inventário de bens públicos",
+          "Profissional"
+        ],
+        [
+          "Vitrine de bens municipais",
+          "Profissional"
+        ],
+        [
+          "Desapropriação",
+          "Profissional"
+        ],
+        [
+          "Faixas de domínio e estradas rurais",
+          "Profissional"
+        ],
+        [
+          "Redes e equipamentos",
+          "Premium"
+        ],
+        [
+          "Obras georreferenciadas",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Desenvolvimento econômico e rural",
+      "itens": [
+        [
+          "Vitrine de investimentos",
+          "Profissional"
+        ],
+        [
+          "Aptidão do solo e do território",
+          "Profissional"
+        ],
+        [
+          "Cadastro de produtores e programas",
+          "Profissional"
+        ],
+        [
+          "Acesso a serviços",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Atendimento e transparência",
+      "itens": [
+        [
+          "Portal de consulta pública",
+          "Premium"
+        ],
+        [
+          "Certidões e viabilidade pelo cidadão",
+          "Premium"
+        ],
+        [
+          "Ouvidoria no mapa",
+          "Premium"
+        ],
+        [
+          "Dados abertos",
+          "Premium"
+        ],
+        [
+          "Painel de transparência",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Gestão, painéis e Ari",
+      "itens": [
+        [
+          "CRM de gestão pública",
+          "Profissional"
+        ],
+        [
+          "Relatórios prontos",
+          "Profissional"
+        ],
+        [
+          "Auditoria e perfis de acesso",
+          "Profissional"
+        ],
+        [
+          "Ari, a assistente do território",
+          "Essencial"
+        ],
+        [
+          "Painel executivo do gestor",
+          "Premium"
+        ]
+      ]
+    }
+  ],
+  "anunciar": [
+    {
+      "nome": "Anunciar sem complicação",
+      "itens": [
+        [
+          "Entrada direta",
+          "Previsto"
+        ],
+        [
+          "Escolha do imóvel",
+          "Previsto"
+        ],
+        [
+          "Cadastro rápido com a Ari",
+          "Previsto"
+        ],
+        [
+          "Dossiê do imóvel",
+          "Previsto"
+        ],
+        [
+          "Valor de referência",
+          "Previsto"
+        ],
+        [
+          "Avaliação formal do imóvel",
+          "Sob contratação"
+        ],
+        [
+          "Preço e condições",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Mostrar o imóvel do melhor jeito",
+      "itens": [
+        [
+          "Mapa com limites e cartografia",
+          "Previsto"
+        ],
+        [
+          "Camadas do território",
+          "Previsto"
+        ],
+        [
+          "Projeções e tour em 3D",
+          "Previsto"
+        ],
+        [
+          "Pontos de vantagem",
+          "Previsto"
+        ],
+        [
+          "Fotos e vídeos organizados",
+          "Previsto"
+        ],
+        [
+          "Relatório completo ou básico",
+          "Previsto"
+        ],
+        [
+          "Levantamento aéreo",
+          "Sob contratação"
+        ]
+      ]
+    },
+    {
+      "nome": "Chegar ao comprador certo",
+      "itens": [
+        [
+          "Imóvel no mapa para todos",
+          "Previsto"
+        ],
+        [
+          "Alcance direcionado",
+          "Previsto"
+        ],
+        [
+          "Compartilhar pelo WhatsApp",
+          "Previsto"
+        ],
+        [
+          "Interessados à vista",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Acompanhar a venda, sem precisar ligar",
+      "itens": [
+        [
+          "Linha do tempo do imóvel",
+          "Previsto"
+        ],
+        [
+          "Retorno de cada visita",
+          "Previsto"
+        ],
+        [
+          "Por que o comprador não quis",
+          "Previsto"
+        ],
+        [
+          "Propostas e negociação",
+          "Previsto"
+        ],
+        [
+          "Quem viu o imóvel, em números",
+          "Previsto"
+        ],
+        [
+          "Lembretes no WhatsApp",
+          "Previsto"
+        ],
+        [
+          "Situação da venda",
+          "Previsto"
+        ],
+        [
+          "Relatório mensal do imóvel",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Contrato e segurança",
+      "itens": [
+        [
+          "Termo de exclusividade",
+          "Previsto"
+        ],
+        [
+          "Dossiê do contrato",
+          "Previsto"
+        ],
+        [
+          "Histórico de alterações",
+          "Previsto"
+        ],
+        [
+          "Seus dados protegidos",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Cuidar do imóvel enquanto vende",
+      "itens": [
+        [
+          "Mapa da propriedade e medições",
+          "Previsto"
+        ],
+        [
+          "Aptidão do solo e relevo",
+          "Previsto"
+        ],
+        [
+          "Avisos ambientais e de incêndio",
+          "Previsto"
+        ],
+        [
+          "Camadas e desenhos personalizados",
+          "Previsto"
+        ],
+        [
+          "Área do proprietário",
+          "Previsto"
+        ],
+        [
+          "Painel de mercado",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Ajuda e orientação",
+      "itens": [
+        [
+          "Passo a passo de boas-vindas",
+          "Previsto"
+        ],
+        [
+          "Ari, a assistente",
+          "Previsto"
+        ]
+      ]
+    }
+  ],
+  "correspondente": [
+    {
+      "nome": "Clientes que chegam com o imóvel escolhido",
+      "itens": [
+        [
+          "Atendimentos do mapa",
+          "Previsto"
+        ],
+        [
+          "Vaga exclusiva do seu banco na sua região",
+          "Previsto"
+        ],
+        [
+          "Imóveis urbanos, rurais e afins",
+          "Previsto"
+        ],
+        [
+          "Cliente com interesse real",
+          "Previsto"
+        ],
+        [
+          "Aviso na hora",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "CRM de atendimento",
+      "itens": [
+        [
+          "Fila de atendimento",
+          "Previsto"
+        ],
+        [
+          "Ficha do cliente e do imóvel",
+          "Previsto"
+        ],
+        [
+          "Simulação do cliente",
+          "Previsto"
+        ],
+        [
+          "Funil do financiamento",
+          "Previsto"
+        ],
+        [
+          "Lista de documentos",
+          "Previsto"
+        ],
+        [
+          "Agenda e lembretes",
+          "Previsto"
+        ],
+        [
+          "Histórico e anotações",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Gestão da sua operação",
+      "itens": [
+        [
+          "Equipe e permissões",
+          "Previsto"
+        ],
+        [
+          "Metas e indicadores",
+          "Previsto"
+        ],
+        [
+          "Relatórios de conversão",
+          "Previsto"
+        ],
+        [
+          "Controle da sua comissão",
+          "Previsto"
+        ],
+        [
+          "Painel do dia",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Comunicação",
+      "itens": [
+        [
+          "WhatsApp empresarial com a Ari",
+          "Complemento"
+        ],
+        [
+          "Mensagens prontas",
+          "Previsto"
+        ],
+        [
+          "Alertas",
+          "Previsto"
+        ],
+        [
+          "Arquivos no seu Google Drive",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Informação do imóvel",
+      "itens": [
+        [
+          "Mapa e cartografia",
+          "Previsto"
+        ],
+        [
+          "Dossiê do imóvel",
+          "Previsto"
+        ],
+        [
+          "Valor de referência da região",
+          "Previsto"
+        ]
+      ]
+    },
+    {
+      "nome": "Ajuda e orientação",
+      "itens": [
+        [
+          "Passo a passo de boas-vindas",
+          "Previsto"
+        ],
+        [
+          "Ari, a assistente",
+          "Previsto"
+        ]
+      ]
+    }
+  ],
+  "leiloeiro": [
+    {
+      "nome": "Painel e leilões",
+      "itens": [
+        [
+          "Painel",
+          "Essencial"
+        ],
+        [
+          "Leilões e lotes",
+          "Essencial"
+        ],
+        [
+          "Agenda de praças",
+          "Essencial"
+        ],
+        [
+          "Exposição no mapa",
+          "Essencial"
+        ],
+        [
+          "Recorte de área",
+          "Essencial"
+        ]
+      ]
+    },
+    {
+      "nome": "Documentos",
+      "itens": [
+        [
+          "Edital, matrícula e autorização",
+          "Essencial"
+        ],
+        [
+          "Laudo de avaliação",
+          "Essencial"
+        ],
+        [
+          "Relatórios completos em PDF, KML e KMZ",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Compradores",
+      "itens": [
+        [
+          "Leads e rastro de visualizações",
+          "Essencial"
+        ],
+        [
+          "Cadastro antecipado e habilitação",
+          "Profissional"
+        ],
+        [
+          "Arrematações e pós-leilão",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Clientes e financeiro",
+      "itens": [
+        [
+          "Comitentes",
+          "Profissional"
+        ],
+        [
+          "Financeiro e comissões",
+          "Profissional"
+        ],
+        [
+          "Relatórios de desempenho",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Equipe e controle",
+      "itens": [
+        [
+          "Usuários",
+          "Essencial"
+        ],
+        [
+          "Permissões por pessoa",
+          "Premium"
+        ],
+        [
+          "Histórico e auditoria",
+          "Premium"
+        ],
+        [
+          "Importação em lote",
+          "Premium"
+        ]
+      ]
+    }
+  ],
+  "produtor": [
+    {
+      "nome": "Painel e cadastros",
+      "itens": [
+        [
+          "Painel da fazenda",
+          "Essencial"
+        ],
+        [
+          "Cadastro de propriedades",
+          "Essencial"
+        ],
+        [
+          "Agenda e tarefas",
+          "Essencial"
+        ],
+        [
+          "Documentos no Drive",
+          "Essencial"
+        ],
+        [
+          "Fornecedores e clientes",
+          "Profissional"
+        ],
+        [
+          "Equipe da fazenda",
+          "Profissional"
+        ],
+        [
+          "Permissões e auditoria",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Cartografia e planejamento",
+      "itens": [
+        [
+          "Desenho e medição",
+          "Essencial"
+        ],
+        [
+          "Agrimensura com IA",
+          "Essencial"
+        ],
+        [
+          "Piquetes e talhões",
+          "Essencial"
+        ],
+        [
+          "Solo e região",
+          "Essencial"
+        ],
+        [
+          "Reserva, APP e nascentes",
+          "Essencial"
+        ],
+        [
+          "Relevo e 3D",
+          "Essencial"
+        ],
+        [
+          "Calculadora de insumos",
+          "Essencial"
+        ]
+      ]
+    },
+    {
+      "nome": "Estoque e financeiro",
+      "itens": [
+        [
+          "Estoque e alertas de mínimo",
+          "Profissional"
+        ],
+        [
+          "Custos e despesas",
+          "Profissional"
+        ],
+        [
+          "Compras e vendas",
+          "Profissional"
+        ],
+        [
+          "Comparador de insumos",
+          "Profissional"
+        ],
+        [
+          "Resultado por área e safra",
+          "Profissional"
+        ],
+        [
+          "Gráficos e painel",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Pecuária bovina",
+      "itens": [
+        [
+          "Viabilidade da criação",
+          "Profissional"
+        ],
+        [
+          "Rebanho e lotes",
+          "Profissional"
+        ],
+        [
+          "Manejo de corte",
+          "Profissional"
+        ],
+        [
+          "Cria, recria e engorda",
+          "Profissional"
+        ],
+        [
+          "Pesagens e ganho de peso",
+          "Profissional"
+        ],
+        [
+          "Sanidade e vacinação",
+          "Profissional"
+        ],
+        [
+          "Pastagem e lotação",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Lavoura e precisão",
+      "itens": [
+        [
+          "Planejamento de safra",
+          "Premium"
+        ],
+        [
+          "Viabilidade de lavoura",
+          "Premium"
+        ],
+        [
+          "NDVI por talhão",
+          "Premium"
+        ],
+        [
+          "Taxa variável",
+          "Premium"
+        ],
+        [
+          "Histórico de safras",
+          "Premium"
+        ],
+        [
+          "Inteligência operacional",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Proteção, mercado e técnico",
+      "itens": [
+        [
+          "Monitoramento e alertas",
+          "Profissional"
+        ],
+        [
+          "Regularização ambiental",
+          "Profissional"
+        ],
+        [
+          "Cotações",
+          "Profissional"
+        ],
+        [
+          "Cadastro rápido por IA",
+          "Profissional"
+        ],
+        [
+          "Relatórios",
+          "Profissional"
+        ],
+        [
+          "Geoprocessamento técnico",
+          "Premium"
+        ],
+        [
+          "Tours em 3D",
+          "Premium"
+        ]
+      ]
+    }
+  ],
+  "corretor": [
+    {
+      "nome": "Gestão comercial",
+      "itens": [
+        [
+          "Dashboards",
+          "Essencial"
+        ],
+        [
+          "Leads",
+          "Essencial"
+        ],
+        [
+          "Clientes",
+          "Essencial"
+        ],
+        [
+          "Imóveis",
+          "Essencial"
+        ],
+        [
+          "Proprietários",
+          "Essencial"
+        ],
+        [
+          "Agenda",
+          "Essencial"
+        ],
+        [
+          "Captação",
+          "Profissional"
+        ],
+        [
+          "Aprovações",
+          "Profissional"
+        ],
+        [
+          "Jurídico",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Marketing e equipe",
+      "itens": [
+        [
+          "Marketing",
+          "Profissional"
+        ],
+        [
+          "Corretores da equipe",
+          "Profissional"
+        ],
+        [
+          "Chat",
+          "Profissional"
+        ],
+        [
+          "Usuários e permissões",
+          "Essencial"
+        ],
+        [
+          "Ponto dos colaboradores",
+          "Premium"
+        ],
+        [
+          "Chatbot",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Financeiro",
+      "itens": [
+        [
+          "Financeiro",
+          "Profissional"
+        ],
+        [
+          "Empresas",
+          "Profissional"
+        ],
+        [
+          "Comissões",
+          "Profissional"
+        ],
+        [
+          "Aluguéis",
+          "Premium"
+        ],
+        [
+          "Relatórios",
+          "Essencial"
+        ]
+      ]
+    },
+    {
+      "nome": "Controle e segurança",
+      "itens": [
+        [
+          "Histórico de movimentações",
+          "Essencial"
+        ],
+        [
+          "Notificações",
+          "Essencial"
+        ],
+        [
+          "Auditoria",
+          "Premium"
+        ]
+      ]
+    }
+  ],
+  "tecnico": [
+    {
+      "nome": "CRM padrão",
+      "itens": [
+        [
+          "Clientes",
+          "Essencial"
+        ],
+        [
+          "Serviços e projetos",
+          "Essencial"
+        ],
+        [
+          "Agenda e prazos",
+          "Essencial"
+        ],
+        [
+          "Documentos no Drive",
+          "Essencial"
+        ],
+        [
+          "Propostas e orçamentos",
+          "Essencial"
+        ]
+      ]
+    },
+    {
+      "nome": "CRM do seu setor",
+      "itens": [
+        [
+          "Dossiê do imóvel",
+          "Profissional"
+        ],
+        [
+          "Modelos de documento",
+          "Profissional"
+        ],
+        [
+          "Funil e captação",
+          "Profissional"
+        ],
+        [
+          "Tarefas e equipe",
+          "Profissional"
+        ],
+        [
+          "Vistorias de campo",
+          "Profissional"
+        ],
+        [
+          "Monitoramento e alertas",
+          "Profissional"
+        ],
+        [
+          "Relatórios",
+          "Profissional"
+        ]
+      ]
+    },
+    {
+      "nome": "Gestão do escritório",
+      "itens": [
+        [
+          "Financeiro e honorários",
+          "Premium"
+        ],
+        [
+          "Marketing",
+          "Premium"
+        ],
+        [
+          "Aprovações",
+          "Premium"
+        ],
+        [
+          "Contratos e jurídico",
+          "Premium"
+        ],
+        [
+          "Ponto da equipe",
+          "Premium"
+        ],
+        [
+          "Chat interno",
+          "Premium"
+        ],
+        [
+          "Painel gerencial",
+          "Premium"
+        ],
+        [
+          "Histórico e auditoria",
+          "Premium"
+        ],
+        [
+          "Usuários e permissões",
+          "Premium"
+        ],
+        [
+          "Chatbot",
+          "Premium"
+        ]
+      ]
+    },
+    {
+      "nome": "Dados e mapa",
+      "itens": [
+        [
+          "Dados fundiários e cadastrais",
+          "Consulta"
+        ],
+        [
+          "Ambiente e recursos naturais",
+          "Consulta"
+        ],
+        [
+          "Solo, relevo e aptidão",
+          "Consulta"
+        ],
+        [
+          "Avaliação e valores",
+          "Consulta"
+        ],
+        [
+          "Desenho e medição",
+          "Essencial"
+        ],
+        [
+          "Importar KML e KMZ",
+          "Essencial"
+        ],
+        [
+          "Sobreposições e interseções",
+          "Profissional"
+        ],
+        [
+          "Memorial descritivo",
+          "Profissional"
+        ],
+        [
+          "Produtos cartográficos",
+          "Premium"
+        ],
+        [
+          "Arquivos CAD",
+          "Premium"
+        ],
+        [
+          "Tours em 3D",
+          "Premium"
+        ]
+      ]
+    }
+  ],
+  "comprar": [
+    {
+      "nome": "Áreas protegidas e meio ambiente",
+      "itens": [
+        [
+          "Áreas de preservação permanente (APP): margens de rios e córregos, nascentes, topos de morro e encostas",
+          "Conforme o imóvel"
+        ],
+        [
+          "Reserva legal, calculada sobre a cartografia do imóvel e comparada com o que consta no CAR",
+          "Conforme o imóvel"
+        ],
+        [
+          "Vegetação nativa e uso do solo, hoje e ao longo do tempo",
+          "Conforme o imóvel"
+        ],
+        [
+          "Sobreposições com unidades de conservação e outras áreas restritas",
+          "Conforme o imóvel"
+        ]
+      ]
+    },
+    {
+      "nome": "Água no imóvel",
+      "itens": [
+        [
+          "Nascentes, córregos e veios d'água mapeados dentro e no entorno da área",
+          "Conforme o imóvel"
+        ],
+        [
+          "Hidrografia e represas existentes",
+          "Conforme o imóvel"
+        ],
+        [
+          "Relação da água com as áreas protegidas do imóvel",
+          "Conforme o imóvel"
+        ],
+        [
+          "Clima e chuvas da região",
+          "Conforme o imóvel"
+        ]
+      ]
+    },
+    {
+      "nome": "Regularidade da terra",
+      "itens": [
+        [
+          "CAR, CCIR e INCRA, lado a lado",
+          "Conforme o imóvel"
+        ],
+        [
+          "Embargos e restrições que incidam sobre o imóvel",
+          "Conforme o imóvel"
+        ],
+        [
+          "Limites exatos da área, conferidos no mapa",
+          "Conforme o imóvel"
+        ],
+        [
+          "Sobreposição com imóveis vizinhos",
+          "Conforme o imóvel"
+        ]
+      ]
+    },
+    {
+      "nome": "A terra em si",
+      "itens": [
+        [
+          "Relevo e declividade",
+          "Conforme o imóvel"
+        ],
+        [
+          "Solo e aptidão da terra",
+          "Conforme o imóvel"
+        ],
+        [
+          "Uso do solo e cobertura vegetal",
+          "Conforme o imóvel"
+        ],
+        [
+          "Imagens de satélite ao longo do tempo e histórico de incêndios",
+          "Conforme o imóvel"
+        ]
+      ]
+    },
+    {
+      "nome": "Tour 3D e entorno",
+      "itens": [
+        [
+          "Percurso em 3D com pontos explicados: o que valoriza o imóvel e o que existe por perto",
+          "Conforme o imóvel"
+        ],
+        [
+          "Hospital, escolas, comércio e estradas mais próximos",
+          "Conforme o imóvel"
+        ],
+        [
+          "Fotos, vídeos e relatório completo",
+          "Conforme o imóvel"
+        ]
+      ]
+    },
+    {
+      "nome": "Imóvel urbano",
+      "itens": [
+        [
+          "Localização e cartografia urbana",
+          "Conforme o imóvel"
+        ],
+        [
+          "Entorno, serviços e pontos de interesse",
+          "Conforme o imóvel"
+        ],
+        [
+          "Comparação com imóveis semelhantes na região",
+          "Conforme o imóvel"
+        ]
+      ]
+    }
+  ]
+}

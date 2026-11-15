@@ -42,7 +42,7 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
   const [{ data: owner }, { data: partner }, acesso] = user
     ? await Promise.all([
         supabase.from("owners").select("id, status").eq("profile_id", user.id).maybeSingle(),
-        supabase.from("partners").select("id, status").eq("profile_id", user.id).maybeSingle(),
+        supabase.from("partners").select("id, status").eq("tipo",user.role).eq("profile_id", user.id).maybeSingle(),
         acessoDe(user.id).catch(() => null),
       ])
     : [{ data: null }, { data: null }, null];

@@ -76,13 +76,14 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
 export async function GET(_request: Request, ctx: RouteContext<"/api/imoveis/[id]/consulta-rural">) {
   const { id } = await ctx.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: "Imóvel inválido." }, { status: 400 });
+  const a = await ator();
+  if (!a) return NextResponse.json({error:"Entre para consultar o imóvel."},{status:401});
   // Revisão de APIs (6.2): o relatório de anúncio publicado é público (painel do
   // mapa); o de anúncio em análise, reprovado ou rascunho só para a equipe e
   // para o responsável — antes qualquer um lia de qualquer imóvel pelo id.
   const { data: p } = await supabaseAdmin().from("properties").select("status, owner_id, partner_id").eq("id", id).maybeSingle();
   if (!p) return NextResponse.json({ error: "Imóvel não encontrado." }, { status: 404 });
-  if (!["publicado", "em_negociacao", "vendido"].includes(p.status)) {
-    const a = await ator();
+  if (!["publicado", "em_negociacao"].includes(p.status)) {
     const responsavel = !!a && ((!!a.ownerId && a.ownerId === p.owner_id) || (!!a.partnerId && a.partnerId === p.partner_id));
     if (!a?.ehArini && !responsavel) return NextResponse.json({ error: "Imóvel não encontrado." }, { status: 404 });
   }

@@ -33,7 +33,7 @@ export type DocId = "termos-de-uso" | "privacidade" | "autorizacao" | "exclusivi
 /** Versão vigente de cada documento. É isso que vai para o banco no aceite. */
 export const VERSOES: Record<DocId, string> = {
   "termos-de-uso": "1.0",
-  privacidade: "1.1",
+  privacidade: "1.2",
   autorizacao: "1.0",
   exclusividade: "1.1",
   remuneracao: "1.0",
@@ -185,7 +185,7 @@ export function documentos(cfg: Record<string, unknown>): Documento[] {
           "Aceite da exclusividade: uma foto do rosto (selfie) de quem aceita o termo, usada só para conferência visual de identidade pela equipe da Arini. Não fazemos reconhecimento facial nem extraímos dado biométrico da imagem.",
           "Segurança da conta: registros de entrada, tentativas de acesso, troca de senha e uso do segundo fator, com data, hora, endereço IP e navegador.",
           "Suporte e pedidos de titulares: o que você escreve nos chamados e nos pedidos sobre seus dados pessoais.",
-          "Navegação: endereço IP, data e hora de acesso, navegador e páginas acessadas, e cookies estritamente necessários para manter a sessão. A preferência de tema claro ou escuro fica guardada só no seu navegador.",
+          "Usamos cookies próprios para o acesso ao site, a sessão e o limite de resumos de imóveis por navegador. As preferências de aparência e mapa podem ficar no navegador. Nas Preferências de privacidade você pode autorizar e revogar o registro de navegação em imóveis e a atribuição da origem de campanha. O sistema registra separadamente eventos de segurança e ações como o envio de interesse.",
         ],
       },
       {

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { consentimentoDaConta } from "@/lib/privacidade/consentimento";
 import { ator } from "@/lib/authz";
 import { falha } from "@/lib/erros";
 import { logAudit } from "@/lib/audit";
 import { lerConfiguracoes } from "@/lib/settings";
-import { conferirRecurso, registrarTentativa, respostaNegacao } from "@/lib/planos-servidor";
+import { conferirRecurso, respostaNegacao } from "@/lib/planos-servidor";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { iaConfigurada, LIMITES_IA, maxIaSimultaneas } from "@/lib/ia/config";
 import { fila, type Liberar } from "@/lib/seguranca/fila";
-import { limiteMensalIa, mensagensIaNoMes } from "@/lib/ia/acesso";
+import { reservarAri } from "@/lib/ia/creditos";
 import { mensagemDeErro, responder, type EventoAssistente, type RespostaAssistente, type Turno } from "@/lib/ia/assistente";
 
 export const maxDuration = 120;
@@ -48,15 +49,9 @@ export async function POST(request: Request) {
   const { acesso, negacao } = await conferirRecurso(request, a ? { id: a.userId, role: a.role } : null, "chat_ia");
   if (negacao) return respostaNegacao(negacao);
   const userId = a!.userId;
+  const guardar = await consentimentoDaConta(userId,"historico_ari");
+  const nichoAtivo = a!.nicho;
 
-  const limite = limiteMensalIa(acesso);
-  const usado = limite != null ? await mensagensIaNoMes(userId) : 0;
-  if (limite != null && usado >= limite) {
-    await registrarTentativa({ request, userId, role: a!.role, planId: acesso.planId, recurso: "chat_ia", motivo: "cota:mensagens_ia_mes" });
-    return falha(403, "cota_esgotada", `Você já usou as ${limite} perguntas do mês no plano ${acesso.planNome ?? "atual"}.`, {
-      solucao: "Fale com a Arini para ampliar o plano ou aguarde o próximo mês.",
-    });
-  }
   for (const [chave, max, janela] of [[`ia:min:${userId}`, LIMITES_IA.porMinuto, 60], [`ia:hora:${userId}`, LIMITES_IA.porHora, 3600]] as const) {
     const l = await limitar(chave, max, janela);
     if (!l.permitido) return respostaLimite(l, "perguntas ao assistente");
@@ -69,9 +64,6 @@ export async function POST(request: Request) {
     return falha(400, "mensagem_longa", `A pergunta passou de ${LIMITES_IA.tamanhoPergunta} caracteres.`, { solucao: "Resuma e envie de novo." });
   }
 
-  // Teto global de conversas simultâneas. Pedido ANTES de gravar a pergunta:
-  // quem ouve "ocupado" não gasta pergunta da cota (que conta ia_mensagens).
-  // Sem espera (maxFila 0): segurar a conexão só alongaria o pico.
   let liberarVaga: Liberar;
   try {
     liberarVaga = await fila("ia_conversas", maxIaSimultaneas()).entrar({ esperaMs: 0, maxFila: 0 });
@@ -84,12 +76,18 @@ export async function POST(request: Request) {
   // erro ou aborto do navegador, que chega a `responder` por request.signal),
   // o `finally` da resposta sem streaming ou a saída antecipada abaixo.
 
+  const reserva = await reservarAri(a!, request, "chat");
+  if (reserva.erro) { liberarVaga(); return reserva.erro; }
+  const { modelo, restante } = reserva;
+  const consultaTerritorial = acesso.recursos.has("consulta_area");
+
   // conversa: só a própria conta continua a sua
   const admin = supabaseAdmin();
-  let conversaId = typeof corpo?.conversaId === "string" && UUID.test(corpo.conversaId) ? corpo.conversaId : null;
+  let conversaId = guardar && typeof corpo?.conversaId === "string" && UUID.test(corpo.conversaId) ? corpo.conversaId : null;
   let historico: Turno[] = [];
   if (conversaId) {
-    const { data: conv } = await admin.from("ia_conversas").select("id").eq("id", conversaId).eq("user_id", userId).maybeSingle();
+    const consulta = admin.from("ia_conversas").select("id").eq("historico_visivel",true).eq("id", conversaId).eq("user_id", userId);
+    const { data: conv } = await (nichoAtivo ? consulta.eq("nicho", nichoAtivo) : consulta.is("nicho", null)).maybeSingle();
     if (!conv) conversaId = null;
     else {
       const { data: msgs } = await admin.from("ia_mensagens").select("papel, conteudo")
@@ -100,22 +98,25 @@ export async function POST(request: Request) {
   }
   if (!conversaId) {
     const { data: nova, error } = await admin.from("ia_conversas")
-      .insert({ user_id: userId, titulo: pergunta.slice(0, 80) }).select("id").single();
+      .insert({ user_id: userId, nicho: nichoAtivo, historico_visivel:guardar, titulo: guardar ? pergunta.slice(0, 80) : "Uso sem histórico" }).select("id").single();
     if (error) {
+      await reserva.estornar();
       liberarVaga();
       return falha(500, "conversa_falhou", "Não foi possível iniciar a conversa.", { motivo: error.message });
     }
     conversaId = nova.id as string;
   }
-  await admin.from("ia_mensagens").insert({ conversa_id: conversaId, user_id: userId, papel: "user", conteudo: pergunta });
-  const restante = limite != null ? Math.max(0, limite - usado - 1) : null;
+  await admin.from("ia_mensagens").insert({ conversa_id: conversaId, user_id: userId, papel: "user", conteudo: guardar ? pergunta : "" });
+
 
   const gravar = async (r: RespostaAssistente | null, erro: { codigo: string; mensagem: string } | null) => {
+    if (erro) await reserva.estornar();
+    else await reserva.concluir();
     const uso = r?.uso ?? { entrada: 0, saida: 0, cacheLeitura: 0, cacheEscrita: 0 };
     await admin.from("ia_mensagens").insert({
       conversa_id: conversaId, user_id: userId, papel: "assistant",
-      conteudo: r?.texto ?? "", modelo: r?.modelo ?? null,
-      ferramentas: r?.ferramentas ?? [],
+      conteudo: guardar ? r?.texto ?? "" : "", modelo: r?.modelo ?? null,
+      ferramentas: guardar ? r?.ferramentas ?? [] : [],
       tokens_entrada: uso.entrada, tokens_saida: uso.saida,
       tokens_cache_leitura: uso.cacheLeitura, tokens_cache_escrita: uso.cacheEscrita,
       erro: erro?.codigo ?? null,
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
   // ---------- sem streaming
   if (new URL(request.url).searchParams.get("stream") === "0") {
     try {
-      const r = await responder({ historico, pergunta, signal: request.signal });
+      const r = await responder({ historico, pergunta, modelo, consultaTerritorial, podeRegistrarLacuna: guardar, signal: request.signal });
       await gravar(r, null);
       return NextResponse.json({ conversaId, texto: r.texto, fontes: r.fontes, restante });
     } catch (e) {
@@ -169,7 +170,7 @@ export async function POST(request: Request) {
       enviar({ tipo: "inicio", conversaId, restante });
       try {
         const r = await responder({
-          historico, pergunta, signal: request.signal,
+          historico, pergunta, modelo, consultaTerritorial, podeRegistrarLacuna: guardar, signal: request.signal,
           aoEvento: (e: EventoAssistente) => enviar(e),
         });
         await gravar(r, null);

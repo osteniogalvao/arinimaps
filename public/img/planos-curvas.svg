@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 360" preserveAspectRatio="xMidYMid slice" fill="none" stroke="#3e7a60" stroke-width="1.2">
+  <defs><path id="curva" d="M-100 70C180 -10 320 150 560 60S900 -40 1200 80S1500 10 1620 50"/></defs>
+  <use href="#curva" transform="translate(0 0)"/>
+  <use href="#curva" transform="translate(0 26)"/>
+  <use href="#curva" transform="translate(0 52)"/>
+  <use href="#curva" transform="translate(0 78)"/>
+  <use href="#curva" transform="translate(0 104)"/>
+  <use href="#curva" transform="translate(0 130)"/>
+  <use href="#curva" transform="translate(0 156)"/>
+  <use href="#curva" transform="translate(0 182)"/>
+  <use href="#curva" transform="translate(0 208)"/>
+  <use href="#curva" transform="translate(0 234)"/>
+  <use href="#curva" transform="translate(0 260)"/>
+  <use href="#curva" transform="translate(0 286)"/>
+</svg>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { CAMPO, ROTULO } from "@/components/ui/Pagina";
 import type { DocumentoCofre, PropriedadeCofre } from "@/lib/cofre";
+import VerificarVinculo from "./VerificarVinculo";
 
 const api = "/api/painel/cofre";
 const acao = "btn-contorno px-4 py-2 text-sm";
@@ -62,7 +63,7 @@ function Documentos({imovel}:{imovel:string}) {
   </section>;
 }
 
-export default function Cofre({produtor}:{produtor:boolean}) {
+export default function Cofre({produtor,codigo="",carInicial="",nomeInicial=""}:{produtor:boolean;codigo?:string;carInicial?:string;nomeInicial?:string}) {
   const [lista,setLista] = useState<Lista | null>(null);
   const [pagina,setPagina] = useState(1);
   const [versao,setVersao] = useState(0);
@@ -101,7 +102,7 @@ export default function Cofre({produtor}:{produtor:boolean}) {
     {!lista && !erro && <p role="status">Carregando cofre…</p>}
     {lista && <div className="flex items-center flex-wrap gap-4"><p>{lista.total} de {lista.limite} vagas utilizadas</p>
       <button type="button" disabled={lista.total>=lista.limite || ocupado} className={acao} onClick={()=>{
-        setNova(true);setErro("");setEditando({id:crypto.randomUUID(),nome:"",municipio:"",area_ha:0,car:null,matricula:null});
+        setNova(true);setErro("");setEditando({id:crypto.randomUUID(),nome:nomeInicial,municipio:"",area_ha:0,car:carInicial||null,matricula:null});
       }}>Adicionar propriedade</button>
       <Link className="underline" href={"/planos?" + plano + "&extra_propriedade_adicional=1#configuracao"}>Solicitar mais vagas · R$ 15 por propriedade/mês</Link></div>}
     {editando && <form onSubmit={salvar} key={editando.id} className="cartao p-5 space-y-4">
@@ -120,7 +121,10 @@ export default function Cofre({produtor}:{produtor:boolean}) {
       <div className="flex flex-wrap gap-2"><button className={acao} onClick={()=>setAberta(aberta===p.id?null:p.id)} aria-expanded={aberta===p.id}>Documentos</button>
         <button className={acao} disabled={ocupado} onClick={()=>{setEditando(p);setNova(false);setErro("");}}>Editar</button>
         <button className={acao} disabled={ocupado} onClick={()=>excluir(p.id)}>Excluir propriedade</button></div>
-      {aberta===p.id && <Documentos imovel={p.id}/>}</article>)}
+      <p className="text-sm">Verificação: {p.claim?.estado==="APROVADA"?"aprovada":p.claim?.estado==="EM_ANALISE"?"em análise":p.claim?.estado==="REPROVADA"?"não aprovada":p.claim?.estado==="PENDENCIA"?"complemento solicitado":"aguardando comprovante"}.</p>
+      {p.claim?.motivo && <p className="text-sm">{p.claim.motivo}</p>}
+      {aberta===p.id && (p.claim?.estado==="APROVADA" ? <Documentos imovel={p.id}/> :
+        p.claim?.estado==="EM_ANALISE" ? <p>A Central está verificando o vínculo.</p> : <VerificarVinculo id={p.id} codigo={codigo} atualizar={atualizar}/>)}</article>)}
     {(pagina>1 || (lista && pagina*25<lista.total)) && <div className="flex gap-3">
       <button className={acao} disabled={pagina===1 || ocupado} onClick={()=>{setLista(null);setPagina(v=>v-1);}}>Anterior</button>
       <button className={acao} disabled={!lista || pagina*25>=lista.total || ocupado} onClick={()=>{setLista(null);setPagina(v=>v+1);}}>Próxima</button></div>}

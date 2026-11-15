@@ -1,0 +1,137 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import test from "node:test";
+import pg from "pg";
+
+// Banco local dedicado à fixture comercial. O teste insere contas e planos sintéticos.
+const url = process.env.ARINI_TESTE_CARTEIRA_DB;
+const local = url && ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname);
+test("carteira da Ari: isolamento, concorrência, estorno, titular e confirmação do gateway", { skip: !local }, async (t) => {
+  const servidor = new pg.Client({ connectionString: url });
+  await servidor.connect();
+  const banco = "ari_qa_" + randomUUID().replaceAll("-", "");
+  const localTeste = new URL(url);
+  localTeste.pathname = "/" + banco;
+  await servidor.query("create database " + banco);
+  const pool = new pg.Pool({ connectionString: localTeste.href });
+  const sql = (q, v = []) => pool.query(q, v);
+  const comprador = randomUUID(), colega = randomUUID(), org = randomUUID(), plano = "qa_" + randomUUID();
+  const perfil = "comprador_investidor", chave = randomUUID(), chamada = randomUUID();
+  const total = async (user) => Number((await sql("select fn_ari_saldo($1,$2)->>'total' as n", [user,perfil])).rows[0].n);
+  const criar = () => sql("select (fn_ari_pedido($1,$2,2000,500,500,12)).id as id", [comprador,chave]);
+  const debitar = (user, id = randomUUID()) => sql("select fn_ari_debitar($1,$2,$3,'chat','modelo_teste')", [user,perfil,id]);
+  try {
+    for (const role of ["anon", "authenticated", "service_role"]) {
+      if (!(await servidor.query("select from pg_roles where rolname=$1", [role])).rowCount) await servidor.query("create role " + role);
+    }
+    await sql(`create table public.settings(chave text primary key, valor jsonb);
+create table public.plans(id text primary key, escopo text, preco_mensal numeric, ativo boolean, cotas jsonb);
+create table public.profiles(user_id uuid primary key,telefone text, ativo bool default true, role text, nicho text, plan_id text, plan_origem text, plan_valido_ate timestamptz,constraint chk_profiles_nicho check (true));
+create table public.organizations(id uuid primary key,plan_id text,ativo boolean,plan_valido_ate timestamptz); 
+create table public.organization_members(user_id uuid,org_id uuid,status text,nicho_vinculo text);
+create table public.municipalities(id uuid primary key);
+create table public.properties(id uuid primary key,codigo text,modalidade text,tipo text,municipality_id uuid,valor numeric,titulo text,descricao text,aceita_financiamento bool,aceita_permuta bool,status text);
+create table public.property_geometries(property_id uuid primary key,area_m2 numeric);
+create table public.conta_consentimentos(id bigint generated always as identity primary key,titular uuid,finalidade text,permitido boolean);
+create table public.audit_log(user_id uuid,entidade_id uuid,acao text,entidade text,dados_antes jsonb,dados_depois jsonb);
+`);
+    for (const arquivo of ["0084_ofertas_dos_perfis.sql","0089_carteiras_da_ari.sql","0094_filtros_de_interesse.sql"]) {
+      await sql(await readFile(new URL("../supabase/migrations/" + arquivo, import.meta.url), "utf8"));
+    }
+    await sql("insert into plans(id,escopo,ativo,cotas,preco_mensal) values ($1,'organizacao',true,'{\"creditos_ari_mes\":1}',1)", [plano]);
+    await sql("insert into profiles(user_id,role,nicho,ativo,plan_origem) values ($1,'comprador',$3,true,'padrao'),($2,'comprador',$3,true,'padrao')", [comprador,colega,perfil]);
+    await sql("insert into organizations(id,plan_id,ativo) values($1,$2,true)", [org,plano]);
+    await sql("insert into organization_members(user_id,org_id,status,nicho_vinculo) values($1,$3,'ativo',$4),($2,$3,'ativo',$4)", [comprador,colega,org,perfil]);
+    assert.equal(await total(comprador),1);
+    assert.equal(await total(colega),1);
+    const ultimos = await Promise.allSettled([debitar(comprador),debitar(colega)]);
+    assert.equal(ultimos.filter(x=>x.status === "fulfilled").length,1);
+    assert.equal(ultimos.find(x=>x.status === "rejected").reason.code,"P8901");
+    assert.equal(await total(colega),0);
+    await assert.rejects(sql("select fn_ari_pedido($1,$2,1,500,500,12)", [comprador,chave]), { code: "40001" });
+    const [p1,p2] = await Promise.all([criar(),criar()]);
+    const compra = p1.rows[0].id;
+    assert.equal(compra,p2.rows[0].id);
+    assert.equal(await total(comprador),0);
+    await sql("update ari_compras set cliente='cliente_teste',status='emitindo' where id=$1", [compra]);
+    const evento = (e, cliente = "cliente_teste", valor = 2000) => sql("select fn_ari_pagamento($1,$2,$3,$4,$5)", [compra,e,"pay_"+compra,cliente,valor]);
+    await assert.rejects(evento("PAYMENT_RECEIVED","outro"), { code: "22023" });
+    await assert.rejects(evento("PAYMENT_RECEIVED","cliente_teste",1), { code: "22023" });
+    await Promise.all([evento("PAYMENT_CONFIRMED"),evento("PAYMENT_RECEIVED")]);
+    assert.equal(await total(comprador),1000);
+    assert.equal(await total(colega),0);
+    await debitar(comprador,chamada);
+    await assert.rejects(debitar(comprador,chamada), { code: "23505" });
+    assert.equal(await total(comprador),999);
+    const devolver = () => sql("select fn_ari_estornar($1,$2)", [comprador,chamada]);
+    await Promise.all([devolver(),devolver()]);
+    assert.equal(await total(comprador),1000);
+    await sql("update ari_lotes set validade=now()-interval '1 second' where compra=$1 and carteira='cortesia'", [compra]);
+    assert.equal(await total(comprador),500);
+    const perdida = randomUUID();
+    await debitar(comprador,perdida);
+    await sql("update ari_uso set criado_em=now()-interval '11 minutes' where id=$1", [perdida]);
+    assert.equal(await total(comprador),500);
+    const entregue = randomUUID();
+    await debitar(comprador,entregue);
+    await sql("select fn_ari_concluir($1,$2)", [comprador,entregue]);
+    await sql("select fn_ari_estornar($1,$2)", [comprador,entregue]);
+    assert.equal(await total(comprador),499);
+    await sql("update settings set valor='1' where chave='ari_limite_creditos_dia'");
+    await assert.rejects(debitar(comprador), { code: "P8902" });
+    await t.test("filtros de interesse: limites, correspondência, revogação, envio único e falha incerta", async () => {
+      assert.equal((await sql("select fn_filtro_limite($1) n",[comprador])).rows[0].n,10);
+      assert.equal((await sql("select fn_filtro_limite($1) n",[colega])).rows[0].n,3);
+      const municipio = randomUUID();
+      await sql("insert into municipalities values($1)",[municipio]);
+      const consentir = (valor) => sql("insert into conta_consentimentos(titular,finalidade,permitido) values($1,'whatsapp',$2)",[colega,valor]);
+      const criterios = {nome:"Teste",municipio,tipo:"rural",preco_max:100,area_min:25,essenciais:"nascente",whatsapp:true};
+      const criarFiltro = (dados) => sql("select fn_filtro_salvar($1,null,$2,true) id",[colega,JSON.stringify(dados)]);
+      await assert.rejects(criarFiltro(criterios),{code:"P9402"});
+      await consentir(true);
+      await sql("update profiles set telefone='5534999999999' where user_id=$1",[colega]);
+      const filtros = await Promise.allSettled(Array.from({length:4},()=>criarFiltro(criterios)));
+      assert.equal(filtros.filter(x=>x.status==="fulfilled").length,3);
+      assert.equal(filtros.find(x=>x.status==="rejected").reason.code,"P9401");
+      const publicar = async (preco) => {
+        const id = randomUUID();
+        await sql("insert into properties(id,codigo,status,municipality_id,tipo,titulo,descricao,valor) values($1,'QA','rascunho',$2,'rural','Fazenda','Com NASCENTE',$3)",[id,municipio,preco]);
+        await sql("insert into property_geometries values($1,70)",[id]);
+        await sql("update properties set status='publicado' where id=$1",[id]);
+        return id;
+      };
+      await publicar(120);
+      const imovel = await publicar(80);
+      const conferir = () => sql("select fn_filtro_corresponder() n");
+      const rodadas = await Promise.all([conferir(),conferir()]);
+      assert.equal(rodadas.reduce((n,r)=>n+r.rows[0].n,0),1);
+      assert.equal((await sql("select cardinality(filtros) n from filtro_avisos where imovel=$1",[imovel])).rows[0].n,3);
+      const reservar = () => sql("select * from fn_filtro_reservar_wa()");
+      await consentir(false);
+      assert.equal((await reservar()).rowCount,0);
+      await consentir(true);
+      await publicar(80);
+      await conferir();
+      const envios = await Promise.all([reservar(),reservar()]);
+      assert.equal(envios.reduce((n,r)=>n+r.rowCount,0),1);
+      await sql("update filtro_avisos set reservado_em=now()-interval '20 minutes' where whatsapp='enviando'");
+      assert.equal((await reservar()).rowCount,0);
+      assert.equal((await sql("select count(*)::int n from filtro_avisos where whatsapp='conferir'")).rows[0].n,1);
+      const id=filtros.find(x=>x.status==="fulfilled").value.rows[0].id;
+      await sql("select fn_filtro_salvar($1,$2,'{}',false)",[colega,id]);
+      await criarFiltro({...criterios,whatsapp:false});
+      await assert.rejects(sql("select fn_filtro_salvar($1,$2,'{}',false)",[comprador,id]),{code:"P0002"});
+    });
+    await evento("PAYMENT_REFUNDED");
+    await evento("PAYMENT_CONFIRMED");
+    assert.equal(await total(comprador),0);
+    await assert.rejects(sql("select fn_ari_saldo($1,'engenheiro')", [comprador]), { code: "42501" });
+    const { rows } = await sql("select has_function_privilege('authenticated','fn_ari_debitar(uuid,text,uuid,text,text)','execute') as permitido");
+    assert.equal(rows[0].permitido,false);
+  } finally {
+    await pool.end();
+    await servidor.query("drop database " + banco);
+    await servidor.end();
+  }
+});

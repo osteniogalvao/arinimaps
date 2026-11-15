@@ -8,21 +8,19 @@ import { CAMPO, ROTULO } from "@/components/ui/Pagina";
 function lerUtm() {
   const utm: Record<string, string> = {};
   try {
-    const guardado = JSON.parse(sessionStorage.getItem("arini-utm") ?? "{}") as Record<string, string>;
-    Object.assign(utm, guardado);
     const p = new URLSearchParams(window.location.search);
     for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]) {
       const v = p.get(k);
       if (v) utm[k] = v;
     }
-    if (Object.keys(utm).length) sessionStorage.setItem("arini-utm", JSON.stringify(utm));
   } catch { /* armazenamento bloqueado */ }
   return utm;
 }
 
 export default function InteresseForm({
-  codigo, titulo, whatsapp,
-}: { codigo: string; titulo: string; whatsapp: string | null }) {
+  codigo, titulo, whatsapp, regime,
+}: { codigo: string; titulo: string; whatsapp: string | null; regime?: string }) {
+  const externo = !!regime && regime !== "EXCLUSIVO_ARINI";
   const [estado, setEstado] = useState<"idle" | "enviando" | "ok" | "erro">("idle");
   const [erro, setErro] = useState("");
   const [form, setForm] = useState({ nome: "", telefone: "", email: "", mensagem: "", consentimento: false });
@@ -34,7 +32,7 @@ export default function InteresseForm({
     const res = await fetch("/api/leads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo, ...form, utm: lerUtm() }),
+      body: JSON.stringify({ codigo, regime:regime??"EXCLUSIVO_ARINI", ...form, utm: lerUtm() }),
     });
     const data = await res.json();
     if (res.ok) setEstado("ok");
@@ -60,7 +58,8 @@ export default function InteresseForm({
               <CircleCheck className="size-7" />
             </span>
             <p className="lp-display mt-4 text-2xl text-texto">Interesse registrado!</p>
-            <p className="mt-2 text-base text-texto-2">A equipe da Arini vai falar com você em breve.</p>
+            <p className="mt-2 text-base text-texto-2">{externo ? "O responsável pelo anúncio recebeu o seu interesse." : "A equipe da Arini recebeu o seu interesse."}</p>
+            <a className="text-ouro underline" href="/painel/interesses">Acompanhar meus interesses</a>
           </div>
         </div>
       ) : (
@@ -98,7 +97,7 @@ export default function InteresseForm({
             <input type="checkbox" required checked={form.consentimento}
               onChange={(e) => setForm({ ...form, consentimento: e.target.checked })} className="mt-1 size-4 shrink-0 accent-[var(--verde)]" />
             <span>
-              Autorizo a Arini a entrar em contato sobre este imóvel, conforme a{" "}
+              {externo ? "Autorizo a ARINI a encaminhar meu nome, contato e mensagem ao responsável por este anúncio para atendimento, conforme a " : "Autorizo a Arini a entrar em contato sobre este imóvel, conforme a "}
               <a href="/termos/privacidade" target="_blank" className="font-semibold text-verde hover:underline">Política de Privacidade</a>.
             </span>
           </label>

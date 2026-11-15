@@ -18,7 +18,7 @@ const CAMPO: Record<string, CampoBuscaSigef> = { parcela: "parcela_codigo", ccir
 /** As grafias que a base do INCRA pode ter para o mesmo código. */
 function grafias(tipo: string, valor: string): string[] {
   const v = valor.trim();
-  if (tipo === "parcela") return [v.toLowerCase(), v.toUpperCase()];
+  if (tipo === "parcela") return /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(v) ? [v.toLowerCase(), v.toUpperCase()] : [];
   const dig = v.replace(/\D/g, "");
   if (tipo === "ccir") {
     if (dig.length !== 13) return [];
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
   if (!ufs.length) return NextResponse.json({ parcelas: [], ufs });
   if (ufs.length > 6) {
     return NextResponse.json({
-      error: "Aproxime o mapa do estado do imóvel: o INCRA publica o SIGEF por estado.", codigo: "muitas_ufs", ufs,
+      error: "Aproxime o mapa para pesquisar nos estados próximos do imóvel.", codigo: "muitas_ufs", ufs,
     }, { status: 422 });
   }
   try {

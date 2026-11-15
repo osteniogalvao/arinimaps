@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { logAudit } from "@/lib/audit";
 import { assinatura } from "@/lib/juridico";
 import { ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
+import { ator } from "@/lib/authz";
+import { consentimentoDaConta } from "@/lib/privacidade/consentimento";
 import { distribuirLead } from "@/lib/central";
 
 // Formulário público "Tenho interesse" → lead + oportunidade + auditoria + e-mail à Arini.
 export async function POST(request: Request) {
+  const a = await ator();
+  if (!a) return NextResponse.json({ error: "Entre para demonstrar interesse." }, { status: 401 });
   // formulário público: sem limite, um robô enche o funil de leads falsos
   const limite = await limitar(`lead:ip:${ipDoPedido(request)}`, 8, 600);
   if (!limite.permitido) return respostaLimite(limite, "envio");
@@ -16,20 +19,21 @@ export async function POST(request: Request) {
   const { codigo, nome, telefone, email, mensagem, consentimento } = body ?? {};
   // campanha que trouxe o lead (Central de marketing): só as chaves UTM, curtas
   const utm: Record<string, string> = {};
-  if (body?.utm && typeof body.utm === "object") {
+  if (await consentimentoDaConta(a.userId,"rastro") && body?.utm && typeof body.utm === "object") {
     for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]) {
       const v = (body.utm as Record<string, unknown>)[k];
       if (typeof v === "string" && v.trim()) utm[k] = v.trim().slice(0, 100);
     }
   }
 
-  if (!codigo || !nome?.trim() || (!telefone?.trim() && !email?.trim())) {
+  if (typeof codigo!=="string" || typeof nome!=="string" || !nome.trim() ||
+      [telefone,email,mensagem].some(v=>v!=null && typeof v!=="string") || (!telefone?.trim() && !email?.trim())) {
     return NextResponse.json(
       { error: "Informe seu nome e pelo menos um contato (telefone ou e-mail)." },
       { status: 400 }
     );
   }
-  if (!consentimento) {
+  if (consentimento !== true) {
     return NextResponse.json(
       { error: "É preciso autorizar o contato para enviar o interesse." },
       { status: 400 }
@@ -39,59 +43,23 @@ export async function POST(request: Request) {
   const admin = supabaseAdmin();
   const { data: property } = await admin
     .from("properties")
-    .select("id, codigo, titulo, status")
+    .select("id, codigo, titulo, status, regime_comercial")
     .eq("codigo", codigo)
     .in("status", ["publicado", "em_negociacao"])
     .single();
   if (!property) {
     return NextResponse.json({ error: "Imóvel não disponível." }, { status: 404 });
   }
-  // §1.1: demonstração de interesse (antes de criar o lead, para registrar a tentativa)
-  void registrarEventoImovel({ propertyId: property.id, tipo: "interesse", request, detalhe: { codigo: property.codigo } });
-
-  const { data: lead, error: leadError } = await admin
-    .from("leads")
-    .insert({
-      property_id: property.id,
-      nome: nome.trim(),
-      telefone: telefone?.trim() || null,
-      email: email?.trim() || null,
-      mensagem: mensagem?.trim() || null,
-      origem: "pagina",
-      canal: utm.utm_source ?? null,
-      utm,
-      consentimento_lgpd: true,
-      consentimento_versao: assinatura("privacidade"),
-      status: "em_oportunidade",
-    })
-    .select("id")
-    .single();
-  if (leadError) return NextResponse.json({ error: leadError.message }, { status: 500 });
-
-  const { data: opp, error: oppError } = await admin
-    .from("opportunities")
-    .insert({ lead_id: lead.id, property_id: property.id })
-    .select("id, codigo")
-    .single();
-  if (oppError) return NextResponse.json({ error: oppError.message }, { status: 500 });
-
-  await admin.from("opportunity_events").insert({
-    opportunity_id: opp.id,
-    tipo: "contato",
-    descricao: `Lead recebido pelo site para ${property.codigo} — ${property.titulo}`,
+  const {data:opp,error} = await admin.rpc("fn_interesse_no_mapa",{
+    p_codigo:codigo,p_cliente:a.userId,p_regime:body.regime??"EXCLUSIVO_ARINI",p_nome:nome.trim().slice(0,180),p_telefone:telefone?.trim().slice(0,40)||null,
+    p_email:email?.trim().slice(0,254)||null,p_mensagem:mensagem?.trim().slice(0,2000)||null,p_versao:assinatura("privacidade"),p_utm:utm,
   });
-  void registrarEventoImovel({ propertyId: property.id, tipo: "lead", request, detalhe: { lead_id: lead.id, opportunity: opp.codigo } });
-  // Central operacional (migration 0065): rodízio entre os corretores da equipe
-  await distribuirLead(opp.id, opp.codigo, property.titulo);
-
-  await logAudit({
-    acao: "lead_criado",
-    entidade: "leads",
-    entidade_id: lead.id,
-    property_id: property.id,
-    opportunity_id: opp.id,
-    dados_depois: { nome, telefone, email },
-  });
+  if (error || !opp) return NextResponse.json({error:error?.code==="P0001" ? error.message : "Não foi possível registrar o interesse."},{status:409});
+  if (!opp.novo) return NextResponse.json({ok:true,oportunidade:opp.codigo});
+  void registrarEventoImovel({propertyId:property.id,tipo:"interesse",userId:a.userId,request,detalhe:{codigo:property.codigo}});
+  void registrarEventoImovel({propertyId:property.id,tipo:"lead",userId:a.userId,request,detalhe:{lead_id:opp.lead_id,opportunity:opp.codigo}});
+  if (opp.regime!=="EXCLUSIVO_ARINI") return NextResponse.json({ok:true,oportunidade:opp.codigo});
+  await distribuirLead(opp.id,opp.codigo,property.titulo);
 
   // Notificação imediata à Arini (F0): e-mail via Resend, se configurado.
   if (process.env.RESEND_API_KEY && process.env.ARINI_NOTIFY_EMAIL) {

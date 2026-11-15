@@ -16,6 +16,7 @@ import { inteligenciaMercado } from "./jobs/inteligenciaMercado.mjs";
 import { otimizarVideo } from "./jobs/otimizarVideo.mjs";
 import { monitorar } from "./jobs/monitorar.mjs";
 import { lembretesProprietario } from "./jobs/lembretesProprietario.mjs";
+import { agendarGlebasSicor, atualizarGlebasSicor } from "./jobs/glebasSicor.mjs";
 import { coletarCotacoes } from "./jobs/cotacoes.mjs";
 
 const INTERVALO_MS = Number(process.env.WORKER_INTERVALO_MS ?? 15000);
@@ -50,6 +51,7 @@ const HANDLERS = {
   lembretes_proprietario: lembretesProprietario,
   // cotações do agro para a faixa do topo e o /mercado (migration 0056)
   coletar_cotacoes: coletarCotacoes,
+  atualizar_glebas_sicor: atualizarGlebasSicor,
 };
 
 // O Swarm envia SIGTERM antes de trocar a imagem. Termine o job já obtido
@@ -193,6 +195,29 @@ async function rodarCentral() {
   }
 }
 
+let proximaBusca = 0;
+let buscandoFiltros = false;
+async function processarFiltros() {
+  if (buscandoFiltros || Date.now() < proximaBusca) return;
+  buscandoFiltros = true;
+  try {
+    const { rows: [config] } = await db.query("select valor from settings where chave='filtros_intervalo_minutos'");
+    const minutos = Math.min(15, Math.max(1, Number(config?.valor) || 10));
+    proximaBusca = Date.now() + minutos * 60_000;
+    await db.query("select fn_filtro_corresponder()");
+    if (process.env.SITE_URL && process.env.SAUDE_TOKEN) {
+      const r = await fetch(`${process.env.SITE_URL}/api/interno/avisos-imoveis`, {
+        method: "POST", headers: { "x-saude-token": process.env.SAUDE_TOKEN }, signal: AbortSignal.timeout(90_000),
+      });
+      if (!r.ok) console.error("[filtro] WhatsApp: HTTP", r.status);
+    }
+  } catch (e) {
+    console.error("[filtro] erro ao processar", e.code ?? e.name);
+  } finally {
+    buscandoFiltros = false;
+  }
+}
+
 // Notificações críticas criadas pelo banco (ex.: tarefa escalonada para a
 // Diretoria) também vão por e-mail. As criadas pelo site já saem de lá.
 async function emailsCriticos() {
@@ -231,6 +256,9 @@ async function verificarInterrompidos() {
 }
 // monitoramento: confere /api/saude a cada 5 min e alerta (jobs/monitorar.mjs)
 if (!process.env.WORKER_UMA_VEZ) {
+  const agendarSicor = () => agendarGlebasSicor(db).catch(e => console.error("[SICOR]", e.message));
+  void agendarSicor();
+  setInterval(agendarSicor, 6 * 3_600_000);
   setInterval(verificarInterrompidos, 5 * 60_000);
   setInterval(() => void monitorar(db).catch((e) => console.error("[monitor]", e.message)), 5 * 60_000);
   setTimeout(() => void monitorar(db).catch((e) => console.error("[monitor]", e.message)), 30_000);
@@ -242,6 +270,8 @@ setInterval(agendarRotinas, 60 * 60 * 1000);
 setInterval(agendarLembretes, 15 * 60 * 1000);
 setInterval(agendarCotacoes, 20 * 60 * 1000);
 if (!process.env.WORKER_UMA_VEZ) {
+  setTimeout(processarFiltros, 15_000);
+  setInterval(processarFiltros, 60_000);
   setTimeout(rodarCentral, 60_000);
   setInterval(rodarCentral, 10 * 60 * 1000);
 }
