@@ -35,6 +35,7 @@ test("download privado exige titular, perfil e registro exato antes da assinatur
     return Response.json([{id:doc,nome_arquivo:"Escritura.pdf"}]);
   });
   const gateway=carregar("lib/seguranca/documentos",{"@/lib/supabase/admin":{supabaseAdmin:()=>db},
+    "@/lib/imovel/verificacao":{cofreAprovado:async (u,id)=>u===dono && id===imovel},
     "@/lib/authz":{},"./limite":{},"@/lib/cofre":cofre});
   assert.equal(await gateway.resolverArquivo({...tit,userId:outro},caminho),null);
   assert.equal(await gateway.resolverArquivo({...tit,role:"admin_central"},caminho),null);
@@ -59,6 +60,7 @@ test("upload recusa outro titular e conteúdo disfarçado antes de gravar; PDF r
     return new Response(null,{status:201});
   });
   const deps={"@/lib/cofre":cofre,"@/lib/authz":{ator:async()=>ator},"@/lib/supabase/admin":{supabaseAdmin:()=>db},
+    "@/lib/imovel/verificacao":{cofreAprovado:async(u,id)=>u===dono && id===imovel},
     "@/lib/seguranca/arquivos":arquivos,"@/lib/seguranca/limite":{limitar:async()=>({permitido:true})},
     "@/lib/seguranca/link-arquivo":carregar("lib/seguranca/link-arquivo"),
     "@/lib/solicitacoes-planos-servidor":carregar("lib/solicitacoes-planos-servidor",{"@/lib/supabase/admin":{},"@/lib/solicitacoes-planos":{}}),
@@ -90,6 +92,9 @@ test("Postgres: limite concorrente, planos vigentes, isolamento, concessão expl
       create table public.audit_log(user_id uuid, acao text, entidade text, entidade_id uuid, dados_antes jsonb, dados_depois jsonb);
       create table storage.objects(name text,bucket_id text,created_at timestamptz);
       create table public.cartography_layers(tipo text, source_path text);
+      create table public.fin_documentos(storage_path text);
+      create table public.propriedade_claims(prova_path text);
+      create table public.balcao_anexos(storage_path text);
     `);
     for(const nome of ["0075_solicitacoes_planos","0079_cofre_propriedades"]) await db.query(readFileSync(new URL("supabase/migrations/"+nome+".sql",raiz),"utf8"));
     const fin=randomUUID(), marketing=randomUUID(), org=randomUUID(), titulo=randomUUID();

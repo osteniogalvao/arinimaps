@@ -4,6 +4,15 @@ import { CAMPO } from "@/components/ui/Pagina";
 import { estadoProtocolo, type PedidoMunicipal, type ServicoMunicipal } from "@/lib/territorio-contratado";
 import { useOperacao } from "./useOperacao";
 
+function AnexarProjeto() {
+  return <label className="block">Projeto ou documento complementar (opcional)
+    <input type="file" name="arquivo" accept=".pdf,.dwg,.dxf,.kml,.kmz,.zip,.doc,.docx,.xls,.xlsx,.odt,.ods,.jpg,.jpeg,.png,.heic,.webp,.gif" className={CAMPO}/>
+    <span className="text-sm text-texto-2">Envie um documento, imagem ou arquivo de projeto de até 25 MB.</span></label>;
+}
+function arquivoDoFormulario(form:FormData) {
+  const arquivo=form.get("arquivo");
+  return arquivo instanceof File && arquivo.name ? arquivo : undefined;
+}
 export default function Balcao({servicos,pedidos,interno=false,gestor=false}:{servicos:ServicoMunicipal[];pedidos:PedidoMunicipal[];interno?:boolean;gestor?:boolean}) {
   const {enviar,ocupado,mensagem}=useOperacao();
   const [escolhido,setEscolhido]=useState("");
@@ -14,7 +23,7 @@ export default function Balcao({servicos,pedidos,interno=false,gestor=false}:{se
     const form=e.currentTarget;
     const f=new FormData(form);
     const dados=Object.fromEntries(servico.requisitos.map((r,i)=>[r,String(f.get("req"+i)??"").trim()]));
-    if (await enviar({acao:"protocolar",regra:servico.id,dados},"Pedido recebido.")) form.reset();
+    if (await enviar({acao:"protocolar",regra:servico.id,dados},"Pedido recebido.",arquivoDoFormulario(f))) form.reset();
   }
   async function regra(e:FormEvent<HTMLFormElement>) {
     e.preventDefault();const f=new FormData(e.currentTarget);
@@ -23,7 +32,7 @@ export default function Balcao({servicos,pedidos,interno=false,gestor=false}:{se
   }
   async function andamento(e:FormEvent<HTMLFormElement>,p:PedidoMunicipal) {
     e.preventDefault();const form=e.currentTarget;const f=new FormData(form);
-    if (await enviar({acao:"andamento",id:p.id,revisao:p.revisao,etapa:interno?f.get("etapa"):"resposta",texto:f.get("texto")},"Andamento registrado.")) form.reset();
+    if (await enviar({acao:"andamento",id:p.id,revisao:p.revisao,etapa:interno?f.get("etapa"):"resposta",texto:f.get("texto")},"Andamento registrado.",arquivoDoFormulario(f))) form.reset();
   }
   return <div className="space-y-7">
     <p role="status" aria-live="polite" className="font-semibold text-verde">{mensagem}</p>
@@ -40,6 +49,7 @@ export default function Balcao({servicos,pedidos,interno=false,gestor=false}:{se
       </form> : !interno && servico && <form key={servico.id} onSubmit={protocolar} className="space-y-4">
         <p><strong>{servico.territorio}</strong></p><p className="whitespace-pre-wrap">{servico.orientacao}</p>
         {servico.requisitos.map((r,i)=><label key={r} className="block">{r}<textarea className={CAMPO} name={"req"+i} required maxLength={2000}/></label>)}
+        <AnexarProjeto/>
         <button className="btn-verde px-4 py-2" disabled={ocupado}>Protocolar pedido</button>
       </form>}
     </section>}
@@ -51,12 +61,14 @@ export default function Balcao({servicos,pedidos,interno=false,gestor=false}:{se
           <dl>{Object.entries(p.dados).map(([k,v])=><div key={k} className="mb-2"><dt className="font-semibold">{k}</dt><dd className="whitespace-pre-wrap">{v}</dd></div>)}</dl>
           <ol className="space-y-2 border-l border-linha pl-4">{p.andamentos.map((v,i)=><li key={i}>
             <strong>{estadoProtocolo[v.acao]}</strong> · {new Date(v.data).toLocaleString("pt-BR")}<p className="whitespace-pre-wrap">{v.texto}</p>
+            {v.arquivo && <a className="break-all text-sm underline" href={"/api/territorio/anexos?id="+encodeURIComponent(v.arquivo.id)}>Baixar {v.arquivo.nome} ({Math.ceil(v.arquivo.tamanho/1024)} KB)</a>}
           </li>)}</ol>
           {((!interno && p.estado==="pendencia") || (interno && !p.proprio && ["protocolado","em_analise"].includes(p.estado))) &&
             <form className="space-y-2" onSubmit={e=>andamento(e,p)}>
               {interno && <label>Andamento<select name="etapa" className={CAMPO}>
                 {(p.estado==="protocolado"?["em_analise","pendencia"]:["pendencia"]).concat(gestor?["deferido","indeferido"]:[]).map(x=><option key={x} value={x}>{estadoProtocolo[x]}</option>)}</select></label>}
               <label className="block">{interno?"Justificativa para o solicitante":"Resposta à pendência"}<textarea required maxLength={2000} name="texto" className={CAMPO}/></label>
+              {!interno && <AnexarProjeto/>}
               <button className="btn-verde px-4 py-2" disabled={ocupado}>{interno?"Registrar andamento":"Enviar resposta"}</button>
             </form>}
         </div></details>)}

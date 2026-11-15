@@ -702,7 +702,7 @@ export default function NovoImovel() {
             <span>
               {ehParceiro ? (
                 <>{ehLeiloeiro
-                  ? "Declaro estar habilitado a conduzir este leilão, nos termos do edital enviado, e aceito o"
+                  ? "Declaro estar habilitado a conduzir este leilão conforme a autorização enviada e aceito o"
                   : "Declaro ter autorização escrita do proprietário para anunciar este imóvel, no preço e nas condições acima, e aceito o"}{" "}
                 <Link href="/termos/parceiros" target="_blank" className="text-verde underline">Termo de Parceria</Link></>
               ) : (
@@ -712,8 +712,7 @@ export default function NovoImovel() {
                   <Link href="/termos/exclusividade" target="_blank" className="text-verde underline">Termo de Exclusividade</Link>
                 </>}</>
               )}
-              {" "}e a{" "}
-              <Link href="/termos/remuneracao" target="_blank" className="text-verde underline">Regra de Remuneração</Link>.
+              {!ehLeiloeiro && <> e a <Link href="/termos/remuneracao" target="_blank" className="text-verde underline">Regra de Remuneração</Link></>}.
             </span>
           </label>
         )}

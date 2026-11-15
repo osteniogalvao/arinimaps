@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { logAudit } from "@/lib/audit";
 import { ator, temSetor } from "@/lib/authz";
 import { ADAPTADORES, consultarFontes, linhaParaGravar, type Bbox, type LinhaConsulta, type ResultadoFonte } from "@/lib/rural/adaptadores";
@@ -16,7 +17,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
     return NextResponse.json({ error: "A consulta territorial do anúncio é dos setores de Operações e Cartografia." }, { status: 403 });
   }
 
-  const { raio_m = 5000 } = await request.json().catch(() => ({}));
+  const corpo = await request.json().catch(() => null);
+  const raio_m = corpo?.raio_m ?? 5000;
+  if (!Number.isInteger(raio_m) || raio_m < 0 || raio_m > 50_000) {
+    return NextResponse.json({ error: "O raio precisa estar entre 0 e 50.000 metros." }, { status: 400 });
+  }
+  const limite = await limitar(`consulta-territorial:${a.userId}`, 30, 60);
+  if (!limite.permitido) return respostaLimite(limite, "consultas territoriais");
   const admin = supabaseAdmin();
 
   const { data: bboxRaw, error: bboxErro } = await admin.rpc("fn_property_bbox", {

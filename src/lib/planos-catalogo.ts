@@ -418,8 +418,8 @@ export const PLANOS_CATALOGO: PlanoCatalogo[] = [
     mensalCentavos: 15990, anualCentavos: 159900, origemPreco: "referencia_anexo", escopo: "escritorio", exigeProfissao: true,
     incluiPlanoId: "tecnico_essencial", limites: { usuarios: 3, consultasMensais: "uso_justo", creditosIaMensais: 300 },
     recursos: ["crm_tecnico_setor", "relatorios_marca", "sobreposicoes_memorial", "monitoramento", "equipe_privada", "assinatura_documentos"],
-    disponibilidade: "parcial", motivoDisponibilidade: "Os seis modelos de serviço estão disponíveis para contas com o CRM setorial liberado. Monitoramento, relatórios com marca e documentos oficiais ainda dependem de implantação.",
-    condicoes: ["A Central confirma o prazo de configuração conforme a profissão e as integrações solicitadas."],
+    disponibilidade: "parcial", motivoDisponibilidade: "Os escritórios com CRM setorial têm módulos técnicos, campos por profissão, acompanhamento de serviços e documentos operacionais imprimíveis. Corretagem usa o perfil de corretor ou imobiliária. A emissão e a assinatura de documentos oficiais dependem dos serviços profissionais próprios.",
+    condicoes: ["Solicite uma nova profissão pelo CRM e acompanhe a previsão inicial de cinco dias úteis e a resposta da Diretoria."],
   },
   {
     id: "tecnico_premium", personaId: "profissional_tecnico", nome: "Premium", descricao: "Gestão completa do escritório e recursos técnicos.",

@@ -36,6 +36,7 @@ export default async function MeuCrm({ searchParams }: PageProps<"/painel/crm">)
       <div><p className="text-sm text-texto-3">Atendimento · {ETAPAS[a.etapa]}</p><h1 className="mt-1 break-words text-3xl font-semibold">{a.assunto}</h1>
         <p className="mt-2 break-words">{c.nome}{c.telefone && <> · {c.telefone}</>}{c.email && <> · {c.email}</>}</p>
         <p className="text-sm text-texto-3">{a.proximo_retorno ? "Próximo retorno: " + data(a.proximo_retorno) : "Sem retorno agendado"}</p></div>
+      {config && <Link className={botao} href={"/painel/crm/profissoes?atendimento="+a.id}>Abrir registro técnico neste atendimento</Link>}
       {detalhe.servico && <section className="rounded-lg border border-linha p-4">
         <h2 className="font-semibold">{detalhe.servico.categoria_nome} · {detalhe.servico.modelo_nome}</h2>
         <dl className="mt-2 space-y-1">{Object.entries(detalhe.servico.campos).map(([k,campo]) => <div key={k} className="break-words"><dt className="inline text-texto-3">{campo.nome}: </dt>
@@ -53,7 +54,7 @@ export default async function MeuCrm({ searchParams }: PageProps<"/painel/crm">)
   const [lista,config] = await Promise.all([listarPrivados(s.banco, s.titular, pagina),configuracaoPrivada(s.banco)]);
   return <section className="space-y-6"><div><h1 className="text-3xl font-semibold">Meu CRM</h1>
     <p className="mt-2 text-texto-3">Sua carteira particular de contatos e atendimentos. Somente você vê os registros deste espaço.</p></div>
-    {config && <ProfissaoCrm config={config} />}
+    {config && <><Link className={botao} href="/painel/crm/profissoes">Serviços, documentos e pedidos por profissão</Link><ProfissaoCrm config={config} /></>}
     <details className="rounded-xl border border-linha p-4" open={!lista.itens.length && pagina === 1}>
       <summary className="cursor-pointer font-medium">Novo contato e atendimento</summary><FormularioCrm key={config?.profissao} config={config} /></details>
     <section><h2 className="text-xl font-semibold">Atendimentos recentes</h2>

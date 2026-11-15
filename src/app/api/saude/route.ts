@@ -27,18 +27,21 @@ type Item = { ok: boolean; ms?: number; detalhe?: string };
 
 async function medir(fn: () => Promise<string | void>): Promise<Item> {
   const t0 = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const detalhe = await Promise.race([
       fn(),
-      new Promise<never>((_, falha) => setTimeout(() => falha(new Error("sem resposta em 8 s")), 8000)),
+      new Promise<never>((_, falha) => { timer = setTimeout(() => falha(new Error("sem resposta em 8 s")), 8000); }),
     ]);
     return { ok: true, ms: Date.now() - t0, ...(detalhe ? { detalhe } : {}) };
   } catch (e) {
     return { ok: false, ms: Date.now() - t0, detalhe: e instanceof Error ? e.message : String(e) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-export async function GET(request: Request) {
+async function verificarComponentes() {
   const admin = supabaseAdmin();
   const [banco, armazenamento, tiles, worker, fontes] = await Promise.all([
     medir(async () => {
@@ -88,14 +91,22 @@ export async function GET(request: Request) {
   ]);
   const ia: Item = { ok: true, detalhe: iaConfigurada() ? "chave configurada" : "sem ANTHROPIC_API_KEY (assistente desligado)" };
 
-  const ok = banco.ok && armazenamento.ok;
+  return { ok: banco.ok && armazenamento.ok, em: new Date().toISOString(), componentes: { banco, armazenamento, tiles, worker, fontes, ia } };
+}
+
+// Monitores e visitantes compartilham a mesma sondagem, inclusive durante a consulta.
+// Só a resposta ao token da operação contém o diagnóstico detalhado.
+let sondagem: { ate: number; resposta: ReturnType<typeof verificarComponentes> } | undefined;
+export async function GET(request: Request) {
+  if (!sondagem || sondagem.ate <= Date.now()) {
+    sondagem = { ate: Date.now() + 15_000, resposta: verificarComponentes() };
+  }
+  const relatorio = await sondagem.resposta;
   const url = new URL(request.url);
   const token = request.headers.get("x-saude-token") ?? url.searchParams.get("token");
   const detalhado = !!process.env.SAUDE_TOKEN && token === process.env.SAUDE_TOKEN;
   return NextResponse.json(
-    detalhado
-      ? { ok, em: new Date().toISOString(), componentes: { banco, armazenamento, tiles, worker, fontes, ia } }
-      : { ok },
-    { status: ok ? 200 : 503, headers: { "Cache-Control": "no-store" } },
+    detalhado ? relatorio : { ok: relatorio.ok },
+    { status: relatorio.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } },
   );
 }

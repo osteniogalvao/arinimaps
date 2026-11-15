@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import dynamicImport from "next/dynamic";
-import { URL_MAPLIBRE } from "@/lib/map/config";
+import { SATELITE, URL_MAPLIBRE } from "@/lib/map/config";
 import Moldura from "@/components/shell/Moldura";
 import { currentUser } from "@/lib/supabase/server";
 import { acessoDe } from "@/lib/planos-servidor";
@@ -25,6 +25,7 @@ export default async function PaginaMapa() {
 
   return (
     <Moldura usuario={usuario} cheia>
+      {SATELITE.tiles?.[0] && <link rel="preconnect" href={new URL(SATELITE.tiles[0]).origin} />}
       <link rel="modulepreload" href={URL_MAPLIBRE} />
       <MapaRegional recursos={[...acesso.recursos]} logado={!!user} versaoLotes={versaoLotes} />
       {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14) */}

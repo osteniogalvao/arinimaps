@@ -39,7 +39,7 @@ export default async function AdminPlanos() {
         variante="simples"
         eyebrow="Central · Diretoria"
         titulo="Planos e nichos"
-        acoes={<><LinkAcao href="/admin/planos/ofertas">Ofertas por perfil</LinkAcao><LinkAcao href="/admin/planos/solicitacoes">Solicitações de planos</LinkAcao><LinkAcao href="/admin/planos/matriz">Matriz de personas</LinkAcao></>}
+        acoes={<><LinkAcao href="/admin/planos/ofertas">Ofertas por perfil</LinkAcao><LinkAcao href="/admin/planos/solicitacoes">Solicitações de planos</LinkAcao><LinkAcao href="/admin/planos/profissoes">Modelos técnicos</LinkAcao><LinkAcao href="/admin/planos/matriz">Matriz de personas</LinkAcao></>}
         subtitulo="Cada conta externa tem um nicho (o segmento comercial) e um plano (o que ela pode usar). O que você mudar aqui vale imediatamente para todas as contas do plano. A equipe da Arini não usa plano: o papel libera tudo."
       />
 

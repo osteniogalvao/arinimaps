@@ -97,17 +97,21 @@ export class GerenciadorCamadasOficiais {
     const corFill = def.cores
       ? (["match", ["get", "nome"], ...Object.entries(def.cores).flat(), def.cor] as never)
       : def.cor;
+    // Nas malhas de parcelas a divisa identifica o cadastro. A imagem continua
+    // legível mesmo com SIGEF, SNCI e crédito rural ligados ao mesmo tempo.
+    const malha = id === "sigef" || id === "snci" || id === "credito_rural";
+    const opacidade = malha ? 0.035 : def.semContorno ? 0.24 : 0.16;
     this.map.addLayer({
       id: `of-${id}-fill`, type: "fill", source: fonte(id),
       // sem antisserrilhado na camada recortada em células: senão a emenda entre células vira um fio
-      paint: { "fill-color": corFill, "fill-opacity": def.semContorno ? 0.24 : 0.16, ...(def.semContorno ? { "fill-antialias": false } : {}) },
+      paint: { "fill-color": corFill, "fill-opacity": opacidade, ...(def.semContorno ? { "fill-antialias": false } : {}) },
     }, antes);
     if (def.semContorno) return;
     this.map.addLayer({
       id: `of-${id}-linha`, type: "line", source: fonte(id),
       paint: {
         "line-color": def.cor,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1, 14, 2.2] as never,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, malha ? 0.6 : 1, 14, malha ? 1.5 : 2.2] as never,
         ...(id === "sigef" ? { "line-dasharray": [3, 1.5] as never } : {}),
       },
     }, antes);

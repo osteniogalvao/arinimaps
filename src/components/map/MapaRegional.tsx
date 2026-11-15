@@ -697,7 +697,7 @@ export default function MapaRegional({
       });
       popupRef.current = popup;
 
-      map.on("load", async () => {
+      map.once("style.load", async () => {
         baseEstiloRef.current = { fontes: new Set(), camadas: new Set(["fundo-satelite"]) };
         estiloDeRuasRef.current = null;
         // satélite fica acima da base vetorial e abaixo das camadas de dados

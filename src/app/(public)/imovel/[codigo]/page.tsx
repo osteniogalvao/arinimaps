@@ -426,7 +426,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
                   </a>
                 )}
                 <p className="text-sm text-texto-2">
-                  Os lances são dados na página do leiloeiro, nas condições do edital. Leia o edital antes de participar.
+                  O leiloeiro responde pelos valores, pelas datas e pelas condições do edital. Os lances são dados no canal do leiloeiro. A ARINI divulga o imóvel e encaminha interessados sem cobrar comissão de intermediação deste leilão.
                 </p>
                 {permiteHabilitacao.data && <HabilitacaoLeilao imovel={propId!.id} estado={candidatura.data?.estado ?? null} /> }
               </section>

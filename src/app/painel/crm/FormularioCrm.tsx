@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ETAPAS_CRM_PRIVADO, type AtendimentoPrivado, type ContatoPrivado, type ConfiguracaoSetorial } from "@/lib/crm-privado";
 
@@ -24,9 +25,9 @@ export function ProfissaoCrm({ config }: { config: ConfiguracaoSetorial }) {
     <form onSubmit={aplicar} className="mt-3 flex flex-wrap items-end gap-3"><label>Profissão
       <select className={campo} name="profissao" defaultValue={config.profissao ?? ""} required>
         <option value="" disabled>Selecione</option>
-        {Object.entries(config.modelos).sort(([,a],[,b]) => a.nome.localeCompare(b.nome,"pt-BR")).map(([id,m]) => <option key={id} value={id}>{m.nome}</option>)}
+        {Object.entries(config.modelos).filter(([id])=>id!=="corretagem"||config.profissao==="corretagem").sort(([,a],[,b]) => a.nome.localeCompare(b.nome,"pt-BR")).map(([id,m]) => <option key={id} value={id}>{m.nome}</option>)}
       </select></label><button className="rounded-lg border border-linha px-4 py-2" disabled={salvando}>Salvar modelo</button>
-      {aviso && <p role="status">{aviso}</p>}</form></details>;
+      {aviso && <p role="status">{aviso}</p>}</form><Link href="/conta/perfis" className="mt-3 inline-block underline">Usar o CRM de corretagem no perfil de corretor ou imobiliária</Link></details>;
 }
 export default function FormularioCrm({ atendimento, contato, config }: { atendimento?: AtendimentoPrivado; contato?: ContatoPrivado; config?: ConfiguracaoSetorial | null }) {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function FormularioCrm({ atendimento, contato, config }: { atendi
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [categoria,setCategoria] = useState("");
-  const modelo = config?.profissao ? config.modelos[config.profissao] : null;
+  const modelo = config?.profissao && config.profissao!=="corretagem" ? config.modelos[config.profissao] : null;
   async function salvar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (ocupado.current) return;

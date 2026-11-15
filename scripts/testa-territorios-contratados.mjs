@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import pg from "pg";
+import { verificarAnexosBalcao } from "./verifica-anexos-balcao.mjs";
 
 const url=process.env.ARINI_TESTE_CARTEIRA_DB;
 const local=url && ["localhost","127.0.0.1","[::1]"].includes(new URL(url).hostname);
@@ -23,6 +24,7 @@ test("balcão e safras em organizações contratadas isoladas", { skip:!local },
     const m=await readFile(new URL("../supabase/migrations/0097_modulos_contratados.sql",import.meta.url),"utf8");
     await sql(m.slice(0,m.indexOf("create or replace function public.fn_trocar_contexto")));
     await sql(await readFile(new URL("../supabase/migrations/0098_territorios_contratados.sql",import.meta.url),"utf8"));
+    await sql(await readFile(new URL("../supabase/migrations/0102_anexos_balcao.sql",import.meta.url),"utf8"));
     async function org(tipo){
       const id=randomUUID(),u=randomUUID();
       const modo=tipo==="empresa"?"safras":"balcao",nicho=tipo==="empresa"?"empresa_holding":"ente_publico";
@@ -55,6 +57,9 @@ test("balcão e safras em organizações contratadas isoladas", { skip:!local },
       assert.equal((await ler(x.u,true))[0].andamentos.length,4);
       await sql("update organizations set plan_valido_ate=now()-interval '1 day' where id=$1",[x.id]);
       assert.equal((await sql("select * from fn_balcao_servicos(null)")).rowCount,0);
+    });
+    await t.test("abertura e complemento com arquivo privado, isolamento entre titulares e órgãos e descarte",async()=>{
+      await verificarAnexosBalcao(pool,org);
     });
     await t.test("empresa não acessa nem vincula dados de terceiros, resultado exige duas safras",async()=>{
       const x=await org("empresa"),y=await org("empresa");

@@ -211,7 +211,7 @@ export async function POST(request: Request) {
 
   if (!equipe && dados.aceite_termos !== true) {
     return NextResponse.json(
-      { error: "Para anunciar é preciso aceitar o termo da condição de comercialização e a Regra de Remuneração." },
+      { error: modalidade === "leilao" ? "Confirme o Termo de Parceria e a sua autorização para conduzir este leilão." : "Para anunciar é preciso aceitar o termo da condição de comercialização e a Regra de Remuneração." },
       { status: 400 }
     );
   }
@@ -285,7 +285,7 @@ export async function POST(request: Request) {
   const cfg = await lerConfiguracoes();
   const validade = new Date(Date.now() + numero(cfg, "juridico_prazo_autorizacao_dias", 180) * 86_400_000);
   const versao = condicao === "parceiro"
-    ? assinatura("parceiros", "remuneracao")
+    ? (modalidade === "leilao" ? assinatura("parceiros") : assinatura("parceiros", "remuneracao"))
     : condicao === "exclusividade"
       ? assinatura("autorizacao", "exclusividade", "remuneracao")
       : assinatura("autorizacao", "remuneracao");
