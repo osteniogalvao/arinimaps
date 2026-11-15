@@ -153,5 +153,9 @@ test("fila PostgreSQL, reservas simultâneas, estornos, emitentes e reentregas",
     assert.equal((await confirmar("inv","emitida")).rows[0].ok,false);
     assert.equal((await sql("select * from nfse_assinaturas")).rowCount,1);
     assert.equal((await sql("select has_function_privilege('authenticated','nfse_assinatura_reservar_post(uuid,date,boolean,text)','execute') as ok")).rows[0].ok,false);
-  } finally {await pool.end();await servidor.query("drop database "+banco+" with (force)");await servidor.end();}
+  } finally {
+    await pool.end();
+    try { await servidor.query("drop database "+banco); }
+    finally { await servidor.end(); }
+  }
 });
