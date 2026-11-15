@@ -42,6 +42,9 @@ jobs:
       - name: Testar recorte de camadas
         run: node scripts/testa-recorte-camadas.mjs
 
+      - name: Conferir recortes urbanos e calibração CAD
+        run: node scripts/testa-recortes-cad.mjs
+
       - name: Lint
         run: npm run lint
 

@@ -45,6 +45,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/tiles/[camad
   const { camada, z: zs, x: xs, y: ys } = await ctx.params;
   const cfg = CAMADAS[camada];
   if (!cfg) return NextResponse.json({ error: "Camada desconhecida." }, { status: 404 });
+  const cache = camada === "car" ? "public, max-age=30, s-maxage=30" : CACHE;
 
   const z = Number(zs), x = Number(xs), y = Number(ys.replace(/\.(pbf|mvt)$/i, ""));
   const max = 2 ** z;
@@ -62,8 +63,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/tiles/[camad
   const chaveTile = `${camada}/${z}/${x}/${y}/${versao}`;
   const aceitaGzip = /gzip/.test(request.headers.get("accept-encoding") ?? "");
   const lembrado = memoria.get(chaveTile);
-  if (lembrado && Date.now() - lembrado.em < MEMORIA_TTL_MS) {
-    return responder(lembrado.raw.length ? (aceitaGzip ? lembrado.gz : lembrado.raw) : null, aceitaGzip);
+  if (lembrado && Date.now() - lembrado.em < (camada === "car" ? 30_000 : MEMORIA_TTL_MS)) {
+    return responder(lembrado.raw.length ? (aceitaGzip ? lembrado.gz : lembrado.raw) : null, aceitaGzip, cache);
   }
 
   const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/${cfg.fn}`;
@@ -87,16 +88,16 @@ export async function GET(request: Request, ctx: RouteContext<"/api/tiles/[camad
   const corpo = b64 ? Buffer.from(b64, "base64") : Buffer.alloc(0);
   const gz = corpo.length ? gzipSync(corpo) : Buffer.alloc(0);
   lembrar(chaveTile, corpo, gz);
-  return responder(corpo.length ? (aceitaGzip ? gz : corpo) : null, aceitaGzip);
+  return responder(corpo.length ? (aceitaGzip ? gz : corpo) : null, aceitaGzip, cache);
 }
 
-function responder(saida: Buffer | null, gzip: boolean) {
-  if (!saida) return new NextResponse(null, { status: 204, headers: { "Cache-Control": CACHE } });
+function responder(saida: Buffer | null, gzip: boolean, cache: string) {
+  if (!saida) return new NextResponse(null, { status: 204, headers: { "Cache-Control": cache } });
   return new NextResponse(new Uint8Array(saida), {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.mapbox-vector-tile",
-      "Cache-Control": CACHE,
+      "Cache-Control": cache,
       ...(gzip ? { "Content-Encoding": "gzip" } : {}),
       Vary: "Accept-Encoding",
     },

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import AmbienteCar from "./AmbienteCar";
 import type { Map as MLMap } from "maplibre-gl";
-import { ESTILO_BASE } from "@/lib/map/config";
+import { estiloSatelite } from "@/lib/map/ortofotos";
 import { RADAR_ANEL, STATUS_MAPA } from "./statusMapa";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 
@@ -10,12 +11,15 @@ type Props = {
   geometry: GeoJSON.Geometry;
   status: string;
   className?: string;
+  carAmbiental?: string;
 };
 
 /** Mapa satélite com a geometria do imóvel destacada (página do imóvel e admin). */
-export default function MiniMapa({ geometry, status, className }: Props) {
+export default function MiniMapa({ geometry, status, className, carAmbiental }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  const [mapaCar, setMapaCar] = useState<MLMap | null>(null);
+  const [ambiental, setAmbiental] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -26,15 +30,9 @@ export default function MiniMapa({ geometry, status, className }: Props) {
       const maplibregl = await carregarMaplibre();
       if (cancelado || !containerRef.current) return;
 
-      const estilo = structuredClone(ESTILO_BASE);
-      estilo.layers = estilo.layers.map((l) => ({
-        ...l,
-        layout: { visibility: l.id === "base-satelite" ? "visible" : "none" },
-      })) as typeof estilo.layers;
-
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: estilo,
+        style: estiloSatelite(),
         center: [-50.2, -19.73],
         zoom: 12,
         attributionControl: { compact: true },
@@ -44,6 +42,7 @@ export default function MiniMapa({ geometry, status, className }: Props) {
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
       map.on("load", () => {
+        if (carAmbiental) setMapaCar(map);
         const cor = STATUS_MAPA[status] ?? STATUS_MAPA.publicado;
         map.addSource("imovel", { type: "geojson", data: { type: "Feature", geometry, properties: {} } });
         if (geometry.type === "Point") {
@@ -66,21 +65,13 @@ export default function MiniMapa({ geometry, status, className }: Props) {
             id: "imovel-linha", type: "line", source: "imovel",
             paint: { "line-color": "#D9BD6F", "line-width": 3 },
           });
-          const coords: [number, number][] = [];
+          const limites = new maplibregl.LngLatBounds();
           const walk = (c: unknown): void => {
-            if (Array.isArray(c) && typeof c[0] === "number") coords.push(c as [number, number]);
+            if (Array.isArray(c) && typeof c[0] === "number" && typeof c[1] === "number") limites.extend([c[0], c[1]]);
             else if (Array.isArray(c)) c.forEach(walk);
           };
           walk((geometry as GeoJSON.Polygon).coordinates);
-          if (coords.length) {
-            const lngs = coords.map((c) => c[0]);
-            const lats = coords.map((c) => c[1]);
-            map.fitBounds(
-              [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-              // lote urbano é pequeno: sem teto o mapa abre em z21 e o satélite (até z17) fica borrado
-              { padding: 50, duration: 0, maxZoom: 18 }
-            );
-          }
+          if (!limites.isEmpty()) map.fitBounds(limites, { padding: 50, duration: 0, maxZoom: 18 });
         }
       });
     })();
@@ -90,7 +81,19 @@ export default function MiniMapa({ geometry, status, className }: Props) {
       mapa?.remove();
       mapRef.current = null;
     };
-  }, [geometry, status]);
+  }, [geometry, status, carAmbiental]);
 
-  return <div ref={containerRef} className={className ?? "h-80 w-full rounded-2xl overflow-hidden border border-linha"} />;
+  useEffect(() => {
+    if (!mapaCar || mapaCar !== mapRef.current) return;
+    for (const id of ["imovel-fill", "imovel-linha"]) {
+      if (mapaCar.getLayer(id)) mapaCar.setLayoutProperty(id, "visibility", ambiental ? "none" : "visible");
+    }
+  }, [mapaCar, ambiental]);
+
+  const mapa = <div ref={containerRef} className={className ?? "h-80 w-full rounded-2xl overflow-hidden border border-linha"} />;
+  if (!carAmbiental) return mapa;
+  return <div className="space-y-3">{mapa}
+    <button className="btn-contorno px-4 py-2 text-sm" type="button" onClick={() => setAmbiental(v => !v)} aria-expanded={ambiental}>{ambiental ? "Fechar mapa ambiental" : "Ver camadas ambientais do imóvel"}</button>
+    {ambiental && mapaCar && <AmbienteCar key={carAmbiental} mapa={mapaCar} cod={carAmbiental} />}
+  </div>;
 }

@@ -113,6 +113,7 @@ function lerAjustes(v: unknown): { ok: true; ajustes: AjusteLocal[] } | { ok: fa
     }
     ajustes.push({
       id: a.id,
+      ...(typeof a.nomeCad === "string" && a.nomeCad.trim() ? { nomeCad: a.nomeCad.trim().slice(0, 150) } : {}),
       nome: (typeof a.nome === "string" && a.nome.trim() ? a.nome.trim() : nomeParte).slice(0, 60),
       area: a.area.map((p) => [Number(p[0]), Number(p[1])] as [number, number]),
       t: {
@@ -214,6 +215,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
     if (!lidas.ok) fora.push(lidas.motivo);
     else patch.edicoes_geometria = lidas.edicoes;
   }
+  if (body.apelidos_cad !== undefined) {
+    const nomes = body.apelidos_cad;
+    if (!nomes || typeof nomes !== "object" || Array.isArray(nomes) ||
+      Object.entries(nomes).some(([origem, novo]) => !origem || typeof novo !== "string" || !novo.trim() || novo.length > 100)) {
+      fora.push("os apelidos das camadas precisam ter de 1 a 100 caracteres");
+    } else patch.apelidos_cad = nomes;
+  }
 
   if (fora.length) {
     return falha(400, "ajuste_fora_da_faixa", "O ajuste pedido está fora do que a calibração aceita.", {
@@ -231,7 +239,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
 
   const admin = supabaseAdmin();
   const { data: antes } = await admin.from("cartography_layers")
-    .select("nome, tipo, tiles_path, publico_path, publico_centro, offset_leste_m, offset_norte_m, rotacao_graus, escala, layers_ocultos, linhas_excluidas, ajustes_locais, edicoes_geometria, lotes_total, lotes_assinatura")
+    .select("nome, tipo, tiles_path, publico_path, publico_centro, offset_leste_m, offset_norte_m, rotacao_graus, escala, layers_ocultos, linhas_excluidas, ajustes_locais, edicoes_geometria, lotes_total, lotes_assinatura, diagnostico")
     .eq("id", id).single();
   if (!antes) {
     return falha(404, "camada_sumiu", "Essa camada não existe mais.", {
@@ -241,6 +249,12 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   }
 
   let publico: Awaited<ReturnType<typeof gerarPlantaPublica>> | null = null;
+  if (patch.apelidos_cad) {
+    const conhecidas = new Set(((antes.diagnostico?.layers ?? []) as { nome: string }[]).map(l => l.nome));
+    if (!Object.keys(patch.apelidos_cad).every(k => conhecidas.has(k))) {
+      return falha(400, "camada_cad_desconhecida", "Um dos nomes de origem não existe nesta planta.");
+    }
+  }
   const mudouCamadas = Array.isArray(patch.layers_ocultos) &&
     [...(patch.layers_ocultos as string[])].sort().join("|") !== [...((antes.layers_ocultos as string[] | null) ?? [])].sort().join("|");
   const excluidasAntes = ((antes.linhas_excluidas as string[] | null) ?? []);

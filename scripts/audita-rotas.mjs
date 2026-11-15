@@ -65,6 +65,7 @@ const EXCECOES_AUTH = {
 const LEITURA_PUBLICA = [/^\/api\/geo\//, /^\/api\/tiles\//];
 // GET público revisado à mão: só entrega o que é público e trava o resto dentro.
 const LEITURA_PUBLICA_CONFERIDA = {
+  "/api/consulta/car/[cod]/relatorio": "ficha pública do SICAR. O PDF completo exige sessão e o recurso relatorio_territorial",
   "/api/empreendimentos/[id]/espelho": "estoque de lotes anunciados, com limite de pedidos; o prazo pessoal exige sessão, e POST/PATCH validam o ator",
   "/api/imoveis/[id]/consulta-rural": "relatório de anúncio publicado para contas autenticadas; imóveis privados exigem equipe ou responsável",
   "/api/vitrine/abrir": "resumo de anúncio publicado, cota assinada e limite de pedidos por IP",

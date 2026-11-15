@@ -14,7 +14,7 @@ type Props = {
   className?: string;
 };
 
-type Formato = "kml" | "geojson" | "shp" | "dxf" | "memorial";
+type Formato = "kml" | "kmz" | "geojson" | "shp" | "dxf" | "memorial";
 
 const BOTAO_PADRAO =
   "flex w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-linha-forte py-3 text-sm font-bold text-texto transition hover:border-verde hover:text-verde";
@@ -83,6 +83,11 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
       const base = nomeArquivo(nomeBase);
       if (formato === "geojson") lib.baixar(lib.paraGeoJSON(camadas), `${base}.geojson`, "application/geo+json");
       else if (formato === "kml") lib.baixar(lib.paraKML(camadas, nomeBase), `${base}.kml`, "application/vnd.google-earth.kml+xml");
+      else if (formato === "kmz") {
+        const { default: JSZip } = await import("jszip");
+        const zip = new JSZip().file("doc.kml", lib.paraKML(camadas, nomeBase));
+        lib.baixar(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), `${base}.kmz`, "application/vnd.google-earth.kmz");
+      }
       else if (formato === "shp") lib.baixar(await lib.paraShapefileZip(camadas), `${base}-shapefile.zip`, "application/zip");
       else if (formato === "dxf") {
         const dxf = await lib.paraDXF(camadas);
@@ -114,6 +119,7 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
 
   const opcoes: { id: Formato; rotulo: string; ajuda: string; icone: typeof Globe2 }[] = [
     { id: "kml", rotulo: "KML", ajuda: "Google Earth e a maioria dos apps de mapa", icone: Globe2 },
+    { id: "kmz", rotulo: "KMZ", ajuda: "KML compactado para compartilhar ou importar no projeto", icone: FileArchive },
     { id: "geojson", rotulo: "GeoJSON", ajuda: "QGIS, web e sistemas próprios", icone: FileCode2 },
     { id: "shp", rotulo: "Shapefile (zip)", ajuda: "ArcGIS, QGIS e órgãos públicos", icone: FileArchive },
     { id: "dxf", rotulo: "DXF (UTM SIRGAS 2000)", ajuda: "AutoCAD e softwares de topografia, em metros", icone: PencilRuler },

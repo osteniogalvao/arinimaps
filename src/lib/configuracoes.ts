@@ -76,13 +76,11 @@ export const GRUPOS: Grupo[] = [
   {
     id: "comercial",
     titulo: "Regras comerciais",
-    descricao: "Comissão, mensalidade do anúncio e prazo de inadimplência.",
+    descricao: "Regras de comissão e prazo de inadimplência.",
     icone: "💰",
     campos: [
       { chave: "comissao_percentual_padrao", rotulo: "Comissão padrão", tipo: "percentual", padrao: 1.9, min: 0, max: 100, sufixo: "%",
-        ajuda: "Sugerida ao registrar uma venda; pode ser ajustada caso a caso.", somenteDiretoria: true },
-      { chave: "mensalidade_valor_padrao", rotulo: "Mensalidade do anúncio", tipo: "dinheiro", padrao: 0, min: 0, sufixo: "R$",
-        ajuda: "Cobrada por imóvel publicado. Zero = anúncio gratuito.", somenteDiretoria: true },
+        ajuda: "Sugestão para contratos anteriores. As exclusividades e captações da Rede sob os termos de 15/11/2026 têm comissão contratual de 1,9%.", somenteDiretoria: true },
       { chave: "suspensao_dias", rotulo: "Tolerância de atraso", tipo: "numero", padrao: 15, min: 1, max: 180, sufixo: "dias",
         ajuda: "Depois disso, “Processar inadimplência” marca a fatura como vencida." },
       { chave: "regra_comissao_texto", rotulo: "Regra contratual da comissão", tipo: "textarea",
@@ -284,5 +282,7 @@ export function comPadroes(linhas: { chave: string; valor: unknown }[]): Record<
     const v = mapa[campo.chave];
     saida[campo.chave] = v === undefined || v === null || v === "" ? campo.padrao : v;
   }
+  // O valor anterior ainda integra documentos das versões antigas.
+  saida.mensalidade_valor_padrao = mapa.mensalidade_valor_padrao ?? 0;
   return saida;
 }

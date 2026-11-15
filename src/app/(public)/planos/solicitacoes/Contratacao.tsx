@@ -1,4 +1,5 @@
 "use client";
+import AvisoPlanoAnual from "../AvisoPlanoAnual";
 import {useState} from "react";
 import Pix from "./Pix";
 import {useRouter} from "next/navigation";
@@ -24,8 +25,9 @@ export default function Contratacao({s,ativo}:{s:OfertaAssinatura;ativo:boolean}
  return <section className="rounded-lg border p-4 space-y-3" aria-label="Contratação">
    <h3 className="font-semibold">{s.cancelado?"Renovação cancelada":s.aceite?"Assinatura e faturas":"Proposta liberada pela Central"}</h3>
    <p className="whitespace-pre-line">{s.escopo_confirmado}</p>
-   <p>{anual?moeda(s.primeira)+" por ano":moeda(s.primeira+s.adicionais)+" no primeiro mês e "+moeda(s.recorrente+s.adicionais)+" nos meses seguintes"}{anual&&s.adicionais>0&&" + "+moeda(s.adicionais)+" de adicionais em fatura mensal separada"}</p>
+   <p>{anual?moeda(s.primeira)+" por ano":moeda(s.primeira+s.adicionais)+" no primeiro mês e "+moeda(s.recorrente+s.adicionais)+" por mês a partir do segundo"}{anual&&s.adicionais>0&&" + "+moeda(s.adicionais)+" de adicionais em fatura mensal separada"}</p>
    {!s.aceite&&!s.cancelado&&<><p>O Asaas emite a fatura a cada ciclo. Escolha Pix, boleto ou cartão na página de pagamento. A confirmação libera o período contratado.</p>
+     {anual && <AvisoPlanoAnual />}
      <label className="flex gap-2"><input type="checkbox" checked={aceito} onChange={e=>setAceito(e.target.checked)}/>Aceito o escopo, os valores e a renovação {s.ciclo} apresentados.</label>
      <button type="button" disabled={!aceito||ocupado||!ativo} className="btn-primario px-4 py-2" onClick={()=>registrar("aceitar")}>{ativo?"Contratar e gerar fatura":"Emissão temporariamente indisponível"}</button></>}
    {s.assinatura_reajustes.filter(r=>r.avisado_em).map(r=><div className="rounded border p-3" key={r.id}>

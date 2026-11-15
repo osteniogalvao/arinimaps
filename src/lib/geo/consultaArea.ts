@@ -164,16 +164,19 @@ function respostaConsulta(chave: string, resultados: ResultadoFonte[], doCache: 
  * O que a página de uma consulta precisa mostrar: fontes (com o resultado em
  * cache, se houver), quem está olhando e o que o plano dele permite.
  */
-export async function carregarConsultaArea(chave: string, opcoes: { excluir?: string[] } = {}) {
+export async function carregarConsultaArea(chave: string, opcoes: { excluir?: string[]; relatorio?: boolean } = {}) {
   const admin = supabaseAdmin();
-  const [{ data: fontes }, { data: consultas }, user, { userId, acesso }] = await Promise.all([
+  const [{ data: fontes }, user, { userId, acesso }] = await Promise.all([
     admin.from("fontes_externas").select("id, nome, orgao, prioridade, ativa, tipo, classificacao, situacao, ficha").order("prioridade"),
-    admin.from("consultas_area").select("fonte_id, quantidade, raio_m, erro, consultado_em, resultado").eq("chave", chave),
     currentUser(),
     acessoAtual(),
   ]);
 
   const podeConsultar = acesso.recursos.has("consulta_area");
+  const podeLerResultados = opcoes.relatorio ? acesso.recursos.has("relatorio_territorial") : podeConsultar;
+  const consultas = user && podeLerResultados
+    ? (await admin.from("consultas_area").select("fonte_id, quantidade, raio_m, erro, consultado_em, resultado").eq("chave", chave)).data
+    : [];
   const limiteMes = acesso.cotas.consultas_area_mes;
   const cotaRestante = podeConsultar && userId && limiteMes != null && !acesso.equipe
     ? Math.max(0, Number(limiteMes) - (await consultasAreaNoMes(userId)))

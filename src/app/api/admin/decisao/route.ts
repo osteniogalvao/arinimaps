@@ -106,12 +106,6 @@ export async function POST(request: Request) {
     }
 
     if (acao === "publicado") {
-      // mensalidade nasce junto com a publicação (idempotente)
-      const { data: valorPadrao } = await admin.from("settings").select("valor").eq("chave", "mensalidade_valor_padrao").single();
-      await admin.from("subscriptions").upsert(
-        { property_id: id, valor_mensal: Number(valorPadrao?.valor ?? 0) },
-        { onConflict: "property_id", ignoreDuplicates: true }
-      );
       // apresentação 3D fica disponível na hora; vídeo/OG vão para a fila do worker.
       // Idempotente: republicar não duplica apresentação nem job (a migration 0063
       // cria o unique (property_id, tipo); a checagem abaixo vale antes dela também).

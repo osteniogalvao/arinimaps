@@ -1,5 +1,7 @@
 import "server-only";
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * Malha do CAR (SICAR) — importação por município.
@@ -14,6 +16,46 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const CAR_WFS = "https://geoserver.car.gov.br/geoserver/sicar/ows";
 const UA = "AriniImoveisBrasil/1.0 (contato@arinibrasil.com.br)";
 const PAGINA = 2000;
+
+// Um CAR clicável no arquivo nacional de tiles pode ainda não estar no banco regional.
+// Página, matrícula e exportações reutilizam o mesmo perímetro oficial.
+const buscando = new Map<string, Promise<void>>();
+
+async function importarUmCar(codigo: string) {
+  const url = new URL(CAR_WFS);
+  url.search = new URLSearchParams({
+    service: "WFS", version: "2.0.0", request: "GetFeature",
+    typeNames: "sicar:sicar_imoveis_" + codigo.slice(0, 2).toLowerCase(),
+    count: "1", outputFormat: "application/json", CQL_FILTER: `cod_imovel='${codigo}'`,
+  }).toString();
+  const resposta = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
+  if (!resposta.ok) throw new Error("SICAR indisponível.");
+  const fc = await resposta.json();
+  if (!Array.isArray(fc.features)) throw new Error("Resposta inválida do SICAR.");
+  if (!fc.features.length) return;
+  if (fc.features[0]?.properties?.cod_imovel !== codigo || !fc.features[0]?.geometry) throw new Error("Perímetro inválido no SICAR.");
+  const { error } = await supabaseAdmin().rpc("fn_car_upsert", { p_fc: fc });
+  if (error) throw new Error("Falha ao registrar perímetro do SICAR.");
+}
+
+export const consultarCar = cache(async (cod: string) => {
+  const codigo = cod.trim().toUpperCase();
+  const admin = supabaseAdmin();
+  const ler = () => admin.rpc("fn_car_imovel", { p_cod: codigo });
+  const local = await ler();
+  if (local.error || local.data || !/^[A-Z]{2}-\d{7}-[0-9A-F]{32}$/.test(codigo)) return local;
+  let busca = buscando.get(codigo);
+  if (!busca) {
+    busca = importarUmCar(codigo).finally(() => buscando.delete(codigo));
+    buscando.set(codigo, busca);
+  }
+  try {
+    await busca;
+    return await ler();
+  } catch {
+    return { data: null, error: { message: "A consulta ao SICAR está indisponível. Tente novamente em instantes." } };
+  }
+});
 
 export type ResultadoCar = { municipio: string; cod_ibge: number; gravados: number; total: number };
 

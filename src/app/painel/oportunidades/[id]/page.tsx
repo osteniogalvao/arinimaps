@@ -94,7 +94,7 @@ export default async function OportunidadeParceiro({ params }: PageProps<"/paine
         propostas={propostas ?? []}
         contrato={null}
         venda={null}
-        percentualPadrao={1}
+        percentualPadrao={1.9}
       />
 
       <SimuladorProposta

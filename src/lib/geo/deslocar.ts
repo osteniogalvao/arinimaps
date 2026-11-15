@@ -249,10 +249,11 @@ export function ajustarPorPontos(
   const Q = pares.map((p) => local(p.satelite));
 
   if (pares.length === 1) {
+    const atual = local(pares[0].planta);
     return {
-      escala: 1, rotacaoGraus: 0,
-      offsetLesteM: Q[0][0] - P[0][0],
-      offsetNorteM: Q[0][1] - P[0][1],
+      escala: base.escala, rotacaoGraus: base.rotacaoGraus,
+      offsetLesteM: base.offsetLesteM + Q[0][0] - atual[0],
+      offsetNorteM: base.offsetNorteM + Q[0][1] - atual[1],
       residuoM: 0,
     };
   }
@@ -327,6 +328,7 @@ export const DESLOCAMENTO_DATUM: Record<string, { leste: number; norte: number; 
 export type AjusteLocal = {
   id: string;
   nome: string;
+  nomeCad?: string;
   /** anel da área, em graus, no desenho cru */
   area: [number, number][];
   t: Transform;
@@ -389,6 +391,11 @@ export function pontoNaArea(p: [number, number], area: [number, number][]): bool
   let dentro = false;
   for (let i = 0, j = area.length - 1; i < area.length; j = i++) {
     const [xi, yi] = area[i], [xj, yj] = area[j];
+    // Uma linha do próprio perímetro tem o centro na borda da quadra.
+    const dx = xj - xi, dy = yj - yi;
+    if (Math.abs(dx * (p[1] - yi) - dy * (p[0] - xi)) <= 1e-11 * (Math.abs(dx) + Math.abs(dy)) &&
+        p[0] >= Math.min(xi, xj) - 1e-11 && p[0] <= Math.max(xi, xj) + 1e-11 &&
+        p[1] >= Math.min(yi, yj) - 1e-11 && p[1] <= Math.max(yi, yj) + 1e-11) return true;
     if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) dentro = !dentro;
   }
   return dentro;

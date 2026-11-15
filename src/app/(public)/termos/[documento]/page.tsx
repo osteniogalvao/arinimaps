@@ -5,7 +5,7 @@ import { ArrowRight, ChevronRight, ScrollText } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import { CabecalhoPagina, Conteudo, Etiqueta } from "@/components/ui/Pagina";
 import { lerConfiguracoes } from "@/lib/settings";
-import { documento, documentos } from "@/lib/juridico";
+import { documento, documentos, paginasOficiais, versaoAnterior, VERSOES } from "@/lib/juridico";
 import BotaoImprimir from "./BotaoImprimir";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +19,13 @@ export async function generateMetadata({ params }: PageProps<"/termos/[documento
 export default async function DocumentoJuridico({ params, searchParams }: PageProps<"/termos/[documento]">) {
   const { documento: id } = await params;
   const cfg = await lerConfiguracoes();
-  const { meses } = await searchParams;
-  const doc = documento(cfg, id, meses === "6" ? 6 : meses === "12" ? 12 : undefined);
+  const { meses, versao } = await searchParams;
+  if (Array.isArray(versao)) notFound();
+  const doc = documento(cfg, id, meses === "6" ? 6 : meses === "12" ? 12 : undefined, versao);
   if (!doc) notFound();
+  const arquivo = doc.pdf ? paginasOficiais(doc.id) : null;
+  const anterior = versaoAnterior(doc.id);
+  const historico = doc.versao !== VERSOES[doc.id];
   const outros = documentos(cfg).filter((d) => d.id !== doc.id);
 
   return (
@@ -43,8 +47,11 @@ export default async function DocumentoJuridico({ params, searchParams }: PagePr
           </nav>
           <div className="flex flex-wrap items-center gap-2.5">
             <Etiqueta tom="neutro">Versão {doc.versao}</Etiqueta>
-            <Etiqueta tom="neutro">Vigente desde {doc.vigencia}</Etiqueta>
+            <Etiqueta tom="neutro">{historico ? "Versão histórica" : "Vigente desde " + doc.vigencia}</Etiqueta>
             <BotaoImprimir />
+            {doc.pdf && <a className="btn-contorno px-4 py-2 text-sm" href={doc.pdf} download>Baixar PDF original</a>}
+            {historico ? <Link href={`/termos/${doc.id}`} className="underline">Consultar versão vigente</Link>
+              : anterior && <Link href={`/termos/${doc.id}?versao=${anterior}`} className="underline">Consultar versão {anterior}</Link>}
           </div>
         </CabecalhoPagina>
       </div>
@@ -57,8 +64,18 @@ export default async function DocumentoJuridico({ params, searchParams }: PagePr
             <p className="text-xs text-gray-600">Versão {doc.versao} · vigente desde {doc.vigencia} · {doc.paraQuem}</p>
           </header>
 
+          {historico && <p className="text-sm">Modelo histórico. Os campos configuráveis usam as informações atuais da plataforma. Quando disponível, a cópia vinculada ao imóvel fica em <Link className="underline" href="/conta/termos">Termos e contratos aceitos</Link>.</p>}
           <article className="cartao space-y-10 p-6 sm:p-10 print:space-y-6 print:p-6">
-            {doc.secoes.map((s, i) => (
+            {arquivo ? arquivo.map((blocos, i) => (
+              <section key={i} aria-label={`Página ${i+1}`} className="space-y-3 print:break-before-page">
+                <h2 className="text-sm font-semibold text-verde">Página {i+1}</h2>
+                {blocos.map((b,j) => typeof b === "string" ? <p key={j} className="leading-relaxed">{b}</p> : (
+                  <div key={j} className="overflow-auto"><table className="w-full border-collapse text-left text-sm"><tbody>
+                    {b.map((linha,k) => <tr key={k}>{linha.map((celula,l) => <td key={l} className="border border-linha p-2 align-top">{celula}</td>)}</tr>)}
+                  </tbody></table></div>
+                ))}
+              </section>
+            )) : doc.secoes.map((s, i) => (
               <section key={s.titulo} className="space-y-4">
                 <h2 className="lp-display text-xl text-texto md:text-2xl print:text-lg print:text-black">
                   <span className="text-verde print:text-black">{i + 1}.</span> {s.titulo}

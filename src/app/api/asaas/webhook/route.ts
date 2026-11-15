@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { timingSafeEqual } from "node:crypto";
-import type { AsaasNota } from "@/lib/asaas";
+import { AsaasErro, asaasBuscarCobranca, asaasContaDaImobiliaria, type AsaasNota } from "@/lib/asaas";
 import { camposDaNota } from "@/lib/modulos/financeiro";
 
 /** Comparação em tempo constante: o tempo de resposta não revela quantos caracteres acertaram. */
@@ -45,6 +45,8 @@ type Pagamento = {
   externalReference?: string | null;
   customer?: string;
   value?: number;
+  originalValue?: number | null;
+  creditDate?: string | null;
   paymentDate?: string | null;
   clientPaymentDate?: string | null;
   confirmedDate?: string | null;
@@ -171,7 +173,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as { id?: unknown; event?: unknown; payment?: Pagamento; invoice?: AsaasNota } | null;
+  const body = (await request.json().catch(() => null)) as { id?: unknown; event?: unknown; dateCreated?: string; payment?: Pagamento; invoice?: AsaasNota } | null;
 
   // nota fiscal (central fiscal, migration 0066): só atualiza a situação da nota nossa
   if (typeof body?.event === "string" && body.event.startsWith("INVOICE_") && body.invoice && typeof body.invoice.id === "string") {
@@ -228,10 +230,43 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: "Falha temporária ao atualizar a carteira." }, { status: 503 });
     return NextResponse.json({ ok: true });
   }
-  if (!(EVENTOS as readonly string[]).includes(evento)) return NextResponse.json({ ok: true, ignorado: "evento não tratado" });
   if (!UUID.test(ref)) return NextResponse.json({ ok: true, ignorado: "sem referência deste sistema" });
-
   const admin = supabaseAdmin();
+  if (["PAYMENT_RECEIVED","PAYMENT_REFUNDED","PAYMENT_RECEIVED_IN_CASH_UNDONE","PAYMENT_CHARGEBACK_REQUESTED","PAYMENT_PARTIALLY_REFUNDED","PAYMENT_CONFIRMED","PAYMENT_DELETED"].includes(evento)) {
+    const { data: contratual, error } = await admin.from("commissions").select("id").eq("id",ref).not("autorizacao_id","is",null).maybeSingle();
+    if (error) return NextResponse.json({error:"Falha ao identificar o contrato."},{status:503});
+    if (contratual) {
+      if (["PAYMENT_CONFIRMED","PAYMENT_DELETED"].includes(evento)) return NextResponse.json({ ok:true });
+      if (!eventoId || !body?.dateCreated) return NextResponse.json({ ok:true, ignorado:"evento sem identificador ou data" });
+      const hora = body.dateCreated.replace(" ","T");
+      const recebidoEm = new Date(/[Zz]|[+-]\d\d:\d\d$/.test(hora) ? hora : hora+"-03:00");
+      if (!Number.isFinite(recebidoEm.getTime())) return NextResponse.json({ok:true,ignorado:"data inválida"});
+      const credito = evento === "PAYMENT_RECEIVED";
+      // Encargos acima do principal não aumentam o repasse. Um desconto também
+      // não pode transformar o valor integral do título em dinheiro recebido.
+      const valor = credito && typeof pagamento.value === "number"
+        ? Math.min(pagamento.value, pagamento.originalValue ?? pagamento.value) : 0;
+      const motivos: string[] = [];
+      try {
+        const [imobiliaria,cobranca] = await Promise.all([asaasContaDaImobiliaria(),asaasBuscarCobranca(pagamento.id)]);
+        if (!imobiliaria || cobranca?.externalReference !== ref) motivos.push("conferir titularidade da conta ARINI Imóveis e vínculo da cobrança");
+        if (credito && cobranca?.status !== "RECEIVED" && cobranca?.status !== "RECEIVED_IN_CASH") motivos.push("conferir situação atual da cobrança");
+      } catch (erro) {
+        if (!(erro instanceof AsaasErro) || ![401,403].includes(erro.status)) return NextResponse.json({error:"Asaas indisponível para conferência."},{status:503});
+        motivos.push("conferir recebimento no extrato da ARINI Imóveis");
+      }
+      if (evento === "PAYMENT_PARTIALLY_REFUNDED" || evento === "PAYMENT_CHARGEBACK_REQUESTED") motivos.push("conferir o saldo após estorno ou contestação");
+      if (credito && (!Number.isFinite(valor) || Number(valor)<=0)) motivos.push("valor recebido ausente");
+      const dataEvento = recebidoEm.toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"});
+      const data = credito && pagamento.creditDate && DATA.test(pagamento.creditDate) ? pagamento.creditDate : dataEvento;
+      const {error:erroBaixa} = await admin.rpc("fn_gateway_comissao",{p_id:ref,p_evento_id:eventoId,p_evento:evento,p_gateway:pagamento.id,
+        p_valor:Number.isFinite(valor) && Number(valor)>0 ? valor : 0,p_data:data,p_hora:recebidoEm.toISOString(),p_conferir:motivos.length>0,
+        p_documento:[evento,pagamento.id,...motivos].join(" · ").slice(0,300)});
+      if (erroBaixa) return NextResponse.json({error:"Falha ao conciliar a comissão."},{status:503});
+      return NextResponse.json({ok:true});
+    }
+  }
+  if (!(EVENTOS as readonly string[]).includes(evento)) return NextResponse.json({ ok: true, ignorado: "evento não tratado" });
 
   // idempotência pelo id do evento
   let registrado = false;

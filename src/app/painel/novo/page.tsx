@@ -1,4 +1,6 @@
 "use client";
+import { assinatura, clausulasDestacadas, linkTermo, prazoExclusividade } from "@/lib/juridico/versoes";
+import { camposQuadro, type CampoQuadro } from "@/lib/juridico/quadro-exclusividade";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -60,6 +62,11 @@ export default function NovoImovel() {
   const [papel, setPapel] = useState<string | null>(null);
   // revisão do Carlos (29/10): venda pela plataforma só com exclusividade Arini
   const [prazoMeses, setPrazoMeses] = useState<6 | 12 | null>(null);
+  const [quadro, setQuadro] = useState<Partial<Record<CampoQuadro,string>>>({});
+  const [destaques, setDestaques] = useState<string[]>([]);
+  const [antecipar, setAntecipar] = useState(false);
+  const [semInteressados, setSemInteressados] = useState(false);
+  const [anteriores, setAnteriores] = useState("");
   const [condicao, setCondicao] = useState<Condicao>("exclusividade");
   const [docs, setDocs] = useState<Docs>({ matricula: [], edital: [], ccir_itr: [], autorizacao: [], outro: [] });
   const [videos, setVideos] = useState<File[]>([]);
@@ -253,7 +260,7 @@ export default function NovoImovel() {
       return;
     }
     if (!ehParceiro && !prazoMeses) {
-      setErro("Escolha o prazo de exclusividade de 6 ou 12 meses.");
+      setErro("Escolha o prazo de exclusividade de 180 dias ou 12 meses.");
       return;
     }
     if (!ehEquipe && emLeilao && !docs.edital.length && !docs.autorizacao.length) {
@@ -305,6 +312,12 @@ export default function NovoImovel() {
       },
       condicao,
       prazo_exclusividade_meses: prazoMeses,
+      quadro_exclusividade: quadro, clausulas_exclusividade: destaques,
+      publicacao_antecipada: antecipar,
+      sem_interessados_anteriores: semInteressados, interessados_anteriores: anteriores,
+      versao_aceita: ehParceiro ? (papel === "corretor" || papel === "imobiliaria"
+        ? assinatura("parceiros", "remuneracao") : assinatura("termos-de-uso", "remuneracao")) :
+        assinatura("exclusividade","remuneracao"),
       termo_exclusividade: prazoMeses ? assinaturas[prazoMeses] : undefined,
       aceite_termos: aceite,
       car_codigo: geometria.fonte === "car" ? car?.cod ?? null : null,
@@ -474,7 +487,7 @@ export default function NovoImovel() {
           </div>
           <div>
             <label className={label}>Município</label>
-            <select className={input + realce("municipality_id")} value={form.municipality_id}
+            <select required={!ehParceiro && !ehEquipe} className={input + realce("municipality_id")} value={form.municipality_id}
               onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}>
               <option value="">Detectar pelo mapa</option>
               {municipios.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
@@ -498,7 +511,7 @@ export default function NovoImovel() {
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <label className={label}>{loteamento ? "Preço padrão por lote (R$)" : "Valor pedido (R$)"}</label>
-            <input className={input + realce("valor")} placeholder={loteamento ? "Ex.: 85.000" : "Ex.: 3.800.000"} inputMode="numeric"
+            <input required={!ehParceiro && !ehEquipe} className={input + realce("valor")} placeholder={loteamento ? "Ex.: 85.000" : "Ex.: 3.800.000"} inputMode="numeric"
               value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} />
             {loteamento && <p className={ajuda}>Vale para todos os lotes; troque na tabela abaixo o que tiver preço diferente.</p>}
           </div>
@@ -643,13 +656,13 @@ export default function NovoImovel() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className={label} htmlFor="matricula_numero">Número da matrícula</label>
-              <input id="matricula_numero" className={input + realce("matricula_numero")} maxLength={120} placeholder="Ex.: 45413"
+              <input required={!ehParceiro && !ehEquipe} id="matricula_numero" className={input + realce("matricula_numero")} maxLength={120} placeholder="Ex.: 45413"
                 value={form.matricula_numero} onChange={(e) => setForm({ ...form, matricula_numero: e.target.value })} />
               <p className={ajuda}>Está no topo do documento da matrícula. Se houver mais de uma, separe por vírgula.</p>
             </div>
             <div>
               <label className={label} htmlFor="matricula_cartorio">Cartório de registro</label>
-              <input id="matricula_cartorio" className={input + realce("matricula_cartorio")} maxLength={200} placeholder="Ex.: Cartório de Registro de Imóveis de Iturama"
+              <input required={!ehParceiro && !ehEquipe} id="matricula_cartorio" className={input + realce("matricula_cartorio")} maxLength={200} placeholder="Ex.: Cartório de Registro de Imóveis de Iturama"
                 value={form.matricula_cartorio} onChange={(e) => setForm({ ...form, matricula_cartorio: e.target.value })} />
               <p className={ajuda}>Não aparece no site: só a Arini usa, para conferir e pedir o espelho.</p>
             </div>
@@ -658,7 +671,7 @@ export default function NovoImovel() {
         {([
           ...(emLeilao ? [["edital", "Edital ou ordem judicial", "Envie este documento ou o contrato com o comitente para autorizar o anúncio.", false] as const, ["autorizacao", "Contrato com o comitente", "Autorização para realizar o leilão extrajudicial deste imóvel.", false] as const] : []),
           ["matricula", "Matrícula atualizada do imóvel", "Ou escritura, contrato de compra e venda registrado, formal de partilha.", !ehEquipe && !emLeilao],
-          ...(ehParceiro && !emLeilao ? [["autorizacao", "Autorização de venda assinada pelo proprietário", "Com prazo, preço e condições compatíveis com o anúncio.", true] as const] : []),
+          ...(ehParceiro && !emLeilao ? [["autorizacao", papel === "corretor" || papel === "imobiliaria" ? "Termo de Exclusividade assinado pelo proprietário" : "Autorização de venda assinada pelo proprietário", "Com prazo, preço e condições compatíveis com o anúncio.", true] as const] : []),
           ...(form.tipo === "rural" ? [["ccir_itr", "CCIR e/ou ITR", "Recomendado para imóvel rural — agiliza a análise.", false] as const] : []),
           ["outro", "Outros documentos", "Procuração, certidões, documento do cônjuge…", false],
         ] as const).map(([tipo, titulo, ajudaDoc, obrigatorio]) => (
@@ -676,9 +689,10 @@ export default function NovoImovel() {
       <Etapa id="condicao" numero={numero("condicao")} icone={Handshake} titulo="Condição de comercialização *">
         {ehParceiro ? (
           <p className="text-base leading-relaxed text-texto-2">
-            {ehLeiloeiro ? "Imóvel de leilão: a venda segue o edital, e a Arini encaminha os" : "Imóvel de parceiro: a autorização do proprietário é com você, e a Arini intermedia os"}{" "}
-            interessados que chegam pela plataforma, conforme o{" "}
-            <Link href="/termos/parceiros" target="_blank" className="text-verde underline">Termo de Parceria</Link>.
+            {ehLeiloeiro ? "O leilão segue o edital. A ARINI divulga o imóvel e encaminha os interessados."
+              : papel === "corretor" || papel === "imobiliaria"
+                ? "Ao captar este imóvel pela Rede, envie o Termo de Exclusividade assinado pelo proprietário. A ARINI atende os interessados e conduz a negociação."
+                : "Envie a autorização do titular que fundamenta este anúncio."}
           </p>
         ) : (
           <fieldset>
@@ -689,8 +703,8 @@ export default function NovoImovel() {
                   (prazoMeses === meses ? "border-verde bg-verde/10" : "border-linha")}>
                   <input required type="radio" name="prazo-exclusividade" checked={prazoMeses === meses}
                     disabled={!ehEquipe && !assinaturas[meses]}
-                    onChange={() => { setPrazoMeses(meses); setAceite(false); }} />
-                  <strong>{meses} meses</strong>
+                    onChange={() => { setPrazoMeses(meses); setAceite(false); setDestaques([]); }} />
+                  <strong>{prazoExclusividade(meses)}</strong>
                 </label>
               ))}
             </div>
@@ -704,6 +718,25 @@ export default function NovoImovel() {
           </fieldset>
         )}
 
+        {!ehParceiro && !ehEquipe && <fieldset className="space-y-4 rounded-xl border border-linha p-4">
+          <legend className="px-2 font-semibold">Quadro-resumo e Anexo I</legend>
+          <p className="text-sm">O imóvel, a matrícula, o município e o preço mínimo informados neste cadastro integram o termo. Comissão de 1,9% sobre o valor total da venda, paga pelo proprietário.</p>
+          {camposQuadro.map(([campo, titulo]) => <label key={campo} className="block text-sm">{titulo}
+            <textarea className={input} required maxLength={1500} minLength={2} value={quadro[campo] ?? ""}
+              onChange={e=>{setQuadro({...quadro,[campo]:e.target.value}); setAceite(false);}}/>
+          </label>)}
+          <label className="flex gap-2 text-sm"><input type="checkbox" checked={semInteressados}
+            onChange={e=>{setSemInteressados(e.target.checked);setAceite(false);}}/>Declaro que não existem interessados ou negociações anteriores.</label>
+          {!semInteressados && <label className="block text-sm">Interessados preexistentes (nome, CPF/CNPJ, data e estágio de cada negociação)
+            <textarea required minLength={5} maxLength={6000} className={input} value={anteriores}
+              onChange={e=>{setAnteriores(e.target.value);setAceite(false);}}/></label>}
+          <a className="text-verde underline" href={linkTermo("exclusividade")} target="_blank" rel="noreferrer">Ler o Termo de Exclusividade integral</a>
+          {clausulasDestacadas.map(([clausula, texto]) => <label className="flex items-start gap-2 text-sm" key={clausula}>
+            <input type="checkbox" required checked={destaques.includes(clausula)} onChange={e=>{setAceite(false);setDestaques(lista=>e.target.checked ? [...lista,clausula] : lista.filter(c=>c!==clausula));}}/>
+            <span>Aceito a cláusula {clausula}. {texto}</span></label>)}
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={antecipar} onChange={e=>{setAntecipar(e.target.checked);setAceite(false);}}/>
+            Solicito a publicação antes do término do prazo de desistência de sete dias. Os interessados que registrarem interesse desde a publicação ficam sujeitos à cláusula 7.</label>
+        </fieldset>}
         {pedeSelfie && (
           <div className="rounded-2xl border border-ouro/40 bg-ouro/5 p-5">
             <label className={label}>
@@ -730,19 +763,14 @@ export default function NovoImovel() {
               disabled={!ehParceiro && (!prazoMeses || !assinaturas[prazoMeses])}
               onChange={(e) => setAceite(e.target.checked)} className="mt-1 size-4 shrink-0 accent-[var(--verde)]" />
             <span>
-              {ehParceiro ? (
-                <>{ehLeiloeiro
-                  ? "Declaro estar habilitado a conduzir este leilão conforme a autorização enviada e aceito o"
-                  : "Declaro ter autorização escrita do proprietário para anunciar este imóvel, no preço e nas condições acima, e aceito o"}{" "}
-                <Link href="/termos/parceiros" target="_blank" className="text-verde underline">Termo de Parceria</Link></>
-              ) : (
-                <>Declaro ser proprietário (ou ter poderes para vender) e aceito o{" "}
-                <Link href="/termos/autorizacao" target="_blank" className="text-verde underline">Termo de Autorização de Venda</Link>
-                {condicao === "exclusividade" && <>, o{" "}
-                  <Link href={prazoMeses ? "/termos/exclusividade?meses=" + prazoMeses : "/termos/exclusividade"} target="_blank" className="text-verde underline">Termo de Exclusividade{prazoMeses && ` por ${prazoMeses} meses`}</Link>
-                </>}</>
-              )}
-              {!ehLeiloeiro && <> e a <Link href="/termos/remuneracao" target="_blank" className="text-verde underline">Regra de Remuneração</Link></>}.
+              {ehParceiro ? <>
+                Declaro ter autorização do titular para este anúncio e aceito {papel === "corretor" || papel === "imobiliaria" ?
+                  <>o <Link href={linkTermo("parceiros")} target="_blank" className="text-verde underline">Termo de Parceria da Rede de Corretores</Link></> :
+                  <>os <Link href={linkTermo("termos-de-uso")} target="_blank" className="text-verde underline">Termos de Uso</Link></>}.
+              </> : <>Declaro ser titular ou representante com poderes. Confirmo o quadro-resumo e o Anexo I e assino o{" "}
+                <Link href={linkTermo("exclusividade")} target="_blank" className="text-verde underline">Termo de Exclusividade{prazoMeses && ` por ${prazoExclusividade(prazoMeses)}`}</Link>.
+              </>}
+              {" "}Aceito a <Link href={linkTermo("remuneracao")} target="_blank" className="text-verde underline">Regra de Remuneração</Link>.
             </span>
           </label>
         )}

@@ -6,6 +6,7 @@ import SecaoFontesOficiais from "@/components/map/SecaoFontesOficiais";
 import { BotaoLink, CabecalhoPagina, Conteudo, PilulaPonto, Secao } from "@/components/ui/Pagina";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { carregarConsultaArea } from "@/lib/geo/consultaArea";
+import { consultarCar } from "@/lib/geo/car";
 import { formatArea } from "@/lib/format";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
 import IndicadoresMunicipio from "@/components/rural/IndicadoresMunicipio";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 /** Prévia do link (WhatsApp): área e município do CAR. Só lê as propriedades, sem a divisa. */
 export async function generateMetadata({ params }: PageProps<"/consulta/car/[cod]">): Promise<Metadata> {
   const cod = decodeURIComponent((await params).cod);
-  const { data } = await supabaseAdmin().rpc("fn_car_imovel", { p_cod: cod });
+  const { data } = await consultarCar(cod);
   const p = (data as Car | null)?.properties;
   if (!p) return { title: "Consulta de área rural" };
   const area = p.area_ha ? formatArea(Number(p.area_ha) * 10_000, "rural") : "Área rural";
@@ -52,14 +53,15 @@ type Car = {
 export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[cod]">) {
   const cod = decodeURIComponent((await params).cod);
   const admin = supabaseAdmin();
-  const [{ data: carRaw }, { data: anuncio }, consulta] = await Promise.all([
-    admin.rpc("fn_car_imovel", { p_cod: cod }),
+  const [{ data: carRaw, error }, { data: anuncio }, consulta] = await Promise.all([
+    consultarCar(cod),
     admin.from("properties").select("codigo, titulo, status").eq("car_codigo", cod)
       .in("status", ["publicado", "em_negociacao"]).limit(1).maybeSingle(),
     // o próprio CAR fica fora da lista: ele já é o assunto da página
     carregarConsultaArea(`car:${cod}`, { excluir: ["car"] }),
   ]);
   const car = carRaw as Car | null;
+  if (error) throw new Error("O cadastro rural está indisponível. Tente novamente em instantes.");
   if (!car?.geometry) notFound();
   const p = car.properties;
 
@@ -99,7 +101,8 @@ export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[
         <Secao eyebrow="02 · Cadastro no mapa" titulo="Dados do cadastro">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           <MiniMapa geometry={car.geometry} status="publicado"
-            className="h-80 lg:h-full lg:min-h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
+            carAmbiental={consulta.acesso.recursos.has("camadas_oficiais") ? p.cod : undefined}
+            className="h-80 lg:h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{area}</p>
             <dl className="divide-y divide-linha border-y border-linha">
@@ -122,6 +125,17 @@ export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[
                 }} />
             </div>
             <div className="border-t border-linha pt-4"><MatriculaSigef cod={p.cod} /></div>
+            <div className="flex flex-wrap gap-2 border-t border-linha pt-4">
+              {(["simples", ...(consulta.user && consulta.acesso.recursos.has("relatorio_territorial") ? ["completo"] : [])]).map(modelo => {
+                const href = `/api/consulta/car/${encodeURIComponent(p.cod)}/relatorio?modelo=${modelo}`;
+                return <div key={modelo} className="flex items-center gap-3 rounded-xl border border-linha px-4 py-2 text-sm">
+                  <strong>Modelo {modelo}</strong>
+                  <a className="text-verde underline" href={href+"&visualizar=1"} target="_blank" rel="noreferrer" aria-label={`Ver PDF ${modelo}`}>Ver PDF</a>
+                  <a className="text-verde underline" href={href} aria-label={`Baixar PDF ${modelo}`}>Baixar</a>
+                </div>;
+              })}
+              <BotaoLink href={`/suporte?assunto=${encodeURIComponent("Solicitação de relatório completo do CAR " + p.cod)}`}>Solicitar relatório completo à equipe</BotaoLink>
+            </div>
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-4">
               Dados públicos do SICAR, copiados em{" "}
               {p.importado_em ? new Date(p.importado_em).toLocaleDateString("pt-BR") : "—"}. O CAR é

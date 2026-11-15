@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { assinatura, linkTermo } from "@/lib/juridico/versoes";
 import Link from "next/link";
 type Entrada = {id:string;nome:string;chamada:string;nicho:string};
 
@@ -14,7 +15,7 @@ export default function Escolha({atual,nicho,anteriores,entradas}:{atual:string|
     if (!item || enviando) return;
     setEnviando(true);setErro("");
     try {
-      const r=await fetch("/api/conta/contexto",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({entrada:item.id,aceite})});
+      const r=await fetch("/api/conta/contexto",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({entrada:item.id,aceite,versao:assinatura("termos-de-uso","privacidade")})});
       if (!r.ok) throw new Error((await r.json()).error);
       window.location.assign(item.id==="anunciar"?"/painel/novo":item.id==="comprar"?"/imoveis":["instituicao","empresa"].includes(item.id)?"/painel/territorio":"/planos?perfil="+item.id);
     } catch (e) {setErro(e instanceof Error?e.message:"Tente novamente.");setEnviando(false);}
@@ -27,7 +28,7 @@ export default function Escolha({atual,nicho,anteriores,entradas}:{atual:string|
         <strong>{x.nome}</strong>{(x.id===atual || !atual && x.nicho===nicho && x.id!=="anunciar") && <small> · Em uso</small>}
         <span className="mt-1 block text-sm">{x.chamada}</span>
       </button>)}</div>
-    {termos && <label className="mt-5 flex items-center gap-2"><input type="checkbox" checked={aceite} onChange={e=>setAceite(e.target.checked)}/>Aceito os <Link href="/termos/parceiros" target="_blank" className="underline">termos de parceria</Link>.</label>}
+    {termos && <label className="mt-5 flex items-center gap-2"><input type="checkbox" checked={aceite} onChange={e=>setAceite(e.target.checked)}/>Aceito os <Link href={linkTermo("termos-de-uso")} target="_blank" className="underline">Termos de Uso</Link> e a <Link href={linkTermo("privacidade")} target="_blank" className="underline">Política de Privacidade</Link>.</label>}
     {erro && <p role="alert" className="my-3 text-critico">{erro}</p>}
     <button type="button" disabled={!item || enviando || termos&&!aceite} onClick={abrir} className="mt-5 rounded-full bg-verde px-6 py-3 font-bold text-white disabled:opacity-50">{enviando?"Abrindo…":"Usar perfil"}</button></>;
 }

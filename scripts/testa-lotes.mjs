@@ -1,3 +1,4 @@
+import { quadroDeTeste } from "./fixture-exclusividade.mjs";
 // Teste dos lotes urbanos clicáveis (rodada 4, 01/10/2026): a camada carrega
 // no zoom de quadra, o clique abre o cartão com as medidas, as metragens
 // aparecem no zoom de lote e o anúncio nasce com a divisa do lote.
@@ -76,9 +77,11 @@ try {
   ok("formulário abre com o lote", !!faixa, faixa);
   await p.screenshot({ path: ".capturas/lotes-anuncio.png" });
 
-  const r = await p.evaluate(async (id) => {
+  const {data: loteEscolhido} = await admin.from("urban_lots").select("municipality_id").eq("id",loteId).single();
+  const r = await p.evaluate(async (id,quadro) => {
+    const regras = await (await fetch("/api/conta/anunciar")).json();
     const fd = new FormData();
-    fd.set("dados", JSON.stringify({ tipo: "urbano", titulo: "TESTE AUTOMATIZADO — lote", condicao: "exclusividade", prazo_exclusividade_meses: 6, termo_exclusividade:(await (await fetch("/api/conta/anunciar")).json()).termos[6], aceite_termos: true, lote_id: id }));
+    fd.set("dados", JSON.stringify({ ...quadro, versao_aceita:regras.versoes.exclusividade, tipo: "urbano", titulo: "TESTE AUTOMATIZADO — lote", condicao: "exclusividade", prazo_exclusividade_meses: 6, termo_exclusividade:regras.termos[6], aceite_termos: true, lote_id: id }));
     // geometria falsa de propósito: a rota tem de ignorar e usar a do banco
     fd.set("geometria", JSON.stringify({ fonte: "lote", geometry: { type: "Point", coordinates: [0, 0] } }));
     // PDF mínimo válido: desde a 9.5 o upload confere o conteúdo, não só a extensão
@@ -86,7 +89,7 @@ try {
     fd.append("doc_matricula", new File([pdf], "matricula.pdf", { type: "application/pdf" }));
     const res = await fetch("/api/imoveis", { method: "POST", body: fd });
     return { status: res.status, json: await res.json().catch(() => null) };
-  }, loteId);
+  }, loteId, quadroDeTeste(loteEscolhido?.municipality_id));
   ok("anúncio pelo lote é criado", r.status === 200, JSON.stringify(r.json));
   criado = r.json?.id ?? null;
   const { data: g } = await admin.from("property_geometries").select("fonte, area_m2").eq("property_id", criado).single();

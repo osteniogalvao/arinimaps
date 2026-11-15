@@ -4,6 +4,7 @@ import RetomarCadastro from "@/components/conta/RetomarCadastro";
 import CamposProfissao from "@/components/conta/CamposProfissao";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { assinatura, linkTermo } from "@/lib/juridico/versoes";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatarCPF, validarDocumento } from "@/lib/br/documentos";
@@ -153,7 +154,7 @@ export default function Entrar() {
         const res = await fetch("/api/cadastro", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, aceite_termos: aceite }),
+          body: JSON.stringify({ ...form, aceite_termos: aceite, versao_termos: assinatura("termos-de-uso", "privacidade") }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Falha no cadastro.");
@@ -318,12 +319,9 @@ export default function Entrar() {
                   onChange={(e) => setAceite(e.target.checked)} className="mt-1 size-4 shrink-0 accent-[var(--verde)]" />
                 <span>
                   Li e aceito os{" "}
-                  <Link href="/termos/termos-de-uso" target="_blank" className="font-semibold text-verde hover:underline">Termos de Uso</Link>
-                  {ehParceiro && <>, o{" "}
-                    <Link href="/termos/parceiros" target="_blank" className="font-semibold text-verde hover:underline">Termo de Parceria</Link>
-                  </>}
+                  <Link href={linkTermo("termos-de-uso")} target="_blank" className="font-semibold text-verde hover:underline">Termos de Uso</Link>
                   {" "}e a{" "}
-                  <Link href="/termos/privacidade" target="_blank" className="font-semibold text-verde hover:underline">Política de Privacidade</Link>.
+                  <Link href={linkTermo("privacidade")} target="_blank" className="font-semibold text-verde hover:underline">Política de Privacidade</Link>.
                 </span>
               </label>
               {!["comprador", "consulta"].includes(form.role) && (

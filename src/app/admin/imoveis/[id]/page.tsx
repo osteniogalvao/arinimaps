@@ -1,3 +1,4 @@
+import Testemunhas from "./Testemunhas";
 import Conversa from "@/components/admin/Conversa";
 import { notFound } from "next/navigation";
 import RegimeComercial from "./RegimeComercial";
@@ -91,7 +92,7 @@ export default async function AnaliseImovel
       () => ({ data: null })
     ),
     admin.from("property_authorizations")
-      .select("tipo, validade, prazo_meses, termo_aceito, aceite_at, versao, aceite_ip, selfie_path")
+      .select("id, tipo, validade, prazo_meses, termo_aceito, aceite_at, versao, aceite_ip, selfie_path")
       .eq("property_id", id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -105,6 +106,11 @@ export default async function AnaliseImovel
   const { data: autorRevisao } = revisao?.created_by
     ? await admin.from("profiles").select("nome").eq("user_id", revisao.created_by).maybeSingle()
     : { data: null };
+  const contratoNovo = autorizacao?.versao?.includes("exclusividade@2026.11.15");
+  const listaTestemunhas = contratoNovo
+    ? await admin.from("exclusividade_testemunhas").select("posicao,assinado_em,pessoa:profiles!exclusividade_testemunhas_perfil_fkey(nome)").eq("autorizacao",autorizacao!.id).order("posicao")
+    : {data:[],error:null};
+  if (listaTestemunhas.error) throw Error("Falha ao consultar as testemunhas.");
   const docs = documentos ?? [];
   // leilão é conferido pelo edital; venda comum, pela matrícula
   const ehLeilao = p.modalidade === "leilao";
@@ -254,7 +260,7 @@ export default async function AnaliseImovel
                   {autorizacao.aceite_at
                     ? <> — aceite eletrônico em {new Date(autorizacao.aceite_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                         {autorizacao.aceite_ip && ` (IP ${autorizacao.aceite_ip})`}, versão {autorizacao.versao}
-                        {autorizacao.prazo_meses && ` · ${autorizacao.prazo_meses} meses`}{autorizacao.validade && `, válida até ${new Date(autorizacao.validade + "T12:00:00").toLocaleDateString("pt-BR")}`}</>
+                        {autorizacao.prazo_meses && ` · ${contratoNovo && autorizacao.prazo_meses===6 ? "180 dias" : autorizacao.prazo_meses+" meses"}`}{autorizacao.validade && `, válida até ${new Date(autorizacao.validade + "T12:00:00").toLocaleDateString("pt-BR")}`}</>
                     : " — sem aceite eletrônico: confira a autorização assinada nos documentos"}
                 </>
               : p.exclusividade ? "Exclusividade (cadastro anterior aos termos, sem aceite registrado)" : "Sem autorização registrada (cadastro anterior aos termos)"}
@@ -268,6 +274,9 @@ export default async function AnaliseImovel
                 : "—"}
           </Item>
         </ul>
+        {contratoNovo && autorizacao && <Testemunhas id={autorizacao.id} lista={(listaTestemunhas.data ?? []).map(t=>({
+          posicao:t.posicao,assinado_em:t.assinado_em,nome:(t.pessoa as unknown as {nome:string}|null)?.nome ?? "Conta indicada",
+        }))}/>}
         {autorizacao?.termo_aceito && <details className="cartao p-4 text-sm"><summary className="cursor-pointer">Ler o termo registrado no aceite</summary>
           {(autorizacao.termo_aceito as import("@/lib/juridico").Documento).secoes.map(secao=><section key={secao.titulo} className="mt-4 space-y-2">
             <strong>{secao.titulo}</strong>{secao.itens.map((item,i)=><p key={i}>{item}</p>)}</section>)}</details>}

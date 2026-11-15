@@ -43,8 +43,8 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
     contar("property_documents", (q) => q.eq("verificado", false).is("substituido_por", null)),
     contar("opportunities", (q) => q.eq("etapa", "novo_lead")),
     contar("opportunities", (q) => q.in("etapa", ["proposta_enviada", "contraproposta", "negociacao", "aceite", "contrato"])),
-    admin.from("commissions").select("valor").in("status", ["registrada", "cobrada"])
-      .then(({ data }) => (data ?? []).reduce((s, c) => s + Number(c.valor), 0)),
+    admin.from("commissions").select("valor,recebido").in("status", ["registrada", "cobrada"])
+      .then(({ data }) => (data ?? []).reduce((s, c) => s + Number(c.valor) - Number(c.recebido ?? 0), 0)),
     contar("invoices", (q) => q.eq("status", "vencida")),
     contar("lgpd_requests", (q) => q.in("status", ["recebido", "em_analise"])),
     contar("property_authorizations", (q) => q.gte("validade", hoje).lte("validade", em30)),

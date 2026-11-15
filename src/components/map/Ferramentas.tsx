@@ -30,9 +30,10 @@ type Modo = null | "area" | "distancia" | "consulta" | "recorte";
 const CONSULTA_MAX_HA = 50_000;
 
 export default function Ferramentas({
-  mapa, onImportarKml, onCapturar, recursos, logado = false, onDesenhando, pedidoRecorte, onDelimitar,
+  mapa, recolhida, onImportarKml, onCapturar, recursos, logado = false, onDesenhando, pedidoRecorte, onDelimitar,
 }: {
   mapa: MLMap | null;
+  recolhida: boolean;
   /** avisa o mapa que um desenho está em curso (o clique não deve abrir cartão de lote/CAR) */
   onDesenhando?: (ativo: boolean) => void;
   pedidoRecorte: number;
@@ -332,7 +333,7 @@ export default function Ferramentas({
   return (
     // no celular a barra fica compacta (só ícones, sem o título): antes ela e a
     // legenda tampavam ~40 % do mapa e Imprimir, Capturar e a Ari ficavam fora (QA 09/11)
-    <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-[min(92%,760px)] space-y-2">
+    <div hidden={recolhida && !modo} className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-[min(92%,760px)] space-y-2">
       {bloqueio && (
         <div className={`flex items-center gap-3 px-4 py-3 text-sm ${VIDRO}`}>
           <Lock className="size-4 shrink-0 text-ouro" />

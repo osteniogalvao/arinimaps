@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { consultarCar } from "@/lib/geo/car";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 import { matriculasDoImovel } from "@/lib/rural/matricula";
 import { pointOnFeature } from "@turf/turf";
@@ -15,7 +15,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/geo/car/[cod
   const bloqueio = await limiteLeituraMapa(request, "geo");
   if (bloqueio) return bloqueio;
   const cod = decodeURIComponent((await ctx.params).cod);
-  const { data } = await supabaseAdmin().rpc("fn_car_imovel", { p_cod: cod });
+  const { data, error } = await consultarCar(cod);
+  if (error) return NextResponse.json({ error: "O cadastro rural está indisponível." }, { status: 503 });
   const geom = (data as { geometry?: GeoJSON.Geometry } | null)?.geometry;
   if (!geom || (geom.type !== "Polygon" && geom.type !== "MultiPolygon")) {
     return NextResponse.json({ error: "Área não encontrada no CAR importado." }, { status: 404 });

@@ -19,6 +19,7 @@
 import type * as MapLibreNS from "maplibre-gl";
 import { URL_MAPLIBRE } from "./config";
 import { Protocol } from "pmtiles";
+import { recortesNoTile, recortesPublicados } from "./recortesUrbanos";
 
 declare global {
   interface Window {
@@ -36,7 +37,22 @@ let promessa: Promise<typeof MapLibreNS> | null = null;
 function registrarPmtiles(ml: typeof MapLibreNS) {
   const w = window as unknown as { __pmtilesRegistrado?: boolean };
   if (w.__pmtilesRegistrado) return ml;
-  ml.addProtocol("pmtiles", new Protocol({ metadata: true }).tile);
+  const protocolo = new Protocol({ metadata: true });
+  const carregar: MapLibreNS.AddProtocolAction = protocolo.tile;
+  const arquivo = process.env.NEXT_PUBLIC_CAR_NACIONAL_URL?.trim();
+  const car = arquivo ? `pmtiles://${new URL(arquivo, window.location.origin).href}/` : null;
+  ml.addProtocol("pmtiles", async (params, abort) => {
+    const resposta = await carregar(params, abort);
+    if (!car || !params.url.startsWith(car) || !(resposta.data instanceof Uint8Array) || !resposta.data.length) return resposta;
+    const xyz = /^(\d+)\/(\d+)\/(\d+)$/.exec(params.url.slice(car.length));
+    if (!xyz) return resposta;
+    const [z, x, y] = xyz.slice(1).map(Number);
+    const recortes = recortesNoTile(await recortesPublicados(), z, x, y);
+    abort.signal.throwIfAborted();
+    if (!recortes.length) return { ...resposta, cacheControl: "max-age=30", expires: undefined };
+    const { cortarTileCar } = await import("./cortarTileCar");
+    return { ...resposta, data: cortarTileCar(resposta.data, z, x, y, recortes), cacheControl: "max-age=30", expires: undefined };
+  });
   w.__pmtilesRegistrado = true;
   return ml;
 }

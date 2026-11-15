@@ -1,4 +1,5 @@
 "use client";
+import AvisoPlanoAnual from "./AvisoPlanoAnual";
 
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -138,29 +139,31 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
           const anual = periodo === "anual" && p.anualCentavos !== null;
           const preco = anual ? p.anualCentavos! : p.mensalCentavos;
           const economia = economiaAnualCentavos(p);
+          const limites = limitesDoPacote(p);
           return <article key={p.id} data-selecionado={p.id === planoId} className="vitrine-card gap-3"
             onClick={(evento) => {
               if (p.id !== planoId && !(evento.target as HTMLElement).closest("button,details")) escolher(p.id);
             }}>
             <h3 className="lp-display text-2xl">{p.nome}</h3>
-            <p className="text-sm text-texto-2">{p.descricao}</p>
             <p className="valor">{preco === 0 ? "Grátis" : reais(preco)}
               <small className="ml-1 text-sm font-normal">{preco ? (anual ? "/ ano" : "/ mês") : p.teste ? "por " + p.teste.dias + " dias" : ""}</small></p>
             {!anual && p.primeiroMesCentavos && <p className="text-sm font-semibold text-verde">Primeiro mês por {reais(p.primeiroMesCentavos)}</p>}
             {anual && economia != null && economia > 0 && <p className="text-sm text-verde">Economia de {reais(economia)} no primeiro ano</p>}
-            <p className="text-sm text-texto-2">{limitesDoPacote(p).join(" · ")}</p>
+            <p className="nota">{p.descricao}</p>
+            {limites.length > 0 && <p className="vitrine-limites">{limites.join(" · ")}</p>}
             <p className="estado">{DISPONIBILIDADE_CATALOGO[p.disponibilidade]}</p>
             <ul className="itens-vitrine">{p.recursos.slice(0, 4).map((id) => <li key={id}>{RECURSOS_CATALOGO[id].nome}</li>)}</ul>
-            <button type="button" aria-pressed={p.id === planoId} onClick={() => escolher(p.id)}
-              className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : "Selecionar"}</button>
             <details className="border-t border-linha pt-2 text-sm"><summary className="cursor-pointer font-semibold">Recursos e condições</summary>
               <ul className="my-3 space-y-2">{recursosDoPacote(p).map((r) => <li key={r.nome}>{r.nome} <small className="block text-texto-2">{DISPONIBILIDADE_CATALOGO[r.disponibilidade]}</small></li>)}</ul>
               <p className="text-texto-2">{p.motivoDisponibilidade}</p>
               {p.teste && <p className="mt-2">Após o teste, continua disponível o mapa de imóveis à venda.</p>}
             </details>
+            <button type="button" aria-pressed={p.id === planoId} aria-label={"Selecionar " + p.nome}
+              onClick={() => escolher(p.id)} className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : "Selecionar"}</button>
           </article>;
         })}
       </div>
+      <a href="#configuracao" className="vitrine-link">Configurar {plano.nome} e ver complementos <ArrowRight aria-hidden size={17} /></a>
     </fieldset>
 
     <fieldset disabled={enviando} id="configuracao" className="cartao min-w-0 scroll-mt-24 space-y-5 p-5 md:p-7">
@@ -212,8 +215,9 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
       </section>}
       <div className="border-t border-linha pt-4" aria-live="polite">
         {cotacao && <><p className="font-semibold">{cotacao.sobOrcamento ? "Configuração sob orçamento" : ciclo === "anual" ? reais(cotacao.baseCicloCentavos) + " pelo plano anual" : reais(cotacao.primeiraMensalidadeCentavos!) + " no primeiro mês"}</p>
-          {!cotacao.sobOrcamento && ciclo === "mensal" && cotacao.mensalRecorrenteCentavos !== cotacao.primeiraMensalidadeCentavos && <p>Depois, {reais(cotacao.mensalRecorrenteCentavos!)}/mês com os complementos.</p>}
+          {!cotacao.sobOrcamento && ciclo === "mensal" && cotacao.mensalRecorrenteCentavos !== cotacao.primeiraMensalidadeCentavos && <p>A partir do segundo mês, {reais(cotacao.mensalRecorrenteCentavos!)}/mês{cotacao.adicionaisMensaisCentavos>0 ? " com os complementos" : ""}.</p>}
           {!cotacao.sobOrcamento && ciclo === "anual" && cotacao.adicionaisMensaisCentavos > 0 && <p>Complementos de {reais(cotacao.adicionaisMensaisCentavos)}/mês. Total estimado em 12 meses de {reais(cotacao.totalCentavos!)}.</p>}</>}
+        {cotacao && !cotacao.sobOrcamento && ciclo === "anual" && cotacao.baseCicloCentavos > 0 && <AvisoPlanoAnual />}
         {validacao && <p>{validacao}</p>}
         <p className="mt-2 text-sm text-texto-2">{podeAtivar ? plano.teste ? "Experimente os recursos disponíveis por 72 horas. Ao terminar o teste, a conta continua sem cobrança." : "O cofre gratuito permite cadastrar até três propriedades." : "A Central confere o escopo e os valores. Quando sua proposta estiver liberada, abra Meus pedidos para aceitar e pagar a fatura. O envio do pedido é gratuito."}</p>
       </div>

@@ -3,6 +3,10 @@ export function formatBRL(v: number | null | undefined) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 
+export function formatBRLFinanceiro(valor: number) {
+  return Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 /** Área amigável: rural em ha (e alqueires), urbano em m². */
 export function formatArea(areaM2: number | null | undefined, tipo: "urbano" | "rural") {
   if (!areaM2) return "—";

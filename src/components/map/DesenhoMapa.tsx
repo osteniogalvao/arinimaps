@@ -7,6 +7,7 @@ import { ESTILO_BASE, CENTRO_REGIAO } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { Eraser, MapPin, MousePointerClick, PenLine, Upload } from "lucide-react";
 import { plural } from "@/lib/format";
+import { centroDe, transformarGeoJSON, TRANSFORM_ZERO, type AjusteLocal, type Transform } from "@/lib/geo/deslocar";
 
 export type GeometriaEscolhida = {
   geometry: GeoJSON.Geometry;
@@ -17,6 +18,8 @@ export type Selecao = { tipo: "car"; cod: string } | { tipo: "lote"; id: string 
 
 type Props = {
   onChange: (g: GeometriaEscolhida | null) => void;
+  planta?: { centro?: [number, number] | null; geojson_publico?: string; tiles?: string; transform?: Transform; ajustes?: AjusteLocal[] };
+  recortes?: GeoJSON.Polygon[];
   /** Geometria que já chega pronta (ex.: a área clicada no CAR). */
   inicial?: GeometriaEscolhida | null;
   /**
@@ -47,7 +50,7 @@ function enquadrar(map: MLMap, geom: GeoJSON.Geometry) {
  * Define a localização do imóvel: desenhar polígono (clique nos vértices,
  * duplo clique fecha), marcar um ponto, ou subir KML/KMZ (processado no navegador).
  */
-export default function DesenhoMapa({ onChange, inicial, onSelecionar }: Props) {
+export default function DesenhoMapa({ onChange, inicial, onSelecionar, planta, recortes }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const [modo, setModo] = useState<"selecionar" | "poligono" | "ponto">(onSelecionar ? "selecionar" : "poligono");
@@ -96,8 +99,8 @@ export default function DesenhoMapa({ onChange, inicial, onSelecionar }: Props) 
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: estilo,
-        center: CENTRO_REGIAO,
-        zoom: 11,
+        center: planta?.centro ?? CENTRO_REGIAO,
+        zoom: planta?.centro ? 15 : 11,
         doubleClickZoom: false,
         attributionControl: { compact: true },
       });
@@ -120,6 +123,24 @@ export default function DesenhoMapa({ onChange, inicial, onSelecionar }: Props) 
           paint: { "fill-color": "#FFE299", "fill-opacity": 0.02 } });
         map.addLayer({ id: "sel-lotes-linha", type: "line", source: "lotes", "source-layer": "lotes", minzoom: 15,
           paint: { "line-color": "#FFFFFF", "line-width": 1, "line-opacity": 0.8, "line-dasharray": [2, 2] } });
+        if (planta?.tiles) {
+          map.addSource("planta-referencia", { type: "raster", tiles: [planta.tiles], tileSize: 256 });
+          map.addLayer({ id: "planta-referencia", type: "raster", source: "planta-referencia", paint: { "raster-opacity": 0.75 } });
+        } else if (planta?.geojson_publico) {
+          void fetch(planta.geojson_publico).then(r => { if (!r.ok) throw Error(); return r.json(); })
+            .then((fc: GeoJSON.FeatureCollection) => {
+              if (cancelado) return;
+              const data = transformarGeoJSON(fc, planta.centro ?? centroDe(fc), planta.transform ?? TRANSFORM_ZERO, [], planta.ajustes);
+              map.addSource("planta-referencia", { type: "geojson", data });
+              map.addLayer({ id: "planta-referencia", type: "line", source: "planta-referencia",
+                paint: { "line-color": "#FFE299", "line-width": 1.5 } }, "desenho-fill");
+            }).catch(() => { if (!cancelado) setMsg("Falha ao carregar o desenho da planta."); });
+        }
+        if (planta) {
+          map.addSource("recortes-existentes", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+          map.addLayer({ id: "recortes-existentes", type: "fill", source: "recortes-existentes",
+            paint: { "fill-color": "#67d6b1", "fill-opacity": 0.25, "fill-outline-color": "#67d6b1" } });
+        }
         map.addSource("desenho", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
         map.addLayer({
           id: "desenho-fill", type: "fill", source: "desenho",
@@ -194,6 +215,11 @@ export default function DesenhoMapa({ onChange, inicial, onSelecionar }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const source = mapRef.current?.getSource<GeoJSONSource>("recortes-existentes");
+    if (pronto && source && recortes) source.setData({ type: "FeatureCollection", features: recortes.map(geometry => ({ type: "Feature", properties: {}, geometry })) });
+  }, [recortes, pronto]);
+
   async function importarArquivo(file: File) {
     try {
       let kmlTexto: string;
@@ -260,7 +286,7 @@ export default function DesenhoMapa({ onChange, inicial, onSelecionar }: Props) 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        {(onSelecionar ? (["selecionar", "poligono", "ponto"] as const) : (["poligono", "ponto"] as const)).map((m) => (
+        {(planta ? (["poligono"] as const) : onSelecionar ? (["selecionar", "poligono", "ponto"] as const) : (["poligono", "ponto"] as const)).map((m) => (
           <button key={m} type="button" onClick={() => { setModo(m); limpar(); }}
             className={`inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2 border font-semibold transition ${modo === m ? "bg-verde text-fundo border-verde" : "border-linha-forte text-texto-3 hover:border-verde hover:text-verde"}`}>
             {m === "selecionar" ? <><MousePointerClick className="size-4" /> Selecionar no mapa</>

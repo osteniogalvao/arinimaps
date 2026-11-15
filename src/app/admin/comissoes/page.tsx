@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { formatBRL } from "@/lib/format";
+import { formatBRLFinanceiro as formatBRL } from "@/lib/format";
 import ComissaoBotoes from "./ComissaoBotoes";
+import Recebimentos from "./Recebimentos";
 import Paginacao from "@/components/admin/Paginacao";
 import { lerEmLotes, paginaDe } from "@/lib/supabase/lotes";
 import { exigirSetor } from "@/lib/setores-servidor";
@@ -25,28 +26,31 @@ export default async function AdminComissoes({ searchParams }: PageProps<"/admin
   const admin = supabaseAdmin();
   // tabela paginada; os totais leem só valor+status de todas, em lotes
   // (o PostgREST corta cada pedido em 1000 linhas sem avisar)
-  const [{ data: comissoes, count }, { data: todas }] = await Promise.all([
+  const [{ data: comissoes, count, error: erroLista }, { data: todas, error: erroTotais }] = await Promise.all([
     admin.from("commissions")
       .select(`
-        id, base_calculo, percentual, valor, regra_contratual, status, pago_em, created_at,
+        id, base_calculo, percentual, valor, regra_contratual, status, pago_em, created_at, recebido, autorizacao_id, captador_id,
+        captador:partners(razao_social,perfil:profiles!partners_profile_id_fkey(nome)),
+        parcelas:comissao_recebimentos(id,referencia,recebido_em,valor,repasse,repassado,em_conferencia,motivo_conferencia),
         sale:sales(data_venda, opportunity:opportunities(codigo), property:properties(codigo, titulo))
       `, { count: "exact" })
       .order("created_at", { ascending: false }).order("id").range(de, ate),
-    lerEmLotes<{ valor: number; status: string }>((i, f) => admin.from("commissions").select("valor, status").order("id").range(i, f)),
+    lerEmLotes<{ valor: number; recebido: number | null; status: string }>((i, f) => admin.from("commissions").select("valor, recebido, status").order("id").range(i, f), { maximo: Infinity }),
   ]);
 
-  const total = (status: string[]) =>
-    todas.filter((c) => status.includes(c.status)).reduce((s, c) => s + Number(c.valor), 0);
+  if (erroLista || erroTotais) return <Vazio icone={Percent} titulo="Comissões indisponíveis" texto="Atualize a página para consultar os recebimentos." />;
+  const recebido = todas.reduce((total, c) => total + Number(c.recebido ?? (["paga","conciliada"].includes(c.status) ? c.valor : 0)),0);
+  const pendente = todas.reduce((total,c) => total + Number(c.valor),0) - recebido;
 
   return (
     <div className="space-y-8">
       <CabecalhoPagina eyebrow="Financeiro" titulo="Comissões"
         subtitulo="Comissão de cada venda, do registro à conciliação." />
       <div className="grid gap-4 sm:grid-cols-3">
-        <Estatistica icone={Wallet} urgente={total(["registrada", "cobrada"]) > 0}
-          valor={<span className="tabular-nums">{formatBRL(total(["registrada", "cobrada"]))}</span>} rotulo="A receber (registrada + cobrada)" />
+        <Estatistica icone={Wallet} urgente={pendente > 0}
+          valor={<span className="tabular-nums">{formatBRL(pendente)}</span>} rotulo="A receber" />
         <Estatistica icone={CircleDollarSign}
-          valor={<span className="tabular-nums text-verde">{formatBRL(total(["paga", "conciliada"]))}</span>} rotulo="Recebido" />
+          valor={<span className="tabular-nums text-verde">{formatBRL(recebido)}</span>} rotulo="Recebido" />
         <Estatistica icone={Handshake} valor={<span className="tabular-nums">{count ?? todas.length}</span>} rotulo="Vendas com comissão" />
       </div>
 
@@ -69,6 +73,7 @@ export default async function AdminComissoes({ searchParams }: PageProps<"/admin
             </thead>
             <tbody className={TBODY}>
               {comissoes.map((c) => {
+                const captador = c.captador as unknown as {razao_social: string | null; perfil: {nome: string} | null} | null;
                 const sale = c.sale as unknown as { data_venda: string; opportunity: { codigo: string } | null; property: { codigo: string; titulo: string } | null } | null;
                 return (
                   <tr key={c.id} className={TR}>
@@ -78,7 +83,11 @@ export default async function AdminComissoes({ searchParams }: PageProps<"/admin
                     <td className="px-4 py-3.5 tabular-nums">{Number(c.percentual).toLocaleString("pt-BR")}%</td>
                     <td className="px-4 py-3.5 tabular-nums whitespace-nowrap font-bold text-texto">{formatBRL(c.valor)}</td>
                     <td className="px-4 py-3.5"><Etiqueta tom={TOM[c.status] ?? "neutro"}>{LABEL[c.status]}{c.pago_em ? ` em ${new Date(c.pago_em + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}</Etiqueta></td>
-                    <td className="px-4 py-3.5 text-right"><ComissaoBotoes id={c.id} status={c.status} /></td>
+                    <td className="px-4 py-3.5 text-right">
+                      {(!c.autorizacao_id || c.status !== "cobrada") && <ComissaoBotoes id={c.id} status={c.status} />}
+                      {c.autorizacao_id && <Recebimentos id={c.id} recebido={Number(c.recebido)} parcelas={c.parcelas ?? []}
+                        captador={c.captador_id ? captador?.razao_social || captador?.perfil?.nome || c.captador_id : null} />}
+                    </td>
                   </tr>
                 );
               })}

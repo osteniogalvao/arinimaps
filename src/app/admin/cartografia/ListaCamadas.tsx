@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import CalibrarPlanta from "./CalibrarPlanta";
+import RecortesUrbanos from "./RecortesUrbanos";
 import { enviarJson, type ErroApi } from "@/lib/api/enviar";
 import { AvisoErro } from "@/components/ui/Aviso";
 import type { Transform, AjusteLocal, EdicaoGeometria } from "@/lib/geo/deslocar";
@@ -31,6 +32,7 @@ const fmt = (n: number) => n.toLocaleString("pt-BR");
 export default function ListaCamadas() {
   const [camadas, setCamadas] = useState<Camada[]>([]);
   const [calibrando, setCalibrando] = useState<Camada | null>(null);
+  const [recortando, setRecortando] = useState<Camada | null>(null);
   const [erro, setErro] = useState<ErroApi | null>(null);
   const [carregando, setCarregando] = useState(true);
   const router = useRouter();
@@ -159,6 +161,7 @@ export default function ListaCamadas() {
                   <Crosshair className="size-4" /> Calibrar sobre o satélite
                 </button>
               )}
+              <button onClick={() => setRecortando(c)} className="btn-contorno px-3.5 py-2 text-sm">Recortes urbanos</button>
               {c.tipo === "vector" && !!c.lotes?.total && (
                 <button onClick={() => reencaixar(c)} disabled={reencaixe?.texto === "Reencaixando…"}
                   title="Para quando esta planta substitui outra: encaixa os anúncios de lote do município nos lotes dela"
@@ -174,6 +177,7 @@ export default function ListaCamadas() {
         })}
       </div>
 
+      {recortando && <RecortesUrbanos key={recortando.id} planta={recortando} fechar={() => setRecortando(null)} />}
       {calibrando && (
         <CalibrarPlanta camada={calibrando} onFechar={() => { setCalibrando(null); carregar(); }} />
       )}

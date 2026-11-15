@@ -8,8 +8,10 @@
  */
 
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import bbox from "@turf/bbox";
 import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpecification, VectorTileSource } from "maplibre-gl";
-import { CENTRO_REGIAO, SATELITE, SATELITE_ALTO, ZOOM_SATELITE_ALTO } from "@/lib/map/config";
+import { DETALHES_SATELITE, camadaDeDetalhe } from "@/lib/map/ortofotos";
+import { CENTRO_REGIAO, SATELITE } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
 import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeoJSON, TRANSFORM_ZERO, type Transform, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
@@ -22,6 +24,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis,
 import BuscaUrbana from "@/components/map/BuscaUrbana";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
+import AmbienteCar from "./AmbienteCar";
 import Ferramentas from "@/components/map/Ferramentas";
 import { guardarCarPendente } from "@/lib/map/carPendente";
 import { CartaoLote, CartaoLotes, LOTES_MAX, LOTE_ZOOM_MIN, MEDIDA_ZOOM_MIN, ROTULO_ZOOM_MIN, type LoteInfo } from "@/components/map/lotes";
@@ -147,10 +150,11 @@ function CartaoOficiais({ itens, ponto, onFechar }: {
   );
 }
 
-function CartaoCar({ car, onFechar, oficiais = [] }: { car: CarProps; onFechar: () => void; oficiais?: FeicaoNoPonto[] }) {
+function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [] }: { car: CarProps; mapa: MLMap | null; podeAmbiente: boolean; onFechar: () => void; oficiais?: FeicaoNoPonto[] }) {
   const area = Number(car.area_ha);
+  const [aba, setAba] = useState<"resumo" | "ambiental" | "fontes">(oficiais.length ? "fontes" : "resumo");
   return (
-    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-5rem)] overflow-y-auto p-5 space-y-4 ${VIDRO}`}>
+    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto overscroll-contain p-4 space-y-3 ${VIDRO}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro">{CAR_TIPO[car.tipo ?? ""] ?? "Imóvel rural"} · CAR</p>
@@ -160,6 +164,17 @@ function CartaoCar({ car, onFechar, oficiais = [] }: { car: CarProps; onFechar: 
         </div>
         <BotaoFechar onClick={onFechar} />
       </div>
+      <div role="group" aria-label="Informações desta área" className="flex flex-wrap gap-1">
+        {(["resumo", "ambiental", ...(oficiais.length ? ["fontes" as const] : [])] as const).map(k =>
+          <button type="button" key={k} aria-pressed={aba === k} onClick={() => setAba(k)} className={"min-h-9 rounded-lg px-2.5 text-sm " + (aba === k ? "bg-verde text-white" : "border border-linha text-texto")}>
+            {{resumo:"Resumo",ambiental:"Ambiental",fontes:"Fontes no ponto"}[k]}
+          </button>)}
+      </div>
+      {aba === "ambiental" && (podeAmbiente
+        ? <AmbienteCar cod={car.cod} mapa={mapa} />
+        : <Link href="/planos" className="text-sm text-verde underline">Consultar planos com mapa ambiental</Link>)}
+      {aba === "fontes" && oficiais.length > 0 && <ListaOficiais itens={oficiais} />}
+      {(aba === "resumo" || (aba === "fontes" && !oficiais.length)) && <>
       <dl className="text-sm divide-y divide-linha rounded-xl border border-linha bg-superficie-2/60 px-3.5">
         <div className="flex justify-between gap-2 py-2.5"><dt className="text-texto-2">Município</dt><dd className="text-texto font-medium">{car.municipio ?? "—"}</dd></div>
         <div className="flex justify-between gap-2 py-2.5"><dt className="text-texto-2 shrink-0">Situação no CAR</dt><dd className="text-texto text-right">{car.condicao ?? "—"}</dd></div>
@@ -169,12 +184,7 @@ function CartaoCar({ car, onFechar, oficiais = [] }: { car: CarProps; onFechar: 
         </div>
       </dl>
       <MatriculaSigef cod={car.cod} compacto />
-      {oficiais.length > 0 && (
-        <div className="space-y-2">
-          <p className="lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro">Também neste ponto</p>
-          <ListaOficiais itens={oficiais} />
-        </div>
-      )}
+      </>}
       <div className="space-y-2">
         <Link href={`/painel/novo?car=${encodeURIComponent(car.cod)}`} onClick={() => guardarCarPendente(car.cod)}
           className="btn-ouro flex w-full items-center justify-center gap-1.5 py-2.5 text-sm">
@@ -319,9 +329,9 @@ export default function MapaRegional({
   const manterPontoBuscaRef = useRef(false);
   const [painelAberto, setPainelAberto] = useState(false);
   const [raio, setRaio] = useState(5000);
-  const [camadasAbertas, setCamadasAbertas] = useState(false);
+  const [painelMapa, setPainelMapa] = useState<"camadas" | "mais" | "ano" | "imagem" | null>(null);
+  const camadasAbertas = painelMapa === "camadas";
   const [grupoCamadas, setGrupoCamadas] = useState<GrupoCamadas | null>(null);
-  useEffect(() => { setCamadasAbertas(window.matchMedia("(min-width: 1024px)").matches); }, []);
   const [pronto, setPronto] = useState(false);
   const [avisoCarga, setAvisoCarga] = useState("");
   const [lista, setLista] = useState<ImovelProps[]>([]);
@@ -339,6 +349,13 @@ export default function MapaRegional({
     if (!carEscolhido.current) setCarAtivo(prefs.camada_car);
   }, [prefsCarregadas, prefs.mapa_base, prefs.camada_car]);
   const [carSel, setCarSel] = useState<CarProps | null>(null);
+  const codigoSelecionado = carSel?.cod;
+  useEffect(() => {
+    if (!codigoSelecionado || !pronto || !mapaPronto?.getSource("car")) return;
+    const alvo = { source: "car", sourceLayer: "car", id: codigoSelecionado };
+    mapaPronto.setFeatureState(alvo, { selecionado: true });
+    return () => { if (mapaPronto.getSource("car")) mapaPronto.removeFeatureState(alvo, "selecionado"); };
+  }, [codigoSelecionado, pronto, mapaPronto]);
   // camadas oficiais (SIGEF, embargos, ANM…): ligadas no painel, pedidas por janela
   const camadasRef = useRef<GerenciadorCamadasOficiais | null>(null);
   const [camadasAtivas, setCamadasAtivas] = useState<Set<CamadaOficialId>>(new Set());
@@ -354,7 +371,7 @@ export default function MapaRegional({
     setAreasCamadas(antes => [...antes, { id, nome: `Área ${numero}`, geometria, camadas: new Set(), car: false, relevo: new Set() }]);
     setAreaId(id);
     setGrupoCamadas("Fundiário");
-    setCamadasAbertas(true);
+    setPainelMapa("camadas");
   }, []);
   const camadasVisiveis = useMemo(() => new Set([...camadasAtivas, ...areasCamadas.flatMap(a => [...a.camadas])]), [camadasAtivas, areasCamadas]);
   const areasComCar = areasCamadas.filter(a => a.car).map(a => a.id).join(",");
@@ -434,7 +451,31 @@ export default function MapaRegional({
   const estiloDeRuasRef = useRef<string | null>(null);
   const [carAviso, setCarAviso] = useState("");
   // barra de chips: menu "Mais" (celular) e a altura medida, para os painéis abrirem logo abaixo
-  const [maisAberto, setMaisAberto] = useState(false);
+  const maisAberto = painelMapa === "mais";
+  const botaoMaisRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!painelMapa) return;
+    const ancora = botaoMaisRef.current, area = areaMapaRef.current;
+    const alinhar = () => {
+      if (!maisAberto || !ancora || !area) return;
+      const espaco = area.getBoundingClientRect().right - ancora.getBoundingClientRect().left - 188;
+      ancora.style.setProperty("--menu-mais-x", Math.min(0, espaco) + "px");
+    };
+    alinhar();
+    const obs = new ResizeObserver(alinhar);
+    if (area) obs.observe(area);
+    const fecharFora = (e: PointerEvent) => {
+      if (maisAberto && !botaoMaisRef.current?.contains(e.target as Node)) setPainelMapa(null);
+    };
+    const escapar = (e: KeyboardEvent) => { if (e.key === "Escape") setPainelMapa(null); };
+    document.addEventListener("pointerdown", fecharFora);
+    document.addEventListener("keydown", escapar);
+    return () => {
+      obs.disconnect();
+      document.removeEventListener("pointerdown", fecharFora);
+      document.removeEventListener("keydown", escapar);
+    };
+  }, [painelMapa, maisAberto]);
   const chipsRef = useRef<HTMLDivElement>(null);
   const areaMapaRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -492,7 +533,7 @@ export default function MapaRegional({
       setPlantaAtiva(true);
     } else return;
     setAreaId("");
-    setCamadasAbertas(true);
+    setPainelMapa("camadas");
   }, [camadaPedida, alternarCamada, alternarRelevo]);
   // desenho em curso (medir / consultar área): o clique é vértice, não abre cartão
   const desenhandoRef = useRef(false);
@@ -500,9 +541,9 @@ export default function MapaRegional({
   // Imagem do ano (roadmap 3.8): satélite histórico no lugar do atual, ou lado a lado
   const [imagemAno, setImagemAno] = useState<string | null>(null);
   const [comparar, setComparar] = useState(false);
-  const [seletorAno, setSeletorAno] = useState(false);
+  const seletorAno = painelMapa === "ano";
   // busca por imagem (Revisão do Carlos, 29/10)
-  const [buscaImagem, setBuscaImagem] = useState(false);
+  const buscaImagem = painelMapa === "imagem";
   const buscaInputRef = useRef<HTMLInputElement>(null);
   const buscaUrbanaRef = useRef<HTMLButtonElement>(null);
   const [avisoPlano, setAvisoPlano] = useState("");
@@ -523,7 +564,7 @@ export default function MapaRegional({
     if (!img || compararRef.current) return;
     const camadas = map.getStyle().layers;
     // acima também da camada de perto, senão ela cobriria a imagem do ano no zoom do lote
-    const topo = map.getLayer("satelite-alto") ? "satelite-alto" : "satelite";
+    const topo = DETALHES_SATELITE.filter(d=>map.getLayer(d.id)).at(-1)?.id ?? "satelite";
     const depois = camadas[camadas.findIndex((l) => l.id === topo) + 1]?.id;
     map.addSource("historico", img.fonte);
     map.addLayer({ id: "historico", type: "raster", source: "historico" }, depois);
@@ -718,6 +759,8 @@ export default function MapaRegional({
   }, [filtrar]);
 
   const voarPara = useCallback((p: ImovelProps) => {
+    setPainelMapa(null);
+    setPainelAberto(false);
     setSelecionado(p);
     mapRef.current?.flyTo({
       center: [p.lng, p.lat],
@@ -795,13 +838,9 @@ export default function MapaRegional({
         // satélite fica acima da base vetorial e abaixo das camadas de dados
         map.addSource("satelite", SATELITE);
         map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" } });
-        // imagem mais nítida no zoom do lote (ver SATELITE_ALTO em src/lib/map/config.ts)
-        if (SATELITE_ALTO) {
-          map.addSource("satelite-alto", SATELITE_ALTO);
-          map.addLayer({
-            id: "satelite-alto", type: "raster", source: "satelite-alto", minzoom: ZOOM_SATELITE_ALTO,
-            layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" },
-          });
+        for (const detalhe of DETALHES_SATELITE) {
+          map.addSource(detalhe.id, detalhe.fonte);
+          map.addLayer(camadaDeDetalhe(detalhe, baseRef.current==="satelite"));
         }
         aplicarHistorico();
 
@@ -936,7 +975,7 @@ export default function MapaRegional({
           id: "car-fill", type: "fill", source: "car", "source-layer": "car", minzoom: CAR_ZOOM_MIN,
           paint: {
             "fill-color": COR_RURAL,
-            "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.25, 0.04] as never,
+            "fill-opacity": ["case", ["boolean", ["feature-state", "selecionado"], false], 0.28, ["boolean", ["feature-state", "hover"], false], 0.16, 0.04] as never,
           },
         });
         // o traço afina conforme afasta: de longe a malha vira textura, de perto vira divisa
@@ -1156,7 +1195,8 @@ export default function MapaRegional({
           }
           if (!noCar) setCarSel(null);
           // o cartão do clique abre no mesmo canto do painel de camadas: o painel cede a vez
-          if (noCar || oficiais.length) setCamadasAbertas(false);
+          setPainelMapa(null);
+          setAvisoPlano("");
         });
 
       });
@@ -1224,7 +1264,9 @@ export default function MapaRegional({
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("satelite")) return;
     map.setLayoutProperty("satelite", "visibility", base === "satelite" ? "visible" : "none");
-    if (map.getLayer("satelite-alto")) map.setLayoutProperty("satelite-alto", "visibility", base === "satelite" ? "visible" : "none");
+    for (const {id} of DETALHES_SATELITE) {
+      if (map.getLayer(id)) map.setLayoutProperty(id,"visibility",base === "satelite" ? "visible" : "none");
+    }
     relevoRef.current?.mudarBase(base);
     const cores = CARTO_CORES[base];
     if (map.getLayer("lotes-borda")) {
@@ -1349,29 +1391,26 @@ export default function MapaRegional({
     (mapRef.current?.getSource("busca-ponto") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [] });
   }, [busca]);
 
-  /** Código do CAR: enquadra a divisa e abre o cartão; fora da base importada, vai para a consulta (que busca no SICAR). */
+  /** A API usa o perímetro local ou busca o imóvel por código no SICAR. */
   const abrirCar = useCallback(async (cod: string) => {
     setBuscaAviso("Procurando o imóvel no CAR…");
-    const f = await fetch(`/api/geo/car/${encodeURIComponent(cod)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as
-      { geometry?: GeoJSON.Geometry; properties?: Partial<CarProps> } | null;
-    if (!f?.geometry) { router.push(`/consulta/car/${encodeURIComponent(cod)}`); return; }
-    setBuscaAviso("");
-    const coords: [number, number][] = [];
-    const walk = (c: unknown): void => {
-      if (Array.isArray(c) && typeof c[0] === "number") coords.push(c as [number, number]);
-      else if (Array.isArray(c)) c.forEach(walk);
-    };
-    walk((f.geometry as { coordinates?: unknown }).coordinates);
-    if (coords.length && mapRef.current) {
-      const lngs = coords.map((c) => c[0]), lats = coords.map((c) => c[1]);
-      mapRef.current.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 80, duration: 1200 });
+    const resposta = await fetch(`/api/geo/car/${encodeURIComponent(cod)}`).catch(() => null);
+    const f = resposta?.ok ? await resposta.json().catch(() => null) as
+      { geometry?: GeoJSON.Geometry; properties?: Partial<CarProps> } | null : null;
+    if (!f?.geometry) {
+      setBuscaAviso(resposta?.status === 404 ? "Código não encontrado no CAR." : "Não foi possível consultar o CAR. Tente novamente.");
+      setPainelAberto(true);
+      return;
     }
+    setBuscaAviso("");
+    const [oeste, sul, leste, norte] = bbox(f.geometry);
+    mapRef.current?.fitBounds([[oeste, sul], [leste, norte]], { padding: 80, duration: 1200 });
     setCarAtivo(true);
     setCarSel({
       cod, area_ha: f.properties?.area_ha ?? null, condicao: f.properties?.condicao ?? null,
       status: f.properties?.status ?? null, tipo: f.properties?.tipo ?? null, municipio: f.properties?.municipio ?? null,
     });
-  }, [router]);
+  }, []);
 
   /**
    * Parcela do SIGEF por código da certificação, CCIR ou matrícula (ideia do
@@ -1453,7 +1492,7 @@ export default function MapaRegional({
     ativo: () => !desenhandoRef.current && !variosRef.current,
     aoPressionar: (p) => {
       // o cartão mínimo ocupa o mesmo canto: os outros cartões cedem a vez
-      setCarSel(null); setNoPonto([]); setCamadasAbertas(false);
+      setCarSel(null); setNoPonto([]); setPainelMapa(null);
       if (loteSel) { setLoteSel(null); mapRef.current?.removeFeatureState({ source: "lotes", sourceLayer: "lotes" }); }
       setPontoLivre(p);
     },
@@ -1463,6 +1502,8 @@ export default function MapaRegional({
   /** Escolheu uma sugestão da busca: o voo já aconteceu, o texto não filtra mais a lista. */
   const escolherSugestao = (acao: () => void, manterPonto = false) => {
     acao();
+    setPainelAberto(false);
+    setPainelMapa(null);
     manterPontoBuscaRef.current = manterPonto;
     setBusca("");
   };
@@ -1482,25 +1523,26 @@ export default function MapaRegional({
 
   const chipsSecundarios = (
     <>
-      <button onClick={() => { setBuscaImagem(!buscaImagem); setSeletorAno(false); }} data-ativo={buscaImagem} className={chipBase}
+      <button onClick={() => setPainelMapa("imagem")} data-ativo={buscaImagem} className={chipBase}
         title="Encontre o local por uma foto com GPS, um print de mapa, um croqui ou um documento">
         <ImageUp className="size-3.5" /> Buscar por imagem
       </button>
       <button
         onClick={() => {
           if (!liberado("camadas_oficiais")) {
+            setPainelMapa(null);
             setAvisoPlano(logado
               ? "As imagens históricas fazem parte da consulta profissional e não estão no seu plano."
               : "Entre na sua conta para ver as imagens históricas.");
             return;
           }
-          setSeletorAno(!seletorAno);
+          setPainelMapa("ano");
         }}
         data-ativo={!!imagemAno || seletorAno} className={chipBase}
         title="Imagens de satélite de anos anteriores (Esri Wayback e Sentinel-2)">
         {liberado("camadas_oficiais") ? <History className="size-3.5" /> : <Lock className="size-3.5" />} {imagemAno ? `Imagem de ${imagemHistoricaPorId(imagemAno)?.ano}` : "Imagem do ano"}
       </button>
-      <button onClick={() => setPlantaAtiva(!plantaAtiva)} data-ativo={plantaAtiva} className={chipBase}
+      <button onClick={() => { setPlantaAtiva(!plantaAtiva); setPainelMapa(null); }} data-ativo={plantaAtiva} className={chipBase}
         title="Desenho completo da planta da cidade, como veio do CAD: ruas, calçadas, textos e detalhes">
         Planta completa
       </button>
@@ -1672,7 +1714,7 @@ export default function MapaRegional({
       </aside>
 
       <button
-        onClick={() => setPainelAberto(!painelAberto)}
+        onClick={() => { setPainelMapa(null); setPainelAberto(!painelAberto); }}
         title={painelAberto ? "Recolher lista" : "Mostrar lista"}
         className={
           "absolute z-30 top-1/2 -translate-y-1/2 bg-superficie border border-l-0 border-linha-forte shadow-lg rounded-r-[10px] w-7 h-14 flex items-center justify-center text-texto-2 hover:text-verde transition-all duration-300 " +
@@ -1705,25 +1747,25 @@ export default function MapaRegional({
               {b === "ruas" ? "Mapa" : "Satélite"}
             </button>
           ))}
-          <button onClick={() => { setCamadasAbertas(!camadasAbertas); setMaisAberto(false); setBuscaImagem(false); setSeletorAno(false); setAvisoPlano(""); }}
+          <button onClick={() => { setPainelMapa(camadasAbertas ? null : "camadas"); setAvisoPlano(""); }}
             aria-controls="catalogo-camadas" aria-expanded={camadasAbertas} data-ativo={camadasAbertas}
             className={chipBase} data-tour="camadas">
             <Layers className="size-3.5" /> Camadas e Dados
           </button>
-          <button onClick={() => { setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
+          <button onClick={() => { setPainelMapa(null); setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
         className={chipBase} title="Abrir a lista com a busca e os filtros de imóveis">
         <Search className="size-3.5" /> Buscar imóveis
       </button>
-          <button onClick={() => { setMaisAberto(!maisAberto); setCamadasAbertas(false); }} data-ativo={maisAberto} aria-expanded={maisAberto} className={chipBase} data-tour="mais">
+          <div ref={botaoMaisRef} className="relative">
+          <button onClick={() => { setPainelMapa(maisAberto ? null : "mais"); setAvisoPlano(""); }} data-ativo={maisAberto} aria-expanded={maisAberto} aria-controls="mais-do-mapa" className={chipBase} data-tour="mais">
             <Ellipsis className="size-3.5" /> Mais
           </button>
-          {/* ancorado na barra (não no botão): não passa da borda da tela */}
           {maisAberto && (
-            <div className={`absolute left-0 top-full z-30 mt-2 flex w-56 max-w-full flex-col items-stretch gap-1.5 p-2 ${VIDRO}`}
-              onClick={() => setMaisAberto(false)}>
+            <div id="mais-do-mapa" className={`absolute top-full left-[var(--menu-mais-x,0px)] z-30 mt-2 flex w-44 flex-col items-stretch gap-1.5 p-2 ${VIDRO}`}>
               {chipsSecundarios}
             </div>
           )}
+          </div>
         </div>
 
         {carAtivo && carAviso && !carSel && !camadasAbertas && (
@@ -1753,9 +1795,9 @@ export default function MapaRegional({
         {buscaImagem && (
           <BuscaPorImagem
             logado={logado}
-            onFechar={() => setBuscaImagem(false)}
+            onFechar={() => setPainelMapa(null)}
             onIr={(lng, lat, zoom) => mapRef.current?.flyTo({ center: [lng, lat], zoom, duration: 1400 })}
-            onBuscarTexto={(termo) => { setBusca(termo); setPainelAberto(true); }}
+            onBuscarTexto={(termo) => { setBusca(termo); setPainelMapa(null); setPainelAberto(true); }}
           />
         )}
 
@@ -1766,7 +1808,7 @@ export default function MapaRegional({
                 <span className="grid size-9 place-items-center rounded-full bg-verde/12 text-verde"><History className="size-[18px]" /></span>
                 <p className="lp-display text-2xl text-verde">Imagem do ano</p>
               </div>
-              <BotaoFechar onClick={() => setSeletorAno(false)} />
+              <BotaoFechar onClick={() => setPainelMapa(null)} />
             </div>
             <select value={imagemAno ?? ""} aria-label="Ano da imagem de satélite"
               onChange={(e) => {
@@ -1810,12 +1852,12 @@ export default function MapaRegional({
           <ComparaImagens mapa={mapaPronto} imagem={imagemHistoricaPorId(imagemAno)!} onFechar={() => setComparar(false)} />
         )}
 
-        {carSel && <CartaoCar car={carSel} oficiais={noPonto} onFechar={() => { setCarSel(null); setNoPonto([]); }} />}
+        {!painelMapa && !avisoPlano && !selecionado && <>
+        {carSel && <CartaoCar key={carSel.cod} car={carSel} mapa={mapaPronto} podeAmbiente={liberado("camadas_oficiais")} oficiais={noPonto} onFechar={() => { setCarSel(null); setNoPonto([]); }} />}
         {!carSel && noPonto.length > 0 && !loteSel && <CartaoOficiais itens={noPonto} ponto={pontoClicado} onFechar={() => setNoPonto([])} />}
         {pontoLivre && !carSel && !loteSel && !varios && noPonto.length === 0 && (
           <CartaoPonto ponto={pontoLivre} onFechar={() => setPontoLivre(null)} />
         )}
-        <MarcadorDaUrl map={mapaPronto} />
         {loteSel && !carSel && !varios && (
           <CartaoLote lote={loteSel} onFechar={() => {
             setLoteSel(null);
@@ -1829,12 +1871,14 @@ export default function MapaRegional({
             onSair={() => { setAvisoVarios(""); mudarVarios(null); }} />
         )}
 
+        </>}
+        <MarcadorDaUrl map={mapaPronto} />
         {camadasAbertas && (
-          <PainelCamadas onFechar={() => setCamadasAbertas(false)}
+          <PainelCamadas onFechar={() => setPainelMapa(null)}
             globais={{ car: carAtivo, oficiais: camadasAtivas, relevo: relevoAtivas }}
             grupo={grupoCamadas} selecionarGrupo={setGrupoCamadas}
             areas={areasCamadas} areaId={areaId} escolherArea={setAreaId}
-            pronto={pronto} desenharArea={() => { setCamadasAbertas(false); setPedidoRecorte(n => n + 1); }}
+            pronto={pronto} desenharArea={() => { setPainelMapa(null); setPedidoRecorte(n => n + 1); }}
             excluirArea={() => { setAreasCamadas(antes => antes.filter(a => a.id !== areaId)); setAreaId(""); }}
             car={areaEscolhida?.car ?? carAtivo} avisoCar={carAviso} alternarCar={() => {
               if (areaId) { setAreasCamadas(antes => antes.map(a => a.id === areaId ? { ...a, car: !a.car } : a)); return; }
@@ -1849,11 +1893,12 @@ export default function MapaRegional({
         {mapaPronto && gerenteRelevo && recortesRelevo.map(({id, areas}) => <RelevoNasAreas
           key={id + "-" + areas.map(a => a.id).join(",")} id={id} areas={areas.map(a => a.geometria)}
           mapa={mapaPronto} gerente={gerenteRelevo} aoErro={avisarRelevoLocal} />)}
-        <Legenda car={carVisivel} corUrbana={CARTO_CORES[base].linha} relevo={[...relevoAtivas, ...recortesRelevo.map(c => c.id)]} extras={CAMADAS_OFICIAIS.filter((c) => camadasVisiveis.has(c.id))
+        {!painelMapa && !carSel && !loteSel && !varios && !pontoLivre && !noPonto.length && !selecionado && <Legenda car={carVisivel} corUrbana={CARTO_CORES[base].linha} relevo={[...relevoAtivas, ...recortesRelevo.map(c => c.id)]} extras={CAMADAS_OFICIAIS.filter((c) => camadasVisiveis.has(c.id))
           // camada com cor por valor (biomas): uma linha por valor na legenda
-          .flatMap((c) => (c.cores ? Object.entries(c.cores).map(([nome, cor]) => ({ nome, cor })) : [c]))} />
+          .flatMap((c) => (c.cores ? Object.entries(c.cores).map(([nome, cor]) => ({ nome, cor })) : [c]))} />}
 
         <Ferramentas
+          recolhida={!!(painelMapa || carSel || loteSel || varios || pontoLivre || noPonto.length || selecionado)}
           mapa={mapaPronto}
           pedidoRecorte={pedidoRecorte} onDelimitar={salvarArea}
           recursos={recursos}

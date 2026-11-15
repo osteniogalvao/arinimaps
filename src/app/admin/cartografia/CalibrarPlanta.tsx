@@ -36,7 +36,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
 import type { Map as MLMap, GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
-import { SATELITE, SATELITE_ALTO, ZOOM_SATELITE_ALTO } from "@/lib/map/config";
+import { estiloSatelite } from "@/lib/map/ortofotos";
 import {
   centroDe, ajustarPorPontos, DESLOCAMENTO_DATUM, TRANSFORM_ZERO,
   afim, compor, inverter, aplicarMatriz, aplicarMatrizPonto, centroArea, partesDasLinhas,
@@ -45,6 +45,7 @@ import {
 } from "@/lib/geo/deslocar";
 import { enviarJson, type ErroApi } from "@/lib/api/enviar";
 import { AvisoErro } from "@/components/ui/Aviso";
+import { contornoConvexo, detectarBlocosCad, normalizarCad, termosDescricaoCad } from "@/lib/geo/blocosCad";
 
 type Camada = {
   id: string; nome: string; municipio: string | null;
@@ -53,6 +54,7 @@ type Camada = {
   datum?: string;
   layers_ocultos?: string[];
   layers_cad?: { nome: string; linhas: number }[];
+  apelidos_cad?: Record<string, string>;
   transform?: Transform;
   ajustes?: AjusteLocal[];
   linhas_excluidas?: string[];
@@ -166,17 +168,6 @@ function coordenadasLinha(fc: GeoJSON.FeatureCollection, s: LinhaSelecionada): [
   return null;
 }
 
-/** Contorno convexo (cadeia monótona) — junta várias caixas de seleção numa área só. */
-function contornoConvexo(pts: [number, number][]): [number, number][] {
-  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  if (p.length < 3) return p;
-  const cruz = (o: number[], a: number[], b: number[]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const baixo: [number, number][] = [], cima: [number, number][] = [];
-  for (const q of p) { while (baixo.length >= 2 && cruz(baixo[baixo.length - 2], baixo[baixo.length - 1], q) <= 0) baixo.pop(); baixo.push(q); }
-  for (const q of [...p].reverse()) { while (cima.length >= 2 && cruz(cima[cima.length - 2], cima[cima.length - 1], q) <= 0) cima.pop(); cima.push(q); }
-  return [...baixo.slice(0, -1), ...cima.slice(0, -1)];
-}
-
 /** Centro do retângulo envolvente de uma linha (o mesmo critério de parteDaLinha). */
 function centroLinha(l: GeoJSON.Position[]): [number, number] | null {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -226,6 +217,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const [pendente, setPendente] = useState<[number, number] | null>(null);
   const [residuo, setResiduo] = useState<number | null>(null);
   const [aba, setAba] = useState<"posicao" | "camadas">("posicao");
+  const [descricao, setDescricao] = useState("");
+  const [consultandoAri, setConsultandoAri] = useState(false);
+  const [apelidos, setApelidos] = useState<Record<string, string>>(camada.apelidos_cad ?? {});
   const [historico, setHistorico] = useState<Estado[]>([]);
   const [ajustes, setAjustes] = useState<AjusteLocal[]>(camada.ajustes ?? []);
   // linhas apagadas ("i" ou "i:j", posição no arquivo original) e espessura das linhas
@@ -407,12 +401,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       const map = new maplibregl.Map({
         container: containerRef.current,
         // calibrar é olhar telhado e meio-fio: a camada de perto entra a partir do z18
-        style: SATELITE_ALTO
-          ? {
-              version: 8, sources: { sat: SATELITE, "sat-alto": SATELITE_ALTO },
-              layers: [{ id: "sat", type: "raster", source: "sat" }, { id: "sat-alto", type: "raster", source: "sat-alto", minzoom: ZOOM_SATELITE_ALTO }],
-            }
-          : { version: 8, sources: { sat: SATELITE }, layers: [{ id: "sat", type: "raster", source: "sat" }] },
+        style: estiloSatelite(),
         center: [-50.196, -19.728],
         zoom: 15,
         attributionControl: { compact: true },
@@ -919,7 +908,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     if (encosta) { setMsg(`Essa peça encosta em “${encosta.nome}”. Selecione essa parte ou remova-a primeiro.`); return; }
     const numero = ajustesRef.current.length + 1;
     const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`).slice(0, 13);
-    const nova: AjusteLocal = { id, nome: `Peça ${numero}`, area, t: { ...TRANSFORM_ZERO } };
+    const nomeCad = String(bruto.features[s.feature].properties?.layer || "").trim();
+    const nova: AjusteLocal = { id, nome: `${nomeCad || "Peça"} ${numero}`.slice(0, 60), nomeCad, area, t: { ...TRANSFORM_ZERO } };
     ativaRef.current = id; setAtiva(id);
     definir(tRef.current, [...ajustesRef.current, nova]);
     setModo("mover");
@@ -1324,6 +1314,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   }
 
   function selecionarParte(id: string | null) {
+    if (id !== ativaRef.current) {
+      pendenteRef.current = null; setPendente(null); setPares([]); setResiduo(null); desenharPares([], null);
+    }
     ativaRef.current = id;
     setAtiva(id);
     if (modo === "parte") cancelarDesenho();
@@ -1411,7 +1404,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   }
 
   function aplicarPontos() {
-    const ajuste = ajustarPorPontos(pares, centroRef.current, t);
+    const parte = ajustesRef.current.find(a => a.id === ativaRef.current);
+    const inv = inverter(afim(centroRef.current, t));
+    const locais = parte ? pares.map(p => ({ planta: aplicarMatrizPonto(inv, p.planta), satelite: aplicarMatrizPonto(inv, p.satelite) })) : pares;
+    const ajuste = ajustarPorPontos(locais, parte ? centroArea(parte.area) : centroRef.current, parte?.t ?? t);
     if (!ajuste) {
       setErro({
         mensagem: "Não deu para calcular o ajuste com esses pontos.",
@@ -1422,11 +1418,70 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       return;
     }
     setErro(null);
+    if (parte && (Math.abs(ajuste.offsetLesteM) > 500 || Math.abs(ajuste.offsetNorteM) > 500 ||
+      Math.abs(ajuste.rotacaoGraus) > 45 || ajuste.escala < 0.8 || ajuste.escala > 1.25)) {
+      setMsg("Os pontos excedem os limites do ajuste da quadra. Confira se os pares indicam os mesmos cantos."); return;
+    }
     setResiduo(ajuste.residuoM);
-    aplicar({
+    const novo = {
       offsetLesteM: ajuste.offsetLesteM, offsetNorteM: ajuste.offsetNorteM,
       rotacaoGraus: ajuste.rotacaoGraus, escala: ajuste.escala,
+    };
+    if (parte) aplicarParte(() => novo); else aplicar(novo);
+    setPares([]); setPendente(null); pendenteRef.current = null; desenharPares([], null);
+    setMsg(`Pontos aplicados em ${parte?.nome ?? "toda a planta"}. Erro médio ${ajuste.residuoM.toFixed(2)} m.`);
+  }
+
+  function separarQuadras() {
+    const bruto = brutoRef.current, mapa = mapRef.current;
+    if (!bruto || !mapa) return;
+    const vista = mapa.getBounds(), global = afim(centroRef.current, tRef.current);
+    const candidatos = detectarBlocosCad(bruto, ocultos, excluidas, p => vista.contains(aplicarMatrizPonto(global, p)));
+    const novas: AjusteLocal[] = [];
+    const atuais = ajustesRef.current;
+    for (const c of candidatos) {
+      if (c.area.length > 300 || [...atuais, ...novas].some(a => areasSeSobrepoem(a.area, c.area))) continue;
+      if (atuais.length + novas.length >= 100) {
+        setMsg("A planta comporta 100 partes. Aproxime o mapa para separar apenas as quadras do trecho desejado."); return;
+      }
+      novas.push({ id: crypto.randomUUID(), nomeCad: c.nomeCad,
+        nome: `${c.nomeCad} · ${atuais.length + novas.length + 1}`.slice(0, 60), area: c.area, t: { ...TRANSFORM_ZERO } });
+    }
+    if (!novas.length) { setMsg("Nenhuma quadra inteira disponível nesta vista. Enquadre as quadras ou delimite uma peça pelo perímetro."); return; }
+    definir(tRef.current, [...atuais, ...novas]);
+    selecionarParte(novas[0].id); setPainelAberto(true); setAba("posicao"); setModo("mover");
+    setMsg(`${novas.length} quadra(s) separada(s). Selecione uma peça para ajustar sua posição.`);
+  }
+
+  function selecionarDescricao(sugeridas?: Set<string>) {
+    const bruto = brutoRef.current, termos = termosDescricaoCad(descricao);
+    if (!bruto) return;
+    if (!termos.length) { limparSelecao(); setMsg("Indique a descrição da linha ou da camada."); return; }
+    const selecao = new Set<string>();
+    bruto.features.forEach((f, i) => {
+      const p = f.properties ?? {}, layer = String(p.layer ?? "");
+      if (ocultos.has(layer) || excluidas.has(String(i))) return;
+      const texto = normalizarCad([layer, apelidos[layer], p.descricao, p.nome, p.name, p.text, p.texto, p.label].filter(Boolean).join(" "));
+      if (sugeridas ? !sugeridas.has(layer) : !termos.every(termo => texto.includes(termo))) return;
+      if (f.geometry.type === "MultiLineString") f.geometry.coordinates.forEach((_, j) => {
+        const k = `${i}:${j}`; if (!excluidas.has(k)) selecao.add(k);
+      });
+      else if (["Polygon", "MultiPolygon", "LineString"].includes(f.geometry.type)) selecao.add(String(i));
     });
+    caixasSelecaoRef.current = []; setCaixasSelecao([]);
+    selecaoRef.current = selecao; setSelecao(selecao); desenharSelecao(selecao); setModo("selecao");
+    setMsg(`${fmt(selecao.size)} linha(s) encontrada(s) em toda a planta. Confira a seleção destacada antes de apagar.`);
+  }
+
+  async function sugerirComAri() {
+    const camadas = layersCad.filter(l => !ocultos.has(l.nome))
+      .sort((a, b) => b.linhas - a.linhas).slice(0, 160).map(l => l.nome);
+    setConsultandoAri(true);
+    const r = await enviarJson<{ camadas: string[] }>("/api/admin/cartografia/sugerir-camadas", "POST", { pedido: descricao, camadas });
+    setConsultandoAri(false);
+    if (!r.ok) { setMsg(`Ari indisponível. ${r.erro.mensagem} A seleção por descrição continua disponível.`); return; }
+    const nomes = new Set((r.dados.camadas ?? []).filter(nome => camadas.includes(nome)));
+    selecionarDescricao(nomes);
   }
 
   function aplicarDatum(chave: string) {
@@ -1457,7 +1512,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         escala: Math.round(t.escala * 1e6) / 1e6,
         opacidade,
         layers_ocultos: [...ocultos],
-        pontos_controle: pares,
+        apelidos_cad: apelidos,
+        ...(!ativa ? { pontos_controle: pares } : {}),
         ajustes_locais: ajustes,
         linhas_excluidas: [...excluidas],
         espessura_linha: espessura,
@@ -1478,6 +1534,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     if (gravadas && ajustesRef.current === ajustes) { ajustesRef.current = gravadas; setAjustes(gravadas); }
     setSalvo({
       t, ocultos: [...ocultos].sort(), opacidade, ajustes: JSON.stringify(gravadas ?? ajustes),
+      apelidos: JSON.stringify(apelidos),
       excluidas: [...excluidas].sort().join(","), espessura, edicoes: JSON.stringify(edicoes),
     });
 
@@ -1518,8 +1575,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
    * volta arredondado do banco (`salvar` manda 2 casas em metros): comparar por
    * igualdade exata acusaria pendência logo depois de salvar com sucesso.
    */
-  const [salvo, setSalvo] = useState<{ t: Transform; ocultos: string[]; opacidade: number; ajustes: string; excluidas: string; espessura: number; edicoes: string }>({
+  const [salvo, setSalvo] = useState<{ t: Transform; ocultos: string[]; opacidade: number; ajustes: string; excluidas: string; espessura: number; edicoes: string; apelidos: string }>({
     t: inicial,
+    apelidos: JSON.stringify(camada.apelidos_cad ?? {}),
     excluidas: [...(camada.linhas_excluidas ?? [])].sort().join(","),
     espessura: camada.espessura ?? 1,
     ajustes: JSON.stringify(camada.ajustes ?? []),
@@ -1535,9 +1593,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     if (salvo.excluidas !== [...excluidas].sort().join(",")) return true;
     if (Math.abs(salvo.espessura - espessura) > 1e-6) return true;
     if (salvo.edicoes !== JSON.stringify(edicoes)) return true;
+    if (salvo.apelidos !== JSON.stringify(apelidos)) return true;
     const atuais = [...ocultos].sort();
     return atuais.length !== salvo.ocultos.length || atuais.some((n, i) => n !== salvo.ocultos[i]);
-  }, [salvo, t, ocultos, opacidade, ajustes, excluidas, espessura, edicoes]);
+  }, [salvo, t, ocultos, opacidade, ajustes, excluidas, espessura, edicoes, apelidos]);
 
   /**
    * Fechar com calibração pendente perdia o trabalho sem aviso (X, clique fora
@@ -1663,8 +1722,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
             <button className={chip(modo === "vertices")} onClick={() => setModo("vertices")}
               title="Selecione uma linha e arraste seus vértices"><Pencil className="size-4" /> Ajustar linha</button>
             <button className={chip(modo === "navegar")} onClick={() => setModo("navegar")}><Hand className="size-4" /> Navegar</button>
-            <button className={chip(modo === "pontos")} onClick={() => { selecionarParte(null); setModo("pontos"); }}
-              title="Calibra a planta inteira por pares de pontos"><Crosshair className="size-4" /> Pontos de controle</button>
+            <button className={chip(false)} disabled={carregando} onClick={separarQuadras}>Separar quadras na vista</button>
+            <button className={chip(modo === "pontos")} onClick={() => { setModo("pontos"); setAba("posicao"); setPainelAberto(true); }}
+              title="Calibra a peça selecionada ou a planta inteira por pares de pontos"><Crosshair className="size-4" /> Pontos de controle</button>
             <button className={chip(modo === "selecao")} onClick={() => { if (modo === "parte") cancelarDesenho(); setMsg(""); setModo("selecao"); }}
               title="Arraste um retângulo para pegar várias linhas de uma vez — apagar ou mover juntas"><BoxSelect className="size-4" /> Selecionar área</button>
             <button className={chip(modo === "parte" && novoPoligono)} onClick={() => { setNovoPoligono(true); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}>
@@ -1850,6 +1910,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
                 <div className="space-y-3 min-w-64 max-w-md">
                   <label className="block space-y-1">
                     <span className="text-sm text-texto-2">Nome da parte</span>
+                    {parteAtual.nomeCad && <span className="block text-xs text-texto-2">Nome original no CAD · {parteAtual.nomeCad}</span>}
                     <input value={parteAtual.nome} maxLength={60} onChange={(e) => renomearParte(parteAtual.id, e.target.value)}
                       className="w-full rounded-lg border border-linha-forte bg-superficie px-3 py-1.5 text-sm" />
                   </label>
@@ -1943,9 +2004,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
                 )}
               </div>
 
-              {modo === "pontos" && !parteAtual && (
+              {modo === "pontos" && (
                 <div className="w-full rounded-2xl border border-linha bg-superficie-2 p-5 text-sm space-y-3">
-                  <p className="font-semibold text-texto">Como calibrar por pontos de controle</p>
+                  <p className="font-semibold text-texto">Pontos de controle · {parteAtual?.nome ?? "Planta inteira"}</p>
                   <ol className="list-decimal ml-5 text-texto-2 space-y-1 text-sm leading-relaxed">
                     <li>Clique num cruzamento bem visível <strong>na planta</strong> (linha amarela).</li>
                     <li>Clique no <strong>mesmo cruzamento no satélite</strong>. Isso fecha um par.</li>
@@ -1963,6 +2024,15 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
 
           {painelAberto && aba === "camadas" && (
             <div className="p-6 space-y-4">
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="text-sm">Descrição no CAD<input value={descricao} onChange={e => setDescricao(e.target.value)}
+                  placeholder="Apagar linhas de área verde…" className="campo block" /></label>
+                <button className="btn-contorno px-3 py-2 text-sm" disabled={!descricao.trim()} onClick={() => selecionarDescricao()}>Selecionar por descrição</button>
+                <button className="btn-contorno px-3 py-2 text-sm" disabled={!descricao.trim() || consultandoAri || !layersCad.length}
+                  onClick={sugerirComAri}>{consultandoAri ? "Consultando Ari…" : "Sugerir camadas com a Ari"}</button>
+                {selecao.size > 0 && <button className="btn-contorno px-3 py-2 text-sm"
+                  onClick={() => { if (confirm(`Apagar ${fmt(selecao.size)} linhas destacadas da planta?`)) apagarSelecionadas(); }}>Apagar {fmt(selecao.size)} linhas selecionadas</button>}
+              </div>
               {layersCad.length === 0 ? (
                 <p className="text-sm text-texto-2">
                   Esta planta foi publicada antes do diagnóstico por camada. Reenvie o DXF para poder
@@ -1976,11 +2046,23 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
                   </p>
                   <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 max-h-64 overflow-auto pr-1">
                     {layersCad.map((l) => (
-                      <label key={l.nome} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-superficie-2 cursor-pointer text-sm">
-                        <input type="checkbox" checked={!ocultos.has(l.nome)} onChange={() => alternarLayer(l.nome)} />
-                        <span className="flex-1 truncate" title={l.nome}>{l.nome}</span>
-                        <span className="text-xs text-texto-2 tabular-nums">{fmt(l.linhas)}</span>
-                      </label>
+                      <div key={l.nome} className="min-w-0 space-y-1 rounded-lg px-2 py-1.5 text-sm">
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={!ocultos.has(l.nome)} onChange={() => alternarLayer(l.nome)} />
+                          <span className="flex-1 truncate" title={l.nome}>{l.nome}</span>
+                          <span className="text-xs text-texto-2 tabular-nums">{fmt(l.linhas)}</span>
+                        </label>
+                        <input aria-label={`Nome de exibição de ${l.nome}`} placeholder="Nome de exibição" className="campo w-full"
+                          value={Object.hasOwn(apelidos, l.nome) ? apelidos[l.nome] : ""} maxLength={100}
+                          onChange={e => {
+                            const nome = e.target.value;
+                            setApelidos(anterior => {
+                              const novos = { ...anterior };
+                              if (nome.trim()) novos[l.nome] = nome; else delete novos[l.nome];
+                              return novos;
+                            });
+                          }} />
+                      </div>
                     ))}
                   </div>
                   <div className="flex gap-2">

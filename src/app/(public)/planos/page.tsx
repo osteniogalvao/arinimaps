@@ -11,7 +11,8 @@ import { currentUser } from "@/lib/supabase/server";
 import { acessoAtual } from "@/lib/planos-servidor";
 import { lerConfiguracoes, texto } from "@/lib/settings";
 import EscolherPlano from "./EscolherPlano";
-import CabecalhoPlanos from "./CabecalhoPlanos";
+import CabecalhoPlanos, { apresentacaoDoPerfil } from "./CabecalhoPlanos";
+import FluxoDoPerfil from "./FluxoDoPerfil";
 import OfertasDoPerfil from "./OfertasDoPerfil";
 import ModulosDoPerfil from "./ModulosDoPerfil";
 import { PERFIS_COM_VITRINE, type OfertaPerfil } from "@/lib/ofertas-perfis";
@@ -51,6 +52,7 @@ function precoDe(p: Plano) {
 export default async function Planos({ searchParams }: PageProps<"/planos">) {
   const sp = await searchParams;
   const persona = personaPorId(typeof sp.perfil === "string" ? sp.perfil : "vender") ?? PERSONAS_PLANOS[0];
+  const apresentacao = apresentacaoDoPerfil(persona);
   const catalogo = persona && CATALOGO_POR_ENTRADA[persona.id];
   const temVitrine = PERFIS_COM_VITRINE.includes(persona.id);
   const [{ data: planosRaw }, user, { acesso }, cfg, vitrine] = await Promise.all([
@@ -73,15 +75,15 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
 
   return (
     <Moldura usuario={usuario} site>
+      <div className="vitrine-pagina">
       <CabecalhoPlanos persona={persona} />
-      <Conteudo className="space-y-10 py-12 md:py-16">
+      <Conteudo className="vitrine-conteudo space-y-8 py-8 md:py-12">
         {user && acesso.planNome && <p className="flex items-center gap-2 text-sm"><BadgeCheck className="size-5 text-verde" /> Seu plano atual · {acesso.planNome}
           {acesso.nicho && <span> · {NICHO_LABEL[acesso.nicho] ?? acesso.nicho}</span>}{acesso.vencido && " · vencido"}</p>}
         <div id="planos" className="flex scroll-mt-24 flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="lp-display mt-2 text-3xl text-texto md:text-4xl">
-              {persona ? persona.nome : "Planos de acesso ao sistema"}
-            </h2>
+          <div className="vitrine-escolha">
+            <h2>{apresentacao.escolha}</h2>
+            {apresentacao.resumo && <p>{apresentacao.resumo}</p>}
           </div>
           <div className="flex flex-wrap gap-3">
             {persona && <Link href="#perfis" className="lp-btn lp-btn-contorno">Escolher outro perfil</Link>}
@@ -187,8 +189,10 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
             })}
           </div>
         )}
+        <FluxoDoPerfil perfil={persona.id} />
         <ModulosDoPerfil perfil={persona.id} />
       </Conteudo>
+      </div>
     </Moldura>
   );
 }

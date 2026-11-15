@@ -18,22 +18,25 @@ export async function GET() {
     return NextResponse.json({ error: "Restrito ao setor Financeiro." }, { status: 403 });
   }
   const admin = supabaseAdmin();
-  const [{ data: comissoes, error: e1 }, { data: faturas, error: e2 }] = await Promise.all([
+  const [{ data: comissoes, error: e1 }, { data: faturas, error: e2 }, {data: movimentos, error: e3}] = await Promise.all([
     lerEmLotes((de, ate) => admin.from("commissions")
       .select("valor, percentual, base_calculo, status, pago_em, sale:sales(data_venda, valor_final, opportunity:opportunities(codigo), property:properties(codigo, titulo))")
       .order("created_at").order("id").range(de, ate)),
     lerEmLotes((de, ate) => admin.from("invoices")
       .select("competencia, valor, status, pago_em, subscription:subscriptions(property:properties(codigo, titulo))")
       .order("competencia").order("id").range(de, ate)),
+    lerEmLotes((de, ate) => admin.from("comissao_movimentos")
+      .select("tipo,diferenca,data,documento,rec:comissao_recebimentos(referencia,comissao:commissions(venda:sales(imovel:properties(codigo,titulo))))")
+      .order("data").order("id").range(de, ate)),
   ]);
   // planilha pela metade é pior que nenhuma: a contabilidade não teria como saber
-  if (e1 || e2) {
-    return NextResponse.json({ error: "Não foi possível ler tudo para a planilha.", motivo: (e1 ?? e2)!.message }, { status: 500 });
+  if (e1 || e2 || e3) {
+    return NextResponse.json({ error: "Não foi possível ler tudo para a planilha.", motivo: (e1 ?? e2 ?? e3)!.message }, { status: 500 });
   }
 
   const num = (v: unknown) => Number(v ?? 0).toFixed(2).replace(".", ",");
-  const txt = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const linhas = [["tipo", "data", "imovel_codigo", "imovel", "referencia", "base", "percentual", "valor", "status", "pago_em"].join(";")];
+  const txt = (v: unknown) => `"${String(v ?? "").replace(/^[\s]*[=+\-@]/, c => "'" + c).replace(/"/g, '""')}"`;
+  const linhas = [["tipo", "data", "imovel_codigo", "imovel", "referencia", "base", "percentual", "valor", "status", "pago_em","comprovante"].join(";")];
 
   for (const c of comissoes ?? []) {
     const s = c.sale as unknown as {
@@ -42,16 +45,22 @@ export async function GET() {
     } | null;
     linhas.push([
       "comissao", s?.data_venda ?? "", s?.property?.codigo ?? "", txt(s?.property?.titulo), s?.opportunity?.codigo ?? "",
-      num(c.base_calculo), num(c.percentual), num(c.valor), c.status, c.pago_em ?? "",
+      num(c.base_calculo), num(c.percentual), num(c.valor), c.status, c.pago_em ?? "", "",
     ].join(";"));
   }
   for (const f of faturas ?? []) {
     const p = (f.subscription as unknown as { property: { codigo: string; titulo: string } | null } | null)?.property;
     linhas.push([
-      "mensalidade", f.competencia, p?.codigo ?? "", txt(p?.titulo), "", "", "", num(f.valor), f.status, f.pago_em ?? "",
+      "mensalidade", f.competencia, p?.codigo ?? "", txt(p?.titulo), "", "", "", num(f.valor), f.status, f.pago_em ?? "", "",
     ].join(";"));
   }
 
+  for (const m of movimentos) {
+    const r = m.rec as unknown as {referencia:string; comissao:{venda:{imovel:{codigo:string;titulo:string}}}} | null;
+    const im = r?.comissao?.venda?.imovel;
+    linhas.push([m.tipo === "repasse" ? "repasse_captador" : "recebimento_comissao",m.data,im?.codigo ?? "",txt(im?.titulo),txt(r?.referencia),
+      "", "", num(m.tipo === "repasse" ? -m.diferenca : m.diferenca),"efetivado",m.data,txt(m.documento)].join(";"));
+  }
   await logAudit({ user_id: a.userId, acao: "financeiro_exportado", entidade: "commissions", dados_depois: { linhas: linhas.length - 1 } });
   return new NextResponse("﻿" + linhas.join("\r\n"), {
     headers: {

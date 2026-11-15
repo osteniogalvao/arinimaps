@@ -264,9 +264,12 @@ export async function POST(request: Request, ctx: RouteContext<"/api/oportunidad
         return NextResponse.json({ error: "Só a diretoria Arini registra a venda." }, { status: 403 });
       }
       const valor = Number(body.valor_final);
-      const percentual = Number(body.percentual ?? 1);
-      if (!valor || valor <= 0) return NextResponse.json({ error: "Valor final inválido." }, { status: 400 });
-      const { data: saleId, error } = await admin.rpc("fn_registrar_venda", {
+      const percentual = body.percentual == null ? null : Number(body.percentual);
+      if (!Number.isFinite(valor) || valor <= 0) return NextResponse.json({ error: "Valor final inválido." }, { status: 400 });
+      if (percentual !== null && (!Number.isFinite(percentual) || percentual < 0 || percentual > 100)) {
+        return NextResponse.json({ error: "Percentual de comissão inválido." }, { status: 400 });
+      }
+      const { data: venda, error } = await admin.rpc("fn_registrar_venda_resumo", {
         p_opportunity_id: id,
         p_valor: valor,
         p_data: body.data_venda ?? null,
@@ -275,12 +278,14 @@ export async function POST(request: Request, ctx: RouteContext<"/api/oportunidad
         p_regra: body.regra ?? null,
       });
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-      await evento(id, "anotacao", `VENDA registrada: R$ ${valor.toLocaleString("pt-BR")} · comissão ${percentual}%`, a!.userId);
-      await logAudit({ user_id: a!.userId, acao: "venda_registrada", entidade: "sales", entidade_id: saleId as string, opportunity_id: id, property_id: opp.property_id, dados_depois: { valor, percentual } });
+      const comissao = venda.percentual == null ? "sem comissão de intermediação" : `comissão de ${Number(venda.percentual).toLocaleString("pt-BR")}%`;
+      const resumo = `R$ ${valor.toLocaleString("pt-BR")} · ${comissao}`;
+      await evento(id, "anotacao", `Venda registrada · ${resumo}`, a!.userId);
+      await logAudit({ user_id: a!.userId, acao: "venda_registrada", entidade: "sales", entidade_id: venda.sale_id, opportunity_id: id, property_id: opp.property_id, dados_depois: { valor, percentual: venda.percentual, comissao: venda.comissao } });
       const to = await ariniEmail();
       await sendEmail(to, `Venda fechada — ${opp.codigo}`,
-        `Venda registrada na oportunidade ${opp.codigo}: R$ ${valor.toLocaleString("pt-BR")}, comissão ${percentual}%.`);
-      return NextResponse.json({ ok: true, sale_id: saleId });
+        `Venda registrada na oportunidade ${opp.codigo}. ${resumo}.`);
+      return NextResponse.json({ ok: true, sale_id: venda.sale_id });
     }
   }
 

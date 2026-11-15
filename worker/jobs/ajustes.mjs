@@ -33,6 +33,11 @@ export function pontoNaArea(p, area) {
   let dentro = false;
   for (let i = 0, j = area.length - 1; i < area.length; j = i++) {
     const [xi, yi] = area[i], [xj, yj] = area[j];
+    // Uma linha do próprio perímetro tem o centro na borda da quadra.
+    const dx = xj - xi, dy = yj - yi;
+    if (Math.abs(dx * (p[1] - yi) - dy * (p[0] - xi)) <= 1e-11 * (Math.abs(dx) + Math.abs(dy)) &&
+        p[0] >= Math.min(xi, xj) - 1e-11 && p[0] <= Math.max(xi, xj) + 1e-11 &&
+        p[1] >= Math.min(yi, yj) - 1e-11 && p[1] <= Math.max(yi, yj) + 1e-11) return true;
     if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) dentro = !dentro;
   }
   return dentro;

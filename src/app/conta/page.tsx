@@ -35,6 +35,7 @@ export default async function MinhaConta() {
   ]);
 
   const mais = [
+    { href:"/conta/termos",rotulo:"Termos e contratos aceitos",texto:"Versões, cópias dos contratos de imóveis e renovação",icone:ShieldCheck },
     {href:"/conta/comunicados",rotulo:"Comunicados da Matriz",texto:avisos.count ? `${avisos.count} aviso(s) por ler` : "Avisos de manutenção, planos e atualizações",icone:LifeBuoy},
     ...(user.nicho==="engenheiro" ? [{href:"/painel/crm/profissoes",rotulo:"CRM da minha profissão",texto:"Modelos disponíveis e pedidos de módulos técnicos",icone:BadgeCheck}] : []),
     ...(["proprietario","produtor_rural"].includes(user.nicho??"") ? [{href:"/conta/monitoramento",rotulo:"Monitoramento territorial",texto:"Áreas acompanhadas e ocorrências nas fontes oficiais",icone:ShieldCheck}] : []),

@@ -1,0 +1,971 @@
+{
+  "privacidade": {
+    "sha256": "1c3003d3b217dea31ca7ad1689c513470afbcc884bc0159070af4037b0b79b6d",
+    "paginas": [
+      [
+        "ARINI — Política de Privacidade",
+        "Resumo",
+        "• A plataforma é da ARINI Tecnologia; a intermediação imobiliária é da ARINI Imóveis.",
+        "Cada uma responde pelos dados da sua atividade.",
+        "• Imóvel à venda é público. Dados pessoais, documentos e imóveis não anunciados são privados.",
+        "• A ARINI não entrega o contato do proprietário ao interessado, nem o do interessado ao proprietário.",
+        "• A ARINI não vende cadastros e não entrega dados privados de usuários a órgãos públicos contratantes.",
+        "• Os pedidos sobre seus dados são feitos pela Central de Atendimento, sem custo.",
+        "1. Quem trata os dados",
+        "1.1 ARINI Tecnologia e Participações Ltda (nome fantasia ARINI Brasil), CNPJ nº",
+        "68.128.846/0001-45, Rua Ribeirão São Domingos, 649, Centro, Iturama/MG, CEP 38280-000. É controladora dos dados de cadastro, conta, planos, pagamentos, CRMs, consultas, relatórios, alertas, Ari e segurança da Plataforma.",
+        "1.2 Arini Negócios Imobiliários Ltda (ARINI Imóveis), CNPJ nº 61.134.351/0001-80, CRECI",
+        "0010524-J, Rua Campina Verde, 1130, Centro, Iturama/MG. É controladora dos dados de anúncios, verificação documental, Interesses, visitas, propostas, exclusividade e intermediação.",
+        "1.3 As duas empresas compartilham entre si apenas os dados necessários à atividade de cada uma, por contrato que define responsabilidades e medidas de segurança.",
+        "1.4 Corretores, imobiliárias, leiloeiros, profissionais técnicos, correspondentes bancários, empresas e órgãos públicos que usam seus próprios CRMs na Plataforma são controladores dos dados que inserem sobre os seus clientes. A ARINI Tecnologia atua como operadora desses dados, seguindo as instruções de cada um.",
+        "1.5 Fornecedores de hospedagem, armazenamento, mapas, pagamentos, mensagens e inteligência artificial atuam como operadores, sob contrato e apenas para o serviço prestado.",
+        "1.6 Esta Política alcança todos os usuários e visitantes da Plataforma e também pessoas sem conta cujos dados apareçam em documentos ou informações de imóveis, como confrontantes, coproprietários, cônjuges, representantes e titulares anteriores. Esses dados são tratados no mínimo necessário e, quando possível, ocultados ou tarjados.",
+        "2. Canal de privacidade e encarregado",
+        "2.1 Pedidos e dúvidas sobre dados pessoais são feitos pelo formulário de Privacidade da Central de Atendimento, acessível também sem login. Cada pedido recebe número de protocolo."
+      ],
+      [
+        "2.2 Encarregado pelo tratamento de dados pessoais: Carlos Eduardo Freitas Borges Arini, contato pelo formulário de Privacidade.",
+        "3. Dados tratados",
+        [
+          [
+            "Categoria",
+            "Exemplos"
+          ],
+          [
+            "Cadastro e conta",
+            "Nome, CPF ou CNPJ, telefone, e-mail, Perfil, empresa, poderes de representação, CRECI ou registro profissional"
+          ],
+          [
+            "Validação de identidade",
+            "Documento de identidade e imagem do rosto (selfie), usados para conferir que a pessoa é quem diz ser"
+          ],
+          [
+            "Imóveis e anúncios",
+            "Localização, geometria, preço, fotos, vídeos, matrícula, certidões, autorizações e dados de titulares, cônjuges e representantes que constem nesses documentos"
+          ],
+          [
+            "Interesse e negociação",
+            "Imóveis de interesse, pedidos de contato, mensagens, visitas, propostas, condições de aceite, contratos e valores"
+          ],
+          [
+            "Registro de acesso",
+            "Imóveis visualizados, cliques, buscas, data, hora, IP, dispositivo e ações realizadas na conta"
+          ],
+          [
+            "Planos e pagamentos",
+            "Plano contratado, forma de pagamento, histórico de cobranças e Créditos. Dados completos de cartão ficam apenas com o processador de pagamento"
+          ],
+          [
+            "Ari",
+            "Perguntas feitas e respostas geradas"
+          ],
+          [
+            "CRMs dos usuários",
+            "Dados que cada profissional ou empresa insere sobre os próprios clientes, imóveis e operações"
+          ],
+          [
+            "Filtro de interesse",
+            "Tipo de imóvel, região e faixa de preço que o usuário quer receber em alertas"
+          ]
+        ],
+        "3.1 A Plataforma não é destinada a menores de 18 anos.",
+        "3.2 O usuário deve enviar apenas os documentos necessários e, quando possível, ocultar dados de terceiros que não sejam relevantes.",
+        "3.3 Quem envia documentos, fotos, contatos ou informações de outras pessoas deve ter autorização ou outra justificativa legal para isso. A ARINI pode restringir, ocultar ou remover conteúdo que exponha dados pessoais de forma excessiva ou incompatível com a finalidade da Plataforma.",
+        "4. Finalidades e bases legais",
+        [
+          [
+            "Finalidade",
+            "Base legal (LGPD)"
+          ],
+          [
+            "Criar e manter a conta, prestar os planos, CRMs,",
+            "Execução de contrato (art. 7º, V)"
+          ]
+        ]
+      ],
+      [
+        [
+          [
+            "Finalidade",
+            "Base legal (LGPD)"
+          ],
+          [
+            "consultas e a Ari",
+            ""
+          ],
+          [
+            "Publicar o anúncio autorizado e conduzir a intermediação",
+            "Execução de contrato (art. 7º, V)"
+          ],
+          [
+            "Conferir titularidade, cumprir deveres fiscais, guardar registros de acesso e prevenção à lavagem de dinheiro",
+            "Obrigação legal (art. 7º, II)"
+          ],
+          [
+            "Validar identidade por reconhecimento facial para prevenir fraude",
+            "Prevenção à fraude e segurança do titular em identificação (art. 11, II, g)"
+          ],
+          [
+            "Registrar imóveis visualizados e ações para atender o Interesse e comprovar a atuação da ARINI Imóveis",
+            "Legítimo interesse (art. 7º, IX) e exercício regular de direitos (art. 7º, VI)"
+          ],
+          [
+            "Segurança da Plataforma e prevenção de fraude, sem dados sensíveis",
+            "Legítimo interesse (art. 7º, IX)"
+          ],
+          [
+            "Enviar alertas do filtro de interesse por WhatsApp e ofertas opcionais",
+            "Consentimento (art. 7º, I), revogável a qualquer momento"
+          ],
+          [
+            "Enviar pré-simulação de financiamento à correspondente bancária",
+            "Consentimento específico (art. 7º, I), dado no momento do envio"
+          ],
+          [
+            "Defender direitos e cobrar comissões e valores devidos",
+            "Exercício regular de direitos (art. 7º, VI)"
+          ]
+        ],
+        "4.1 O consentimento, quando exigido, é pedido de forma separada, nunca é condição para usar o serviço principal e pode ser revogado na própria conta.",
+        "4.2 O legítimo interesse é usado depois de avaliação documentada de necessidade, expectativa do titular e riscos.",
+        "4.3 A ARINI pode usar dados agregados e anonimizados, que não permitam identificar ninguém, para estatísticas, estudos de mercado e melhoria da Plataforma.",
+        "5. O que é público e o que nunca é entregue",
+        "5.1 No mapa, a localização exata do Imóvel à venda é visível a todos, inclusive a quem não tem cadastro. Sem login, o visitante pode abrir até dois imóveis, com informações básicas. O detalhamento, como relatórios, consultas, fotos, vídeos e geometria completa, exige cadastro e login.",
+        "5.1-A Antes de publicar, o anunciante é informado de que a localização exata do imóvel ficará pública no mapa."
+      ],
+      [
+        "5.2 Nunca são publicados CPF, telefone, e-mail ou documentos do titular. Documentos do imóvel ficam restritos à equipe autorizada e, quando necessário à negociação, ao interessado com Interesse registrado, sob dever de sigilo.",
+        "5.3 A ARINI não entrega o contato do titular ao interessado, nem o do interessado ao titular. O titular acompanha na Plataforma visitas, propostas e retornos, sem acesso ao contato do interessado.",
+        "5.4 Imóveis não anunciados, documentos, dados de CRM e demais dados privados não são exibidos a outros usuários nem entregues a órgãos públicos contratantes, salvo ordem legal ou judicial.",
+        "5.5 A ARINI não vende nem aluga cadastros pessoais.",
+        "6. Compartilhamento",
+        [
+          [
+            "Com quem",
+            "O que",
+            "Quando"
+          ],
+          [
+            "Equipe ARINI Imóveis e corretor responsável",
+            "Dados do Interesse e da negociação",
+            "Para atender e intermediar"
+          ],
+          [
+            "Corretor da rede que captou o imóvel",
+            "Andamento da negociação do imóvel captado, sem contatos do interessado",
+            "Para apurar o repasse de 0,5%"
+          ],
+          [
+            "Leiloeiro",
+            "Nome e contato do interessado",
+            "Quando o interessado pede contato sobre imóvel em leilão"
+          ],
+          [
+            "Correspondente bancária",
+            "Nome, contato e dados da pré- simulação",
+            "Somente com consentimento dado no envio"
+          ],
+          [
+            "Empresa com CRM próprio",
+            "Dados do interessado no imóvel da empresa",
+            "Quando o interessado pede contato sobre imóvel dessa empresa"
+          ],
+          [
+            "Fornecedores (operadores)",
+            "Dados estritamente necessários ao serviço",
+            "Hospedagem, mapas, pagamentos, mensagens, IA"
+          ],
+          [
+            "Autoridades",
+            "Dados exigidos",
+            "Por obrigação legal, ordem judicial ou defesa de direitos"
+          ]
+        ],
+        "6.1 Dados de interessados nunca são enviados a toda a rede. Quem recebe dados deve usá-los apenas para a finalidade informada.",
+        "6.1-A Corretores, leiloeiros, correspondentes, empresas e demais parceiros que recebem dados pela Plataforma não podem reaproveitá-los em campanhas próprias, para ampliar suas bases de contatos ou para qualquer finalidade alheia ao atendimento que motivou o envio."
+      ],
+      [
+        "6.2 O usuário que integra serviços próprios, como Google Drive ou WhatsApp, autoriza o trânsito dos dados necessários entre esses serviços e a Plataforma, que seguem também os termos desses serviços.",
+        "7. Ari, inteligência artificial e transferência internacional",
+        "7.1 A Ari funciona com modelo de inteligência artificial de fornecedor externo, com servidores fora do Brasil. As perguntas e os dados necessários à resposta são enviados a esse fornecedor apenas para gerar a resposta, sob contrato que proíbe o uso para outros fins.",
+        "7.2 O usuário não deve incluir na Ari documentos pessoais, dados bancários ou dados de saúde.",
+        "7.3 Outros fornecedores, como hospedagem e mensagens, também podem armazenar ou acessar dados fora do Brasil. Toda transferência internacional segue o art. 33 da LGPD e a Resolução CD/ANPD nº 19/2024, com cláusulas-padrão nos contratos quando aplicável. A lista de fornecedores e países está disponível pelo formulário de Privacidade.",
+        "7.4 Algumas decisões são tomadas de forma automatizada pela Plataforma, com apoio de inteligência artificial: a aprovação do cadastro e a suspensão preventiva de contas com sinais de fraude. A aprovação de anúncios é sempre feita pela equipe.",
+        "7.4-A O usuário afetado por decisão automatizada pode pedir revisão pela Central de Atendimento, com análise por pessoa da equipe e resposta em até 5 dias úteis (LGPD, art. 20).",
+        "Quando pedido, a ARINI informa os critérios gerais usados, preservados o segredo comercial e as medidas antifraude.",
+        "8. Dados de bases públicas",
+        "8.1 A Plataforma organiza dados de bases públicas, como CAR, SICAR, SIGEF, INCRA, embargos e cadastros municipais. Esses dados são tratados conforme a finalidade para a qual foram publicados e exibidos apenas na medida em que a própria fonte os disponibiliza.",
+        "8.2 Nas consultas, a Plataforma exibe dados do imóvel e da área. CPF e contatos pessoais de titulares que constem nas fontes não são exibidos.",
+        "8.3 Quem encontrar dado seu exibido de forma indevida pode pedir correção ou ocultação pelo formulário de Privacidade.",
+        "8.4 A exibição de dados de bases públicas na Plataforma não torna a ARINI fonte oficial, certificadora ou garantidora desses dados, que seguem a origem, a data e as condições de cada fonte.",
+        "9. Conservação e exclusão",
+        [
+          [
+            "Dado",
+            "Prazo",
+            "Contagem"
+          ],
+          [
+            "Conta ativa",
+            "Enquanto a conta existir",
+            "—"
+          ]
+        ]
+      ],
+      [
+        [
+          [
+            "Dado",
+            "Prazo",
+            "Contagem"
+          ],
+          [
+            "Cadastro, CRM e dados em texto de conta bloqueada",
+            "12 meses",
+            "Do bloqueio por falta de pagamento"
+          ],
+          [
+            "Documentos, fotos e anexos de conta bloqueada",
+            "6 meses",
+            "Do bloqueio"
+          ],
+          [
+            "Vídeos, tour 3D e arquivos pesados de conta bloqueada",
+            "90 dias",
+            "Do bloqueio"
+          ],
+          [
+            "Imagem do rosto (selfie)",
+            "30 dias",
+            "Da validação; fica guardado só o comprovante (data, hora e resultado)"
+          ],
+          [
+            "Registro de acesso e Interesse",
+            "Até o fim da janela de proteção de 2 anos",
+            "Do registro de Interesse"
+          ],
+          [
+            "Registros de intermediação, exclusividade e venda",
+            "Prazo prescricional para cobrança e defesa",
+            "Da venda ou do fim da exclusividade"
+          ],
+          [
+            "Registros de acesso à aplicação (Marco Civil)",
+            "Mínimo de 6 meses",
+            "Do acesso"
+          ],
+          [
+            "Documentos fiscais",
+            "Prazo da lei fiscal",
+            "Do fato gerador"
+          ]
+        ],
+        "9.1 Antes de excluir dados de conta bloqueada, a ARINI avisa na conta com 15 dias de antecedência.",
+        "9.2 Encerrados os prazos, os dados são excluídos ou anonimizados. Dados ligados a processo ou cobrança pendente ficam restritos até o fim da pendência. Cópias de segurança seguem ciclo próprio e não retornam ao uso normal.",
+        "10. Direitos do titular",
+        "10.1 O titular pode pedir, sem custo: confirmação e acesso aos dados; correção; anonimização, bloqueio ou exclusão de dados desnecessários; portabilidade; informação sobre compartilhamentos; revogação do consentimento; oposição a tratamento irregular; e revisão de decisão automatizada.",
+        "10.2 A confirmação e o acesso são atendidos de forma simplificada na hora ou por declaração completa em até 15 dias (LGPD, art. 19). Os demais pedidos são respondidos em prazo razoável, com explicação quando não puderem ser atendidos.",
+        "10.3 A identidade do solicitante é conferida de forma proporcional antes do atendimento."
+      ],
+      [
+        "10.4 A exclusão da conta ou a revogação do consentimento não elimina dados que a lei obriga guardar ou que sejam necessários à defesa de direitos, como os registros de intermediação. O titular é informado do que foi mantido e por quê.",
+        "10.5 O titular pode reclamar à ANPD e aos órgãos de defesa do consumidor.",
+        "11. Segurança, incidentes, cookies e alterações",
+        "11.1 A ARINI mantém medidas técnicas e administrativas compatíveis com o risco, incluindo controle de acesso por perfil, proteção das comunicações e gestão de fornecedores.",
+        "11.2 Em incidente que possa gerar risco ou dano relevante, a ARINI comunica a ANPD e os titulares afetados nos prazos da Resolução CD/ANPD nº 15/2024.",
+        "11.3 A Plataforma usa dois tipos de cookies e tecnologias semelhantes:",
+        "• Necessários: próprios da ARINI, para login, segurança, preferências e funcionamento.",
+        "Não podem ser desativados.",
+        "• De terceiros, para análise e publicidade: ferramentas de medição de uso e de anúncios de parceiros, que podem enviar dados de navegação a esses parceiros, inclusive no exterior. Só são ativados com aceite.",
+        "11.3-A No primeiro acesso, o usuário escolhe quais cookies opcionais aceita. Recusar não impede o uso da Plataforma, e a escolha pode ser mudada a qualquer momento na própria conta ou no rodapé do site. A lista de ferramentas de terceiros, com finalidade e prazo de cada uma, fica disponível na página de cookies.",
+        "11.4 Esta Política é datada e versionada. Alterações relevantes são comunicadas na conta antes de entrar em vigor. A atualização do texto não torna lícito tratamento anterior feito em desacordo com a lei."
+      ]
+    ]
+  },
+  "remuneracao": {
+    "sha256": "3f4583c68207f69c7278bde90eeea392bda8b0b8030be6c96ac8e0a84b430ba9",
+    "paginas": [
+      [
+        "ARINI — Regra de Remuneração",
+        "Reúne, num só lugar, as regras de comissão de todos os perfis da ARINI. A comissão é sempre da ARINI Imóveis; a ARINI Tecnologia não recebe comissão.",
+        "Comissão por perfil",
+        [
+          [
+            "Perfil",
+            "Comissão da ARINI Imóveis",
+            "Quem paga"
+          ],
+          [
+            "Proprietário e \"Quero vender\"",
+            "1,9% sobre a venda, com Termo de Exclusividade",
+            "Proprietário"
+          ],
+          [
+            "Imóvel captado pela Rede de Corretores",
+            "1,9%, dos quais 0,5% são repassados ao corretor captador",
+            "Proprietário"
+          ],
+          [
+            "Empresa ou incorporadora",
+            "1,9% só na venda feita pela ARINI Imóveis, com exclusividade; sem comissão na venda por CRM e corretores próprios",
+            "Empresa"
+          ],
+          [
+            "Leiloeiro",
+            "Sem comissão; cobrança apenas do plano",
+            "—"
+          ],
+          [
+            "Correspondente bancário",
+            "Sem comissão sobre o ganho da correspondente; cobrança apenas do pacote",
+            "—"
+          ],
+          [
+            "Comprador e investidor",
+            "Nunca paga comissão por cadastro, consulta, Interesse ou visita",
+            "—"
+          ],
+          [
+            "Órgão público",
+            "Sem comissão; contrato próprio",
+            "—"
+          ]
+        ],
+        "Anúncio não tem mensalidade. Planos, Créditos e serviços de tecnologia seguem os Termos de Uso e são contratados com a ARINI Tecnologia.",
+        "1. Aplicação e prevalência",
+        "1.1 Esta Regra integra o Termo de Exclusividade, o Termo de Parceria da Rede de Corretores e os contratos com empresas firmados com a Arini Negócios Imobiliários Ltda, CNPJ",
+        "61.134.351/0001-80, CRECI 0010524-J (\"ARINI Imóveis\").",
+        "1.2 Em caso de conflito, prevalece o contrato específico assinado para o imóvel, e depois esta Regra. Condições especiais negociadas por escrito prevalecem no que forem válidas.",
+        "1.3 Cada contratação registra a versão desta Regra aceita na data da assinatura.",
+        "2. Base de cálculo",
+        "2.1 A comissão incide sobre o valor total da operação: o preço ajustado, somados entrada, parcelas e o valor atribuído a bens recebidos em permuta ou dação em pagamento."
+      ],
+      [
+        "2.2 Não entram na base tributos, despesas de cartório, juros de financiamento bancário e encargos de atraso. A assunção de dívida entra apenas se fizer parte expressa do preço, sem contagem dupla.",
+        "2.3 Em venda de parte da área, desmembramento ou direito distinto, a base é o valor da parte ou do direito negociado.",
+        "2.4 Em permuta ou operação sem preço em dinheiro, a base, o valor e a forma de pagamento são ajustados por escrito entre as partes e a ARINI Imóveis antes da conclusão, conforme o Termo de Exclusividade.",
+        "2.5 Se a operação for concluída sem a ARINI Imóveis e sem valor declarado, a base é o preço anunciado.",
+        "3. Quando a comissão é devida",
+        "3.1 A comissão é devida nas hipóteses do Termo de Exclusividade: venda durante a exclusividade, venda a interessado protegido pela janela de 2 anos, recusa de proposta que atenda a todas as condições de aceite e encerramento antecipado sem justo motivo.",
+        "3.2 A venda considera-se feita na data do primeiro destes atos: compromisso, promessa ou contrato particular; recebimento de sinal ou entrada; cessão de direitos; entrega da posse; ou escritura.",
+        "3.3 Alcançado o acordo entre as partes, o arrependimento posterior delas não afasta a comissão (Código Civil, art. 725).",
+        "3.4 Quando a venda depende de condição, como a aprovação de financiamento bancário, e o negócio se desfaz por motivo alheio às partes, como a recusa do banco, a comissão não é devida.",
+        "3.4-A A comissão é devida quando o negócio deixa de se concretizar por culpa ou intenção de uma das partes, como deixar de entregar documentos, não dar andamento ao processo ou desistir.",
+        "Ela é paga por quem deu causa:",
+        "• pelo Proprietário, quando a falha for dele;",
+        "• pelo comprador, quando a falha for dele, conforme cláusula que conste da proposta ou do compromisso assinado por ele.",
+        "3.5 Cadastro, consulta, visualização, Interesse ou visita, isoladamente, não geram comissão. O vínculo entre o trabalho da ARINI Imóveis e o negócio é demonstrado pelos registros da Plataforma.",
+        "4. Quem paga, repasse à rede e divisão",
+        "4.1 O Proprietário paga a comissão do imóvel sob Termo de Exclusividade, inclusive quando captado pela Rede de Corretores. O comprador nunca paga comissão à ARINI Imóveis sem contrato próprio, prévio e expresso."
+      ],
+      [
+        "4.2 O repasse de 0,5% ao corretor captador sai dos 1,9% e não aumenta o valor pago pelo Proprietário. O repasse acompanha o recebimento da comissão pela ARINI Imóveis, na mesma proporção, e é pago ao corretor em até 5 dias úteis de cada recebimento. Comissão não recebida pela ARINI Imóveis não gera repasse. As demais regras do repasse ficam no Termo de Parceria.",
+        "4.3 A divisão com outros corretores ou imobiliárias que atuem no negócio, com autorização da ARINI Imóveis, é ajustada por escrito, sem custo adicional ao Proprietário. Sem ajuste, aplica-se a divisão igual do art. 728 do Código Civil. O simples cadastro na rede não dá direito a participação.",
+        "4.4 A mesma comissão nunca é cobrada duas vezes, nem de duas pessoas diferentes.",
+        "4.5 Serviços técnicos, jurídicos, leilões, financiamento e planos da Plataforma não seguem esta Regra e têm remuneração própria.",
+        "5. Pagamento, documento fiscal, atraso e quitação",
+        "5.1 A comissão é paga no momento registrado nas condições de aceite ou ajustado por escrito para a proposta. Na falta de data, vence em 5 dias úteis contados da data da venda.",
+        "5.2 Venda parcelada não parcela a comissão automaticamente. O pagamento proporcional aos recebimentos só vale se ajustado por escrito antes do vencimento.",
+        "5.3 A ARINI Imóveis emite demonstrativo do cálculo e nota fiscal. O pagamento é feito apenas pelos meios oficiais informados na Plataforma.",
+        "5.4 O atraso gera multa de 2%, juros simples de 1% ao mês, proporcionais aos dias, e correção pelo IPCA.",
+        "5.5 O pagamento integral dá direito a recibo de quitação da comissão daquele negócio.",
+        "6. Contestação e alterações",
+        "6.1 Dúvidas ou contestação do cálculo são feitas pela Central de Atendimento, que esclarece a origem e o cálculo da comissão em até 5 dias úteis.",
+        "6.2 Percentual e condições de um contrato em curso só mudam por ajuste expresso. Nova versão desta Regra não alcança negócios, interessados ou obrigações anteriores.",
+        "6.3 Aplicam-se as leis brasileiras. Fica eleito o foro da Comarca de Iturama/MG, sem prejuízo do foro do domicílio do consumidor."
+      ]
+    ]
+  },
+  "exclusividade": {
+    "sha256": "9276d92441fb8fb03525885d9539dbab6f58b08984dc272c5cf8942d6ec681ca",
+    "paginas": [
+      [
+        "ARINI — Termo de Exclusividade",
+        "Contrato específico de intermediação imobiliária com exclusividade, firmado na Plataforma ARINI. Campos entre {chaves} são preenchidos pelo sistema a cada imóvel.",
+        "Quadro-resumo",
+        [
+          [
+            "Campo",
+            "Conteúdo"
+          ],
+          [
+            "Contratada",
+            "Arini Negócios Imobiliários Ltda, CNPJ 61.134.351/0001-80, CRECI 0010524-J, Rua Campina Verde, 1130, Centro, Iturama/MG"
+          ],
+          [
+            "Corretor responsável técnico",
+            "Carlos Eduardo Freitas Borges Arini, CRECI-MG 0043030"
+          ],
+          [
+            "Proprietário",
+            "{nome ou razão social}, {CPF ou CNPJ}, {endereço}, {estado civil e regime de bens}, {representante e poderes}"
+          ],
+          [
+            "Coproprietários e anuentes",
+            "{qualificação de cada um}"
+          ],
+          [
+            "Imóvel",
+            "{código ARINI}, {natureza do direito}, matrícula {nº} do {cartório}, {município/UF}, área registral {área}, {CAR, CCIR ou inscrição municipal}, área levantada {área}, {ocupação, arrendamento, posse ou uso atual}, {ônus, gravames e ações conhecidos}"
+          ],
+          [
+            "Condições de aceite",
+            "Preço mínimo {valor}; entrada {valor}; prazo e forma de pagamento {condições}"
+          ],
+          [
+            "Comissão",
+            "1,9% sobre o valor total da venda, paga pelo Proprietário"
+          ],
+          [
+            "Momento de pagamento da comissão",
+            "{escolha registrada: assinatura do primeiro documento, recebimento do sinal ou outro}"
+          ],
+          [
+            "Prazo da exclusividade",
+            "{180 dias ou 12 meses}, de {início} a {término}, com renovação automática por igual período (cláusula 3.2)"
+          ],
+          [
+            "Janela de proteção",
+            "Até 2 anos contados do registro de Interesse de cada interessado"
+          ],
+          [
+            "Interessados preexistentes",
+            "Conforme Anexo I"
+          ],
+          [
+            "Anúncio",
+            "Gratuito, sem mensalidade. Serviços adicionais"
+          ]
+        ]
+      ],
+      [
+        [
+          [
+            "Campo",
+            "Conteúdo"
+          ],
+          [
+            "",
+            "contratados: {lista ou nenhum}"
+          ]
+        ],
+        "A descrição do imóvel neste quadro integra o Termo e não é substituída pela geometria ou pelo anúncio, que podem mudar.",
+        "1. Partes",
+        "1.1 São partes o Proprietário identificado no Quadro-resumo, e todos os titulares e anuentes nele indicados, e a Arini Negócios Imobiliários Ltda, doravante \"ARINI Imóveis\".",
+        "1.2 Coproprietários e anuentes necessários aderem a este Termo na extensão de seus direitos.",
+        "Não há solidariedade presumida entre eles.",
+        "1.3 A Plataforma é operada pela ARINI Tecnologia e Participações Ltda, CNPJ",
+        "68.128.846/0001-45, que não é parte deste Termo, não presta corretagem e não recebe comissão.",
+        "2. Objeto e alcance da exclusividade",
+        "2.1 O Proprietário contrata a ARINI Imóveis para prestar, com exclusividade, o serviço de intermediação da venda do imóvel descrito no Quadro-resumo: divulgar o imóvel, buscar e atender compradores compatíveis com as condições de aceite, aproximar as partes e conduzir a negociação, nos termos dos arts. 722 a 729 do Código Civil e da Lei 6.530/1978.",
+        "2.2 Durante o prazo, o Proprietário não contrata outro intermediador, não anuncia o imóvel por outros meios e encaminha à ARINI Imóveis todo interessado que o procurar. Corretores da rede ARINI podem atuar sob coordenação da ARINI Imóveis, sem afastar a exclusividade.",
+        "2.3 A exclusividade não dá à ARINI Imóveis poderes para vender, aceitar proposta, conceder desconto, assinar compromisso ou escritura, receber sinal ou preço ou dar quitação. Esses atos são do Proprietário ou dependem de procuração específica.",
+        "2.4 A exclusividade não nasce do cadastro nem do aceite dos Termos de Uso. Ela exige a assinatura deste Termo, com aceite em destaque do prazo, da comissão e dos efeitos da venda direta.",
+        "3. Prazo",
+        "3.1 A exclusividade vale pelo prazo escolhido pelo Proprietário no Quadro-resumo, de 180 dias ou de 12 meses, contado da assinatura do Proprietário.",
+        "3.2 Ao fim do prazo, o Termo se renova automaticamente por igual período, de 180 dias ou de 12 meses, e assim sucessivamente, nas mesmas condições, salvo se uma das partes manifestar o contrário até a data de término."
+      ],
+      [
+        "3.3 A ARINI Imóveis avisa o Proprietário na Plataforma pelo menos 30 dias antes de cada renovação. Para não renovar, basta o Proprietário informar pela Central de Atendimento até a data de término, sem custo e sem precisar de motivo.",
+        "4. Comissão, vencimento e atraso",
+        "4.1 A comissão é de 1,9% sobre o valor total da venda, paga pelo Proprietário à ARINI Imóveis.",
+        "O repasse de 0,5% ao corretor da rede que captou o imóvel, quando houver, sai dos 1,9% e não aumenta o valor pago pelo Proprietário.",
+        "4.2 Para proposta dentro das condições de aceite, a comissão é paga no momento registrado no",
+        "Quadro-resumo. Para proposta diferente, a forma e o momento são ajustados por escrito antes da conclusão do negócio, conforme a cláusula 5.4.",
+        "4.3 A ARINI Imóveis emite demonstrativo com a identificação da operação e o cálculo da comissão. O pagamento vence no momento ajustado ou, na falta de data, em 5 dias úteis contados da data da venda definida na cláusula 6.2.",
+        "4.4 O atraso no pagamento gera multa de 2%, juros de 1% ao mês e correção monetária pelo IPCA.",
+        "4.5 A comissão não é cobrada em duplicidade. Se outro corretor atuar com autorização da ARINI Imóveis, a divisão é feita entre eles, sem custo adicional ao Proprietário.",
+        "5. Condições de aceite e propostas",
+        "5.1 As condições de aceite registradas no Quadro-resumo refletem a autorização atual de venda do Proprietário.",
+        "5.2 O Proprietário pode pedir alteração das condições de aceite a qualquer momento, pela Plataforma. A alteração vale a partir da confirmação da ARINI Imóveis e não alcança proposta apresentada antes dela.",
+        "5.3 Se a ARINI Imóveis apresentar proposta formal, por escrito, de comprador identificado e com capacidade de pagamento demonstrada, que atenda a todas as condições de aceite vigentes, a comissão é devida. O Proprietário deve celebrar o negócio ou, recusando, pagar a comissão calculada sobre o valor da proposta.",
+        "5.4 Proposta diferente das condições de aceite pode ser aceita ou recusada livremente pelo Proprietário. Se ele quiser aceitá-la, a forma e o momento de pagamento da comissão são ajustados por escrito antes da conclusão. Sem acordo, a negociação com aquele interessado não prossegue, e a ARINI Imóveis segue com outros interessados.",
+        "5.5 O registro de proposta na Plataforma não equivale a aceitação. A aceitação deve ser expressa e registrada pelo Proprietário."
+      ],
+      [
+        "6. Venda durante a exclusividade, data da venda e operações equiparadas",
+        "6.1 A venda do imóvel durante a exclusividade gera a comissão integral, ainda que feita diretamente pelo Proprietário ou por terceiro e formalizada depois do fim do prazo (Código Civil, art. 726). Ficam ressalvados os interessados declarados no Anexo I e a inércia comprovada da ARINI Imóveis.",
+        "6.2 Considera-se feita a venda na data do primeiro destes atos: assinatura de compromisso, promessa ou contrato particular; recebimento de sinal ou entrada; cessão de direitos; entrega da posse; ou escritura. A escritura lavrada depois, inclusive ao fim de pagamento parcelado por anos, não muda a data da venda.",
+        "6.3 Equiparam-se à venda a permuta, a cessão de direitos, a dação em pagamento, a venda de quotas ou ações de sociedade titular do imóvel e a transferência do imóvel a empresa ligada ao Proprietário seguida de alienação.",
+        "6.3-A Em permuta ou outra operação sem preço em dinheiro, a base de cálculo, o valor, a forma e o momento de pagamento da comissão são ajustados por escrito entre o Proprietário, a outra parte e a ARINI Imóveis antes da conclusão. Sem esse ajuste, a negociação não prossegue pela ARINI Imóveis.",
+        "6.3-B Se a operação for concluída pelo Proprietário sem a ARINI Imóveis, durante a exclusividade ou com interessado protegido, a comissão incide sobre o valor atribuído ao imóvel na operação ou, na falta dele, sobre o preço anunciado.",
+        "6.4 Em desmembramento, venda de parte da área ou abertura de novas matrículas, a comissão incide sobre o valor da parte vendida. A ligação com o imóvel contratado é demonstrada por matrículas, plantas, memoriais e histórico cadastral.",
+        "6.5 A comissão permanece devida se, alcançado o acordo entre as partes, o negócio não se concretizar por arrependimento delas (Código Civil, art. 725).",
+        "7. Janela de proteção após o prazo",
+        "7.1 Terminada a exclusividade, a comissão continua devida se o imóvel for vendido a interessado que o conheceu pela Plataforma, dentro de até 2 anos contados do registro de Interesse desse interessado, ainda que o contato final ocorra sem a ARINI Imóveis (Código Civil, art. 727).",
+        "7.2 Considera-se venda ao interessado também a venda a seu cônjuge ou companheiro, a parentes até o segundo grau, a sócios, a empresas de que participe e a quem agir em seu nome ou por sua conta.",
+        "7.3 Em até 10 dias úteis do fim da exclusividade, a ARINI Imóveis disponibiliza ao Proprietário, na Plataforma, relatório final com as atividades realizadas, as propostas recebidas e a relação dos interessados registrados, com as datas. O Proprietário pode contestar a relação em 10 dias úteis, comprovando contato anterior ou ausência de vínculo."
+      ],
+      [
+        "7.4 O vínculo entre a atuação da ARINI Imóveis e o negócio é demonstrado pelos registros da Plataforma: Interesse, visitas, propostas e comunicações.",
+        "7.5 Durante a exclusividade e a janela de proteção, o Proprietário informa à ARINI Imóveis a venda do imóvel e a identificação do comprador em até 5 dias úteis. A ARINI Imóveis pode conferir a venda pela matrícula.",
+        "7.6 A comissão fundada no trabalho da ARINI Imóveis ou em tentativa de contornar o pagamento é devida a qualquer tempo, nos termos do art. 727 do Código Civil.",
+        "8. Obrigações da ARINI Imóveis",
+        "8.1 Analisar os documentos e indicar as pendências. O anúncio é publicado entre o 8º e o 10º dia contados da assinatura do Proprietário, depois de encerrado o prazo de desistência da cláusula",
+        "11.6, desde que a documentação esteja completa. Até a publicação, o Termo e as informações do imóvel ficam reservados, e o imóvel não é divulgado.",
+        "8.2 Divulgar o imóvel nos canais adequados, atender os interessados, organizar visitas autorizadas e encaminhar ao Proprietário todas as propostas, sem alterar suas condições.",
+        "8.3 Registrar na Plataforma, com acesso do Proprietário, visitas, propostas, retornos e motivos de desistência dos interessados.",
+        "8.4 Manter no perfil do Proprietário, atualizados e disponíveis a qualquer momento, o acompanhamento do imóvel e o relatório de divulgação, contatos, visitas e propostas. Dúvidas são atendidas pela Central de Atendimento ou presencialmente, com agendamento.",
+        "8.5 Esclarecer riscos e fatores relevantes conhecidos ou identificáveis com a diligência exigível e guardar sigilo sobre as informações confidenciais do imóvel e do Proprietário.",
+        "8.6 A ARINI Imóveis não garante venda, preço ou prazo, nem se obriga a contratar publicidade paga, levantamentos, laudos ou outros serviços extraordinários, que dependem de orçamento e autorização à parte. A falta de comprador, por si só, não caracteriza inércia.",
+        "8.7 A Plataforma informa ao Proprietário fatores que podem estar dificultando a venda, como preço, condições e retorno dos interessados. Recursos adicionais de análise com inteligência artificial podem ser contratados à parte, a critério do Proprietário, e têm natureza informativa.",
+        "9. Obrigações do Proprietário",
+        "9.1 Apresentar certidão atualizada da matrícula e os documentos de titularidade, poderes e situação do imóvel. CAR e cadastros não substituem prova de propriedade.",
+        "9.2 Informar ônus, ações, ocupação e restrições ambientais, fiscais e fundiárias conhecidas, bem como coproprietários, cônjuge, procurações e litígios.",
+        "9.3 Permitir visitas previamente agendadas, respeitadas a segurança e a privacidade dos ocupantes."
+      ],
+      [
+        "9.4 Comunicar em até 5 dias úteis: proposta recebida diretamente, negociação em curso, venda, promessa, alteração de titularidade, desmembramento ou mudança relevante no imóvel.",
+        "9.5 Manter atualizados preço, disponibilidade e restrições, e não fornecer informação falsa nem manipular documentos ou a identidade das partes.",
+        "9.6 O Proprietário declara ter legitimidade para contratar e que as informações e os documentos fornecidos são verdadeiros, completos e atualizados, respondendo por inexatidões ou omissões.",
+        "10. Encerramento antecipado",
+        "10.1 O Proprietário pode encerrar a exclusividade antes do fim do prazo, sem penalidade, por justo motivo: falecimento de titular, abertura de inventário, irregularidade documental, ordem judicial, bloqueio ou desapropriação do imóvel, ou descumprimento comprovado da ARINI Imóveis.",
+        "10.2 Outros motivos pessoais, familiares, de saúde ou financeiros também podem justificar o encerramento. A ARINI Imóveis analisa cada pedido com boa-fé e decide de forma fundamentada se o aprova, considerando especialmente a ausência de indício de venda por fora ou de tentativa de evitar a comissão. A análise não obriga a aprovação.",
+        "10.3 O pedido é feito pela Central de Atendimento, com o motivo e, quando houver, o documento que o comprove. A ARINI Imóveis responde em até 5 dias úteis. Enquanto analisa, o anúncio pode ser suspenso a pedido do Proprietário. Aprovado o pedido, o anúncio sai dos canais da ARINI em até 2 dias úteis.",
+        "10.4 O encerramento antecipado sem justo motivo obriga o Proprietário a pagar a comissão calculada sobre o preço anunciado, como cláusula penal, sem acumular com outra comissão pelo mesmo imóvel.",
+        "10.5 Em qualquer caso de encerramento, permanecem a janela de proteção e a cláusula 7.",
+        "10.6 A ARINI Imóveis pode encerrar o Termo com aviso de 15 dias, ou de imediato em caso de fraude, impedimento legal ou informação falsa do Proprietário.",
+        "11. Documentos, dados, assinatura eletrônica e testemunhas",
+        "11.1 Integram este Termo o Quadro-resumo e o Anexo I. Os Termos de Uso regem o uso da Plataforma, e a Política de Privacidade informa o tratamento de dados. Em caso de conflito, prevalece este Termo.",
+        "11.2 Documentos e informações do imóvel e do Proprietário são usados apenas para divulgação, análise e negociação, conforme a Política de Privacidade.",
+        "11.3 O Termo é assinado eletronicamente pelo Proprietário, com validação de identidade, e produz todos os efeitos desde essa assinatura. A assinatura fica vinculada à íntegra do Termo, com data, hora e código de verificação, e uma cópia fica disponível às partes."
+      ],
+      [
+        "11.4 Depois da assinatura do Proprietário, a ARINI Imóveis colhe a assinatura eletrônica de duas testemunhas sobre o mesmo documento, para que o Termo valha também como título executivo extrajudicial (Código de Processo Civil, art. 784, III). A assinatura posterior das testemunhas não altera o conteúdo nem a data de início, e sua falta não afeta a validade do Termo.",
+        "11.5 As cláusulas 3.2, 5.3, 6, 7 e 10 são apresentadas em destaque e aceitas de forma específica antes da assinatura.",
+        "11.6 O Proprietário consumidor pode desistir deste Termo em até 7 dias da assinatura, pela Central de Atendimento, sem custo (Código de Defesa do Consumidor, art. 49). Como o imóvel só é publicado depois desse prazo, a desistência encerra o Termo sem outros efeitos. Se, por pedido expresso do Proprietário, a publicação ocorrer antes, os interessados que registrarem Interesse desde a publicação continuam abrangidos pela janela de proteção da cláusula 7.",
+        "11.7 Este Termo substitui autorização anterior incompatível para o mesmo imóvel, preservadas as obrigações já constituídas.",
+        "11.8 A tolerância de uma parte com o descumprimento da outra não significa renúncia, alteração ou novação. Alterações só valem se registradas por escrito ou por aceite eletrônico vinculado a este Termo.",
+        "12. Foro e assinaturas",
+        "12.1 Aplicam-se as leis brasileiras. Fica eleito o foro da Comarca de Iturama/MG, sem prejuízo do foro do domicílio do Proprietário quando ele for consumidor.",
+        "12.2 Declaração específica: o Proprietário confirma ter lido o prazo da exclusividade, a comissão de 1,9%, a comissão na venda direta durante o prazo, a janela de proteção de 2 anos e as regras de encerramento antecipado.",
+        [
+          [
+            "Assinatura",
+            "Nome",
+            "Documento"
+          ],
+          [
+            "Proprietário",
+            "{nome}",
+            "{CPF ou CNPJ}"
+          ],
+          [
+            "Coproprietários e anuentes",
+            "{nomes}",
+            "{CPF}"
+          ],
+          [
+            "ARINI Imóveis",
+            "{representante}",
+            "CNPJ 61.134.351/0001-80"
+          ],
+          [
+            "Corretor responsável",
+            "Carlos Eduardo Oliveira Freitas",
+            "CRECI-MG 0043030"
+          ],
+          [
+            "Testemunha 1",
+            "{nome}",
+            "{CPF}"
+          ],
+          [
+            "Testemunha 2",
+            "{nome}",
+            "{CPF}"
+          ]
+        ],
+        "Iturama/MG, {data da assinatura eletrônica}."
+      ],
+      [
+        "Anexo I — Interessados preexistentes",
+        "Antes de assinar, o Proprietário declara as pessoas ou empresas com quem já negociava o imóvel. A venda a interessado declarado não gera comissão, salvo se a ARINI Imóveis participar da negociação a pedido do Proprietário. Interessado não declarado não pode ser alegado depois para afastar a comissão.",
+        [
+          [
+            "Nome ou empresa",
+            "CPF ou CNPJ",
+            "Desde quando",
+            "Estágio da negociação"
+          ],
+          [
+            "{nome}",
+            "{documento}",
+            "{data}",
+            "{contato, visita ou proposta}"
+          ]
+        ],
+        "• ☐ Declaro que não existem interessados ou negociações anteriores."
+      ]
+    ]
+  },
+  "parceiros": {
+    "sha256": "2a55022ec7a05d4b9f050b97aaae271bb08e7817ca39b35efc8f58b5f7850a57",
+    "paginas": [
+      [
+        "ARINI — Termo de Parceria da Rede de Corretores",
+        "Contrato de adesão do corretor ou da imobiliária à Rede de Corretores ARINI, para captar imóveis que passam a ser intermediados com exclusividade pela ARINI Imóveis. Adesão opcional: o uso do CRM e dos planos do perfil corretor não depende deste Termo.",
+        "Quadro de credenciamento",
+        [
+          [
+            "Campo",
+            "Conteúdo"
+          ],
+          [
+            "ARINI Imóveis",
+            "Arini Negócios Imobiliários Ltda, CNPJ 61.134.351/0001-80, CRECI 0010524-J, Rua Campina Verde, 1130, Centro, Iturama/MG"
+          ],
+          [
+            "Parceiro",
+            "{nome ou razão social}, {CPF ou CNPJ}, {endereço}"
+          ],
+          [
+            "Registro",
+            "CRECI {nº} {F ou J}; responsável técnico, se imobiliária: {nome e CRECI}"
+          ],
+          [
+            "Região de atuação",
+            "{municípios ou região}"
+          ],
+          [
+            "Repasse",
+            "0,5% sobre o valor da venda de cada imóvel captado, saído dos 1,9% da ARINI Imóveis"
+          ],
+          [
+            "Vigência",
+            "Prazo indeterminado, a partir da aprovação do credenciamento"
+          ]
+        ],
+        "1. Partes e natureza da parceria",
+        "1.1 São partes a Arini Negócios Imobiliários Ltda (\"ARINI Imóveis\") e o corretor ou imobiliária identificado no Quadro de credenciamento (\"Parceiro\").",
+        "1.2 O Parceiro capta imóveis para a ARINI Imóveis. Cada imóvel captado passa a ser intermediado exclusivamente pela ARINI Imóveis, por Termo de Exclusividade assinado pelo proprietário, e o Parceiro recebe o repasse da cláusula 5.",
+        "1.3 A adesão à Rede é opcional. O Parceiro continua livre para usar o CRM e os planos da plataforma e para atender seus próprios clientes fora da Rede, com imóveis que não tenha captado para a ARINI Imóveis.",
+        "1.4 Este Termo não cria franquia, representação, sociedade nem poderes para o Parceiro agir em nome da ARINI Imóveis.",
+        "2. Credenciamento e CRECI",
+        "2.1 O credenciamento depende de análise e aprovação da ARINI Imóveis e de CRECI ativo: de pessoa física para corretor autônomo, ou de pessoa jurídica com responsável técnico para imobiliária."
+      ],
+      [
+        "2.2 O Parceiro comunica imediatamente qualquer suspensão, cancelamento ou irregularidade no CRECI. Nesse caso, a participação na Rede fica suspensa até a regularização.",
+        "2.3 Imobiliária parceira responde pelos corretores que atuam em seu nome, que também devem ter CRECI ativo e credenciais individuais na plataforma.",
+        "3. Captação de imóveis e exclusividade",
+        "3.1 O Parceiro cadastra o imóvel pelo próprio perfil, com a matrícula atualizada e os documentos do proprietário. A ARINI Imóveis analisa e decide se aceita o imóvel.",
+        "3.2 Aceito o imóvel, o proprietário assina o Termo de Exclusividade diretamente com a ARINI Imóveis. O imóvel fica registrado como captado pelo Parceiro, com data e hora.",
+        "3.3 Durante a exclusividade do imóvel e a janela de proteção, o Parceiro trabalha esse imóvel apenas pela ARINI Imóveis: não o anuncia em outros portais, imobiliárias ou redes, nem o oferece por conta própria.",
+        "3.4 O Parceiro não cobra do proprietário nenhuma comissão própria sobre o imóvel captado. Sua remuneração é apenas o repasse da cláusula 5.",
+        "3.5 O Parceiro responde pela veracidade das informações e dos documentos que apresenta. Se souber de revogação, venda ou alteração relevante do imóvel, avisa a ARINI Imóveis imediatamente.",
+        "3.6 Imóvel já cadastrado na plataforma por outro corretor ou pelo próprio proprietário não gera repasse. Vale o primeiro registro de captação aceito pela ARINI Imóveis.",
+        "4. Atendimento, contato e conduta",
+        "4.1 O Parceiro atua apenas como captador. O atendimento aos interessados, a apresentação do imóvel, as visitas e a negociação são feitos exclusivamente pela ARINI Imóveis, que não repassa ao Parceiro os contatos dos interessados.",
+        "4.1-A Se o Parceiro guardar as chaves do imóvel ou for o responsável por liberar o acesso, a ARINI Imóveis o avisa com antecedência do dia e do horário da visita, e o Parceiro disponibiliza as chaves ou o acesso, sem contato com o interessado.",
+        "4.2 O Parceiro acompanha pela plataforma o andamento dos imóveis que captou: visitas, propostas e situação da venda.",
+        "4.3 É proibido ao Parceiro:",
+        "• procurar diretamente interessados apresentados pela ARINI Imóveis para negociar fora dela;",
+        "• ocultar negociação ou desviar contato para evitar a comissão;",
+        "• prometer preço, prazo ou condição em nome da ARINI Imóveis, receber valores ou conceder descontos;"
+      ],
+      [
+        "• usar a marca ARINI fora das diretrizes da ARINI Imóveis.",
+        "4.4 O descumprimento da cláusula 4.3 gera a perda do repasse do imóvel envolvido e o descredenciamento, sem prejuízo da indenização pelo dano causado.",
+        "5. Repasse de 0,5%",
+        "5.1 Pela captação, o Parceiro recebe 0,5% sobre o valor da venda do imóvel captado, calculado sobre a mesma base da comissão da Regra de Remuneração. O repasse sai dos 1,9% recebidos pela ARINI Imóveis e não aumenta o valor pago pelo proprietário.",
+        "5.2 O repasse é devido sempre que a ARINI Imóveis receber comissão sobre o imóvel captado, seja a venda feita pela equipe ARINI, por outro corretor da Rede ou dentro da janela de proteção.",
+        "5.3 O repasse acompanha o recebimento da comissão, na mesma proporção, e é pago em até 5 dias úteis de cada recebimento. Comissão não recebida pela ARINI Imóveis não gera repasse.",
+        "5.4 Para receber, o Parceiro emite nota fiscal ou recibo de autônomo, conforme o caso, e mantém atualizados os dados bancários no perfil.",
+        "5.5 A divisão com outros corretores que atuem no mesmo negócio, com autorização da ARINI Imóveis, é ajustada por escrito. Sem ajuste, aplica-se o art. 728 do Código Civil. O simples credenciamento não dá direito a participação em imóvel captado por outro.",
+        "6. Dados pessoais e confidencialidade",
+        "6.1 O Parceiro trata os dados de proprietários que capta apenas para a captação e o acompanhamento do imóvel, conforme a LGPD e a Política de Privacidade da plataforma.",
+        "6.2 O Parceiro não vende, distribui nem usa em campanhas próprias os dados recebidos pela plataforma. O acesso de colaboradores exige credencial individual e dever de sigilo.",
+        "6.3 O Parceiro guarda sigilo sobre os processos internos, critérios e estratégias da ARINI Imóveis a que tiver acesso, durante a parceria e por 5 anos depois dela.",
+        "6.4 Incidente que possa afetar dados compartilhados é comunicado à outra parte em até 24 horas da ciência.",
+        "6.5 Encerrada a parceria, o Parceiro exclui ou devolve os dados recebidos, salvo os que a lei o obrigue a guardar.",
+        "7. Autonomia, responsabilidades e encerramento",
+        "7.1 O Parceiro é autônomo: organiza seu tempo, seus meios e sua equipe e responde por seus tributos e encargos. Não há jornada, subordinação, exclusividade pessoal nem vínculo empregatício com a ARINI Imóveis.",
+        "7.2 Cada parte responde pelos danos que causar por seus atos e omissões."
+      ],
+      [
+        "7.3 A parceria vale por prazo indeterminado e pode ser encerrada por qualquer parte com aviso de 30 dias pela plataforma.",
+        "7.4 Descumprimento sanável é notificado para correção em 5 dias úteis. Fraude, perda do CRECI ou desvio de clientes permitem descredenciamento imediato.",
+        "7.5 Encerrada a parceria por qualquer motivo que não seja a cláusula 4.4, o Parceiro continua recebendo o repasse dos imóveis que captou, enquanto houver comissão recebida sobre eles. As obrigações das cláusulas 3.3, 4.3 e 6 continuam valendo para esses imóveis.",
+        "8. Aceite e foro",
+        "8.1 Integram este Termo os Termos de Uso, a Política de Privacidade e a Regra de Remuneração.",
+        "8.2 O aceite é eletrônico, com validação de identidade, vinculado à versão integral do Termo, com data e hora. Uma cópia fica disponível no perfil do Parceiro.",
+        "8.3 Alterações do percentual ou das condições econômicas exigem novo aceite e não alcançam imóveis já captados.",
+        "8.4 A tolerância com descumprimento não significa renúncia. Fica eleito o foro da Comarca de Iturama/MG."
+      ]
+    ]
+  },
+  "termos-de-uso": {
+    "sha256": "6d3629e13ba923a87930e5755c1c12769d4ce564d6f796f2261befdbd9878523",
+    "paginas": [
+      [
+        "ARINI — Termos de Uso",
+        "Quadro de parâmetros",
+        [
+          [
+            "Parâmetro",
+            "Valor atual",
+            "Onde se aplica"
+          ],
+          [
+            "Comissão de intermediação",
+            "1,9% sobre o valor da venda",
+            "Imóvel sob exclusividade com a ARINI"
+          ],
+          [
+            "Retorno ao corretor da rede",
+            "0,5%, deduzido dos 1,9%",
+            "Imóvel captado pela rede de corretores"
+          ],
+          [
+            "Prazo da exclusividade",
+            "180 dias ou 12 meses, à escolha do titular; renovação por aceite expresso",
+            "Termo de Exclusividade"
+          ],
+          [
+            "Janela de proteção",
+            "Até 2 anos contados do registro de Interesse",
+            "Negócio fechado com interessado apresentado pela ARINI"
+          ],
+          [
+            "Anúncio",
+            "Gratuito, sem mensalidade",
+            "Proprietário e \"Quero vender\""
+          ],
+          [
+            "Teste gratuito",
+            "3 dias",
+            "Perfis indicados nos Anexos"
+          ],
+          [
+            "Plano anual",
+            "12 meses pelo preço de 10",
+            "Planos com opção anual"
+          ],
+          [
+            "Créditos da Ari",
+            "R$ 20 por 1.000 créditos",
+            "Pacote de IA"
+          ],
+          [
+            "Arrependimento",
+            "7 dias da contratação",
+            "Contratação de consumo pela internet"
+          ]
+        ],
+        "1. Identificação e definições",
+        "1.1 A plataforma ARINI é de titularidade e operação de ARINI Tecnologia e Participações Ltda, nome fantasia ARINI Brasil, CNPJ nº 68.128.846/0001-45, com sede na Rua Ribeirão São Domingos, 649, Centro, Iturama/MG, CEP 38280-000, doravante \"ARINI Tecnologia\". A ARINI Tecnologia é dona do software, das bases organizadas, da marca e da Ari, e presta todos os serviços de tecnologia: planos, CRMs, consultas, relatórios, alertas, Créditos e contratos institucionais.",
+        "1.1-A A intermediação imobiliária realizada pela Plataforma é prestada exclusivamente por Arini Negócios Imobiliários Ltda, CNPJ nº 61.134.351/0001-80, inscrita no CRECI sob o nº 0010524- J, com sede na Rua Campina Verde, 1130, Centro, Iturama/MG, doravante \"ARINI Imóveis\". O corretor responsável técnico é Carlos Eduardo Freitas Borges Arini, CRECI-MG nº 0043030.",
+        "1.1-B Cabem somente à ARINI Imóveis o Termo de Exclusividade, a Intermediação, a comissão de 1,9% e o repasse de 0,5% à Rede de Corretores. A ARINI Tecnologia não presta corretagem nem recebe comissão. Nestes Termos, \"ARINI\" designa as duas empresas, cada uma nos limites de sua atividade."
+      ],
+      [
+        "1.1-C O atendimento é feito pela Central de Atendimento da Plataforma, canal oficial para dúvidas, reclamações, denúncias, cancelamento e arrependimento. Cada solicitação recebe número de protocolo e resposta em até 5 dias úteis. A Central fica acessível também a quem não tem cadastro ou está com a conta suspensa.",
+        "1.2 Para estes Termos, considera-se:",
+        "• Plataforma: o site, os aplicativos, os mapas, as consultas, os CRMs e os demais recursos da ARINI.",
+        "• Usuário: quem acessa a Plataforma, com ou sem cadastro.",
+        "• Perfil: a forma de uso escolhida no cadastro, com recursos e regras próprios descritos nos",
+        "Anexos. Um usuário pode ter mais de um Perfil.",
+        "• Imóvel à venda: imóvel aprovado pela ARINI para divulgação no mapa público.",
+        "• Interesse: a manifestação registrada por usuário cadastrado sobre um Imóvel à venda, como pedido de contato, de visita ou de informações.",
+        "• Intermediação: a atividade de corretagem prestada pela ARINI, por meio de corretores habilitados, para aproximar vendedor e comprador.",
+        "• Termo de Exclusividade: o contrato específico pelo qual o titular confia à ARINI, com exclusividade e por prazo determinado, a intermediação da venda do imóvel.",
+        "• Rede de Corretores: corretores e imobiliárias autônomos que aderem ao Termo de Parceria para captar imóveis para a ARINI.",
+        "• Ari: a assistente de inteligência artificial da Plataforma.",
+        "• Créditos: unidades pré-pagas consumidas pelo uso da Ari.",
+        "• Registro de acesso: o histórico de imóveis visualizados e ações realizadas pelo usuário cadastrado.",
+        "2. Estrutura dos documentos",
+        "2.1 Estes Termos regem o uso geral da Plataforma por todos os Perfis. Completam estes Termos:",
+        "1. o Anexo do Perfil escolhido;",
+        "2. a Política de Privacidade;",
+        "3. os contratos específicos, quando houver: Termo de Exclusividade, Termo de Parceria da Rede de Corretores, contrato de assinatura, contrato institucional e termo da Ari.",
+        "2.2 Em caso de conflito, prevalece o contrato específico sobre o Anexo, e o Anexo sobre estes Termos. A Política de Privacidade prevalece em matéria de dados pessoais.",
+        "2.3 O uso gratuito do mapa não cria obrigação de pagamento. Obrigação de pagar só nasce de contratação expressa: plano, Créditos, serviço avulso ou Termo de Exclusividade.",
+        "3. Cadastro e conta",
+        "3.1 Qualquer pessoa pode navegar pelo mapa de Imóveis à venda sem cadastro. Para ver o detalhamento de imóveis, registrar Interesse ou usar recursos de qualquer Perfil, o cadastro é obrigatório."
+      ],
+      [
+        "3.2 O cadastro exige maioridade ou capacidade civil, dados verdadeiros e atualizados e um CPF ou CNPJ válido. A identidade pode ser validada por documento e reconhecimento facial, como também com o código que sera gerado e indicado pelo cliente, conforme a Política de Privacidade. Cada CPF ou CNPJ terá uma conta principal. Representante de pessoa jurídica ou de órgão público deve comprovar seus poderes.",
+        "3.3 Perfis profissionais dependem de comprovação: CRECI ativo para corretor e imobiliária;",
+        "matrícula na junta comercial para leiloeiro; registro no conselho para profissional técnico;",
+        "contrato de correspondente com a instituição financeira para correspondente bancário, a OAB para advogados, e para outros profissionais, para uso de consulta e sistemas atraves de outros criterios de usos, verificados pela Arini, como afins. A ARINI pode verificar a habilitação a qualquer tempo.",
+        "3.4 Colaboradores de empresas e órgãos usam credenciais individuais. É proibido compartilhar login e senha. O usuário deve proteger suas credenciais e avisar a ARINI de acesso indevido.",
+        "3.5 A ARINI pode pedir documentos proporcionais à finalidade do cadastro e recusar ou suspender acesso por irregularidade, documentação insuficiente ou risco concreto de fraude.",
+        "Sempre que possível, informará o motivo e permitirá a correção.",
+        "4. Regras de uso",
+        "4.1 É proibido ao usuário:",
+        "• anunciar imóvel sem ser titular ou sem autorização válida;",
+        "• publicar informação falsa, imagem de outro imóvel ou oferta ilícita;",
+        "• extrair dados em massa, por robô ou script, ou revender dados da Plataforma;",
+        "• usar dados de outros usuários para finalidade diferente da contratada;",
+        "• contornar a ARINI para fechar negócio com interessado apresentado por ela e evitar a comissão devida;",
+        "• tentar acesso indevido, testar vulnerabilidades ou prejudicar o funcionamento da Plataforma;",
+        "• usar a Ari para produzir conteúdo ilícito ou enganoso.",
+        "4.2 Erros, anúncios irregulares e denúncias podem ser comunicados pelo atendimento. A ARINI apurará e poderá corrigir, suspender ou retirar o conteúdo.",
+        "5. Imóveis à venda e anúncios",
+        "5.1 Todo Imóvel à venda depende de aprovação da ARINI e de autorização de todos os titulares ou de representante com poderes suficientes que comprove sua legitimidade para atuar em nome de terceiro. Copropriedade, inventário e anuência do cônjuge serão exigidos conforme o caso.",
+        "5.2 O anunciante deve apresentar certidão atualizada da matrícula e os documentos complementares solicitados. Escritura sem registro, contrato particular, cadastro fiscal e CAR"
+      ],
+      [
+        "não provam propriedade isoladamente. Direitos possessórios, hereditários ou aquisitivos serão anunciados com essa identificação expressa, nunca como propriedade plena.",
+        "5.3 A aprovação confirma a consistência necessária à divulgação e não garante regularidade absoluta do imóvel. Riscos conhecidos ou identificáveis com a diligência exigível serão informados às partes antes do fechamento.",
+        "5.4 O anunciante deve manter preço, disponibilidade e restrições atualizados e informar venda ou retirada do mercado em até 5 dias úteis. A retirada não afasta obrigações do Termo de Exclusividade.",
+        "5.5 Os dados do Imóvel à venda, como localização, cartografia, consultas públicas, fotos e vídeos, ficam visíveis no mapa para todos os usuários. Dados pessoais do titular e documentos privados não são exibidos publicamente.",
+        "5.6 A ARINI não promete venda, prazo de venda, liquidez, valorização ou aprovação de crédito.",
+        "6. Intermediação, exclusividade e comissão",
+        "6.1 A ARINI Imóveis presta Intermediação imobiliária por corretores habilitados, nos termos da Lei 6.530/1978 e dos arts. 722 a 729 do Código Civil. A ARINI não é vendedora dos imóveis de terceiros, mas responde pelos serviços que presta e pelos deveres legais de diligência e informação.",
+        "6.2 A Intermediação pela ARINI exige Termo de Exclusividade assinado pelo titular, com prazo determinado. Durante a exclusividade, o imóvel fica sob intermediação exclusiva da ARINI, e o titular não o oferece por outro intermediador.",
+        "6.3 A comissão é de 1,9% sobre o valor da venda, paga pelo vendedor à ARINI Imóveis, nas condições do Termo de Exclusividade. O cadastro, a consulta e o registro de Interesse não obrigam o comprador a pagar comissão.",
+        "6.4 A comissão é devida quando a venda se concretizar:",
+        "1. durante a exclusividade, com qualquer comprador, ainda que sem a participação da ARINI Imóveis (Código Civil, art. 726);",
+        "2. depois da exclusividade, com interessado que conheceu o imóvel pela Plataforma, dentro da janela de proteção de até 2 anos contados do registro de Interesse, ainda que o contato final ocorra sem a ARINI Imóveis;",
+        "3. a qualquer tempo, quando o negócio for fruto do trabalho da ARINI Imóveis ou houver tentativa de contornar a comissão, nos termos do art. 727 do Código Civil.",
+        "6.4-A O vínculo entre a atuação da ARINI Imóveis e o negócio será demonstrado pelos registros da Plataforma: Interesse, visitas, propostas e comunicações.",
+        "6.4-B Para a janela de proteção, considera-se venda ao interessado também a venda ao seu cônjuge ou companheiro, a parentes até o segundo grau, a sócios, a empresas de que participe e a quem agir em seu nome ou por sua conta."
+      ],
+      [
+        "6.4-C O vendedor deve informar à ARINI Imóveis a venda do imóvel e a identificação do comprador em até 5 dias úteis, durante a exclusividade e a janela de proteção. A ARINI Imóveis pode conferir a venda pela matrícula do imóvel.",
+        "6.4-D Considera-se concretizada a venda na data do primeiro destes atos: assinatura de compromisso, promessa ou contrato particular de compra e venda; recebimento de sinal ou entrada; cessão de direitos; entrega da posse; ou escritura. A escritura lavrada depois, inclusive ao fim de pagamentos parcelados por anos, não altera a data da venda nem afasta a comissão.",
+        "6.4-E A comissão é paga na forma registrada nas condições de aceite (cláusula 6.10) ou, para proposta diferente delas, na forma ajustada conforme a cláusula 6.11-A.",
+        "6.5 Quando o imóvel for captado pela Rede de Corretores, 0,5% dos 1,9% são repassados ao corretor captador, conforme o Termo de Parceria. Esse repasse não aumenta a comissão paga pelo vendedor.",
+        "6.6 Não há exclusividade nem comissão da ARINI:",
+        "• nos imóveis em leilão divulgados pelo Perfil Leiloeiro;",
+        "• nas vendas da empresa ou incorporadora feitas por CRM próprio e corretores próprios.",
+        "6.7 A ARINI não recebe preço, sinal ou valores em nome do vendedor, nem aceita proposta ou assina a venda por ele, salvo instrumento próprio com poderes expressos. Nenhum pagamento deve ser feito a terceiro sem conferência dos dados e da autorização.",
+        "6-A. Regras da exclusividade",
+        "6.8 A exclusividade vale por todo o prazo contratado. O titular pode encerrá-la antes do fim do prazo, sem penalidade, por justo motivo, como falecimento de titular, abertura de inventário, irregularidade documental, ordem judicial, bloqueio ou desapropriação do imóvel, ou descumprimento comprovado da ARINI Imóveis.",
+        "6.8-A Outros motivos pessoais, familiares, de saúde ou financeiros também podem justificar o encerramento. A ARINI Imóveis analisará cada pedido com boa-fé e decidirá de forma fundamentada se o aprova, considerando especialmente a ausência de indício de venda por fora ou de tentativa de evitar a comissão. A análise não obriga a aprovação.",
+        "6.8-B O pedido é feito pela Central de Atendimento, com o motivo e, quando houver, o documento que o comprove. A ARINI Imóveis responde em até 5 dias úteis. Enquanto analisa, o anúncio pode ser suspenso a pedido do titular.",
+        "6.9 O encerramento antecipado sem justo motivo obriga o titular a pagar a comissão calculada sobre o preço anunciado, como cláusula penal. Em qualquer caso de encerramento, permanecem a janela de proteção e a comissão da cláusula 6.4 se o imóvel for vendido a interessado apresentado pela Plataforma."
+      ],
+      [
+        "6.10 Ao contratar a exclusividade, o titular registra na Plataforma suas condições de aceite: preço mínimo, valor de entrada, prazo e forma de pagamento do preço, e o momento de pagamento da comissão, como a assinatura do primeiro documento ou o recebimento do sinal.",
+        "6.11 Se a ARINI Imóveis apresentar proposta formal, por escrito e de comprador identificado e com capacidade de pagamento demonstrada, que atenda a todas as condições de aceite vigentes, a comissão é devida e paga no momento registrado na cláusula 6.10. O titular deve celebrar o negócio ou, recusando, pagar a comissão calculada sobre o valor da proposta.",
+        "6.11-A Proposta diferente das condições de aceite pode ser aceita ou recusada livremente pelo titular. Se ele quiser aceitá-la, a forma e o momento de pagamento da comissão serão ajustados por escrito com a ARINI Imóveis antes da conclusão. Sem acordo, a negociação com aquele interessado não prossegue, e a ARINI Imóveis continua a intermediação com outros interessados durante a exclusividade.",
+        "6.12 O titular pode pedir alteração das condições de aceite a qualquer momento, pela Plataforma.",
+        "A alteração vale a partir da confirmação da ARINI Imóveis e não alcança proposta apresentada antes dela.",
+        "6.13 Venda feita pelo titular por conta própria durante a exclusividade, ainda que formalizada depois do fim do prazo, gera comissão integral, conforme o art. 726 do Código Civil. O titular deve declarar à ARINI Imóveis qualquer negociação em curso sobre o imóvel.",
+        "6.14 Antes de assinar o Termo de Exclusividade, o titular declara os interessados com quem já negociava o imóvel, com identificação e estágio da negociação. A venda a interessado declarado não gera comissão, salvo se a ARINI Imóveis participar da negociação a pedido do titular.",
+        "Interessado não declarado não pode ser alegado depois para afastar a comissão.",
+        "6.15 Equiparam-se à venda, para fins de comissão, a permuta, a cessão de direitos, a dação em pagamento, a venda de quotas ou ações de sociedade titular do imóvel e a transferência do imóvel a empresa ligada ao titular seguida de alienação, quando realizadas com interessado apresentado pela Plataforma ou durante a exclusividade.",
+        "6.16 Em desmembramento, venda de parte da área ou abertura de novas matrículas, a comissão incide sobre o valor da parte vendida. A ligação entre o imóvel contratado e as áreas derivadas é demonstrada por matrículas, plantas, memoriais e histórico cadastral.",
+        "6.17 O registro de proposta na Plataforma não equivale a aceitação. A aceitação deve ser expressa e registrada pelo titular.",
+        "6.18 São deveres do titular durante a exclusividade: prestar informações verdadeiras sobre titularidade, ônus, ocupação e situação ambiental, fiscal e fundiária; declarar coproprietários, cônjuge, procurações e litígios; permitir visitas agendadas; e comunicar propostas recebidas por outros canais e qualquer alteração de titularidade ou da área.",
+        "6.19 São deveres da ARINI Imóveis durante a exclusividade: divulgar o imóvel e atender os interessados com diligência e boa-fé; registrar visitas, propostas e retornos na Plataforma, com"
+      ],
+      [
+        "acesso do titular; encaminhar ao titular todas as propostas recebidas; e guardar sigilo sobre informações confidenciais do imóvel e do titular.",
+        "6.20 No encerramento da exclusividade, a ARINI Imóveis disponibiliza ao titular, na Plataforma, relatório final com as atividades realizadas, as propostas recebidas e a relação dos interessados registrados, que ficam abrangidos pela janela de proteção.",
+        "7. Contato e aproximação",
+        "7.1 A ARINI não fornece o contato do titular ao interessado, nem o contato do interessado ao titular. A aproximação, as visitas e a negociação são conduzidas pela equipe ARINI.",
+        "7.2 Ao registrar Interesse, o usuário autoriza a ARINI a contatá-lo pelos canais cadastrados para atender ao pedido. O titular acompanha na Plataforma as visitas, propostas e retornos sobre o seu imóvel, sem acesso aos dados de contato do interessado.",
+        "7.3 Exceções, nos termos dos Anexos:",
+        "• Leilão: o contato é direto entre leiloeiro e interessado, pelas regras do edital.",
+        "• Correspondente bancário: o usuário que fizer pré-simulação de financiamento e autorizar o envio terá seus dados repassados à correspondente indicada.",
+        "• Empresa com CRM próprio: o contato segue o fluxo da própria empresa.",
+        "8. Mapas, consultas, relatórios e alertas",
+        "8.1 Geometrias, áreas calculadas, arquivos KML e KMZ, mapas urbanos, imagens de satélite, NDVI e análises de solo, APP, nascentes e reserva legal são referências sujeitas à precisão e à atualização de suas fontes. Não substituem matrícula, demarcação, levantamento topográfico nem georreferenciamento certificado. O CAR é autodeclaratório e não comprova propriedade.",
+        "8.2 Cada relatório indica a data de emissão e as fontes consultadas, com a data de referência quando disponível. Fonte indisponível ou desatualizada será sinalizada. A ausência de resultado não equivale a certidão negativa nem prova inexistência de restrição.",
+        "8.3 Relatórios, consultas e pré-avaliações são informativos. Não constituem laudo, parecer técnico, avaliação formal, licença ou certidão. Serviços de engenharia, agrimensura, advocacia, avaliação e outros regulamentados exigem profissional habilitado e contratação própria.",
+        "8.4 Alertas ambientais e de início de incêndio dependem de dados de satélite e de terceiros, com atraso e limites de detecção. O alerta é um aviso de apoio: não substitui vigilância, brigada, Defesa Civil nem Corpo de Bombeiros. A falta de alerta não significa ausência de ocorrência.",
+        "8.5 A simulação de financiamento é uma estimativa visual. Não é oferta, proposta nem aprovação de crédito. A ARINI não é instituição financeira e não concede crédito.",
+        "8.6 A ARINI responde pela execução, pelo processamento e pela apresentação das informações.",
+        "Falhas exclusivas das fontes de origem serão avaliadas conforme a lei, sem exclusão genérica de responsabilidade."
+      ],
+      [
+        "9. Ari, a inteligência artificial da ARINI",
+        "9.1 A Ari é uma ferramenta de apoio à pesquisa, organização e interpretação de informações.",
+        "Suas respostas podem conter erros e devem ser conferidas antes de qualquer decisão.",
+        "9.2 Respostas da Ari não são parecer jurídico, laudo, avaliação formal, recomendação de investimento nem garantia de resultado. Decisões jurídicas, ambientais, financeiras ou técnicas relevantes exigem validação por profissional habilitado.",
+        "9.3 O uso da Ari consome Créditos pré-pagos, conforme o Quadro de Parâmetros e o Anexo do Perfil. O consumo por pergunta pode variar com a complexidade. O saldo fica visível na conta.",
+        "9.4 Os Créditos são acumuláveis e valem por 12 meses contados de cada compra. A ARINI Tecnologia avisará o usuário pela Plataforma 30 dias antes do vencimento. Créditos vencidos não são reembolsados.",
+        "9.4-A Os Créditos ficam vinculados à conta e continuam disponíveis enquanto ela existir, dentro da validade, ainda que o usuário não tenha plano ativo.",
+        "9.4-B Créditos não utilizados podem ser cancelados com reembolso integral em até 7 dias da compra. Depois desse prazo, o saldo não é convertido em dinheiro, salvo falha da ARINI Tecnologia que impeça o uso.",
+        "9.4-C O preço e a quantidade de Créditos por pacote podem mudar para novas compras, inclusive por alteração de custo dos fornecedores de tecnologia. Créditos já comprados mantêm o seu valor de uso.",
+        "9.5 Perguntas e respostas podem ser registradas para prestação do serviço, segurança e melhoria, conforme a Política de Privacidade. A Ari funciona com tecnologia de fornecedor externo, sob contrato que protege os dados.",
+        "10. Planos, cobrança e cancelamento",
+        "10.1 Os planos, Créditos e serviços de tecnologia são contratados com a ARINI Tecnologia. Os planos de cada Perfil, com recursos, limites e preços, são apresentados antes da contratação e ficam disponíveis na conta. O preço é o da oferta aceita.",
+        "10.2 O plano pode ser pago por:",
+        "• cartão com renovação automática: cobrança mensal recorrente até o cancelamento;",
+        "• cartão sem renovação: pagamento de um período de 30 dias, que termina sem nova cobrança;",
+        "• Pix: liberação do período pago após a confirmação do pagamento, sem renovação automática.",
+        "10.2-A A forma escolhida e a existência de renovação automática são exibidas antes do pagamento. Na renovação automática, o usuário é avisado antes de cada cobrança. O plano anual é pago pelo valor de 10 mensalidades e vale por 12 meses."
+      ],
+      [
+        "10.3 Preço promocional do primeiro mês vale só para esse mês. O valor seguinte é informado antes da contratação.",
+        "10.4 O teste gratuito dura 3 dias nos Perfis que o oferecem e não exige meio de pagamento. Ao fim do teste, os recursos pagos são bloqueados sem cobrança, e a conta e os dados permanecem.",
+        "O plano pago só começa por contratação expressa.",
+        "10.5 O cancelamento pode ser feito pela própria conta ou pela Central de Atendimento, a qualquer momento. No plano mensal, o acesso segue até o fim do período pago, sem nova cobrança e sem multa.",
+        "10.5-A No plano anual, pago com desconto equivalente a 2 mensalidades, o cancelamento depois do prazo de arrependimento encerra a renovação. O acesso segue até o fim dos 12 meses contratados, e o valor pago não é devolvido. Essa regra é exibida em destaque antes da contratação do plano anual.",
+        "10.6 O usuário consumidor pode desistir da contratação feita pela internet em até 7 dias, pela Central de Atendimento, nos termos do art. 49 do CDC. Os valores serão devolvidos pelo mesmo meio de pagamento.",
+        "10.6-A Do valor devolvido pode ser descontado o custo dos itens já entregues e consumidos no período, como relatórios emitidos, arquivos baixados e Créditos usados, pelos preços informados antes da contratação.",
+        "10.6-B O arrependimento não se aplica à contratação feita para atividade profissional ou empresarial, como a de corretores, imobiliárias, leiloeiros, empresas, correspondentes bancários, órgãos públicos e profissionais técnicos no exercício da profissão, que declaram essa finalidade ao contratar.",
+        "10.6-C Os Perfis com teste gratuito permitem conhecer a Plataforma antes de qualquer pagamento. Cada CPF ou CNPJ tem direito a um único teste por Perfil.",
+        "10.6-D Contratar e desistir repetidamente para obter consultas ou dados sem pagar é uso abusivo de direito (Código Civil, art. 187). Nesse caso, a ARINI Tecnologia pode recusar novas contratações do mesmo usuário. O arrependimento não autoriza cópia, extração ou reutilização de dados e conteúdos da Plataforma, que seguem protegidos pela cláusula 12.",
+        "10.7 Sem o pagamento no vencimento, os recursos pagos são bloqueados automaticamente. O perfil continua ativo, com os dados preservados, e o acesso é restabelecido assim que o pagamento for confirmado.",
+        "10.7-A Mesmo com os recursos bloqueados, o usuário pode pedir pela Central de Atendimento cópia dos dados pessoais e do conteúdo que ele mesmo inseriu, conforme a LGPD.",
+        "10.7-B Contado do bloqueio por falta de pagamento, o conteúdo da conta é guardado pelos prazos abaixo e depois excluído:"
+      ],
+      [
+        [
+          [
+            "Conteúdo",
+            "Prazo de guarda"
+          ],
+          [
+            "Cadastro, registros do CRM e dados em texto",
+            "12 meses"
+          ],
+          [
+            "Documentos, fotos e arquivos anexados",
+            "6 meses"
+          ],
+          [
+            "Vídeos, tour 3D, imagens de alta resolução e projetos",
+            "90 dias"
+          ]
+        ],
+        "10.7-C A ARINI Tecnologia avisará o usuário na conta 15 dias antes de cada exclusão. Ficam preservados pelo prazo legal os registros que a lei obriga guardar e os necessários à defesa de direitos, como os da Intermediação e da janela de proteção. Arquivos guardados no serviço próprio do usuário, como o Google Drive, não são afetados.",
+        "10.8 A ARINI Tecnologia pode alterar preços, pacotes e recursos dos planos. Durante o período contratado e pago, o usuário mantém o mesmo pacote pelo mesmo valor. A alteração vale só a partir do vencimento seguinte e é comunicada por aviso formal na conta:",
+        "• plano anual: com pelo menos 30 dias de antecedência do vencimento;",
+        "• plano mensal: com pelo menos 7 dias de antecedência do vencimento.",
+        "10.8-A O usuário que não concordar com a alteração pode cancelar antes do vencimento, sem multa e sem nova cobrança.",
+        "11. Dados pessoais e registro de acesso",
+        "11.1 O tratamento de dados pessoais segue a Política de Privacidade e a Lei 13.709/2018 (LGPD). Estes Termos não substituem a Política nem valem como consentimento genérico.",
+        "11.2 Os dados privados de cada usuário, incluindo imóveis não anunciados, documentos e informações de CRM, não são exibidos a outros usuários nem entregues a órgãos públicos contratantes, salvo ordem legal ou judicial.",
+        "11.3 A ARINI registra os imóveis visualizados e as ações do usuário cadastrado para atender ao Interesse, prevenir fraude, comprovar a atuação na Intermediação e cumprir a guarda de registros do Marco Civil da Internet (Lei 12.965/2014). Esses registros são guardados pelo prazo da janela de proteção e pelo tempo necessário ao exercício de direitos.",
+        "11.4 Dados que o usuário guarda em serviços próprios integrados à Plataforma, como Google Drive ou WhatsApp, seguem também os termos desses serviços.",
+        "12. Propriedade intelectual e conteúdo",
+        "12.1 Marca ARINI, nome Ari, software, layout, organização das bases, relatórios e CRMs são de titularidade da ARINI ou de seus licenciantes. O uso da Plataforma não transfere nenhum desses direitos.",
+        "12.2 O usuário mantém os direitos sobre fotos, vídeos, documentos e dados que enviar. Concede à ARINI licença gratuita e não exclusiva para armazenar, processar e exibir esse conteúdo na"
+      ],
+      [
+        "medida necessária ao serviço contratado. No caso de Imóvel à venda, a licença inclui divulgação em redes sociais e portais parceiros enquanto o anúncio estiver ativo.",
+        "12.3 Tour 3D, imagens tratadas e recursos de apresentação não podem alterar características relevantes do imóvel. Imagem gerada ou modificada digitalmente será identificada quando puder causar confusão.",
+        "12.4 Dados públicos, como CAR, SIGEF, SICAR e bases do INCRA, continuam sujeitos às licenças de origem. A ARINI não se apropria do que é público; protege a forma própria como organiza e apresenta esses dados.",
+        "13. Responsabilidades",
+        "13.1 A ARINI responde pelos serviços que presta, conforme a lei e o contrato aplicável. Nas relações de consumo, aplica-se o Código de Defesa do Consumidor (Lei 8.078/1990).",
+        "13.2 Cada usuário responde pela veracidade do que publica e pelas atividades que exerce na Plataforma. Em especial:",
+        "• o anunciante, pela legitimidade e pelas informações do imóvel;",
+        "• o leiloeiro, integralmente pelo leilão, pelo edital e pelos imóveis que divulga;",
+        "• o corretor, a imobiliária e o profissional técnico, pelos serviços que prestam aos próprios clientes;",
+        "• a correspondente bancária, pelo atendimento, pela simulação oficial e pela contratação do crédito;",
+        "• a empresa ou incorporadora, pelas vendas feitas por seu CRM e seus corretores.",
+        "13.3 Corretores, imobiliárias, leiloeiros, profissionais técnicos e correspondentes são autônomos.",
+        "O uso da Plataforma não cria vínculo empregatício, societário ou de representação com a ARINI.",
+        "13.4 A ARINI não responde por negociação feita fora da Plataforma sem sua participação, ressalvado o direito à comissão da cláusula 6.4.",
+        "14. Disponibilidade, suspensão e alterações",
+        "14.1 A Plataforma pode ter manutenções e interrupções. A ARINI avisará as programadas com antecedência e corrigirá falhas sob sua responsabilidade em prazo razoável.",
+        "14.2 Em caso de infração a estes Termos, a ARINI pode advertir, limitar recursos, retirar conteúdo, suspender ou encerrar a conta, de forma proporcional, informando o motivo e permitindo manifestação. Em fraude ou risco grave, a suspensão pode ser imediata, com revisão posterior.",
+        "14.3 O usuário pode encerrar a conta pelo atendimento ou pela própria conta. Retirada de anúncio, fim da exclusividade e exclusão de dados são procedimentos distintos. Obrigações já constituídas, como comissão devida, e dados de guarda legal permanecem."
+      ],
+      [
+        "14.4 Estes Termos podem ser alterados. Cada versão será datada e comunicada com 15 dias de antecedência. Mudança de preço, comissão ou obrigação essencial só alcança contrato em curso com novo aceite expresso. A alteração nunca retroage a negócios anteriores.",
+        "15. Aceite, legislação e foro",
+        "15.1 Os Termos, o Anexo do Perfil e os contratos aplicáveis são exibidos antes do aceite e ficam disponíveis para download. O aceite fica vinculado ao usuário, à versão do documento, à data, à hora e ao endereço IP.",
+        "15.2 Créditos e planos pagos exigem aceite específico, separado do aceite destes Termos.",
+        "15.2-A O Termo de Exclusividade traz quadro-resumo com a identificação do imóvel, matrícula, preço, condições de aceite, prazo e comissão. Ele é assinado eletronicamente pelo titular, com validação de identidade, e produz todos os efeitos desde essa assinatura.",
+        "15.2-B Depois da assinatura do titular, a ARINI Imóveis colhe a assinatura eletrônica de duas testemunhas, para que o Termo valha também como título executivo extrajudicial (Código de Processo Civil, art. 784, III). A assinatura posterior das testemunhas não altera o conteúdo nem a data de início da exclusividade, e sua falta não afeta a validade do Termo.",
+        "15.3 Aplicam-se as leis brasileiras. Fica eleito o foro da Comarca de Iturama/MG, sem prejuízo do foro do domicílio do consumidor."
+      ]
+    ]
+  }
+}

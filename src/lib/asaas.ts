@@ -101,6 +101,13 @@ export async function asaasBuscarCobranca(id: string) {
   }
 }
 
+/** CNPJ da intermediadora nos termos de exclusividade e remuneração de 15/11/2026. */
+export async function asaasContaDaImobiliaria() {
+  if (!asaasConfigurado()) return false;
+  const conta = await chamar<{cpfCnpj?: string}>("/myAccount/commercialInfo");
+  return conta.cpfCnpj?.replace(/\D/g, "") === "61134351000180";
+}
+
 export async function asaasCobrancasPorReferencia(referencia: string) {
   const resultado = await chamar<Lista<AsaasCobranca>>(`/payments?externalReference=${encodeURIComponent(referencia)}&limit=2`);
   return resultado.data;

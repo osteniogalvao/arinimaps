@@ -1,0 +1,102 @@
+{
+  "comprar": {
+    "rotulo": "Acesso · Compradores e investidores",
+    "titulo": [
+      "Compre com dados reais,",
+      "com segurança"
+    ],
+    "introducao": "Explore os imóveis à venda no mapa, cadastre-se para consultar os detalhes de cada área e conte com a equipe ARINI para pedir uma visita.",
+    "escolha": "Escolha como usar a ARINI",
+    "resumo": "Explore o mapa livremente, cadastre os filtros de interesse ou adicione créditos para consultar a Ari."
+  },
+  "correspondente": {
+    "rotulo": "Planos · Correspondentes bancários",
+    "titulo": [
+      "Clientes com o imóvel escolhido,",
+      "direto no seu atendimento"
+    ],
+    "introducao": "Conheça o atendimento de clientes que chegam pelo imóvel e pela simulação de financiamento. Consulte o piloto e as vagas do seu banco por região.",
+    "escolha": "Pacotes por movimento",
+    "resumo": "Consulte o piloto e as condições de atendimento por banco e região."
+  },
+  "corretor": {
+    "rotulo": "Planos · Corretores e imobiliárias",
+    "titulo": [
+      "Seu CRM, seus dados",
+      "e a rede ARINI"
+    ],
+    "introducao": "Você é autônomo. Use a ARINI só como CRM e base de consulta, ou entre na rede como captador. Você escolhe como trabalhar e quando começar.",
+    "escolha": "Escolha seu plano",
+    "resumo": "Você pode usar o CRM, participar da rede de corretores ou combinar as duas opções."
+  },
+  "empresa": {
+    "rotulo": "Planos · Empresas e incorporadoras",
+    "titulo": [
+      "Do terreno ao lote vendido,",
+      "em um só sistema"
+    ],
+    "introducao": "Ache a área, confira o que ninguém vê, aprove com a prefeitura e venda. Mapa, análise e CRM no mesmo lugar, para loteadoras, incorporadoras, usinas, cooperativas e grandes empresas.",
+    "escolha": "Escolha o pacote da sua empresa",
+    "resumo": "Compare os pacotes por porte da equipe e solicite uma proposta para os seus empreendimentos."
+  },
+  "leiloeiro": {
+    "rotulo": "Planos · Leiloeiros",
+    "titulo": [
+      "Seus leilões em destaque,",
+      "com a análise do imóvel"
+    ],
+    "introducao": "Exponha seus imóveis de leilão para quem procura comprar e consulte as informações do território antes de avaliar cada área.",
+    "escolha": "Escolha seu plano",
+    "resumo": "Compare os limites de imóveis ativos e as ferramentas de atendimento para os seus leilões."
+  },
+  "instituicao": {
+    "rotulo": "Planos · Órgãos públicos e instituições",
+    "titulo": [
+      "O território do seu município,",
+      "em um só sistema"
+    ],
+    "introducao": "Cadastro territorial, meio ambiente, fiscalização, regularização e planejamento no mesmo mapa, com a equipe da ARINI para adaptar o sistema à necessidade do seu órgão.",
+    "escolha": "Escolha o pacote do seu órgão",
+    "resumo": "Consulte os módulos, os limites de usuários e o escopo de implantação de cada proposta."
+  },
+  "produtor": {
+    "rotulo": "Planos · Produtores rurais",
+    "titulo": [
+      "Sua fazenda medida,",
+      "planejada e gerida"
+    ],
+    "introducao": "Desenhe e meça a propriedade no mapa. Compare as opções para planejar piquetes e talhões, calcular insumos e acompanhar a fazenda por safra.",
+    "escolha": "Escolha seu plano",
+    "resumo": "Comece pelo teste gratuito e compare as opções para a gestão da sua propriedade."
+  },
+  "tecnico": {
+    "rotulo": "Planos · Profissionais técnicos",
+    "titulo": [
+      "Dados do território",
+      "e o CRM da sua profissão"
+    ],
+    "introducao": "Consulte informações do território, use as ferramentas de mapa e compare as opções de CRM para a sua profissão.",
+    "escolha": "Escolha seu plano",
+    "resumo": "Escolha o acesso de consulta ou um pacote de CRM e configure os complementos para a sua profissão."
+  },
+  "vender": {
+    "rotulo": "Planos",
+    "titulo": [
+      "Como você deseja",
+      "utilizar a ARINI?"
+    ],
+    "introducao": "Escolha o que deseja fazer. Você poderá contratar outros serviços e adicionar novos perfis posteriormente.",
+    "escolha": "Planos para proprietários",
+    "resumo": "Proprietários de imóveis urbanos e rurais podem começar de graça com o cofre da propriedade e contratar serviços quando precisarem."
+  },
+  "anunciar": {
+    "rotulo": "Acesso · Quero vender meu imóvel",
+    "titulo": [
+      "Venda seu imóvel",
+      "e acompanhe cada passo"
+    ],
+    "introducao": "Abra a tela de anúncio, identifique o imóvel e acompanhe as visitas e propostas pelo painel do proprietário.",
+    "escolha": "Quero vender meu imóvel",
+    "resumo": "Comece pelo anúncio e acompanhe o andamento da venda pelo painel do proprietário."
+  }
+}

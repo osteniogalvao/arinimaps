@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { lerEmLotes } from "@/lib/supabase/lotes";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { CircleDollarSign, Download, Receipt, Repeat, Wallet } from "lucide-react";
-import { formatBRL, plural } from "@/lib/format";
+import { formatBRLFinanceiro as formatBRL, plural } from "@/lib/format";
 import { CabecalhoSetor, Indicadores, Secao, TarefasDoSetor, dataBR, LinkAcao } from "@/components/admin/Painel";
 import { LISTA, LISTA_VAZIA, TABELA, TABELA_CAIXA, TBODY, TH, THEAD, TR } from "@/components/admin/estilos";
 import { Vazio } from "@/components/ui/Pagina";
@@ -24,7 +24,7 @@ export default async function PainelFinanceiro() {
   const [mensal, comissoes, faturas, atrasadas, assinaturas] = await Promise.all([
     admin.rpc("fn_financeiro_mensal", { p_meses: 12 }),
     lerEmLotes((de, ate) => admin.from("commissions")
-      .select("id, valor, status, created_at, sale:sales(data_venda, property:properties(codigo, titulo))")
+      .select("id, valor, recebido, status, created_at, sale:sales(data_venda, property:properties(codigo, titulo))")
       .in("status", ["registrada", "cobrada"]).order("created_at").order("id").range(de, ate), { maximo: Infinity }),
     admin.from("invoices")
       .select("id, competencia, valor, status, subscription:subscriptions(property:properties(codigo, titulo))")
@@ -41,7 +41,7 @@ export default async function PainelFinanceiro() {
 
   const meses = (mensal.data ?? []) as Mes[];
   const atual = meses[0];
-  const aReceber = comissoes.data.reduce((s, c) => s + Number(c.valor), 0);
+  const aReceber = comissoes.data.reduce((s, c) => s + Number(c.valor) - Number(c.recebido ?? 0), 0);
   const vencidas = atrasadas.data;
   const recorrente = assinaturas.data.reduce((s, a) => s + Number(a.valor_mensal), 0);
   const recebido12 = meses.reduce((s, m) => s + Number(m.comissao_recebida) + Number(m.mensalidade_recebida), 0);
@@ -106,7 +106,7 @@ export default async function PainelFinanceiro() {
                     <span className="font-medium text-texto">{venda?.property?.titulo ?? "Venda"}</span>
                     <span className="mt-0.5 block text-sm text-texto-2">{venda?.property?.codigo} · venda em {dataBR(venda?.data_venda)} · {c.status}</span>
                   </span>
-                  <span className="lp-display text-lg tabular-nums whitespace-nowrap text-texto">{formatBRL(Number(c.valor))}</span>
+                  <span className="lp-display text-lg tabular-nums whitespace-nowrap text-texto">{formatBRL(Number(c.valor) - Number(c.recebido ?? 0))}</span>
                 </div>
               );
             })}

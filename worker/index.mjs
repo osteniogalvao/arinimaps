@@ -180,7 +180,11 @@ async function rodarCentral() {
       if (e.code === "42883") return { rows: [] };
       throw e;
     });
-    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}) }).filter(([, v]) => Number(v) > 0);
+    const exclusividades = await db.query("select fn_vigencia_exclusividades() as total").catch(e => {
+      if (e.code === "42883") return {rows:[]};
+      throw e;
+    });
+    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
     if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
     await emailsCriticos();
     // publicações agendadas que chegaram na hora (Central de publicação)

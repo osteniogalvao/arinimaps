@@ -1,3 +1,8 @@
+import { createHash } from "node:crypto";
+import { camposQuadro, validarQuadro } from "@/lib/juridico/quadro-exclusividade";
+import { clausulasDestacadas, prazoExclusividade } from "@/lib/juridico/versoes";
+import { validarDocumento } from "@/lib/br/documentos";
+import { cpfDoPerfil } from "@/lib/seguranca/cripto";
 import { NextResponse } from "next/server";
 import { ator, temSetor } from "@/lib/authz";
 import { conferirRecurso, registrarTentativa, respostaNegacao } from "@/lib/planos-servidor";
@@ -82,12 +87,43 @@ export async function POST(request: Request) {
   const meses = condicao === "exclusividade" && (dados.prazo_exclusividade_meses === 6 || dados.prazo_exclusividade_meses === 12)
     ? dados.prazo_exclusividade_meses as 6 | 12 : null;
   if (condicao === "exclusividade" && !meses) {
-    return NextResponse.json({ error: "Escolha o prazo de exclusividade de 6 ou 12 meses." }, { status: 400 });
+    return NextResponse.json({ error: "Escolha o prazo de exclusividade de 180 dias ou 12 meses." }, { status: 400 });
   }
   const cfg = await lerConfiguracoes();
   const vigente = meses && !equipe ? exclusividadeVigente(cfg,meses) : null;
   if (vigente && dados.termo_exclusividade !== vigente.assinatura) {
     return NextResponse.json({ error: "O termo precisa ser conferido novamente. Abra o documento e marque o aceite.", assinatura: vigente.assinatura }, {status:409});
+  }
+  const rede = conta.role === "corretor" || conta.role === "imobiliaria";
+  const versao = condicao === "parceiro"
+    ? assinatura(rede ? "parceiros" : "termos-de-uso", "remuneracao")
+    : condicao === "exclusividade" ? assinatura("exclusividade", "remuneracao") : assinatura("autorizacao", "remuneracao");
+  if (!equipe && dados.versao_aceita !== versao) {
+    return NextResponse.json({ error: "A versão dos documentos mudou. Recarregue a página e confira os termos." }, {status:409});
+  }
+  let titular: string | null = null;
+  let municipio: string | null = null;
+  if (vigente) {
+    if (!validarQuadro(dados.quadro_exclusividade) || !Array.isArray(dados.clausulas_exclusividade) ||
+      !clausulasDestacadas.every(([id]) => dados.clausulas_exclusividade.includes(id)) ||
+      typeof dados.sem_interessados_anteriores !== "boolean" ||
+      (!dados.sem_interessados_anteriores && (typeof dados.interessados_anteriores !== "string" || dados.interessados_anteriores.trim().length < 5 || dados.interessados_anteriores.length > 6000)) ||
+      !(Number.isFinite(dados.valor) && dados.valor > 0) || !String(dados.matricula_numero ?? "").trim() ||
+      !String(dados.matricula_cartorio ?? "").trim() || !dados.municipality_id) {
+      return NextResponse.json({ error: "Complete preço, município, matrícula e cartório, o quadro-resumo, as cláusulas destacadas e o Anexo I." }, {status:400});
+    }
+    const [perfil, local] = await Promise.all([
+      admin.from("profiles").select("nome,cpf_cnpj,cpf_cnpj_cifrado").eq("user_id",user.id).single(),
+      admin.from("municipalities").select("nome,uf").eq("id",dados.municipality_id).single(),
+    ]);
+    if (perfil.error || local.error) return NextResponse.json({error:"Não foi possível conferir o titular e o município."},{status:503});
+    const informado = validarDocumento(dados.quadro_exclusividade.documento);
+    const cadastrado = cpfDoPerfil(perfil.data);
+    if (!informado.ok || (cadastrado && cadastrado.replace(/\D/g,"") !== informado.valor)) {
+      return NextResponse.json({error:"Confira o CPF ou CNPJ de quem assina pela conta no quadro-resumo e no cadastro."},{status:400});
+    }
+    titular = perfil.data.nome + " · " + informado.valor;
+    municipio = local.data.nome + "/" + local.data.uf;
   }
   // Leilão: só leiloeiro ou a equipe cadastram; o documento que sustenta o
   // anúncio é o edital, não a autorização do proprietário.
@@ -125,7 +161,7 @@ export async function POST(request: Request) {
   }
   if (partner_id && modalidade === "venda" && !docs.some((d) => d.tipo === "autorizacao")) {
     return NextResponse.json(
-      { error: "Imóvel de parceiro: envie a autorização de venda assinada pelo proprietário." },
+      { error: "Imóvel de parceiro: envie a autorização assinada pelo proprietário. Para a Rede de Corretores, anexe o Termo de Exclusividade." },
       { status: 400 }
     );
   }
@@ -222,7 +258,7 @@ export async function POST(request: Request) {
 
   if (!equipe && dados.aceite_termos !== true) {
     return NextResponse.json(
-      { error: modalidade === "leilao" ? "Confirme o Termo de Parceria e a sua autorização para conduzir este leilão." : "Para anunciar é preciso aceitar o termo da condição de comercialização e a Regra de Remuneração." },
+      { error: modalidade === "leilao" ? "Confirme os Termos de Uso, a Regra de Remuneração e a autorização para este leilão." : "Para anunciar é preciso aceitar o termo da condição de comercialização e a Regra de Remuneração." },
       { status: 400 }
     );
   }
@@ -296,19 +332,39 @@ export async function POST(request: Request) {
   const instanteAceite = new Date();
   const dataLocal = instanteAceite.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
   const validade = new Date(dataLocal + "T12:00:00Z");
-  if (meses) {
+  if (meses === 6) {
+    validade.setUTCDate(validade.getUTCDate() + 180);
+  } else if (meses) {
     const dia = validade.getUTCDate();
     validade.setUTCMonth(validade.getUTCMonth() + meses + 1, 0);
     validade.setUTCDate(Math.min(dia, validade.getUTCDate()));
   } else {
     validade.setUTCDate(validade.getUTCDate() + numero(cfg, "juridico_prazo_autorizacao_dias", 180));
   }
-  const termoAceito = vigente?.termo ?? null;
-  const versao = condicao === "parceiro"
-    ? (modalidade === "leilao" ? assinatura("parceiros") : assinatura("parceiros", "remuneracao"))
-    : condicao === "exclusividade"
-      ? assinatura("autorizacao", "exclusividade", "remuneracao")
-      : assinatura("autorizacao", "remuneracao");
+  function termoAssinado(codigo: string, preco: number, matricula: string, area: number | null) {
+    if (!vigente || !meses) return null;
+    const quadro = dados.quadro_exclusividade;
+    const secoes = [{
+      titulo: "Quadro-resumo da contratação e Anexo I",
+      itens: [
+        "Signatário autenticado: " + titular, "Imóvel: " + codigo + " · " + dados.titulo,
+        "Matrícula: " + matricula + " · " + dados.matricula_cartorio + " · " + municipio,
+        ...(area ? ["Área declarada: " + area + (dados.tipo === "rural" ? " ha" : " m²")] : []),
+        ...camposQuadro.map(([campo, rotulo]) => rotulo + ": " + quadro[campo].trim()),
+        "Preço mínimo: " + preco.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}),
+        "Condições de venda: " + (dados.condicoes_venda?.trim() || quadro.entrada),
+        "Prazo: " + prazoExclusividade(meses) + ", de " + dataLocal + " a " + validade.toISOString().slice(0,10),
+        "Comissão de 1,9% paga pelo proprietário.",
+        "Cláusulas aceitas em destaque: " + clausulasDestacadas.map(([id])=>id).join(", ") + ".",
+        "Publicação antecipada solicitada: " + (dados.publicacao_antecipada === true ? "sim" : "não"),
+        "Interessados preexistentes: " + (dados.sem_interessados_anteriores ? "Declaro que não existem interessados ou negociações anteriores." : dados.interessados_anteriores.trim()),
+      ],
+    }, ...vigente.termo.secoes];
+    const registro = {...vigente.termo, secoes, assinado_em: instanteAceite.toISOString(),
+      titular_id: user.id, publicacao_antecipada: dados.publicacao_antecipada === true,
+      documentos_aceitos: versao};
+    return {...registro, codigo_verificacao:createHash("sha256").update(JSON.stringify(registro)).digest("hex")};
+  }
   // Selfie no aceite da exclusividade (pedido do Carlos, 01/10/2026): foto de
   // identificação de quem aceitou, no cofre privado. Não há reconhecimento
   // facial — é evidência para conferência humana.
@@ -337,7 +393,7 @@ export async function POST(request: Request) {
     property_id: property.id,
     selfie_path: selfiePath,
     tipo: condicao,
-    prazo_meses: meses, termo_aceito: termoAceito, validade: validade.toISOString().slice(0, 10),
+    prazo_meses: meses, termo_aceito: termoAssinado(property.codigo, dados.valor, numeroMatricula, dados.area_declarada), validade: validade.toISOString().slice(0, 10),
     aceite_at: equipe ? null : instanteAceite.toISOString(),
     versao: equipe ? null : versao,
     aceite_por: equipe ? null : user.id,
@@ -472,7 +528,7 @@ export async function POST(request: Request) {
     if (gErro) { await admin.from("properties").delete().eq("id", un.id); continue; }
     const { error: erroTermoUnidade } = await admin.from("property_authorizations").insert({
         property_id: un.id, selfie_path: selfiePath, tipo: condicao,
-        prazo_meses: meses, termo_aceito: termoAceito, validade: validade.toISOString().slice(0, 10),
+        prazo_meses: meses, termo_aceito: termoAssinado(un.codigo, u.valor ?? dados.valor, u.matricula ?? numeroMatricula, Number(u.lote.area_m2)), validade: validade.toISOString().slice(0, 10),
         aceite_at: equipe ? null : instanteAceite.toISOString(), versao: equipe ? null : versao,
         aceite_por: equipe ? null : user.id, aceite_ip: equipe ? null : ipDe(request),
       });

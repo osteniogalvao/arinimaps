@@ -53,6 +53,7 @@ Node 18: o Next 16.3.2 exige `>=20.9.0` e o build morre antes de começar.
 | `ARINI_NOTIFY_EMAIL` | destino das notificações internas da Arini | cai no padrão do código |
 | `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`, `ASAAS_BASE_URL` | botão "Cobrar via Asaas" + baixa automática em `/api/asaas/webhook` | cobrança só manual |
 | `COPERNICUS_CLIENT_ID`, `COPERNICUS_CLIENT_SECRET` | cena do dia do Sentinel-2 em cor real e NDVI no mapa e o NDVI no relatório (cliente OAuth do Sentinel Hub no Copernicus Data Space; ver docs/FONTES.md) | a lista de cenas aparece, mas a cena não abre e o NDVI fica fora do relatório |
+| `NEXT_PUBLIC_ORTOFOTO_JSON` | Ortofoto XYZ/HTTPS autorizada, tiles de 256 px. JSON com `tiles` (URL com `{z}/{x}/{y}`), `limites` [oeste,sul,leste,norte] em graus, `zoomMin`, `zoomMax` nativos e `atribuicao` (texto da licença/crédito). O servidor de tiles deve permitir CORS. Faça um novo build ao alterar. | mantém a ortofoto aberta de Fazenda Laranja só no perímetro do voo e as demais bases |
 | `NEXT_PUBLIC_ARCGIS_KEY` | satélite Esri **licenciado** (ArcGIS Location Platform, 2 milhões de tiles/mês grátis). Crie a chave com o privilégio *Basemaps* e restrinja aos domínios do site | usa Esri Wayback 20512, sem licença comercial |
 | `NEXT_PUBLIC_WHATSAPP_ARINI` | número do botão de WhatsApp | botão sem número |
 | `ANTHROPIC_API_KEY` | assistente de IA do site (`/api/ia/chat`, botão "Pergunte à Arini"). Só no servidor — **nunca** com prefixo `NEXT_PUBLIC_` | botão mostra "Assistente em configuração"; a rota responde 503 `ia_desligada` |

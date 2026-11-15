@@ -26,6 +26,8 @@ O servidor confere o titular, o valor e o estado da fatura no Asaas antes da ent
 
 Toda requisição envia `User-Agent: AriniImoveisBrasil/1.0`. O Asaas exige esse header nas contas criadas a partir de 13/06/2024.
 
+Para comissões dos termos de 15/11/2026, o webhook confirma o CNPJ da ARINI Imóveis em `/myAccount/commercialInfo` e consulta a cobrança nessa mesma conta. Cada crédito disponível atualiza os recebimentos e o repasse proporcional ao captador. O Financeiro confere o extrato em **Comissões** quando o Asaas indica divergência, contestação ou estorno parcial.
+
 ## Sandbox (testar sem dinheiro real)
 
 1. Crie uma conta em https://sandbox.asaas.com e gere uma chave (`$aact_hmlg_...`).

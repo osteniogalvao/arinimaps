@@ -60,9 +60,9 @@ export async function POST(request: Request) {
     );
   }
   const ehParceiro = papelEhParceiro(role);
-  const versao = ehParceiro
-    ? assinatura("termos-de-uso", "privacidade", "parceiros")
-    : assinatura("termos-de-uso", "privacidade");
+  const versao = assinatura("termos-de-uso", "privacidade");
+  if (body.versao_termos !== versao) return NextResponse.json(
+    { error: "Os termos foram atualizados. Recarregue a página e leia a versão vigente antes de continuar." }, { status: 409 });
   const agora = new Date().toISOString();
   const ip = ipDe(request);
 

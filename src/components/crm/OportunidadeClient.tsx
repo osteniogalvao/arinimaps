@@ -36,6 +36,7 @@ type Props = {
   contrato: { status: string; documento_path: string | null; assinado_at: string | null } | null;
   venda: { valor_final: number; data_venda: string; comissao: { valor: number; percentual: number; status: string } | null } | null;
   percentualPadrao: number;
+  percentualContratual?: number;
   atendimento?: Atendimento | null;
 };
 
@@ -68,12 +69,12 @@ export default function OportunidadeClient(props: Props) {
   const [venda, setVenda] = useState({
     // formato brasileiro no campo: "350000.5".toString() lido como milhar gravava a venda 10× maior
     valor_final: numeroParaCampo(props.propostas.find((p) => p.status === "aceita")?.valor ?? o.valor_imovel),
-    percentual: String(props.percentualPadrao),
+    percentual: numeroParaCampo(props.percentualContratual ?? props.percentualPadrao),
     regra: "",
   });
 
   const brl = (v: number | null | undefined) =>
-    v == null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+    v == null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -308,11 +309,13 @@ export default function OportunidadeClient(props: Props) {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <input className={input} placeholder="Valor final (R$)" inputMode="numeric"
                     value={venda.valor_final} onChange={(e) => setVenda({ ...venda, valor_final: e.target.value })} />
-                  <input className={input} placeholder="Comissão %" inputMode="decimal"
-                    value={venda.percentual} onChange={(e) => setVenda({ ...venda, percentual: e.target.value })} />
+                  {props.percentualContratual == null ? <input className={input} aria-label="Comissão em porcentagem" placeholder="Comissão %" inputMode="decimal"
+                    value={venda.percentual} onChange={(e) => setVenda({ ...venda, percentual: e.target.value })} /> :
+                    <p className="self-center text-sm">{props.percentualContratual ? "Comissão da ARINI Imóveis de 1,9%, conforme o termo aceito." : "Venda sem comissão de intermediação."}</p>}
                 </div>
-                <input className={input} placeholder="Regra contratual da comissão (opcional)"
-                  value={venda.regra} onChange={(e) => setVenda({ ...venda, regra: e.target.value })} />
+                {!!props.percentualContratual && <p className="text-sm text-texto-2">Informe o preço total da parte vendida, incluindo entrada, parcelas e bens em permuta pelo valor acordado. Exclua tributos, cartório, juros bancários e encargos de atraso.</p>}
+                {props.percentualContratual == null && <input className={input} placeholder="Regra contratual da comissão (opcional)"
+                  value={venda.regra} onChange={(e) => setVenda({ ...venda, regra: e.target.value })} />}
                 <button disabled={ocupado || !venda.valor_final}
                   className={`${btn} btn-ouro`}
                   onClick={() => {
@@ -328,7 +331,7 @@ export default function OportunidadeClient(props: Props) {
                       regra: venda.regra || null,
                     });
                   }}>
-                  Registrar venda + comissão
+                  Registrar venda
                 </button>
               </>
             )}

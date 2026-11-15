@@ -1,3 +1,4 @@
+import { quadroDeTeste } from "./fixture-exclusividade.mjs";
 // Teste da rodada 3 (01/10/2026): perfil de leiloeiro e imóvel de leilão,
 // selfie obrigatória na exclusividade e envio de vídeo pelo anunciante.
 // Tudo o que o teste cria é apagado no fim.
@@ -42,9 +43,14 @@ const api = (p, url, body, method = "POST") => p.evaluate(async (u, bd, m) => {
 }, url, body, method);
 
 /** Cria um imóvel pela rota multipart, com arquivos de mentira montados no navegador. */
-const anunciar = (p, dados, arquivos) => p.evaluate(async (d, arqs) => {
+const { data: municipioQA } = await admin.from("municipalities").select("id").eq("codigo_ibge","3134400").single();
+const anunciar = (p, dados, arquivos) => p.evaluate(async (d, arqs, quadro) => {
   const fd = new FormData();
-  if (d.prazo_exclusividade_meses) d.termo_exclusividade=(await (await fetch("/api/conta/anunciar")).json()).termos[d.prazo_exclusividade_meses];
+  const regras = await (await fetch("/api/conta/anunciar")).json();
+  if (d.prazo_exclusividade_meses) {
+    Object.assign(d,quadro,{termo_exclusividade:regras.termos[d.prazo_exclusividade_meses]});
+  }
+  d.versao_aceita = d.condicao === "exclusividade" ? regras.versoes.exclusividade : regras.versoes.outros;
   fd.set("dados", JSON.stringify(d));
   fd.set("geometria", JSON.stringify({ fonte: "desenho", geometry: { type: "Polygon", coordinates: [[[-50.21, -19.73], [-50.209, -19.73], [-50.209, -19.729], [-50.21, -19.729], [-50.21, -19.73]]] } }));
   // conteúdo com a assinatura real do formato: o servidor confere os bytes, não o tipo declarado
@@ -61,7 +67,7 @@ const anunciar = (p, dados, arquivos) => p.evaluate(async (d, arqs) => {
   const t = await r.text();
   let json = null; try { json = JSON.parse(t); } catch {}
   return { status: r.status, corpo: t.slice(0, 200), json };
-}, dados, arquivos);
+}, dados, arquivos, quadroDeTeste(municipioQA?.id));
 
 const imoveis = [];
 let userId = null;
@@ -72,7 +78,8 @@ try {
   if (velho) await admin.auth.admin.deleteUser(velho.id);
 
   const p = await nova();
-  const cad = await api(p, "/api/cadastro", { email: EMAIL, senha: SENHA, nome: "Leiloeiro Teste", role: "leiloeiro", cpf: "11144477735", registro_profissional: "JUCEMG 0001", aceite_termos: true });
+  const versaoCadastro = await p.evaluate(async () => (await (await fetch("/api/conta/anunciar")).json()).versoes.cadastro);
+  const cad = await api(p, "/api/cadastro", { versao_termos:versaoCadastro, email: EMAIL, senha: SENHA, nome: "Leiloeiro Teste", role: "leiloeiro", cpf: "11144477735", registro_profissional: "JUCEMG 0001", aceite_termos: true });
   ok("cadastro de leiloeiro", cad.status === 200, cad.corpo);
   const { data: l1 } = await admin.auth.admin.listUsers({ perPage: 500 });
   userId = l1.users.find((u) => u.email === EMAIL)?.id ?? null;
@@ -134,7 +141,7 @@ try {
   const q = await nova();
   await api(q, "/api/auth/entrar", { email: "proprietario.teste@arinibrasil.com.br", senha: process.env.SEED_USER_PASSWORD });
   const semPrazo = await anunciar(q, { tipo:"rural", titulo:"TESTE prazo obrigatório", condicao:"exclusividade", aceite_termos:true }, []);
-  ok("exclusividade exige prazo escolhido", semPrazo.status===400 && /6 ou 12/.test(semPrazo.corpo), semPrazo.corpo);
+  ok("exclusividade exige prazo escolhido", semPrazo.status===400 && /180 dias ou 12/.test(semPrazo.corpo), semPrazo.corpo);
   const semSelfie = await anunciar(q, { tipo: "rural", titulo: "TESTE exclusividade", condicao: "exclusividade", prazo_exclusividade_meses: 12, aceite_termos: true }, [["doc_matricula", "matricula.pdf", "application/pdf"]]);
   ok("exclusividade sem selfie é recusada", semSelfie.status === 400 && /selfie/i.test(semSelfie.corpo), semSelfie.corpo);
   const { count: orfaos } = await admin.from("properties").select("id", { count: "exact", head: true }).eq("titulo", "TESTE exclusividade");

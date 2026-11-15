@@ -31,19 +31,19 @@ export default function OfertasDoPerfil({ ofertas, autenticado }: { ofertas: Ofe
       {pacotes.map((p) => <article key={p.id} data-selecionado={p.id === id} className="vitrine-card gap-3"
         onClick={() => selecionar(p.id)}>
         <h3>{p.nome}</h3>
-        <p className="nota">{p.descricao}</p>
         <p className="valor">{valorOferta(p, anual)}</p>
+        <p className="nota">{p.descricao}</p>
         {p.prazo_dias && <p className="nota">{p.prazo_dias} dias</p>}
         {p.modalidade === "espera" && p.id !== "comprar_creditos" && <span className="estado">Em breve · lista de interesse</span>}
         {p.modalidade === "proposta" && <span className="estado">Ativação por proposta</span>}
-        <ul className="itens-vitrine">{p.limites.map((x) => <li key={x}>{x}</li>)}</ul>
+        {p.limites.length > 0 && <p className="vitrine-limites">{p.limites.join(" · ")}</p>}
         <ul className="itens-vitrine">{p.detalhes.map((x) => <li key={x}>{x}</li>)}</ul>
-        <button type="button" aria-pressed={p.id === id} className="escolher" onClick={() => selecionar(p.id)}>
+        <button type="button" aria-pressed={p.id === id} aria-label={"Selecionar " + p.nome} className="escolher" onClick={() => selecionar(p.id)}>
           {p.id === id ? <><Check size={16} /> Selecionado</> : "Selecionar"}
         </button>
       </article>)}
     </div>
-    {extras.length > 0 && <section aria-labelledby="titulo-adicionais">
+    {extras.length > 0 && <section id="configuracao" className="scroll-mt-24" aria-labelledby="titulo-adicionais">
       <h3 className="lp-display text-3xl" id="titulo-adicionais">Complementos</h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {extras.map((extra) => {

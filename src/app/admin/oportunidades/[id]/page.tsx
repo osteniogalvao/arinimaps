@@ -25,9 +25,10 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
     .from("opportunities")
     .select(`
       id, codigo, etapa, responsavel_tipo, responsavel_partner_id, partner_comprador_id,
-      qualificacao, motivo_perda, created_at,
+      qualificacao, motivo_perda, created_at, regime_na_origem,
       lead:leads(nome, telefone, email, mensagem, origem, created_at),
-      property:properties(id, codigo, titulo, tipo, status, valor, owner_id, partner_id,
+      property:properties(id, codigo, titulo, tipo, status, valor, owner_id, partner_id, regime_comercial, modalidade,
+        autorizacoes:property_authorizations(versao,aceite_at),
         municipality:municipalities!properties_municipality_id_fkey(nome))
     `)
     .eq("id", id)
@@ -65,6 +66,12 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
 
   const lead = opp.lead as unknown as { nome: string; telefone: string | null; email: string | null; mensagem: string | null; origem: string } | null;
   const prop = opp.property as unknown as { id: string; codigo: string; titulo: string; tipo: string; status: string; valor: number | null; owner_id: string | null; partner_id: string | null; municipality: { nome: string } | null } | null;
+  const contratoImovel = opp.property as unknown as { modalidade: string; regime_comercial: string; autorizacoes: { versao: string | null; aceite_at: string | null }[] } | null;
+  const versao = contratoImovel?.autorizacoes.filter(a => a.aceite_at).sort((a, b) => b.aceite_at!.localeCompare(a.aceite_at!))[0]?.versao;
+  let percentualContratual: number | undefined;
+  if (contratoImovel?.modalidade === "leilao" || (opp.regime_na_origem ?? contratoImovel?.regime_comercial) !== "EXCLUSIVO_ARINI" ||
+      versao === "termos-de-uso@2026.11.15,remuneracao@2026.11.15") percentualContratual = 0;
+  else if (["exclusividade@2026.11.15,remuneracao@2026.11.15", "parceiros@2026.11.15,remuneracao@2026.11.15"].includes(versao ?? "")) percentualContratual = 1.9;
   // simulador de proposta (item 20)
   const anunciante = await nomeAnunciante(prop?.owner_id ?? null, prop?.partner_id ?? null);
   const rodadas = (propostas ?? []).flatMap((p) => {
@@ -129,7 +136,8 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
           valor_final: venda.valor_final, data_venda: venda.data_venda,
           comissao: venda.commission as unknown as { valor: number; percentual: number; status: string } | null,
         } : null}
-        percentualPadrao={Number(pctPadrao?.valor ?? 1)}
+        percentualPadrao={Number(pctPadrao?.valor ?? 1.9)}
+        percentualContratual={percentualContratual}
         atendimento={atendimento}
       />
 
