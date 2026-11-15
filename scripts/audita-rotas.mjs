@@ -45,6 +45,7 @@ function varrerFront(dir, achados = []) {
 // própria trava, conferida na revisão manual.
 const EXCECOES_AUTH = {
   "/api/asaas/webhook": "token do webhook (ASAAS_WEBHOOK_TOKEN)",
+  "/api/asaas/nfse-tecnologia": "token fiscal da conta Tecnologia, comparação em tempo constante e conciliação pela API do emitente",
   "/api/acesso": "senha de bloqueio do site, com limite por IP",
   "/api/auth/entrar": "é o próprio login (limite por IP e por e-mail)",
   "/api/auth/recuperar": "pedido de recuperação (limite por IP e por e-mail)",

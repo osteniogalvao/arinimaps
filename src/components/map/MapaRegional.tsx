@@ -11,7 +11,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useS
 import bbox from "@turf/bbox";
 import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpecification, VectorTileSource } from "maplibre-gl";
 import { DETALHES_SATELITE, camadaDeDetalhe } from "@/lib/map/ortofotos";
-import { CENTRO_REGIAO, SATELITE } from "@/lib/map/config";
+import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, SATELITE, ZOOM_INICIAL_REGIONAL } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
 import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeoJSON, TRANSFORM_ZERO, type Transform, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
@@ -806,11 +806,11 @@ export default function MapaRegional({
         container: containerRef.current,
         style: FUNDO_SATELITE,
         center: CENTRO_REGIAO,
-        zoom: 9,
+        zoom: ZOOM_INICIAL_REGIONAL,
         // abaixo do zoom 4 o satélite pede dezenas de tiles do mundo inteiro e
         // o mapa parece "quebrado" enquanto carrega; o produto é o Brasil
         minZoom: 4,
-        maxBounds: [[-80, -38], [-28, 9]],
+        maxBounds: LIMITES_MAPA_REGIONAL,
         hash: "pos", // posição na URL → link compartilhável, estilo Google Maps
         fadeDuration: 150,
         // v5 moveu as opções de WebGL para cá; sem isto "Capturar Imagem" sai em branco

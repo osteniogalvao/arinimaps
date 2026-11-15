@@ -3,6 +3,7 @@ import { AsaasErro, asaasBuscarCobranca, asaasCobrancasPorReferencia, asaasConfi
   asaasCriarCobranca, asaasEstornarCobranca, asaasExcluirCobranca } from "@/lib/asaas";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { linkFaturaAri } from "@/lib/ia/pacote";
+import { pagarRenovacaoNoCartao } from "@/lib/assinatura-cartao";
 
 export const checkoutAtivo = () => asaasConfigurado() && !!process.env.ASAAS_WEBHOOK_TOKEN;
 const eventos:Record<string,string>={RECEIVED:"PAYMENT_RECEIVED",CONFIRMED:"PAYMENT_CONFIRMED",OVERDUE:"PAYMENT_OVERDUE",
@@ -26,7 +27,7 @@ export async function conciliarFatura(id:string) {
   if(emitir) {
     const hoje=new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"});
     try { cobranca=await asaasCriarCobranca({customer:s.cliente,value:f.valor/100,dueDate:hoje>f.inicio?hoje:f.inicio,
-      description:"ARINI · "+(f.componente==="plano"?s.plano:"Adicionais mensais")+" · "+f.inicio,externalReference:referencia}); }
+      description:"ARINI · "+(f.componente==="troca"?"Diferença da troca de plano":f.componente==="plano"?s.plano:"Adicionais mensais")+" · "+f.inicio,externalReference:referencia}); }
     catch(e) {
       if(e instanceof AsaasErro && [400,401,403,422].includes(e.status)) await db.rpc("assinatura_rejeicao_emissao",{p_id:id});
       throw e;
@@ -74,6 +75,10 @@ export async function conciliarFatura(id:string) {
         await db.from("faturas_cotadas").update({operacao:"conferir"}).eq("id",id).eq("operacao",emCurso);
       throw erro;
     }
+  }
+  if (!atual.operacao && atual.status==="aberta" && f.numero>0 && !f.tentativa_cartao &&
+      (f.componente==="plano" || f.componente==="adicionais")) {
+    await pagarRenovacaoNoCartao(f.assinatura,s.cliente,{...f,pagamento:cobranca.id},cobranca);
   }
   await agendar(atual.operacao?30:360);
 }

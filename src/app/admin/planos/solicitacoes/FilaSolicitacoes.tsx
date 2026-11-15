@@ -103,7 +103,12 @@ export default function FilaSolicitacoes() {
       {!!p.cotacao.itens.length && <ul className="list-disc pl-6 text-sm">{p.cotacao.itens.map(i =>
         <li key={i.id}>{i.quantidade} × {i.nome} · {i.subtotalMensalCentavos === null ? "Sob orçamento" : dinheiro(i.subtotalMensalCentavos) + "/mês"}</li>)}</ul>}
       {p.assinatura ? <div><p>{p.assinatura.cancelado?"Renovação cancelada":p.assinatura.aceite?"Contratação aceita":"Aguardando aceite do titular"} · {p.assinatura.escopo_confirmado}</p>
-        {p.assinatura.faturas_cotadas.map(f=><p className="text-sm" key={f.id}>{dinheiro(f.valor)} · {f.status} {f.operacao && " · "+f.operacao} · {f.pagamento??"plano_"+f.id} {f.status!=="nova"&&<button className="underline" disabled={!!ocupado} onClick={()=>conciliar(f.id)}>Conferir no Asaas</button>}</p>)}</div> :
+        {p.assinatura.faturas_cotadas.map(f=><div className="text-sm" key={f.id}><p>{dinheiro(f.valor)} · {f.status} {f.operacao && " · "+f.operacao} · {f.pagamento??"plano_"+f.id} {f.status!=="nova"&&<button className="underline" disabled={!!ocupado} onClick={()=>conciliar(f.id)}>Conferir no Asaas</button>}</p>
+          {f.nfse_assinaturas && <p>NFS-e da assinatura · {f.nfse_assinaturas.estado} {f.nfse_assinaturas.numero} · {f.nfse_assinaturas.gateway_id || "nfse_plano_"+f.id}
+            {f.nfse_assinaturas.mensagem && " · "+f.nfse_assinaturas.mensagem}
+            {["estornada","parcial","cancelada"].includes(f.status) && ["consultar","agendada","emitida"].includes(f.nfse_assinaturas.estado) && " · Conferir ajuste ou cancelamento fiscal com a contabilidade."}
+          </p>}
+        </div>)}</div> :
         ["em_analise","concluido"].includes(p.status) && p.cotacao.personaId!=="corretor_imobiliaria" && !p.cotacao.sobOrcamento && p.cotacao.baseCicloCentavos>0 &&
         p.cotacao.itens.every(i=>i.id==="propriedade_adicional") && <button type="button" disabled={!!ocupado} className="btn-contorno px-4 py-2" onClick={()=>liberar(p)}>Confirmar escopo disponível e liberar contratação</button>}
       {!p.assinatura && p.status === "concluido" && p.cotacao.itens.filter(i => i.id === "propriedade_adicional").map(i =>

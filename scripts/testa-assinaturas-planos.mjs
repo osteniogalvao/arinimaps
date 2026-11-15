@@ -33,6 +33,8 @@ test("assinaturas cotadas e faturas com gateway simulado",{skip:!url||!["localho
    create function public.cofre_limite(uuid) returns bigint language sql as 'select 3::bigint';
    insert into plans values('proprietario_completo',true,99.90,'conta'),('tecnico_profissional',true,479,'organizacao');`);
   await sql(await readFile(new URL("../supabase/migrations/0099_assinaturas_cotadas.sql",import.meta.url),"utf8"));
+  await sql("create table assinatura_reajustes(assinatura uuid,vigencia date,aplicado_em timestamptz)");
+  await sql(await readFile(new URL("../supabase/migrations/0124_troca_de_plano.sql",import.meta.url),"utf8"));
   const adm=randomUUID();await sql("insert into profiles(user_id,role) values($1,'admin_central')",[adm]);
   async function pedido(ciclo="mensal",extras=0,tecnico=false){
     const id=randomUUID(),u=randomUUID(),p=tecnico?"tecnico_profissional":"proprietario_completo",n=tecnico?"engenheiro":"proprietario";
@@ -46,6 +48,72 @@ test("assinaturas cotadas e faturas com gateway simulado",{skip:!url||!["localho
   const faturas=async(s)=>(await sql("select * from faturas_cotadas where assinatura=$1 order by componente desc,numero",[s.id])).rows;
   const reservar=f=>sql("select assinatura_reservar_emissao($1) r",[f.id]);
   const evento=(f,tipo,valor=f.valor,cliente="cus_sintetico")=>sql("select assinatura_pagamento($1,$2,$3,$4,$5)",[f.id,"pay_"+f.id,cliente,valor,tipo]);
+  await t.test("troca cotada: proporcional da promoção, aceite concorrente, estorno e downgrade anual",async()=>{
+   await sql("insert into plans values('proprietario_teste_maior',true,149.90,'conta'),('proprietario_teste_menor',true,29.90,'conta')");
+   const trocas=async(s,id)=>(await sql("select assinatura_prever_troca($1,$2) p",[s.u,id])).rows[0].p;
+   const confirmar=(s,id,previa)=>sql("select assinatura_confirmar_troca($1,$2,$3)",[s.u,id,previa]);
+   async function oferta(s,plano,primeiro,recorrente,ciclo,extras){
+    const id=randomUUID();
+    await sql("insert into solicitacoes_planos values($1,$2,'em_analise',$3,now())",[id,s.u,JSON.stringify({planoId:plano,personaId:"proprietario",ciclo,sobOrcamento:false,
+      baseCicloCentavos:primeiro,adicionaisMensaisCentavos:extras*1500,mensalRecorrenteCentavos:recorrente+extras*1500,itens:extras?[{id:"propriedade_adicional",quantidade:extras}]:[]})]);
+    await sql("select assinatura_liberar($1,$2,'Escopo de troca sintético.')",[adm,id]);return id;
+   }
+   const s=await pedido("mensal",2);await s.liberar();await s.aceitar();const [base]=await faturas(s);await reservar(base);await evento(base,"PAYMENT_CONFIRMED");
+   await sql("update faturas_cotadas set inicio=inicio-10 where id=$1",[base.id]);
+   const maior=await oferta(s,"proprietario_teste_maior",8990,14990,"mensal",2);
+   const previa=await trocas(s,maior);assert.equal(previa.tipo,"upgrade");assert.equal(previa.adicionais,3000);
+   const dias=(a,b)=>(Date.parse(b)-Date.parse(a))/86400000;
+   assert.equal(previa.valor,Math.round((14990-6990)*dias(previa.hoje,previa.fim)/dias(previa.inicio,previa.fim)));
+   await assert.rejects(confirmar({u:randomUUID()},maior,previa));
+   await assert.rejects(confirmar(s,maior,{...previa,valor:1}),{code:"55000"});
+   await Promise.all([confirmar(s,maior,previa),confirmar(s,maior,previa)]);
+   const [diferenca]=(await faturas(s)).filter(f=>f.componente==="troca");assert.equal(diferenca.valor,previa.valor);
+   const plano=async(s)=>(await sql("select plan_id from profiles where user_id=$1",[s.u])).rows[0].plan_id;
+   assert.equal(await plano(s),s.p);await reservar(diferenca);await Promise.all([evento(diferenca,"PAYMENT_CONFIRMED"),evento(diferenca,"PAYMENT_RECEIVED")]);
+   assert.equal(await plano(s),"proprietario_teste_maior");
+   const assinatura=async(s)=>(await sql("select plano,recorrente,cancelado from assinaturas_cotadas where id=$1",[s.id])).rows[0];
+   assert.equal((await assinatura(s)).recorrente,14990);
+   await evento(diferenca,"PAYMENT_REFUNDED");assert.equal(await plano(s),s.p);assert.equal((await assinatura(s)).recorrente,9990);
+   const segundaOferta=await oferta(s,"proprietario_teste_maior",8990,14990,"mensal",2);
+   await confirmar(s,segundaOferta,await trocas(s,segundaOferta));
+   const segundaDiferenca=(await faturas(s)).find(f=>f.componente==="troca"&&f.numero===1);
+   await reservar(segundaDiferenca);await evento(segundaDiferenca,"PAYMENT_CONFIRMED");
+   await evento(base,"PAYMENT_REFUNDED");
+   assert.equal(await plano(s),null);assert.equal((await faturas(s)).find(f=>f.id===segundaDiferenca.id).operacao,"estornar");
+   const anual=await pedido("anual",1);await anual.liberar();await anual.aceitar();const [ano,extras]=await faturas(anual);
+   await reservar(ano);await evento(ano,"PAYMENT_RECEIVED");await reservar(extras);await evento(extras,"PAYMENT_CONFIRMED");
+   const menor=await oferta(anual,"proprietario_teste_menor",29900,29900,"anual",1),d=await trocas(anual,menor);
+   assert.equal(d.tipo,"downgrade");assert.equal(d.valor,0);await confirmar(anual,menor,d);assert.equal(await plano(anual),anual.p);
+   await assert.rejects(sql("insert into assinatura_reajustes(assinatura,vigencia) values($1,$2)",[anual.id,d.fim]),{code:"55000"});
+   await sql("select assinatura_gerar($1,$2)",[anual.id,d.fim]);
+   assert.equal((await assinatura(anual)).recorrente,29900);
+   assert.equal((await faturas(anual)).find(f=>f.componente==="plano"&&f.numero===1).valor,29900);
+   assert.equal((await faturas(anual)).some(f=>f.componente==="troca"),false);
+  });
+  await t.test("cartão só renova no valor autorizado, uma vez, e respeita a revogação",async()=>{
+   await sql(await readFile(new URL("../supabase/migrations/0126_cartao_renovacoes.sql",import.meta.url),"utf8"));
+   const s=await pedido();await s.liberar();await s.aceitar();
+   const [origem]=await faturas(s);await reservar(origem);await evento(origem,"PAYMENT_CREATED");
+   const autorizar=(titular,base,valor)=>sql("select assinatura_autorizar_cartao($1,$2,$3,'8829',$4,'mensal',$5,0)",[titular,s.id,base,s.p,valor]);
+   await assert.rejects(autorizar(randomUUID(),origem.id,9990));
+   await assert.rejects(autorizar(s.u,origem.id,1));
+   await autorizar(s.u,origem.id,9990);await evento(origem,"PAYMENT_RECEIVED");
+   await assert.rejects(autorizar(s.u,origem.id,9990)); // Uma fatura já paga não cadastra cartão retroativamente.
+   await sql("update assinatura_cartao set autorizado_em=now()-interval '1 month' where assinatura=$1",[s.id]);
+   await sql("select assinatura_gerar($1,$2)",[s.id,origem.fim]);
+   const [,renovacao]=await faturas(s);await reservar(renovacao);await evento(renovacao,"PAYMENT_CREATED");
+   await sql("update faturas_cotadas set inicio=(now() at time zone 'America/Sao_Paulo')::date where id=$1",[renovacao.id]);
+   const tentar=()=>sql("select assinatura_reservar_cartao($1,origem,autorizado_em) ok from assinatura_cartao where assinatura=$2",[renovacao.id,s.id]);
+   assert.equal((await tentar()).rows[0].ok,false);
+   await sql("update assinatura_cartao set situacao='ativo' where assinatura=$1",[s.id]);
+   await sql("update faturas_cotadas set valor=valor+1 where id=$1",[renovacao.id]);
+   assert.equal((await tentar()).rows[0].ok,false);
+   await sql("update faturas_cotadas set valor=valor-1 where id=$1",[renovacao.id]);
+   assert.deepEqual((await Promise.all([tentar(),tentar()])).map(x=>x.rows[0].ok).sort(),[false,true]);
+   await autorizar(s.u,null,9990);
+   assert.equal((await tentar()).rowCount,0);
+   assert.equal((await sql("select has_function_privilege('authenticated','assinatura_reservar_cartao(uuid,uuid,timestamptz)','EXECUTE') ok")).rows[0].ok,false);
+  });
   await t.test("aceite, promoção, concorrência, suspensão e perfil alternativo",async()=>{
    const s=await pedido();await assert.rejects(s.aceitar());await assert.rejects(s.liberar(s.u),{code:"42501"});await s.liberar();
    assert.equal((await faturas(s)).length,0);await assert.rejects(s.aceitar(1),{code:"55000"});

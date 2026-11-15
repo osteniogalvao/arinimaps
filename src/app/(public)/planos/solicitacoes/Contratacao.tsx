@@ -2,15 +2,19 @@
 import AvisoPlanoAnual from "../AvisoPlanoAnual";
 import {useState} from "react";
 import Pix from "./Pix";
+import CartaoRenovacao from "./CartaoRenovacao";
+import TrocaDePlano from "./TrocaDePlano";
 import {useRouter} from "next/navigation";
 
-export type OfertaAssinatura={id:string;ciclo:string;primeira:number;recorrente:number;adicionais:number;escopo_confirmado:string;aceite:string|null;cancelado:string|null;arrependimento:boolean;
+export type OfertaAssinatura={id:string;plano:string;ciclo:string;primeira:number;recorrente:number;adicionais:number;escopo_confirmado:string;aceite:string|null;cancelado:string|null;arrependimento:boolean;
+  assinatura_cartao:{final:string;situacao:string}|null;
   assinatura_reajustes:{id:string;vigencia:string;valor:number;condicoes:string;aceito_em:string|null;aplicado_em:string|null;avisado_em:string|null}[];
-  faturas_cotadas:{id:string;status:string;componente:string;inicio:string;fim:string;valor:number;link:string|null;link_estorno:string|null;operacao:string|null}[]};
+  faturas_cotadas:{id:string;tentativa_cartao:string|null;status:string;componente:string;inicio:string;fim:string;valor:number;link:string|null;link_estorno:string|null;operacao:string|null;nfse_assinaturas:{estado:string;numero:string|null;pdf_url:string|null;xml_url:string|null}|null}[]};
 const moeda=(v:number)=>(v/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const estados:Record<string,string>={nova:"Preparando cobrança",emitindo:"Em conferência no Asaas",aberta:"Aguardando pagamento",paga:"Paga",vencida:"Vencida",cancelada:"Cancelada",estornada:"Estornada",parcial:"Estorno parcial em conferência"};
 const data=(d:string)=>d.slice(0,10).split("-").reverse().join("/");
-export default function Contratacao({s,ativo}:{s:OfertaAssinatura;ativo:boolean}) {
+export type HistoricoTroca = {oferta:string;assinatura:string;tipo:string;status:string;novo:string;fim_ciclo:string;proporcional:number};
+export default function Contratacao({s,ativo,temPlano,trocas}:{s:OfertaAssinatura;ativo:boolean;temPlano:boolean;trocas:HistoricoTroca[]}) {
  const router=useRouter();const [agora]=useState(()=>Date.now()),[aceito,setAceito]=useState(false),[ocupado,setOcupado]=useState(false),[mensagem,setMensagem]=useState("");
  const anual=s.ciclo==="anual";
  async function registrar(acao:string) {
@@ -23,10 +27,17 @@ export default function Contratacao({s,ativo}:{s:OfertaAssinatura;ativo:boolean}
    }catch(e){setMensagem(e instanceof Error?e.message:"Falha de conexão.");}finally{setOcupado(false);}
  }
  return <section className="rounded-lg border p-4 space-y-3" aria-label="Contratação">
-   <h3 className="font-semibold">{s.cancelado?"Renovação cancelada":s.aceite?"Assinatura e faturas":"Proposta liberada pela Central"}</h3>
+   <h3 className="font-semibold">{trocas.some(t=>t.oferta===s.id)?"Proposta utilizada para troca":s.cancelado?"Renovação cancelada":s.aceite?"Assinatura e faturas":"Proposta liberada pela Central"}</h3>
+   {s.aceite&&<p>Plano contratado · {s.plano.replaceAll("_"," ")}</p>}
    <p className="whitespace-pre-line">{s.escopo_confirmado}</p>
-   <p>{anual?moeda(s.primeira)+" por ano":moeda(s.primeira+s.adicionais)+" no primeiro mês e "+moeda(s.recorrente+s.adicionais)+" por mês a partir do segundo"}{anual&&s.adicionais>0&&" + "+moeda(s.adicionais)+" de adicionais em fatura mensal separada"}</p>
-   {!s.aceite&&!s.cancelado&&<><p>O Asaas emite a fatura a cada ciclo. Escolha Pix, boleto ou cartão na página de pagamento. A confirmação libera o período contratado.</p>
+   <p>{s.aceite || temPlano || trocas.length
+     ? (anual?moeda(s.recorrente)+" por ano":moeda(s.recorrente+s.adicionais)+" por mês")
+     : anual?moeda(s.primeira)+" por ano":moeda(s.primeira+s.adicionais)+" no primeiro mês e "+moeda(s.recorrente+s.adicionais)+" por mês a partir do segundo"}{anual&&s.adicionais>0&&" + "+moeda(s.adicionais)+" de adicionais em fatura mensal separada"}</p>
+   {trocas.map(t=><div key={t.oferta}><p>Troca para {t.novo.replaceAll("_"," ")} · {t.status==="aplicada"?"Aplicada":t.status==="encerrada"||s.cancelado&&s.aceite?"Encerrada":t.tipo==="downgrade"?"Agendada para "+data(t.fim_ciclo):"Aguardando pagamento de "+moeda(t.proporcional)}</p>
+      {t.oferta===s.id&&<a className="underline" href={"/planos/solicitacoes?pedido="+t.assinatura}>Abrir assinatura e faturas</a>}</div>)}
+   {s.aceite&&!s.cancelado&&<a className="underline" href="/planos">Escolher um plano para solicitar a troca</a>}
+   {!s.aceite&&!s.cancelado&&temPlano&&<TrocaDePlano oferta={s.id}/>}
+   {!s.aceite&&!s.cancelado&&!temPlano&&<><p>O Asaas emite a fatura a cada ciclo. Escolha Pix, boleto ou cartão na página de pagamento. A confirmação libera o período contratado.</p>
      {anual && <AvisoPlanoAnual />}
      <label className="flex gap-2"><input type="checkbox" checked={aceito} onChange={e=>setAceito(e.target.checked)}/>Aceito o escopo, os valores e a renovação {s.ciclo} apresentados.</label>
      <button type="button" disabled={!aceito||ocupado||!ativo} className="btn-primario px-4 py-2" onClick={()=>registrar("aceitar")}>{ativo?"Contratar e gerar fatura":"Emissão temporariamente indisponível"}</button></>}
@@ -41,11 +52,19 @@ export default function Contratacao({s,ativo}:{s:OfertaAssinatura;ativo:boolean}
           }catch(e){setMensagem(e instanceof Error?e.message:"Falha de conexão.");}finally{setOcupado(false);}
         }}>Aceitar este valor e as condições de renovação</button>}</div>)}
    {s.faturas_cotadas.slice().sort((a,b)=>b.inicio.localeCompare(a.inicio)||b.componente.localeCompare(a.componente)).map(f=><div className="border-t pt-2" key={f.id}>
-     <p>{f.componente==="plano"?"Plano":"Adicionais mensais"} · {data(f.inicio)} · {moeda(f.valor)} · {estados[f.status]}{f.operacao?.startsWith("estorn")&&" · Estorno solicitado"}</p>
+     <p>{f.componente==="troca"?"Diferença da troca de plano":f.componente==="plano"?"Plano":"Adicionais mensais"} · {data(f.inicio)} · {moeda(f.valor)} · {estados[f.status]}{f.operacao?.startsWith("estorn")&&" · Estorno solicitado"}</p>
      {f.link&&!f.operacao&&["aberta","vencida"].includes(f.status)&&<a href={f.link} className="underline" rel="noreferrer" target="_blank">Abrir fatura no Asaas</a>}
      {f.link && !f.operacao && ["aberta","vencida"].includes(f.status) && <Pix id={f.id}/>}
+     {f.tentativa_cartao && !f.operacao && ["aberta","vencida"].includes(f.status) && <p>Tentativa de pagamento no cartão registrada. Consulte a situação na fatura do Asaas.</p>}
      {f.link_estorno&&f.operacao&&<a href={f.link_estorno} className="underline" rel="noreferrer" target="_blank">Informar dados ao Asaas para a devolução do boleto</a>}
+     {f.nfse_assinaturas?.estado==="emitida" && <p className="flex flex-wrap gap-3">
+       Nota fiscal de serviço {f.nfse_assinaturas.numero}
+       {f.nfse_assinaturas.pdf_url && <a href={f.nfse_assinaturas.pdf_url} target="_blank" rel="noreferrer" className="underline">Baixar PDF</a>}
+       {f.nfse_assinaturas.xml_url && <a href={f.nfse_assinaturas.xml_url} target="_blank" rel="noreferrer" className="underline">Baixar XML</a>}
+     </p>}
+     {f.nfse_assinaturas?.estado==="cancelada" && <p>Nota fiscal cancelada.</p>}
    </div>)}
+   {(ativo || s.assinatura_cartao) && <CartaoRenovacao s={s}/>}
    {s.aceite&&<div className="flex gap-4 flex-wrap">
      {!s.cancelado&&<button disabled={ocupado} className="underline" onClick={()=>registrar("cancelar")}>Cancelar renovação</button>}
      {!s.arrependimento&&agora<=Date.parse(s.aceite)+7*86400000&&<button disabled={ocupado} className="underline" onClick={()=>registrar("arrependimento")}>Solicitar cancelamento e estorno em 7 dias</button>}

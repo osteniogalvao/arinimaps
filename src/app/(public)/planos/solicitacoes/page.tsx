@@ -16,12 +16,17 @@ export default async function MeusPedidos({ searchParams }: PageProps<"/planos/s
   if (!a) redirect("/entrar?volta="+encodeURIComponent("/planos/solicitacoes"+(individual?"?pedido="+pedido:"")));
   const pagina = Math.max(1, Math.min(100000, Math.floor(Number((await searchParams).pagina) || 1)));
   const inicio = (pagina - 1) * 20;
-  const consulta = supabaseAdmin().from("solicitacoes_planos").select("id,status,created_at,cotacao,assinatura:assinaturas_cotadas(id,ciclo,primeira,recorrente,adicionais,escopo_confirmado,aceite,cancelado,arrependimento,assinatura_reajustes(id,vigencia,valor,condicoes,aceito_em,aplicado_em,avisado_em),faturas_cotadas(id,status,componente,inicio,fim,valor,link,link_estorno,operacao))")
+  const consulta = supabaseAdmin().from("solicitacoes_planos").select("id,status,created_at,cotacao,assinatura:assinaturas_cotadas(id,plano,assinatura_cartao(final,situacao),ciclo,primeira,recorrente,adicionais,escopo_confirmado,aceite,cancelado,arrependimento,assinatura_reajustes(id,vigencia,valor,condicoes,aceito_em,aplicado_em,avisado_em),faturas_cotadas(id,status,componente,inicio,fim,valor,link,link_estorno,tentativa_cartao,operacao,nfse_assinaturas(estado,numero,pdf_url,xml_url)))")
     .eq("user_id", a.userId);
   const {data,error}=await (individual?consulta.eq("id",pedido):consulta).order("created_at", { ascending: false }).order("id", { ascending: false }).range(inicio, inicio + 20);
   const {data:avisos}=await supabaseAdmin().from("assinatura_contatos").select("id,assinatura,texto,criado_em").eq("titular",a.userId)
     .in("assinatura",(data??[]).map(p=>p.id)).order("criado_em",{ascending:false}).limit(60);
   const pedidos = (data ?? []) as unknown as (Pick<PedidoPlano, "id" | "status" | "created_at" | "cotacao"> & {assinatura:OfertaAssinatura|null})[];
+  const {data:ativas} = await supabaseAdmin().from("assinaturas_cotadas").select("id,nicho")
+    .eq("titular",a.userId).not("aceite","is",null).is("cancelado",null);
+  const ids = pedidos.map(p=>p.id).join(",");
+  const {data:trocas} = ids ? await supabaseAdmin().from("assinatura_trocas").select("oferta,assinatura,tipo,status,novo,fim_ciclo,proporcional")
+    .or(`assinatura.in.(${ids}),oferta.in.(${ids})`).order("ordem",{ascending:false}) : {data:[]};
   return <Moldura site usuario={{ nome: "Conta", papel: "Usuário" }}>
     <CabecalhoPagina titulo="Meus pedidos de planos" variante="faixa" compacta
       acoes={<Link href="/planos" className="lp-btn lp-btn-contorno">Ver planos</Link>} />
@@ -34,7 +39,9 @@ export default async function MeusPedidos({ searchParams }: PageProps<"/planos/s
         <h2 className="lp-display text-2xl">{p.cotacao.rotulo}</h2>
         <p>Plano {p.cotacao.ciclo} · {p.cotacao.totalCentavos === null ? "Sob orçamento" : (p.cotacao.totalCentavos/100).toLocaleString("pt-BR",{style:"currency", currency:"BRL"}) + (p.cotacao.ciclo === "anual" ? " em 12 meses" : " no primeiro mês")}</p>
         {p.cotacao.itens.length > 0 && <p>{p.cotacao.itens.map((i) => i.quantidade + " × " + i.nome).join(" · ")}</p>}
-        {p.assinatura && p.status!=="cancelado" && <Contratacao s={p.assinatura} ativo={checkoutAtivo()} />}
+        {p.assinatura && p.status!=="cancelado" && <Contratacao s={p.assinatura} ativo={checkoutAtivo()}
+          temPlano={!!ativas?.some(s=>s.id!==p.id && s.nicho===(p.cotacao.personaId==="profissional_tecnico"?"engenheiro":p.cotacao.personaId))}
+          trocas={(trocas??[]).filter(t=>t.assinatura===p.id || t.oferta===p.id)}/>}
         {avisos?.some(av=>av.assinatura===p.id) && <details><summary className="cursor-pointer">Avisos da assinatura</summary>
           <ul className="mt-2 space-y-2">{avisos.filter(av=>av.assinatura===p.id).map(av=><li key={av.id}>{av.texto} <small>· {new Date(av.criado_em).toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo"})}</small></li>)}</ul></details>}
         {["pendente","em_analise"].includes(p.status) && <CancelarPedido id={p.id} />}

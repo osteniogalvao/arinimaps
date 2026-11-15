@@ -49,6 +49,12 @@ Nunca misture as duas coisas: a chave de produção com a URL de sandbox (ou o c
 5. Teste: `curl -X POST https://arinibrasil.com.br/api/asaas/webhook -H "asaas-access-token: errado"` precisa responder **401**.
 6. Faça uma cobrança real de valor baixo (R$ 5) por **Admin → Mensalidades → Cobrar via Asaas**. Pague via Pix e confira que a fatura fica **paga**. Depois, se quiser, estorne pelo painel do Asaas e confira que ela fica **estornada**.
 
+## Cartão nas renovações de planos
+
+Em **Meus pedidos de planos**, o titular pode autorizar o cartão antes de pagar uma fatura do plano. Ele informa os quatro últimos dígitos, confere os valores da renovação e paga a fatura no Asaas. A confirmação exige a mesma cobrança, cliente, valor e cartão. A ARINI guarda a autorização e a referência da fatura. O token que o Asaas devolve fica em memória durante a operação.
+
+A cada vencimento, o sistema tenta pagar a fatura existente uma única vez. Se o cartão for recusado, o titular pode pagar pelo link da fatura. Remover a autorização, cancelar a assinatura ou mudar o plano, o ciclo ou o valor impede novos débitos sob aquele aceite. Para a produção, o titular da conta deve confirmar a habilitação da tokenização no Asaas. [Tokenização de cartão no Asaas](https://docs.asaas.com/docs/cobrancas-via-cartao-de-credito) · [Pagamento de uma cobrança existente](https://docs.asaas.com/reference/pagar-uma-cobranca-com-cartao-de-credito)
+
 ## Eventos tratados
 
 `externalReference` da cobrança é o id da fatura (`invoices.id`) ou da comissão (`commissions.id`).
@@ -82,3 +88,22 @@ O Asaas pausa a fila depois de **15 falhas seguidas**. Os eventos continuam send
 
    Os eventos guardados chegam em ordem (`sendType: SEQUENTIALLY`).
 4. Se a pausa passou de 14 dias, confira à mão no painel do Asaas as cobranças do período e marque as faturas em **Admin → Mensalidades**.
+
+## NFS-e das assinaturas de planos
+
+A ARINI Imóveis recebe os pagamentos de tecnologia autorizados pela ARINI. A contabilidade define o CNPJ que emite a nota, o serviço, as deduções, os tributos, o início de vigência e o momento de emissão. Com a migration 0125, cada cobrança de assinatura ganha uma referência única `nfse_plano_<id da fatura>`. O worker de assinaturas só inicia a emissão quando o ambiente do site contém `ASAAS_NFSE_ASSINATURAS_CONFIG` com esses dados.
+
+| Campo do JSON | Preenchimento |
+|---|---|
+| `emitenteCnpj` | CNPJ indicado pela contabilidade, somente dígitos. Para `61134351000180`, a nota usa a cobrança e a credencial Asaas da Imóveis. Para `68128846000145`, configure `ASAAS_NFSE_TECNOLOGIA_KEY` da Tecnologia, e a nota é avulsa para o mesmo tomador em sua conta. O site compara o CNPJ com a identificação retornada pelo Asaas. |
+| `desde` | Primeira competência incluída, em AAAA-MM-DD. Confira o corte com as notas já emitidas manualmente. |
+| `momento` | Use `cobranca` para emitir quando a fatura estiver aberta ou `pagamento` para aguardar sua confirmação. |
+| `municipalServiceName` e código | Nome do serviço e um dos campos `municipalServiceCode` ou `municipalServiceId`, conforme o município e o portal emissor. |
+| `deductions` | Valor de deduções aplicável à cobrança, em reais. |
+| `taxes` | Objeto de impostos do Asaas com `retainIss` e as alíquotas `iss`, `cofins`, `csll`, `inss`, `ir`, `pis`. Inclua os demais campos fiscais aplicáveis ao serviço e ao município. |
+
+O site consulta o cadastro fiscal no Asaas antes de enviar a nota. Um 404 em `/fiscalInfo/` indica que o cadastro está pendente. [Informações fiscais da conta](https://docs.asaas.com/reference/recuperar-informacoes-fiscais) e [campos de emissão da NFS-e](https://docs.asaas.com/reference/agendar-nota-fiscal).
+
+Na conta emissora, habilite os eventos `INVOICE_*`. Na Imóveis use o webhook da cobrança. Na Tecnologia use `/api/asaas/nfse-tecnologia` com o segredo `ASAAS_NFSE_TECNOLOGIA_WEBHOOK_TOKEN`. O sistema confere a nota na conta emissora e associa o resultado ao tomador e valor da fatura. O cliente encontra o PDF e o XML autorizados em **Meus pedidos de planos**. O Financeiro acompanha o estado e as mensagens em **Solicitações de planos**.
+
+Envio com resposta incerta fica em conferência e o worker procura pela referência. Para regularizar uma ausência confirmada, a contabilidade pode agendar a nota com a mesma referência no Asaas, usando a cobrança original na Imóveis ou o cadastro fiscal vinculado do tomador na Tecnologia. Se houve cancelamento da cobrança, estorno parcial, total ou contestação depois do envio, o Financeiro confere o ajuste fiscal com a contabilidade. O cancelamento confirmado pelo emissor aparece no pedido.

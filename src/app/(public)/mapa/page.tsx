@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import dynamicImport from "next/dynamic";
-import { SATELITE, URL_MAPLIBRE } from "@/lib/map/config";
+import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, SATELITE, URL_MAPLIBRE, ZOOM_INICIAL_REGIONAL } from "@/lib/map/config";
+import { CHAVE_PREFERENCIAS } from "@/lib/preferencias";
 import Moldura from "@/components/shell/Moldura";
 import { currentUser } from "@/lib/supabase/server";
 import { acessoDe } from "@/lib/planos-servidor";
@@ -25,8 +26,16 @@ export default async function PaginaMapa() {
 
   return (
     <Moldura usuario={usuario} cheia>
-      {SATELITE.tiles?.[0] && <link rel="preconnect" href={new URL(SATELITE.tiles[0]).origin} />}
+      {SATELITE.tiles?.[0] && <link rel="preconnect" href={new URL(SATELITE.tiles[0]).origin} crossOrigin="anonymous" />}
       <link rel="modulepreload" href={URL_MAPLIBRE} />
+      {SATELITE.tiles?.[0] && (
+        <script
+          async fetchPriority="high" src="/precarregar-satelite.js"
+          data-fonte={SATELITE.tiles[0]} data-maxzoom={SATELITE.maxzoom} data-tile-size={SATELITE.tileSize}
+          data-camera={JSON.stringify([...CENTRO_REGIAO, ZOOM_INICIAL_REGIONAL])}
+          data-limites={JSON.stringify(LIMITES_MAPA_REGIONAL)} data-preferencias={CHAVE_PREFERENCIAS}
+        />
+      )}
       <MapaRegional recursos={[...acesso.recursos]} logado={!!user} versaoLotes={versaoLotes} />
       {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14) */}
       <AjudaTour perfil="mapa" className="fixed bottom-56 right-3 z-30 lg:bottom-36" />

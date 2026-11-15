@@ -11,11 +11,11 @@ const BASE = (process.env.ASAAS_BASE_URL ?? "https://api.asaas.com/v3").replace(
 // Contas raiz criadas a partir de 13/06/2024 exigem User-Agent em toda requisição.
 const USER_AGENT = "AriniImoveisBrasil/1.0 (Next.js)";
 
-function headers() {
+function headers(chave: string) {
   return {
     "Content-Type": "application/json",
     "User-Agent": USER_AGENT,
-    access_token: process.env.ASAAS_API_KEY ?? "",
+    access_token: chave,
   };
 }
 
@@ -25,8 +25,7 @@ export function asaasConfigurado() {
 
 /**
  * Falha da API do Asaas. `mensagem` é segura para mostrar ao operador
- * (vem do `errors[].description` do Asaas ou é texto nosso); o corpo bruto
- * fica só no log do servidor.
+ * (vem do `errors[].description` do Asaas ou é texto nosso).
  */
 export class AsaasErro extends Error {
   constructor(public status: number, public mensagem: string, public codigos: string[] = []) {
@@ -35,12 +34,12 @@ export class AsaasErro extends Error {
   }
 }
 
-async function chamar<T>(caminho: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+async function chamar<T>(caminho: string, init: { method?: string; body?: unknown } = {}, fiscalTecnologia = false): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${BASE}${caminho}`, {
       method: init.method ?? "GET",
-      headers: headers(),
+      headers: headers((fiscalTecnologia ? process.env.ASAAS_NFSE_TECNOLOGIA_KEY : process.env.ASAAS_API_KEY) ?? ""),
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       signal: AbortSignal.timeout(20_000),
     });
@@ -51,7 +50,7 @@ async function chamar<T>(caminho: string, init: { method?: string; body?: unknow
   if (res.ok) return (await res.json()) as T;
 
   const texto = await res.text().catch(() => "");
-  console.error(`Asaas ${init.method ?? "GET"} ${caminho.split("?")[0]} → ${res.status}: ${texto.slice(0, 500)}`);
+  console.error(`Asaas ${init.method ?? "GET"} ${caminho.split("?")[0]} → ${res.status}`);
   let erros: { code?: string; description?: string }[] = [];
   try { erros = (JSON.parse(texto) as { errors?: typeof erros }).errors ?? []; } catch { /* corpo não-JSON */ }
   const codigos = erros.map((e) => e.code ?? "").filter(Boolean);
@@ -66,8 +65,26 @@ async function chamar<T>(caminho: string, init: { method?: string; body?: unknow
 }
 
 type Lista<T> = { data: T[]; hasMore: boolean };
+export function chamarAsaasFiscal<T>(caminho: string, init: { method?: string; body?: unknown } = {}, usarRecebedora = false) {
+  const chave = usarRecebedora ? process.env.ASAAS_API_KEY : process.env.ASAAS_NFSE_TECNOLOGIA_KEY;
+  if (!chave) throw new AsaasErro(503, "Credencial da conta fiscal selecionada ausente.");
+  return chamar<T>(caminho, init, !usarRecebedora);
+}
+
+export function tomadorDaCobranca(id: string) {
+  return chamar<{ id: string; name: string; cpfCnpj: string; email?: string; address?: string; addressNumber?: string;
+    complement?: string; province?: string; postalCode?: string }>(`/customers/${encodeURIComponent(id)}`);
+}
 export type AsaasCliente = { id: string; deleted?: boolean };
-export type AsaasCobranca = { id: string; invoiceUrl: string; status: string; deleted?: boolean; customer?: string; value?: number; externalReference?: string; billingType?: string };
+export type AsaasCobranca = { id: string; invoiceUrl: string; status: string; deleted?: boolean; customer?: string; value?: number; externalReference?: string; billingType?: string;
+  dueDate?: string;
+  creditCard?: { creditCardToken?: string | null; creditCardNumber?: string | null } | null };
+
+export function asaasPagarComCartaoAutorizado(pagamento: string, token: string) {
+  return chamar<AsaasCobranca>(`/payments/${encodeURIComponent(pagamento)}/payWithCreditCard`, {
+    method: "POST", body: { creditCardToken: token },
+  });
+}
 
 /** Cliente pelo nosso identificador (externalReference = profiles.user_id). */
 export async function asaasBuscarClientePorReferencia(externalReference: string) {

@@ -31,6 +31,43 @@ const cliente = (fetch) => createClient("https://teste.invalid", "teste-local", 
   global: { fetch }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 const erro = () => json({ message: "Falha simulada", code: "TEST" }, 503);
+test("o cartão só paga a fatura reservada com o token do cliente e do final autorizados", async()=>{
+  const a={assinatura:"contrato",origem:"origem",autorizado_em:"2026-11-01",final:"8829",situacao:"aguardando"};
+  const origem={id:"origem",pagamento:"pay_inicial",status:"paga",valor:4990,operacao:null};
+  const f={id:"renovacao",pagamento:"pay_nova",status:"aberta",valor:5990,inicio:"2026-12-01",operacao:null};
+  const c={id:"pay_nova",status:"PENDING",value:59.90,customer:"cus_1",externalReference:"plano_renovacao",dueDate:f.inicio};
+  const pago={id:"pay_inicial",status:"CONFIRMED",value:49.90,customer:"cus_1",externalReference:"plano_origem",
+    billingType:"CREDIT_CARD",creditCard:{creditCardNumber:"8829",creditCardToken:"token_sintetico"}};
+  let reservada=false;
+  const admin=cliente(async(url,init)=>{
+    const path=new URL(url).pathname;
+    if(path.endsWith("/assinatura_cartao") && init.method==="PATCH") {Object.assign(a,JSON.parse(init.body));return new Response(null,{status:204});}
+    if(path.endsWith("/assinatura_cartao")) return json(a);
+    if(path.endsWith("/faturas_cotadas")) return json(origem);
+    assert.ok(path.endsWith("/rpc/assinatura_reservar_cartao"));
+    assert.equal(JSON.parse(init.body).p_origem,origem.id);
+    const ganha=!reservada;reservada=true;return json(ganha);
+  });
+  let capturas=0;
+  const asaas=carregar("lib/asaas.ts",{},{
+    process:{env:{ASAAS_API_KEY:"simulado",ASAAS_BASE_URL:"https://cartao.invalid"}},
+    fetch:async(url,init)=>{
+      const {pathname}=new URL(url);
+      if(pathname==="/payments/pay_inicial") return json(pago);
+      assert.equal(pathname,"/payments/pay_nova/payWithCreditCard");
+      assert.deepEqual(JSON.parse(init.body),{creditCardToken:"token_sintetico"});
+      capturas++;return json({...c,status:"CONFIRMED"});
+    },
+  });
+  const cartao=carregar("lib/assinatura-cartao.ts",{"@/lib/asaas":asaas,"@/lib/supabase/admin":{supabaseAdmin:()=>admin}});
+  const renovar=()=>cartao.pagarRenovacaoNoCartao(a.assinatura,"cus_1",f,c);
+  c.dueDate="2026-12-10";await renovar();assert.equal(capturas,0);c.dueDate=f.inicio;
+  pago.customer="outra_conta";await renovar();assert.equal(capturas,0);
+  pago.customer="cus_1";pago.creditCard.creditCardNumber="1111";await renovar();assert.equal(capturas,0);
+  assert.equal(a.situacao,"indisponivel");
+  pago.creditCard.creditCardNumber="8829";a.situacao="aguardando";
+  await renovar();await renovar();assert.equal(capturas,1);
+});
 const lotes = carregar("lib/supabase/lotes.ts");
 const exibicao = { Indicadores: "Indicadores", CabecalhoSetor: "Cabecalho", Secao: "Secao", LinkAcao: "Link", TarefasDoSetor: "Tarefas", dataBR: () => "" };
 function modulosFinanceiros(admin) {
@@ -41,7 +78,7 @@ function modulosFinanceiros(admin) {
     "@/components/admin/Painel": exibicao, "@/components/admin/estilos": {},
     "@/components/ui/Pagina": { CabecalhoPagina: "Cabecalho", Vazio: "Vazio" }, "next/link": "Link",
     "@/lib/setores-servidor": { exigirSetor: async () => ({ id: "teste" }) },
-    "@/lib/format": { formatBRL: (v) => String(v), plural: (v) => String(v) },
+    "@/lib/format": { formatBRL: String, formatBRLFinanceiro: String, plural: String },
   };
 }
 function indicadores(no) {
@@ -209,6 +246,11 @@ test("webhook autenticado concilia pela referência mesmo após perda da respost
     "@/lib/authz": {}, "@/lib/settings": {}, "@/lib/central": {}, "@/lib/asaas": {},
   });
   const modulo = carregar("app/api/asaas/webhook/route.ts", {
+    "@/lib/asaas": {},
+    "@/lib/nfse-regras": carregar("lib/nfse-regras.ts"),
+    "@/lib/nfse-assinaturas": { eventoFiscalAssinatura: async()=>{} },
+    "@/lib/assinatura-cartao": { conferirCartaoPago: async()=>{} },
+    "@/lib/nfse-assinaturas": {}, "@/lib/nfse-regras": carregar("lib/nfse-regras.ts"),
     ...deps, "node:crypto": require("node:crypto"), "@/lib/modulos/financeiro": financeiro,
   }, { process: { env: { ASAAS_WEBHOOK_TOKEN: "segredo-sintetico" } } });
   const enviar = (status) => modulo.POST(new Request("https://teste.invalid/webhook", {

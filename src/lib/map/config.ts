@@ -16,6 +16,8 @@ export const STATUS_CORES: Record<string, string> = {
 };
 
 export const CENTRO_REGIAO: [number, number] = [-50.196, -19.728]; // Iturama
+export const ZOOM_INICIAL_REGIONAL = 9;
+export const LIMITES_MAPA_REGIONAL: [[number, number], [number, number]] = [[-80, -38], [-28, 9]];
 
 /**
  * Fonte de satélite, em ordem de preferência:

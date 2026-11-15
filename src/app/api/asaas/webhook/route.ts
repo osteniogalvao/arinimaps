@@ -4,6 +4,9 @@ import { logAudit } from "@/lib/audit";
 import { timingSafeEqual } from "node:crypto";
 import { AsaasErro, asaasBuscarCobranca, asaasContaDaImobiliaria, type AsaasNota } from "@/lib/asaas";
 import { camposDaNota } from "@/lib/modulos/financeiro";
+import { eventoFiscalAssinatura } from "@/lib/nfse-assinaturas";
+import { CNPJ_IMOVEIS, faturaDaReferencia } from "@/lib/nfse-regras";
+import { conferirCartaoPago } from "@/lib/assinatura-cartao";
 
 /** Comparação em tempo constante: o tempo de resposta não revela quantos caracteres acertaram. */
 function tokenConfere(recebido: string | null, esperado: string) {
@@ -177,6 +180,14 @@ export async function POST(request: Request) {
 
   // nota fiscal (central fiscal, migration 0066): só atualiza a situação da nota nossa
   if (typeof body?.event === "string" && body.event.startsWith("INVOICE_") && body.invoice && typeof body.invoice.id === "string") {
+    const fatura = faturaDaReferencia(body.invoice.externalReference);
+    if (fatura || !body.invoice.externalReference) {
+      try {
+        const tratada = await eventoFiscalAssinatura(fatura, body.invoice.id, CNPJ_IMOVEIS);
+        if (tratada || fatura) return NextResponse.json({ok:true});
+      }
+      catch { return NextResponse.json({error: "Falha ao conciliar a nota da assinatura."}, {status: 503}); }
+    }
     const admin = supabaseAdmin();
     const buscarNota = () => admin.from("notas_fiscais").select("id, status, updated_at");
     let consulta = await buscarNota().eq("gateway_id", body.invoice.id).maybeSingle();
@@ -214,6 +225,10 @@ export async function POST(request: Request) {
       p_valor: Math.round(Number(pagamento.value)*100), p_evento: evento });
     if (error && !["22023","P0002"].includes(error.code)) return NextResponse.json({error:"Falha ao conciliar a fatura."},{status:503});
     if (error) console.error("Cobrança de plano divergente", ref, error.code);
+    if (!error && (evento === "PAYMENT_CONFIRMED" || evento === "PAYMENT_RECEIVED")) {
+      // Uma indisponibilidade na tokenização não interfere na baixa financeira.
+      await conferirCartaoPago(ref.slice(6), pagamento.customer).catch(()=>console.error("Conferência do cartão pendente", ref));
+    }
     return NextResponse.json({ ok:true });
   }
   if (ref.startsWith("ari_") && UUID.test(ref.slice(4))) {
