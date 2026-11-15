@@ -7,7 +7,7 @@
  * fullscreen, escala e localização do usuário.
  */
 
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import bbox from "@turf/bbox";
 import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpecification, VectorTileSource } from "maplibre-gl";
 import { DETALHES_SATELITE, camadaDeDetalhe } from "@/lib/map/ortofotos";
@@ -278,6 +278,8 @@ function mediaUrl(path: string) {
 const norm = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+// Na primeira pintura o HTML pode chegar antes dos controles interativos.
+const assinarHidratacao = () => () => {};
 export default function MapaRegional({
   recursos, logado = false, versaoLotes = "",
 }: {
@@ -291,6 +293,7 @@ export default function MapaRegional({
   versaoLotes?: string;
 } = {}) {
   const tema = useTema();
+  const interativo = useSyncExternalStore(assinarHidratacao, () => true, () => false);
   const router = useRouter();
   const liberado = (r: string) => !recursos || recursos.includes(r);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -476,7 +479,7 @@ export default function MapaRegional({
       document.removeEventListener("keydown", escapar);
     };
   }, [painelMapa, maisAberto]);
-  const chipsRef = useRef<HTMLDivElement>(null);
+  const chipsRef = useRef<HTMLFieldSetElement>(null);
   const areaMapaRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const barra = chipsRef.current, area = areaMapaRef.current;
@@ -1733,7 +1736,8 @@ export default function MapaRegional({
             sumiam para fora da tela. Agora os de prioridade vêm primeiro e a barra
             QUEBRA em linhas; no celular o resto vai para o menu "Mais". A altura real
             da barra vira --abaixo-chips, e os painéis abrem logo abaixo dela. */}
-        <div ref={chipsRef} className="absolute top-3 left-3 right-14 z-20 flex flex-wrap items-start gap-2">
+        <fieldset ref={chipsRef} aria-label="Controles do mapa" disabled={!interativo} aria-busy={!interativo}
+          className="absolute top-3 left-3 right-14 z-20 flex min-w-0 flex-wrap items-start gap-2 disabled:opacity-60">
           {/* requisitos cartográficos §2.1 + Revisão do Carlos (29/10): "Não encontrei
               meu imóvel" precisa ser fácil de achar — fica em dourado, logo no começo */}
           <button
@@ -1766,7 +1770,7 @@ export default function MapaRegional({
             </div>
           )}
           </div>
-        </div>
+        </fieldset>
 
         {carAtivo && carAviso && !carSel && !camadasAbertas && (
           <p className={`absolute top-[var(--abaixo-chips,4rem)] left-3 right-14 sm:right-auto px-3.5 py-2 text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>

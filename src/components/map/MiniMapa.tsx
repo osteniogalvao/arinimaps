@@ -39,10 +39,10 @@ export default function MiniMapa({ geometry, status, className, carAmbiental }: 
       });
       mapa = map;
       mapRef.current = map;
+      if (carAmbiental) setMapaCar(map);
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
       map.on("load", () => {
-        if (carAmbiental) setMapaCar(map);
         const cor = STATUS_MAPA[status] ?? STATUS_MAPA.publicado;
         map.addSource("imovel", { type: "geojson", data: { type: "Feature", geometry, properties: {} } });
         if (geometry.type === "Point") {
@@ -85,15 +85,23 @@ export default function MiniMapa({ geometry, status, className, carAmbiental }: 
 
   useEffect(() => {
     if (!mapaCar || mapaCar !== mapRef.current) return;
-    for (const id of ["imovel-fill", "imovel-linha"]) {
-      if (mapaCar.getLayer(id)) mapaCar.setLayoutProperty(id, "visibility", ambiental ? "none" : "visible");
-    }
+    const atualizar = () => {
+      for (const id of ["imovel-fill", "imovel-linha"]) {
+        if (mapaCar.getLayer(id)) mapaCar.setLayoutProperty(id, "visibility", ambiental ? "none" : "visible");
+      }
+    };
+    if (mapaCar.getSource("imovel")) atualizar();
+    else mapaCar.once("load", atualizar);
+    return () => { mapaCar.off("load", atualizar); };
   }, [mapaCar, ambiental]);
 
   const mapa = <div ref={containerRef} className={className ?? "h-80 w-full rounded-2xl overflow-hidden border border-linha"} />;
   if (!carAmbiental) return mapa;
   return <div className="space-y-3">{mapa}
-    <button className="btn-contorno px-4 py-2 text-sm" type="button" onClick={() => setAmbiental(v => !v)} aria-expanded={ambiental}>{ambiental ? "Fechar mapa ambiental" : "Ver camadas ambientais do imóvel"}</button>
+    <button className="btn-contorno px-4 py-2 text-sm disabled:opacity-60" type="button" disabled={!mapaCar}
+      onClick={() => setAmbiental(v => !v)} aria-expanded={ambiental}>
+      {ambiental ? "Fechar mapa ambiental" : "Ver camadas ambientais do imóvel"}
+    </button>
     {ambiental && mapaCar && <AmbienteCar key={carAmbiental} mapa={mapaCar} cod={carAmbiental} />}
   </div>;
 }
