@@ -10,4 +10,5 @@ export type PedidoPlano = {
   selecao: SelecaoPedido; cotacao: ReturnType<typeof cotarPlano>;
 };
 export type PedidoCentral = PedidoPlano & { user_id: string; email_contato: string | null; perfil: { nome: string; telefone: string | null } | null;
+  assinatura?: {aceite:string|null;cancelado:string|null;escopo_confirmado:string;faturas_cotadas:{id:string;valor:number;status:string;operacao:string|null;pagamento:string|null}[]} | null;
   vagas_cofre: { quantidade:number } | null };

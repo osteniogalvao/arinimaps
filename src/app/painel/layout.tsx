@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { currentUser, supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { acessoDe } from "@/lib/planos-servidor";
 import { PAPEL_LABEL, ehParceiro } from "@/lib/perfis";
 import { temPerfilCofre } from "@/lib/cofre";
@@ -14,11 +15,13 @@ export default async function PainelLayout({ children }: LayoutProps<"/painel">)
   if (["admin_central", "analista_arini"].includes(user.role)) redirect("/admin");
 
   // só para a saudação: o plano nunca derruba o painel
-  const [acesso, crm] = await Promise.all([
+  const modulo = user.nicho==="ente_publico" ? "balcao" : user.nicho==="empresa_holding" ? "safras" : null;
+  const [acesso, crm, territorio] = await Promise.all([
     acessoDe(user.id).catch(() => null),
     ["corretor_imobiliaria", "engenheiro"].includes(user.nicho ?? "")
       ? supabaseServer().then(async db => (await db.rpc("crm_privado_liberado")).data === true).catch(() => false)
       : Promise.resolve(false),
+    modulo ? supabaseAdmin().rpc("org_modulo_atual",{p_titular:user.id,p_modulo:modulo}).then(r=>!!r.data) : false,
   ]);
   const plano = acesso?.planNome;
   const anunciar = acesso?.recursos.has("anunciar") ?? false;
@@ -40,7 +43,7 @@ export default async function PainelLayout({ children }: LayoutProps<"/painel">)
             {plano && <> · plano <strong className="font-semibold text-texto">{plano}</strong></>}
           </p>
           <div className="mt-7">
-            <AbasPainel crm={crm} anunciar={anunciar} cofre={temPerfilCofre(user.role, user.nicho)} insumos={acesso?.recursos.has("calculadora_insumos")} />
+            <AbasPainel leiloes={user.role==="leiloeiro"} territorio={territorio} crm={crm} anunciar={anunciar} cofre={temPerfilCofre(user.role, user.nicho)} insumos={acesso?.recursos.has("calculadora_insumos")} />
           </div>
         </header>
         <div className="pb-12">{children}</div>

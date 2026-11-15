@@ -23,11 +23,19 @@
 .vitrine-card details { border-color:currentColor; }
 .vitrine-card .escolher { display:flex; align-items:center; justify-content:center; gap:.5rem; width:100%; min-height:44px; margin-top:auto; border:1.5px solid currentColor; color:inherit; border-radius:999px; font-weight:700; cursor:pointer; }
 .vitrine-card:has(.escolher) { cursor:pointer; }
-.vitrine-card:is(:hover,:focus-within,[data-selecionado=true]) { background:#124431; border-color:#124431; color:#f2f2ec; }
-.vitrine-card:is(:hover,:focus-within,[data-selecionado=true]) :is(.nota,.text-texto-2) { color:#d8e4dc; }
-.vitrine-card:is(:hover,:focus-within,[data-selecionado=true]) :is(.valor,.estado,.text-verde) { color:#ffe299; }
-.vitrine-card:is(:hover,:focus-within,[data-selecionado=true]) .escolher { color:white; background:#bc0909; border-color:#bc0909; }
-.vitrine-card:focus-within { outline:3px solid #b69642; outline-offset:2px; }
+/* O ponteiro destaca o cartão em comparação. A escolha continua identificada pelo botão. */
+.vitrine-card:hover,
+.vitrine-grade:not(:has(.vitrine-card:hover)) .vitrine-card:focus-within,
+.vitrine-grade:not(:has(.vitrine-card:hover, .vitrine-card:focus-within)) .vitrine-card[data-selecionado=true] {
+  background:#124431;
+  border-color:#124431;
+  color:#f2f2ec;
+
+  & :is(.nota,.text-texto-2) { color:#d8e4dc; }
+  & :is(.valor,.estado,.text-verde) { color:#ffe299; }
+  & .escolher { color:white; background:#bc0909; border-color:#bc0909; }
+}
+.vitrine-card:has(:focus-visible) { outline:3px solid #b69642; outline-offset:2px; }
 .vitrine-comparativo { max-width:100%; overflow:auto; border:1px solid var(--color-linha,#dddbcf); border-radius:14px; }
 .vitrine-comparativo table { width:100%; border-collapse:collapse; font-size:.91rem; }
 .vitrine-comparativo td,.vitrine-comparativo th { text-align:left; padding:.7rem 1rem; border-bottom:1px solid var(--color-linha,#dddbcf); }

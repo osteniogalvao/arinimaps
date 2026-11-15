@@ -236,8 +236,8 @@ export default function NovoImovel() {
       setErro("Marque a localização do imóvel no mapa (desenho, ponto ou KML).");
       return;
     }
-    if (!ehEquipe && emLeilao && !docs.edital.length) {
-      setErro("Envie o edital do leilão — é o documento que a Arini confere para publicar.");
+    if (!ehEquipe && emLeilao && !docs.edital.length && !docs.autorizacao.length) {
+      setErro("Envie o edital, a ordem judicial ou o contrato com o comitente.");
       return;
     }
     if (!ehEquipe && !emLeilao && !docs.matricula.length) {
@@ -520,7 +520,7 @@ export default function NovoImovel() {
       </Etapa>
 
       <Etapa id="localizacao" numero={numero("localizacao")} icone={MapPin} titulo="Localização no mapa"
-        subtitulo="Desenhe a divisa, marque um ponto ou envie um KML.">
+        subtitulo={emLeilao ? "Desenhe ou importe somente a parte da gleba incluída no edital. Essa é a área exibida na vitrine e exportada no CRM." : "Desenhe a divisa, marque um ponto ou envie um KML."}>
         {car && (
           <p className="flex items-start gap-2 rounded-xl border border-ouro/30 bg-ouro/10 px-4 py-3 text-sm text-texto">
             <Trees className="mt-0.5 size-4 shrink-0 text-ouro" />
@@ -633,7 +633,7 @@ export default function NovoImovel() {
           </div>
         )}
         {([
-          ...(emLeilao ? [["edital", "Edital do leilão", "O edital publicado, com a descrição do bem, as praças e as condições.", !ehEquipe] as const] : []),
+          ...(emLeilao ? [["edital", "Edital ou ordem judicial", "Envie este documento ou o contrato com o comitente para autorizar o anúncio.", false] as const, ["autorizacao", "Contrato com o comitente", "Autorização para realizar o leilão extrajudicial deste imóvel.", false] as const] : []),
           ["matricula", "Matrícula atualizada do imóvel", "Ou escritura, contrato de compra e venda registrado, formal de partilha.", !ehEquipe && !emLeilao],
           ...(ehParceiro && !emLeilao ? [["autorizacao", "Autorização de venda assinada pelo proprietário", "Com prazo, preço e condições compatíveis com o anúncio.", true] as const] : []),
           ...(form.tipo === "rural" ? [["ccir_itr", "CCIR e/ou ITR", "Recomendado para imóvel rural — agiliza a análise.", false] as const] : []),

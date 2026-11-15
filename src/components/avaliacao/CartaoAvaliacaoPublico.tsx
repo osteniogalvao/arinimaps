@@ -1,12 +1,11 @@
 import { lerConfiguracoes } from "@/lib/settings";
-import { ator, temRecurso } from "@/lib/authz";
+import { ator } from "@/lib/authz";
 import { Calculator, Sprout } from "lucide-react";
 import PainelAvaliacao from "./PainelAvaliacao";
 
 /**
  * Cartão da ficha pública. Só aparece quando a Diretoria ligou a função
- * (pre_avaliacao_ativa / aptidao_ativa) E o plano da conta tem
- * `pre_avaliacao`. Fora disso não renderiza nada — nem um aviso.
+ * e o visitante entrou em sua conta.
  */
 export default async function CartaoAvaliacaoPublico({ propertyId, tipo, status }: {
   propertyId: string | null | undefined; tipo: "rural" | "urbano"; status: string;
@@ -17,7 +16,7 @@ export default async function CartaoAvaliacaoPublico({ propertyId, tipo, status 
   const apt = cfg.aptidao_ativa === true && tipo === "rural";
   if (!pre && !apt) return null;
   const a = await ator();
-  if (!a || a.ehArini || !temRecurso(a, "pre_avaliacao")) return null;
+  if (!a) return null;
 
   return (
     <section className="cartao p-6 md:p-7 space-y-5">

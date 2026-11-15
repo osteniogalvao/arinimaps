@@ -20,6 +20,9 @@ const METODOS_MUTAVEIS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const ISENTAS = [
   "/api/asaas/webhook", // token do webhook (ASAAS_WEBHOOK_TOKEN)
   "/api/webhooks/whatsapp", // assinatura da Meta (WHATSAPP_APP_SECRET)
+  "/api/interno/avisos-imoveis",
+  "/api/interno/avisos-territoriais",
+  "/api/interno/assinaturas",
   "/api/interno/publicar", // worker, com SAUDE_TOKEN
 ];
 

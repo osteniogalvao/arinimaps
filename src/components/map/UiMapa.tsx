@@ -5,6 +5,7 @@
  * MapaRegional para o componente do mapa cuidar só de mapa.
  */
 
+import { CORES_RURAIS } from "@/lib/map/camadasOficiais";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -32,7 +33,7 @@ export { STATUS_MAPA, RADAR_ANEL };
  * separa o rural do urbano à primeira vista sobre o satélite (pedido do
  * cliente) e o Amarelo Claro marca o lote urbano.
  */
-const COR_CAR = "#40cf39";
+const COR_CAR = CORES_RURAIS.car;
 const COR_LOTE_LEGENDA = "#FFE299";
 
 /** Botão "fechar" dos painéis do mapa (ícone X, alvo de 32 px). */

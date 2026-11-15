@@ -97,8 +97,9 @@ export default function Ferramentas({
   useEffect(() => {
     if (!mapa) return;
     const preparar = () => { try { garantirCamadas(); } catch { /* estilo ainda carregando: o desenho cria depois */ } };
-    if (mapa.loaded()) preparar();
-    else mapa.once("load", preparar);
+    if (mapa.isStyleLoaded()) preparar();
+    else mapa.once("idle", preparar);
+    return () => { mapa.off("idle", preparar); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapa]);
 

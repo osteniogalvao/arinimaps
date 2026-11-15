@@ -259,7 +259,7 @@ function PainelLote({ u, ativo, base, hoje, empId, onFechar, onSimular, onFeito 
     setErro(null);
     const valor = lerNumeroBR(form.valor_venda);
     const r = await enviarJson(`/api/empreendimentos/${empId}/espelho`, "POST", {
-      unidade_id: u.id, acao,
+      unidade_id: u.id, acao, versao: u.alterado_em,
       reserva_ate: form.reserva_ate, cliente_nome: form.cliente_nome,
       opportunity_id: form.opportunity_id || null,
       valor_venda: Number.isFinite(valor) ? valor : null,

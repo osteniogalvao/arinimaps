@@ -205,6 +205,15 @@ export async function POST(request: Request) {
 
   if (!evento || !pagamento) return NextResponse.json({ ok: true, ignorado: "payload sem evento de cobrança" });
   const ref = typeof pagamento.externalReference === "string" ? pagamento.externalReference : "";
+  if (ref.startsWith("plano_") && UUID.test(ref.slice(6))) {
+    if (!(EVENTOS as readonly string[]).includes(evento) && !["PAYMENT_PARTIALLY_REFUNDED","PAYMENT_REFUND_DENIED"].includes(evento)) return NextResponse.json({ ok: true });
+    if (!pagamento.customer || !Number.isFinite(pagamento.value)) return NextResponse.json({ ok: true, ignorado: "cliente ou valor ausente" });
+    const { error } = await supabaseAdmin().rpc("assinatura_pagamento", { p_id: ref.slice(6), p_pagamento: pagamento.id, p_cliente: pagamento.customer,
+      p_valor: Math.round(Number(pagamento.value)*100), p_evento: evento });
+    if (error && !["22023","P0002"].includes(error.code)) return NextResponse.json({error:"Falha ao conciliar a fatura."},{status:503});
+    if (error) console.error("Cobrança de plano divergente", ref, error.code);
+    return NextResponse.json({ ok:true });
+  }
   if (ref.startsWith("ari_") && UUID.test(ref.slice(4))) {
     if (!(EVENTOS as readonly string[]).includes(evento) && evento !== "PAYMENT_PARTIALLY_REFUNDED") return NextResponse.json({ ok: true });
     if (typeof pagamento.customer !== "string" || typeof pagamento.value !== "number" || !Number.isFinite(pagamento.value)) {

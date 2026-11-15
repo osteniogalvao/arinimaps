@@ -1,5 +1,6 @@
 "use client";
 
+import { CORES_RURAIS } from "@/lib/map/camadasOficiais";
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Map as MLMap, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import { ESTILO_BASE, CENTRO_REGIAO } from "@/lib/map/config";
@@ -111,9 +112,9 @@ export default function DesenhoMapa({ onChange, inicial, onSelecionar }: Props) 
           ? { type: "vector", url: `pmtiles://${CAR_NACIONAL.startsWith("/") ? origem + CAR_NACIONAL : CAR_NACIONAL}` }
           : { type: "vector", tiles: [`${origem}/api/tiles/car/{z}/{x}/{y}.pbf`], minzoom: 7, maxzoom: 13 });
         map.addLayer({ id: "sel-car-fill", type: "fill", source: "car", "source-layer": "car", minzoom: 10,
-          paint: { "fill-color": "#40cf39", "fill-opacity": 0.02 } });
+          paint: { "fill-color": CORES_RURAIS.car, "fill-opacity": 0.02 } });
         map.addLayer({ id: "sel-car-linha", type: "line", source: "car", "source-layer": "car", minzoom: 10,
-          paint: { "line-color": "#40cf39", "line-width": 1, "line-opacity": 0.85, "line-dasharray": [3, 2] } });
+          paint: { "line-color": CORES_RURAIS.car, "line-width": 1, "line-opacity": 0.85, "line-dasharray": [3, 2] } });
         map.addSource("lotes", { type: "vector", tiles: [`${origem}/api/tiles/lotes/{z}/{x}/{y}.pbf`], minzoom: 15, maxzoom: 17 });
         map.addLayer({ id: "sel-lotes-fill", type: "fill", source: "lotes", "source-layer": "lotes", minzoom: 15,
           paint: { "fill-color": "#FFE299", "fill-opacity": 0.02 } });

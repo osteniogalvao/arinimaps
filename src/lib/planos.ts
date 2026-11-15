@@ -23,7 +23,7 @@ export type RecursoId =
   | "mapa" | "ficha_basica" | "interesse" | "camada_car" | "camada_lotes" | "ferramenta_medir"
   | "solicitacao_cartografica" | "calculadora_insumos"
   | "camadas_oficiais" | "consulta_area" | "relatorio_territorial" | "ferramenta_kml" | "ferramenta_exportar"
-  | "historico_imovel" | "pre_avaliacao" | "chat_ia"
+  | "historico_imovel" | "pre_avaliacao" | "chat_ia" | "monitoramento_territorial"
   | "anunciar" | "painel_parceiro" | "oportunidades" | "crm_privado" | "crm_setorial"
   | "multiusuario" | "api_dados" | "territorio";
 
@@ -37,6 +37,7 @@ export type Recurso = {
 };
 
 export const RECURSOS: Recurso[] = [
+  { id: "monitoramento_territorial", nome: "Monitoramento territorial", descricao: "Acompanhar ocorrências de fontes públicas nas áreas autorizadas da conta.", grupo: "profissional" },
   { id: "calculadora_insumos", nome: "Calculadora de insumos", descricao: "Calcular quantidades e custos por área em hectares ou alqueires.", grupo: "ferramentas" },
   // consulta básica
   { id: "mapa", nome: "Mapa e imóveis publicados", descricao: "Navegar no mapa regional e ver os anúncios aprovados.", grupo: "consulta" },
@@ -77,6 +78,8 @@ export const GRUPO_RECURSO_LABEL: Record<Recurso["grupo"], string> = {
 
 /** Cotas que um plano pode limitar. Ausente no plano = sem limite. */
 export const COTAS: { id: string; nome: string; ajuda: string }[] = [
+  { id: "monitoramento_hectares", nome: "Hectares por área monitorada", ajuda: "Área máxima por perímetro acompanhado pelo trabalhador territorial." },
+  { id: "monitoramento_horas", nome: "Intervalo do monitoramento em horas", ajuda: "Intervalo entre leituras completas da mesma fonte. O padrão é 24 horas." },
   { id: "propriedades_cofre", nome: "Propriedades no cofre", ajuda: "Vagas incluídas no pacote, antes dos adicionais concedidos à conta." },
   { id: "consultas_area_mes", nome: "Consultas de área por mês", ajuda: "Cruzamentos com as fontes oficiais por conta, no mês corrente." },
   { id: "imoveis_ativos", nome: "Imóveis ativos", ajuda: "Anúncios em análise ou publicados ao mesmo tempo." },
@@ -223,6 +226,7 @@ export const ACESSO_VISITANTE: Acesso = {
 export function montarAcesso(role: string | null | undefined, plano: Plano | null, nicho: string | null, validoAte: string | null): Acesso {
   const equipe = !!role && PAPEIS_EQUIPE_IDS.includes(role);
   const disponiveis = RECURSOS.filter((recurso) => {
+    if (recurso.id === "monitoramento_territorial") return nicho === "proprietario" || nicho === "produtor_rural";
     if (recurso.reservado) return false;
     if (recurso.id === "calculadora_insumos") return equipe || nicho === "produtor_rural";
     if (recurso.id === "crm_privado") return !equipe && ["corretor_imobiliaria", "engenheiro"].includes(nicho ?? "");

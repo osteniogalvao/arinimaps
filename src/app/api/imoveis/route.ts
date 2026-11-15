@@ -95,8 +95,10 @@ export async function POST(request: Request) {
     condicoes: txt(dados.leilao?.condicoes, 2000),
   } : {};
   if (modalidade === "leilao" && !equipe) {
-    if (!docs.some((d) => d.tipo === "edital")) {
-      return NextResponse.json({ error: "Envie o edital do leilão." }, { status: 400 });
+    const {data:pacote}=await admin.rpc("leilao_acesso",{p_ator:conta.userId});
+    if (!pacote || pacote === "leilao_teste") return NextResponse.json({error:"Solicite à Central o credenciamento e a ativação do pacote de leilões para publicar."},{status:403});
+    if (!docs.some((d) => d.tipo === "edital" || d.tipo === "autorizacao")) {
+      return NextResponse.json({ error: "Envie o edital, a ordem judicial ou o contrato com o comitente." }, { status: 400 });
     }
     if (!(leilao as { praca1_data?: string | null }).praca1_data) {
       return NextResponse.json({ error: "Informe a data da 1ª praça do leilão." }, { status: 400 });

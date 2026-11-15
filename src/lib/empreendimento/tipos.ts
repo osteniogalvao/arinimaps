@@ -57,7 +57,11 @@ export type UnidadeEspelho = {
   eventos: EventoEspelho[];
 };
 
-/** Versão pública: só disponível/indisponível, sem cliente nem negociação. */
+export type EstadoPublico = { id: string; status: StatusEspelho; versao: string | null; minha_ate: string | null };
+export type EstoquePublico = { online: boolean; horas: number | null; unidades: EstadoPublico[] };
+export type ConfigEspelho = { reserva_online: boolean; prazo_horas: number | null; projeto_url: string | null; pre_lancamento: boolean; alterado_em: string | null };
+
+/** Geometria e dados de catálogo de cada lote visível. */
 export type UnidadePublica = {
   id: string;
   codigo: string;
@@ -66,7 +70,6 @@ export type UnidadePublica = {
   numero: string | null;
   area_m2: number | null;
   valor: number | null;
-  disponivel: boolean;
 };
 
 export type TotaisEspelho = {

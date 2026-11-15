@@ -5,6 +5,8 @@ import { CabecalhoPagina, Conteudo } from "@/components/ui/Pagina";
 import { ator } from "@/lib/authz";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { SITUACOES_PEDIDO, type PedidoPlano } from "@/lib/solicitacoes-planos";
+import Contratacao, {type OfertaAssinatura} from "./Contratacao";
+import {checkoutAtivo} from "@/lib/assinaturas-cotadas";
 import CancelarPedido from "./CancelarPedido";
 
 export default async function MeusPedidos({ searchParams }: PageProps<"/planos/solicitacoes">) {
@@ -12,9 +14,9 @@ export default async function MeusPedidos({ searchParams }: PageProps<"/planos/s
   if (!a) redirect("/entrar?volta=/planos/solicitacoes");
   const pagina = Math.max(1, Math.min(100000, Math.floor(Number((await searchParams).pagina) || 1)));
   const inicio = (pagina - 1) * 20;
-  const { data, error } = await supabaseAdmin().from("solicitacoes_planos").select("id,status,created_at,cotacao")
+  const { data, error } = await supabaseAdmin().from("solicitacoes_planos").select("id,status,created_at,cotacao,assinatura:assinaturas_cotadas(id,ciclo,primeira,recorrente,adicionais,escopo_confirmado,aceite,cancelado,arrependimento,faturas_cotadas(id,status,componente,inicio,fim,valor,link,link_estorno,operacao))")
     .eq("user_id", a.userId).order("created_at", { ascending: false }).order("id", { ascending: false }).range(inicio, inicio + 20);
-  const pedidos = (data ?? []) as Pick<PedidoPlano, "id" | "status" | "created_at" | "cotacao">[];
+  const pedidos = (data ?? []) as unknown as (Pick<PedidoPlano, "id" | "status" | "created_at" | "cotacao"> & {assinatura:OfertaAssinatura|null})[];
   return <Moldura site usuario={{ nome: "Conta", papel: "Usuário" }}>
     <CabecalhoPagina titulo="Meus pedidos de planos" variante="faixa" compacta
       acoes={<Link href="/planos" className="lp-btn lp-btn-contorno">Ver planos</Link>} />
@@ -26,6 +28,7 @@ export default async function MeusPedidos({ searchParams }: PageProps<"/planos/s
         <h2 className="lp-display text-2xl">{p.cotacao.rotulo}</h2>
         <p>Plano {p.cotacao.ciclo} · {p.cotacao.totalCentavos === null ? "Sob orçamento" : (p.cotacao.totalCentavos/100).toLocaleString("pt-BR",{style:"currency", currency:"BRL"}) + (p.cotacao.ciclo === "anual" ? " em 12 meses" : " no primeiro mês")}</p>
         {p.cotacao.itens.length > 0 && <p>{p.cotacao.itens.map((i) => i.quantidade + " × " + i.nome).join(" · ")}</p>}
+        {p.assinatura && p.status!=="cancelado" && <Contratacao s={p.assinatura} ativo={checkoutAtivo()} />}
         {["pendente","em_analise"].includes(p.status) && <CancelarPedido id={p.id} />}
       </article>)}
       <nav aria-label="Páginas do histórico" className="flex gap-4">

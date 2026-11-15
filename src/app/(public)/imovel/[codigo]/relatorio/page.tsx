@@ -6,7 +6,6 @@ import { lerConfiguracoes, texto } from "@/lib/settings";
 import BotoesRelatorio from "./BotoesRelatorio";
 import EscolhaSecoes, { type OpcaoSecao } from "./EscolhaSecoes";
 import { currentUser } from "@/lib/supabase/server";
-import { ator, temRecurso } from "@/lib/authz";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
 import { formatDistancia, formatPerimetro, nomePoi, poisOrdenados } from "@/lib/geo/distancia";
 import { detalhesRegistro } from "@/lib/rural/detalhes";
@@ -104,18 +103,14 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
   const pendentes = fontes.filter((f) => !f.ativa);
   const fontesDe = (s: SecaoId) => ativas.filter((f) => secaoDaFonte(f.id) === s);
 
-  // Pré-avaliação e aptidão: a mesma regra do cartão da ficha (função ligada
-  // pela Diretoria + recurso `pre_avaliacao` no plano da conta).
+  // A ficha de um imóvel à venda oferece as mesmas informações a todos os perfis.
   const avaliavel = ["publicado", "em_negociacao"].includes(imovel.status);
-  const a = avaliavel && user ? await ator() : null;
-  const temPre = !!a && !a.ehArini && temRecurso(a, "pre_avaliacao");
-  const preLiberada = avaliavel && cfg.pre_avaliacao_ativa === true && temPre;
-  const aptLiberada = avaliavel && cfg.aptidao_ativa === true && tipo === "rural" && temPre;
+  const preLiberada = avaliavel && cfg.pre_avaliacao_ativa === true;
+  const aptLiberada = avaliavel && cfg.aptidao_ativa === true && tipo === "rural";
 
   // o que cada seção tem para mostrar neste imóvel (e por que não, quando não tem)
   const motivoAvaliacao = !avaliavel ? "Só para imóveis à venda."
-    : !user ? "Entre na sua conta: depende do seu plano."
-    : "Não liberado no seu plano.";
+    : "Metodologia em validação pela Arini.";
   const disponivel: Record<SecaoId, true | string> = {
     localizacao: true,
     ambiental: fontesDe("ambiental").length ? true : "Nenhuma fonte ambiental para este imóvel.",

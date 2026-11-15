@@ -1,4 +1,7 @@
 import type { StyleSpecification, RasterSourceSpecification } from "maplibre-gl";
+import { version as versaoMapLibre } from "maplibre-gl/package.json";
+
+export const URL_MAPLIBRE = `/vendor/maplibre-gl.mjs?v=${versaoMapLibre}`;
 
 /**
  * Cores por status no mapa (legenda fixa), na paleta do Manual v1.0: Verde

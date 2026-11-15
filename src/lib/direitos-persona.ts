@@ -42,6 +42,7 @@ export function permiteItem(item: NivelItem | undefined, acao: AcaoItem, contrat
 // Apenas ferramentas já existentes têm um vínculo de execução. Os demais
 // itens permanecem consultáveis no inventário e podem ser vinculados ao plano.
 export const ITENS_POR_RECURSO: Partial<Record<RecursoId, { id: number; acao: AcaoItem }>> = {
+  monitoramento_territorial: { id: 510, acao: "operar" },
   camada_car: { id: 62, acao: "consultar" }, camada_lotes: { id: 19, acao: "consultar" },
   ferramenta_medir: { id: 137, acao: "operar" },
   consulta_area: { id: 14, acao: "consultar" }, relatorio_territorial: { id: 540, acao: "operar" },

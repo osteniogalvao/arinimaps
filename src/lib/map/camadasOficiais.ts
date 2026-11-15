@@ -34,16 +34,27 @@ export const CORES_BIOMAS: Record<string, string> = {
   "Mata Atlântica": "#5BC08A", "Pampa": "#A7C957", "Pantanal": "#4FA3C7",
 };
 
+/** Paleta da referência cartográfica fornecida pela ARINI. */
+export const CORES_RURAIS = {
+  sigef: "#ff0000",
+  snci: "#0000ff",
+  car: "#34db1e",
+  credito_rural: "#f97316",
+  funai: "#a855f7",
+  outorgas_federais: "#0ea5e9",
+  ambiental: "#e11d48",
+} as const;
+
 export const CAMADAS_OFICIAIS: CamadaOficial[] = [
-  { id: "sigef", nome: "Parcelas certificadas (SIGEF)", orgao: "INCRA", grupo: "Fundiário", cor: "#ff353b", zoomMin: 12,
+  { id: "sigef", nome: "Parcelas certificadas (SIGEF)", orgao: "INCRA", grupo: "Fundiário", cor: CORES_RURAIS.sigef, zoomMin: 12,
     ajuda: "Imóveis com georreferenciamento certificado pelo INCRA." },
-  { id: "snci", nome: "Imóveis certificados (SNCI)", orgao: "INCRA", grupo: "Fundiário", cor: "#374cff", zoomMin: 12,
+  { id: "snci", nome: "Imóveis certificados (SNCI)", orgao: "INCRA", grupo: "Fundiário", cor: CORES_RURAIS.snci, zoomMin: 12,
     ajuda: "Certificações históricas anteriores ao SIGEF. Fonte nacional do INCRA e base estadual do IAT no interior do Paraná." },
-  { id: "credito_rural", nome: "Crédito rural (SICOR)", orgao: "Banco Central", grupo: "Fundiário", cor: "#ff8c24", zoomMin: 12,
+  { id: "credito_rural", nome: "Crédito rural (SICOR)", orgao: "Banco Central", grupo: "Fundiário", cor: CORES_RURAIS.credito_rural, zoomMin: 12,
     ajuda: "Glebas nas edições anuais do SICOR importadas para Iturama e municípios vizinhos. Cada polígono informa o ano e a data da carga." },
-  { id: "outorgas_federais", nome: "Outorgas federais", orgao: "ANA", grupo: "Ambiental", cor: "#12b8e8", zoomMin: 9, ponto: true,
+  { id: "outorgas_federais", nome: "Outorgas federais", orgao: "ANA", grupo: "Ambiental", cor: CORES_RURAIS.outorgas_federais, zoomMin: 9, ponto: true,
     ajuda: "Outorgas federais de uso de águas superficiais. Consulte a vigência no detalhe de cada ponto." },
-  { id: "funai", nome: "Terras indígenas", orgao: "FUNAI", grupo: "Fundiário", cor: "#a65bff", zoomMin: 7,
+  { id: "funai", nome: "Terras indígenas", orgao: "FUNAI", grupo: "Fundiário", cor: CORES_RURAIS.funai, zoomMin: 7,
     ajuda: "Área indígena: compra e venda vedadas." },
   { id: "quilombolas", nome: "Territórios quilombolas", orgao: "INCRA", grupo: "Fundiário", cor: "#F3A712", zoomMin: 7,
     ajuda: "Território em reconhecimento ou titulado." },

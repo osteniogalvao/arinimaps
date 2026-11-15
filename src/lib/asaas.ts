@@ -67,7 +67,7 @@ async function chamar<T>(caminho: string, init: { method?: string; body?: unknow
 
 type Lista<T> = { data: T[]; hasMore: boolean };
 export type AsaasCliente = { id: string; deleted?: boolean };
-export type AsaasCobranca = { id: string; invoiceUrl: string; status: string; deleted?: boolean };
+export type AsaasCobranca = { id: string; invoiceUrl: string; status: string; deleted?: boolean; customer?: string; value?: number; externalReference?: string; billingType?: string };
 
 /** Cliente pelo nosso identificador (externalReference = profiles.user_id). */
 export async function asaasBuscarClientePorReferencia(externalReference: string) {
@@ -100,6 +100,15 @@ export async function asaasBuscarCobranca(id: string) {
 export async function asaasCobrancasPorReferencia(referencia: string) {
   const resultado = await chamar<Lista<AsaasCobranca>>(`/payments?externalReference=${encodeURIComponent(referencia)}&limit=2`);
   return resultado.data;
+}
+
+export async function asaasExcluirCobranca(id: string) {
+  return chamar<{ deleted: boolean }>("/payments/" + encodeURIComponent(id), { method: "DELETE" });
+}
+
+export async function asaasEstornarCobranca(id: string, boleto: boolean) {
+  const sufixo = boleto ? "/bankSlip/refund" : "/refund";
+  return chamar<{ requestUrl?: string }>("/payments/" + encodeURIComponent(id) + sufixo, { method: "POST", body: {} });
 }
 
 export async function asaasCriarCobranca(dados: {

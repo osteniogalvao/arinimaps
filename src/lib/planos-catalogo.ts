@@ -74,7 +74,7 @@ export const RECURSOS_CATALOGO = {
   inteligencia_ia: {
     nome: "Pesquisa, leitura de documentos e análises com IA",
     disponibilidade: "parcial",
-    motivo: "Assistente, leitura de matrícula e cadastro rápido existem. Créditos comerciais compartilhados exigem controle de consumo próprio.",
+    motivo: "Assistente, leitura de matrícula e cadastro rápido consomem créditos da carteira. O saldo do plano da organização é compartilhado. O uso da IA depende de configuração do provedor.",
   },
   avaliacao_mercado: {
     nome: "Pré-avaliação, valores de mercado e análise do imóvel",

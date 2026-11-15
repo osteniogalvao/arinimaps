@@ -114,8 +114,8 @@ export async function enviarWhatsapp(telefone: string, texto: string) {
 }
 
 /** O modelo aprovado usa um parâmetro de corpo {{1}} para o link público do imóvel. */
-export async function modeloFiltroWhatsapp() {
-  const id = process.env.WHATSAPP_FILTRO_TEMPLATE_ID;
+export async function modeloFiltroWhatsapp(finalidade: "filtro" | "monitoramento" = "filtro") {
+  const id = finalidade === "monitoramento" ? process.env.WHATSAPP_MONITORAMENTO_TEMPLATE_ID : process.env.WHATSAPP_FILTRO_TEMPLATE_ID;
   if (!whatsappConfigurado() || !id || !/^\d+$/.test(id)) return null;
   const r = await fetch(GRAPH + "/" + id + "?fields=name,language,status,components", {
     headers: { Authorization: "Bearer " + process.env.WHATSAPP_TOKEN }, cache: "no-store", signal: AbortSignal.timeout(10_000),

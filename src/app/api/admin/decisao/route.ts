@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     if (!ACOES_IMOVEL.includes(acao)) {
       return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
     }
-    const { data: antes } = await admin.from("properties").select("id, codigo, status, partner_id, modalidade").eq("id", id).single();
+    const { data: antes } = await admin.from("properties").select("id, codigo, status, partner_id, modalidade, parent_property_id").eq("id", id).single();
     if (!antes) return NextResponse.json({ error: "Imóvel não encontrado." }, { status: 404 });
 
     // Comprovação de propriedade: nada é aprovado nem publicado sem a Arini
@@ -58,12 +58,12 @@ export async function POST(request: Request) {
     // proprietário). Regra do Carlos: o site não publica imóvel sem prova.
     if (["aprovado", "publicado"].includes(acao)) {
       const { data: conferidos } = await admin.from("property_documents")
-        .select("tipo").eq("property_id", id).eq("verificado", true).is("substituido_por", null); // só a versão vigente (5.8)
+        .select("tipo").in("property_id", antes.modalidade==="leilao" && antes.parent_property_id ? [id,antes.parent_property_id] : [id]).eq("verificado", true).is("substituido_por", null); // só a versão vigente (5.8)
       const tipos = new Set((conferidos ?? []).map((d) => d.tipo));
       // leilão se sustenta no edital; venda comum, na matrícula (e na
       // autorização do proprietário quando quem anuncia é parceiro)
       const faltam = (antes.modalidade === "leilao"
-        ? [!tipos.has("edital") && "o edital do leilão conferido"]
+        ? [!tipos.has("edital") && !tipos.has("autorizacao") && "a autorização deste leilão conferida (edital, ordem judicial ou contrato com o comitente)"]
         : [
             !tipos.has("matricula") && "a matrícula (ou escritura) conferida",
             antes.partner_id && !tipos.has("autorizacao") && "a autorização do proprietário conferida",

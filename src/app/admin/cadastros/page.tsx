@@ -82,6 +82,7 @@ export default async function AdminCadastros({ searchParams }: PageProps<"/admin
         subtitulo="Aprovação de parceiros e proprietários, e território de cada franqueado." />
       <BuscaLista caminho="/admin/cadastros" valor={q} placeholder="Buscar parceiro (razão social) ou proprietário (nome)" />
       <a className="btn-contorno inline-block p-3" href="/admin/cadastros/verificacoes">Verificações de propriedade</a>
+      <a className="btn-contorno inline-block p-3" href="/admin/cadastros/leiloes">Credenciamento de leiloeiros</a>
       <Bloco
         titulo="Parceiros (imobiliárias, corretores, engenheiros, leiloeiros e franqueados)"
         alvo="partner"

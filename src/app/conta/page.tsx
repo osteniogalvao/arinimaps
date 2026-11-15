@@ -34,6 +34,7 @@ export default async function MinhaConta() {
   ]);
 
   const mais = [
+    ...(["proprietario","produtor_rural"].includes(user.nicho??"") ? [{href:"/conta/monitoramento",rotulo:"Monitoramento territorial",texto:"Áreas acompanhadas e ocorrências nas fontes oficiais",icone:ShieldCheck}] : []),
     ...(user.nicho==="comprador_investidor" ? [{href:"/conta/filtros",rotulo:"Filtros de interesse",texto:"Buscas salvas e novos imóveis que combinam com você",icone:BadgeCheck}] : []),
     ...(!daEquipe ? [{ href: "/conta/creditos", rotulo: "Carteira da Ari", texto: "Créditos do plano, compras e histórico de uso", icone: BadgeCheck }] : []),
     { href: "/privacidade/preferencias", rotulo: "Preferências de privacidade", texto: "Histórico da Ari, navegação e avisos", icone: ShieldCheck },

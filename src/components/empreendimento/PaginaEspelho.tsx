@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { carregarEspelhoGestao, nomeAnunciante, type Empreendimento } from "@/lib/empreendimento/espelho";
+import { carregarEspelhoGestao, lerConfigEspelho, nomeAnunciante, type Empreendimento } from "@/lib/empreendimento/espelho";
 import { hojeBrasilia } from "@/lib/simulador";
+import ConfigurarEspelho from "./ConfigurarEspelho";
 import EspelhoVendas from "./EspelhoVendas";
 
 /** Corpo da página do espelho de vendas, igual no painel do anunciante e na Central. */
 export default async function PaginaEspelho({ emp, base }: { emp: Empreendimento; base: "/painel" | "/admin" }) {
-  const [{ unidades, geometrias, ativo }, anunciante] = await Promise.all([
+  const [{ unidades, geometrias, ativo }, anunciante, config] = await Promise.all([
     carregarEspelhoGestao(emp),
     nomeAnunciante(emp.owner_id, emp.partner_id),
+    lerConfigEspelho(emp.id),
   ]);
   const publico = ["publicado", "em_negociacao", "vendido"].includes(emp.status);
   return (
@@ -30,6 +32,7 @@ export default async function PaginaEspelho({ emp, base }: { emp: Empreendimento
           )}
         </div>
       </div>
+      <ConfigurarEspelho key={config.alterado_em ?? "inicial"} id={emp.id} config={config} />
       <EspelhoVendas empreendimento={{ id: emp.id, codigo: emp.codigo, titulo: emp.titulo, municipio: emp.municipio }}
         unidades={unidades} geometrias={geometrias} ativo={ativo} base={base} hoje={hojeBrasilia()} anunciante={anunciante} />
     </div>

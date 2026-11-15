@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, VectorTileSource } from "maplibre-gl";
+import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpecification, VectorTileSource } from "maplibre-gl";
 import { CENTRO_REGIAO, SATELITE, SATELITE_ALTO, ZOOM_SATELITE_ALTO } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
@@ -17,7 +17,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
-import PaletaRural, { COR_CAR_MAPA } from "./PaletaRural";
+import PaletaRural from "./PaletaRural";
 import { PainelCamadas, Legenda, VIDRO, BotaoFechar } from "@/components/map/UiMapa";
 import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
@@ -32,7 +32,7 @@ import { useTema } from "@/components/shell/BotaoTema";
 import { usePreferencias } from "@/lib/usePreferencias";
 import { escaparHtml } from "@/lib/seguranca/html";
 import { GerenciadorCamadasOficiais, type EstadoCamada, type FeicaoNoPonto } from "@/components/map/camadasOficiaisMapa";
-import { CAMADAS_OFICIAIS, camadaOficialPorId, descreverFeicao, type CamadaOficialId } from "@/lib/map/camadasOficiais";
+import { CAMADAS_OFICIAIS, CORES_RURAIS, camadaOficialPorId, descreverFeicao, type CamadaOficialId } from "@/lib/map/camadasOficiais";
 import { GerenciadorRelevo, type EstadoRelevo, type RelevoId } from "@/components/map/camadasRelevo";
 import { FORMATOS_BUSCA, interpretarBusca } from "@/lib/map/buscaRural";
 import BotaoCompartilharPonto, { MarcadorDaUrl } from "@/components/map/CompartilharPonto";
@@ -85,7 +85,7 @@ type Camada = {
  * claro no satélite, verde-acinzentado no mapa. Verde separa as duas à
  * primeira vista (pedido: "cores cartográficas distintas para urbano e rural").
  */
-const COR_RURAL = COR_CAR_MAPA;
+const COR_RURAL = CORES_RURAIS.car;
 
 /** A partir deste zoom a malha do CAR aparece (tiles vetoriais; de longe, só as áreas grandes). */
 const CAR_ZOOM_MIN = 7;
@@ -214,6 +214,15 @@ const ESTILO_RUAS = {
   claro: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
 } as const;
 
+// O satélite desenha direto sobre um fundo local. O estilo e os tiles de
+// ruas só são baixados se a pessoa escolher a base cartográfica.
+const FUNDO_SATELITE: StyleSpecification = {
+  version: 8,
+  glyphs: "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
+  sources: {},
+  layers: [{ id: "fundo-satelite", type: "background", paint: { "background-color": "#17251f" } }],
+};
+
 /**
  * Hash da URL no momento em que o último mapa foi desmontado. O remove() do
  * MapLibre apaga o #pos=…; se o componente remonta em seguida (Strict Mode,
@@ -307,6 +316,7 @@ export default function MapaRegional({
   const [paletaAberta, setPaletaAberta] = useState(false);
   useEffect(() => { setPaletaAberta(window.matchMedia("(min-width: 1024px)").matches); }, []);
   const [pronto, setPronto] = useState(false);
+  const [avisoCarga, setAvisoCarga] = useState("");
   const [lista, setLista] = useState<ImovelProps[]>([]);
   const [mapaPronto, setMapaPronto] = useState<MLMap | null>(null);
   const [carAtivo, setCarAtivo] = useState(true);
@@ -352,7 +362,7 @@ export default function MapaRegional({
   }, []);
   // camadas da base CARTO (as do tema): o resto é nosso e atravessa a troca de tema
   const baseEstiloRef = useRef<{ fontes: Set<string>; camadas: Set<string> } | null>(null);
-  const temaAplicadoRef = useRef(tema);
+  const estiloDeRuasRef = useRef<string | null>(null);
   const [carAviso, setCarAviso] = useState("");
   // barra de chips: menu "Mais" (celular) e a altura medida, para os painéis abrirem logo abaixo
   const [maisAberto, setMaisAberto] = useState(false);
@@ -656,7 +666,7 @@ export default function MapaRegional({
       }
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: ESTILO_RUAS[tema],
+        style: FUNDO_SATELITE,
         center: CENTRO_REGIAO,
         zoom: 9,
         // abaixo do zoom 4 o satélite pede dezenas de tiles do mundo inteiro e
@@ -688,10 +698,8 @@ export default function MapaRegional({
       popupRef.current = popup;
 
       map.on("load", async () => {
-        // o que veio do estilo da CARTO; tudo o que entrar depois é nosso (troca de tema)
-        const estilo = map.getStyle();
-        baseEstiloRef.current = { fontes: new Set(Object.keys(estilo.sources)), camadas: new Set(estilo.layers.map((l) => l.id)) };
-        temaAplicadoRef.current = tema;
+        baseEstiloRef.current = { fontes: new Set(), camadas: new Set(["fundo-satelite"]) };
+        estiloDeRuasRef.current = null;
         // satélite fica acima da base vetorial e abaixo das camadas de dados
         map.addSource("satelite", SATELITE);
         map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" } });
@@ -705,12 +713,25 @@ export default function MapaRegional({
         }
         aplicarHistorico();
 
+        const falhas: string[] = [];
+        const semFeicoes: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+        async function carregar<T>(rota: string, nome: string, reserva: T): Promise<T> {
+          try {
+            const r = await fetch(rota);
+            if (!r.ok) throw Error(String(r.status));
+            return await r.json() as T;
+          } catch {
+            falhas.push(nome);
+            return reserva;
+          }
+        }
         const [municipios, imoveis, cartografia] = await Promise.all([
-          fetch("/api/geo/municipios").then((r) => r.json()),
-          fetch("/api/geo/imoveis").then((r) => r.json()),
-          fetch("/api/geo/cartografia").then((r) => r.json()).catch(() => []),
+          carregar("/api/geo/municipios", "municípios", semFeicoes),
+          carregar("/api/geo/imoveis", "imóveis à venda", semFeicoes),
+          carregar<Camada[]>("/api/geo/cartografia", "plantas urbanas", []),
         ]);
         if (cancelado) return;
+        if (falhas.length) setAvisoCarga(`Falha ao carregar ${falhas.join(", ")}. Atualize a página para tentar novamente.`);
         dadosRef.current = imoveis;
         municipiosRef.current = municipios;
 
@@ -895,22 +916,20 @@ export default function MapaRegional({
           },
         });
 
-        // enquadra a região
-        const coords: [number, number][] = [];
-        for (const f of municipios.features ?? []) {
-          const walk = (c: unknown): void => {
-            if (Array.isArray(c) && typeof c[0] === "number") coords.push(c as [number, number]);
-            else if (Array.isArray(c)) c.forEach(walk);
-          };
-          walk(f.geometry?.coordinates);
-        }
-        // respeita posição vinda da URL (#pos=…); sem ela, enquadra a região. Lê o
-        // hash de ENTRADA: o MapLibre já gravou #pos=9/… sozinho antes daqui
-        if (coords.length && !entrada.includes("pos=")) {
-          const lngs = coords.map((c) => c[0]);
-          const lats = coords.map((c) => c[1]);
-          map.fitBounds(
-            [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+        // Respeita a câmera recebida por URL. Sem ela, enquadra a região uma
+        // vez, inclusive quando uma geometria municipal tem muitos vértices.
+        if (!entrada.includes("pos=")) {
+          const limites = new maplibregl.LngLatBounds();
+          function incluir(coordenadas: GeoJSON.Position[][]) {
+            for (const anel of coordenadas) {
+              for (const [lng, lat] of anel) limites.extend([lng, lat]);
+            }
+          }
+          for (const { geometry } of municipios.features) {
+            if (geometry?.type === "Polygon") incluir(geometry.coordinates);
+            if (geometry?.type === "MultiPolygon") geometry.coordinates.forEach(incluir);
+          }
+          if (!limites.isEmpty()) map.fitBounds(limites,
             { padding: { top: 40, bottom: 40, left: 380, right: 40 }, duration: 0 }
           );
         }
@@ -1078,20 +1097,39 @@ export default function MapaRegional({
    */
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !pronto || !baseEstiloRef.current || temaAplicadoRef.current === tema) return;
-    temaAplicadoRef.current = tema;
-    map.setStyle(ESTILO_RUAS[tema], {
-      transformStyle: (anterior, nova) => {
-        const base = baseEstiloRef.current;
-        if (!anterior || !base) return nova;
-        baseEstiloRef.current = { fontes: new Set(Object.keys(nova.sources)), camadas: new Set(nova.layers.map((l) => l.id)) };
-        const fontes = Object.fromEntries(Object.entries(anterior.sources).filter(([id]) => !base.fontes.has(id)));
-        const camadas = anterior.layers.filter((l) => !base.camadas.has(l.id));
-        return { ...nova, sources: { ...nova.sources, ...fontes }, layers: [...nova.layers, ...camadas] };
-      },
-    });
+    if (!map || !pronto || !baseEstiloRef.current) return;
     relevoRef.current?.mudarTema(tema);
-  }, [tema, pronto]);
+    const alvo = base === "ruas" ? ESTILO_RUAS[tema] : null;
+    if (estiloDeRuasRef.current === alvo) return;
+    const pedido = new AbortController();
+    async function trocar() {
+      let novo: StyleSpecification = FUNDO_SATELITE;
+      if (alvo) {
+        const resposta = await fetch(alvo, { signal: pedido.signal });
+        if (!resposta.ok) throw new Error("Base cartográfica indisponível");
+        novo = await resposta.json();
+      }
+      if (pedido.signal.aborted || !map) return;
+      map.setStyle(novo, {
+        transformStyle: (anterior, nova) => {
+          const anteriorBase = baseEstiloRef.current;
+          if (!anterior || !anteriorBase) return nova;
+          baseEstiloRef.current = { fontes: new Set(Object.keys(nova.sources)), camadas: new Set(nova.layers.map(l => l.id)) };
+          const fontes = Object.fromEntries(Object.entries(anterior.sources).filter(([id]) => !anteriorBase.fontes.has(id)));
+          const camadas = anterior.layers.filter(l => !anteriorBase.camadas.has(l.id));
+          return { ...nova, sources: { ...nova.sources, ...fontes }, layers: [...nova.layers, ...camadas] };
+        },
+      });
+      estiloDeRuasRef.current = alvo;
+    }
+    void trocar().catch(() => {
+      if (!pedido.signal.aborted) {
+        setBase("satelite");
+        setAvisoCarga("A base de ruas está indisponível. Tente novamente em instantes.");
+      }
+    });
+    return () => pedido.abort();
+  }, [base, tema, pronto]);
 
   // base ruas/satélite (a planta da cidade muda de cor para continuar legível)
   useEffect(() => {
@@ -1595,6 +1633,13 @@ export default function MapaRegional({
           <p className={`absolute top-[var(--abaixo-chips,4rem)] left-3 right-14 sm:right-auto px-3.5 py-2 text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>
             {carAviso}
           </p>
+        )}
+
+        {avisoCarga && (
+          <div role="status" className={`absolute bottom-12 left-3 right-14 sm:right-auto z-20 flex items-center gap-3 px-3 py-2 text-sm ${VIDRO}`}>
+            {avisoCarga}
+            <BotaoFechar onClick={() => setAvisoCarga("")} />
+          </div>
         )}
 
         {avisoPlano && (

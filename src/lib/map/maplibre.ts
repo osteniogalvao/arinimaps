@@ -17,7 +17,7 @@
  */
 
 import type * as MapLibreNS from "maplibre-gl";
-import { version as VERSAO } from "maplibre-gl/package.json";
+import { URL_MAPLIBRE } from "./config";
 import { Protocol } from "pmtiles";
 
 declare global {
@@ -25,9 +25,6 @@ declare global {
     maplibregl?: typeof MapLibreNS;
   }
 }
-
-/** Versão no query string: ao atualizar, o navegador não reaproveita o módulo velho do cache. */
-const URL_MAPLIBRE = `/vendor/maplibre-gl.mjs?v=${VERSAO}`;
 
 let promessa: Promise<typeof MapLibreNS> | null = null;
 

@@ -16,7 +16,7 @@ export default function Escolha({atual,nicho,anteriores,entradas}:{atual:string|
     try {
       const r=await fetch("/api/conta/contexto",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({entrada:item.id,aceite})});
       if (!r.ok) throw new Error((await r.json()).error);
-      window.location.assign(item.id==="anunciar"?"/painel/novo":item.id==="comprar"?"/imoveis":"/planos?perfil="+item.id);
+      window.location.assign(item.id==="anunciar"?"/painel/novo":item.id==="comprar"?"/imoveis":["instituicao","empresa"].includes(item.id)?"/painel/territorio":"/planos?perfil="+item.id);
     } catch (e) {setErro(e instanceof Error?e.message:"Tente novamente.");setEnviando(false);}
   }
   return <><div className="grid gap-3 sm:grid-cols-2">

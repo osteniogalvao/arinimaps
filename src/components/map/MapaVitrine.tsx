@@ -12,6 +12,7 @@
  * menos movimento (prefers-reduced-motion).
  */
 
+import { CORES_RURAIS } from "@/lib/map/camadasOficiais";
 import { useEffect, useRef } from "react";
 import type { GeoJSONSource, Map as MLMap, StyleSpecification } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
@@ -35,7 +36,7 @@ type Props = {
   ativo?: boolean;
 };
 
-const COR_CAR = "#40cf39";
+const COR_CAR = CORES_RURAIS.car;
 const COR_LOTE = "#FFE299";
 const COR_MUNICIPIO = "#6FB08F";
 

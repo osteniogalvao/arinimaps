@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { Indicadores } from "@/components/admin/Painel";
@@ -47,6 +48,7 @@ export default async function AdminOrganizacoes() {
           Várias contas sob o mesmo plano: imobiliária com corretores, empresa, holding, ente público ou franquia.
           Quem é membro usa o plano da organização enquanto o plano pessoal for o padrão do nicho.
         </>} />
+      <Link className="text-sm font-semibold underline" href="/admin/organizacoes/contratos">Módulos por contrato · Diretoria</Link>
       <Indicadores itens={[
         { rotulo: "Organizações", icone: Landmark, valor: linhas.length },
         { rotulo: "Ativas", icone: CircleCheck, valor: linhas.filter((o) => o.ativo).length },

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ator } from "@/lib/authz";
-import { AsaasErro, asaasBuscarClientePorReferencia, asaasCobrancasPorReferencia, asaasCriarCliente, asaasCriarCobranca } from "@/lib/asaas";
-import { cpfDoPerfil } from "@/lib/seguranca/cripto";
+import { AsaasErro, asaasCobrancasPorReferencia, asaasCriarCobranca } from "@/lib/asaas";
+import {clienteDoPlano} from "@/lib/clientes-asaas";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { pacoteDaAri, linkFaturaAri } from "@/lib/ia/pacote";
 import { uuidAri } from "@/lib/ia/creditos";
@@ -35,20 +35,12 @@ export async function POST(request: Request) {
   const ref = "ari_" + p.id;
   try {
     if (p.status === "nova") {
-      const { data: perfil, error: erroPerfil } = await db.from("profiles").select("nome,cpf_cnpj,cpf_cnpj_cifrado,asaas_customer_id").eq("user_id", a.userId).single();
-      if (erroPerfil || !perfil) return falha(503, "perfil_indisponivel", "Não foi possível consultar seus dados de cobrança.");
-      cliente = perfil.asaas_customer_id ?? (await asaasBuscarClientePorReferencia(a.userId))?.id;
-      if (!cliente) {
-        const cpf = cpfDoPerfil(perfil)?.replace(/\D/g, "") ?? "";
-        if (![11,14].includes(cpf.length)) return falha(422, "cpf_necessario", "Complete o CPF ou CNPJ do seu cadastro antes de gerar a cobrança.");
-        cliente = (await asaasCriarCliente({ name: perfil.nome, cpfCnpj: cpf, externalReference: a.userId }))?.id ?? null;
-      }
-      if (!cliente) return falha(503, "cliente_indisponivel", "Não foi possível vincular o cliente ao Asaas.");
+      try { cliente=await clienteDoPlano(a.userId); }
+      catch(e) {return falha(422,"cadastro_cobranca",e instanceof Error && e.message.startsWith("Complete o CPF")?e.message:"Aguarde a confirmação do cadastro de cobrança no Asaas.");}
       const { data: reserva, error: erroReserva } = await db.from("ari_compras").update({ status: "emitindo", cliente })
         .eq("id", p.id).eq("status", "nova").select("id").maybeSingle();
       if (erroReserva) return falha(503, "pedido_indisponivel", "Tente novamente em instantes.");
       emitir = !!reserva;
-      if (emitir && cliente !== perfil.asaas_customer_id) await db.from("profiles").update({ asaas_customer_id: cliente }).eq("user_id", a.userId);
     }
     const dataVencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
     const cobrancas = emitir ? [await asaasCriarCobranca({ customer: cliente!, value: p.preco / 100, dueDate: dataVencimento,

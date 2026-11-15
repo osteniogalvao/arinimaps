@@ -26,7 +26,13 @@ export async function organizacaoDoUsuario(userId: string): Promise<{ org: Organ
 export async function planoDaOrganizacao(userId: string): Promise<{ plano: Plano; validoAte: string | null; orgNome: string } | null> {
   const [vinculo, {data:contexto}] = await Promise.all([organizacaoDoUsuario(userId),
     supabaseAdmin().from("profiles").select("nicho").eq("user_id",userId).maybeSingle()]);
-  if (!contexto || vinculo?.membro.nicho_vinculo && vinculo.membro.nicho_vinculo!==contexto.nicho) return null;
+  if (!contexto || !vinculo) return null;
+  if (vinculo.membro.nicho_vinculo !== contexto.nicho) {
+    const modulo = contexto.nicho === "ente_publico" ? "balcao" : contexto.nicho === "empresa_holding" ? "safras" : null;
+    if (!modulo) return null;
+    const {data: contratada} = await supabaseAdmin().rpc("org_modulo_atual", {p_titular:userId,p_modulo:modulo});
+    if (contratada !== vinculo.org.id) return null;
+  }
   if (!vinculo || !vinculo.org.ativo || !vinculo.org.plan_id) return null;
   const venceu = vinculo.org.plan_valido_ate && new Date(vinculo.org.plan_valido_ate).getTime() < Date.now();
   if (venceu) return null;

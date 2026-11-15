@@ -22,8 +22,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  *  · equipe da Matriz — sempre, inclusive com a função desligada, para validar a
  *    metodologia antes de liberar (decisão 8.4);
  *  · demais contas — só com a função ligada pela Diretoria (Configurações ›
- *    Inteligência), com o recurso `pre_avaliacao` no plano e para imóvel da
- *    vitrine pública (ou o próprio anúncio).
+ *    Inteligência); a vitrine é comum a todas as contas. No próprio anúncio
+ *    privado a regra do plano continua valendo.
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/avaliacao/[propertyId]">) {
   const { propertyId } = await ctx.params;
@@ -33,9 +33,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/avaliacao/[
   const tipo = corpo.tipo === "pre_avaliacao" || corpo.tipo === "aptidao" ? corpo.tipo : "ambos";
 
   const a = await ator();
-  const { negacao } = await conferirRecurso(request, a ? { id: a.userId, role: a.role } : null, "pre_avaliacao");
-  if (negacao) return respostaNegacao(negacao);
-  const equipe = !!a?.ehArini;
+  if (!a) return falha(401, "login_necessario", "Entre para consultar a avaliação.");
+  const equipe = a.ehArini;
 
   const { data: imovel } = await supabaseAdmin().from("properties")
     .select("id, codigo, tipo, status, owner_id, partner_id").eq("id", propertyId).maybeSingle();
@@ -44,8 +43,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/avaliacao/[
   let quer = { pre: tipo !== "aptidao", aptidao: tipo !== "pre_avaliacao" && imovel.tipo === "rural" };
   if (!equipe) {
     const dono = (!!a?.ownerId && imovel.owner_id === a.ownerId) || (!!a?.partnerId && imovel.partner_id === a.partnerId);
-    if (!dono && !["publicado", "em_negociacao"].includes(imovel.status)) {
-      return falha(404, "nao_encontrado", "Imóvel não encontrado.");
+    if (!["publicado", "em_negociacao"].includes(imovel.status)) {
+      if (!dono) return falha(404, "nao_encontrado", "Imóvel não encontrado.");
+      const { negacao } = await conferirRecurso(request, { id: a.userId, role: a.role }, "pre_avaliacao");
+      if (negacao) return respostaNegacao(negacao);
     }
     const cfg = await lerConfiguracoes();
     quer = { pre: quer.pre && cfg.pre_avaliacao_ativa === true, aptidao: quer.aptidao && cfg.aptidao_ativa === true };
@@ -60,14 +61,14 @@ export async function POST(request: Request, ctx: RouteContext<"/api/avaliacao/[
     return falha(400, "nada_a_avaliar", "Nada a calcular para este imóvel.", { motivo: "A aptidão territorial vale só para imóveis rurais." });
   }
 
-  const limite = await limitar(`avaliacao:${a!.userId}`, equipe ? 60 : 10, 600);
+  const limite = await limitar(`avaliacao:${a.userId}`, equipe ? 60 : 10, 600);
   if (!limite.permitido) return respostaLimite(limite, "avaliação");
 
   try {
-    const r = await avaliarImovel(propertyId, a!.userId, quer);
+    const r = await avaliarImovel(propertyId, a.userId, quer);
     if (!r) return falha(404, "nao_encontrado", "Imóvel não encontrado.");
     await logAudit({
-      user_id: a!.userId, acao: "avaliacao_calculada", entidade: "avaliacoes",
+      user_id: a.userId, acao: "avaliacao_calculada", entidade: "avaliacoes",
       entidade_id: r.pre_avaliacao?.id || (r.aptidao && "id" in r.aptidao ? r.aptidao.id : null) || null,
       property_id: propertyId,
       dados_depois: {

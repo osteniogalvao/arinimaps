@@ -52,17 +52,13 @@ export async function POST(request: Request) {
 
   if (assunto.length < 3) return NextResponse.json({ error: "Informe o assunto." }, { status: 400 });
 
-  const { data: ticket, error } = await admin.from("support_tickets").insert({
-    user_id: user?.id ?? null, nome, email,
-    telefone: b.telefone ? String(b.telefone).slice(0, 30) : null,
-    categoria, assunto: assunto.slice(0, 160),
-    prioridade: categoria === "problema" ? "alta" : "normal",
-  }).select("id, codigo").single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  await admin.from("support_messages").insert({
-    ticket_id: ticket.id, autor_id: user?.id ?? null, autor_nome: nome, corpo: mensagem.slice(0, 6000),
+  const { data: tickets, error } = await admin.rpc("abrir_chamado_com_mensagem", {
+    p_usuario: user?.id ?? null, p_nome: nome, p_email: email,
+    p_telefone: b.telefone ? String(b.telefone).slice(0, 30) : null,
+    p_categoria: categoria, p_assunto: assunto, p_mensagem: mensagem,
   });
+  const ticket = tickets?.[0];
+  if (error || !ticket) return NextResponse.json({ error: "Não foi possível registrar a solicitação. Tente novamente." }, { status: 503 });
   sendEmail(await ariniEmail(), `Chamado ${ticket.codigo}: ${assunto}`, `${nome} <${email}> abriu um chamado (${categoria}).\n\n${mensagem}`).catch(() => undefined);
 
   return NextResponse.json({

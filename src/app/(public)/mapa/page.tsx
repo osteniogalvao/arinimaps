@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import dynamicImport from "next/dynamic";
+import { URL_MAPLIBRE } from "@/lib/map/config";
 import Moldura from "@/components/shell/Moldura";
 import { currentUser } from "@/lib/supabase/server";
 import { acessoDe } from "@/lib/planos-servidor";
@@ -24,6 +25,7 @@ export default async function PaginaMapa() {
 
   return (
     <Moldura usuario={usuario} cheia>
+      <link rel="modulepreload" href={URL_MAPLIBRE} />
       <MapaRegional recursos={[...acesso.recursos]} logado={!!user} versaoLotes={versaoLotes} />
       {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14) */}
       <AjudaTour perfil="mapa" className="fixed bottom-56 right-3 z-30 lg:bottom-36" />

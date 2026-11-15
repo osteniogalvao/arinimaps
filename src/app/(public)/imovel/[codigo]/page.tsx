@@ -1,3 +1,4 @@
+import HabilitacaoLeilao from "@/components/imovel/HabilitacaoLeilao";
 import { visitasDoNavegador } from "@/lib/imovel/visitas";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
@@ -144,7 +145,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
     </Conteudo></Moldura>;
   }
   const leilao = propId?.modalidade === "leilao" ? (propId.leilao ?? {}) as Leilao : null;
-  const [{ data: tourData }, { data: video }, { data: unidades }, { data: whats }, { data: divisa }, { data: origemCadastro }, favoritos, a] = await Promise.all([
+  const [{ data: tourData }, { data: video }, { data: unidades }, { data: whats }, { data: divisa }, { data: origemCadastro }, favoritos, a, permiteHabilitacao, candidatura, configEspelho] = await Promise.all([
     admin.rpc("fn_property_tour", { p_codigo: codigo }),
     admin.from("presentations").select("output_path")
       .eq("tipo", "video").eq("status", "pronto").not("output_path", "is", null)
@@ -165,6 +166,9 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
       .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     codigosFavoritos(user?.id),
     user ? ator() : Promise.resolve(null),
+    leilao ? admin.rpc("leilao_aceita_habilitacao",{p_imovel:propId?.id}) : {data:false},
+    leilao ? admin.from("leilao_habilitacoes").select("estado").eq("imovel_id",propId?.id).eq("candidato",user.id).maybeSingle() : {data:null},
+    propId ? admin.from("espelho_config").select("pre_lancamento").eq("empreendimento_id",propId.id).maybeSingle() : {data:null},
   ]);
 
   const pois = poisOrdenados((tourData as { pois?: { nome: string | null; categoria: string; distancia_m: number }[] } | null)?.pois ?? [])
@@ -337,11 +341,12 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
               </Secao>
             )}
 
-            {/* 5.3/5.4: só com a função ligada pela Diretoria e o recurso no plano */}
+            {/* A Diretoria publica a metodologia para todas as contas. */}
             <CartaoAvaliacaoPublico propertyId={propId?.id} tipo={imovel.tipo} status={imovel.status} />
 
             {!!unidades?.length && (
               <Secao eyebrow="04 · Empreendimento" titulo="Unidades deste empreendimento">
+                {configEspelho.data?.pre_lancamento && <Etiqueta tom="ouro">Pré-lançamento</Etiqueta>}
                 <div className="cartao divide-y divide-linha overflow-hidden !p-0">
                   {unidades.map((u) => (
                     <Link key={u.codigo} href={`/imovel/${u.codigo}`}
@@ -423,6 +428,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
                 <p className="text-sm text-texto-2">
                   Os lances são dados na página do leiloeiro, nas condições do edital. Leia o edital antes de participar.
                 </p>
+                {permiteHabilitacao.data && <HabilitacaoLeilao imovel={propId!.id} estado={candidatura.data?.estado ?? null} /> }
               </section>
             )}
 

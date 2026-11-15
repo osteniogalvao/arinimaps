@@ -2,19 +2,17 @@
 
 import { useState } from "react";
 import { ChevronDown, Layers2, Lock } from "lucide-react";
-import { CAMADAS_OFICIAIS, type CamadaOficialId } from "@/lib/map/camadasOficiais";
+import { CAMADAS_OFICIAIS, CORES_RURAIS, type CamadaOficialId } from "@/lib/map/camadasOficiais";
 import type { EstadoCamada } from "./camadasOficiaisMapa";
 
-export const COR_CAR_MAPA = "#40cf39";
-
 const grupos = [
-  { nome: "SIGEF", cor: "#ff353b", ids: ["sigef"] },
-  { nome: "SNCI", cor: "#374cff", ids: ["snci"] },
-  { nome: "CAR", cor: COR_CAR_MAPA, ids: ["car"] },
-  { nome: "Crédito rural", cor: "#ff8c24", ids: ["credito_rural"] },
-  { nome: "Indígenas", cor: "#a65bff", ids: ["funai"] },
-  { nome: "Outorgas", cor: "#12b8e8", ids: ["outorgas_federais"] },
-  { nome: "Ambiental", cor: "#e72e62", ids: ["ucs","ibama_embargos","prodes_cerrado","inpe_queimadas","ibge_biomas"] },
+  { nome: "SIGEF", cor: CORES_RURAIS.sigef, ids: ["sigef"] },
+  { nome: "SNCI", cor: CORES_RURAIS.snci, ids: ["snci"] },
+  { nome: "CAR", cor: CORES_RURAIS.car, ids: ["car"] },
+  { nome: "Crédito rural", cor: CORES_RURAIS.credito_rural, ids: ["credito_rural"] },
+  { nome: "Indígenas", cor: CORES_RURAIS.funai, ids: ["funai"] },
+  { nome: "Outorgas", cor: CORES_RURAIS.outorgas_federais, ids: ["outorgas_federais"] },
+  { nome: "Ambiental", cor: CORES_RURAIS.ambiental, ids: ["ucs","ibama_embargos","prodes_cerrado","inpe_queimadas","ibge_biomas"] },
 ];
 
 export default function PaletaRural({ car, alternarCar, ativas, alternar, estados, bloqueado, abrirCatalogo }: {
@@ -37,7 +35,7 @@ export default function PaletaRural({ car, alternarCar, ativas, alternar, estado
           title={indisponivel ? "Ver acesso a esta camada" : g.nome}
           onClick={() => { if (grupo) setAberto(expandido ? null : g.nome); else if (ehCar) alternarCar(); else if (indisponivel) abrirCatalogo(); else alternar(itens[0].id); }}
           className="flex min-h-7 min-w-[6.6rem] items-center gap-2 rounded-md border border-black/15 px-2 text-left text-[12px] font-bold text-[#13241c] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
-          style={{ background: ligado ? `color-mix(in srgb, ${g.cor} 25%, white)` : "#fff" }}>
+          style={{ background: ligado ? `color-mix(in srgb, ${g.cor} 20%, white)` : "#fff", borderColor: ligado ? g.cor : undefined }}>
           <span aria-hidden className="size-2.5 shrink-0 rounded-[3px] border-2" style={{ borderColor:g.cor, background:ligado ? g.cor : "transparent" }} />
           {g.nome}{grupo && <ChevronDown className="ml-auto size-3"/>}
           {!grupo && indisponivel && <Lock className="ml-auto size-2.5" aria-label="Ver acesso"/>}

@@ -65,7 +65,7 @@ export async function listarPedidos(req: Request, usuario: string | null) {
       (situacao !== null && !Object.hasOwn(SITUACOES_PEDIDO, situacao))) return falha("Filtro inválido.", 400);
   const inicio = (pagina - 1) * paginaTamanho;
   let consulta = supabaseAdmin().from("solicitacoes_planos")
-    .select(usuario ? campos : campos + ",user_id,email_contato,perfil:profiles!solicitacoes_planos_user_id_fkey(nome,telefone),vagas_cofre:cofre_concessoes(quantidade)");
+    .select(usuario ? campos : campos + ",user_id,email_contato,perfil:profiles!solicitacoes_planos_user_id_fkey(nome,telefone),vagas_cofre:cofre_concessoes(quantidade),assinatura:assinaturas_cotadas(aceite,cancelado,escopo_confirmado,faturas_cotadas(id,valor,status,operacao,pagamento))");
   if (usuario) consulta = consulta.eq("user_id", usuario);
   if (situacao) consulta = consulta.eq("status", situacao);
   const { data, error } = await consulta.order("created_at", { ascending: false })

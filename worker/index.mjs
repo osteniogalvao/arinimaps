@@ -15,6 +15,7 @@ import { verificarFontes } from "./jobs/verificarFontes.mjs";
 import { inteligenciaMercado } from "./jobs/inteligenciaMercado.mjs";
 import { otimizarVideo } from "./jobs/otimizarVideo.mjs";
 import { monitorar } from "./jobs/monitorar.mjs";
+import { verificarAreas } from "./jobs/monitorarAreas.mjs";
 import { lembretesProprietario } from "./jobs/lembretesProprietario.mjs";
 import { agendarGlebasSicor, atualizarGlebasSicor } from "./jobs/glebasSicor.mjs";
 import { coletarCotacoes } from "./jobs/cotacoes.mjs";
@@ -206,10 +207,12 @@ async function processarFiltros() {
     proximaBusca = Date.now() + minutos * 60_000;
     await db.query("select fn_filtro_corresponder()");
     if (process.env.SITE_URL && process.env.SAUDE_TOKEN) {
-      const r = await fetch(`${process.env.SITE_URL}/api/interno/avisos-imoveis`, {
-        method: "POST", headers: { "x-saude-token": process.env.SAUDE_TOKEN }, signal: AbortSignal.timeout(90_000),
-      });
-      if (!r.ok) console.error("[filtro] WhatsApp: HTTP", r.status);
+      for (const rota of ["avisos-imoveis","avisos-territoriais","assinaturas"]) {
+        const r = await fetch(`${process.env.SITE_URL}/api/interno/${rota}`, {
+          method: "POST", headers: { "x-saude-token": process.env.SAUDE_TOKEN }, signal: AbortSignal.timeout(90_000),
+        });
+        if (!r.ok) console.error("[avisos]", rota, r.status);
+      }
     }
   } catch (e) {
     console.error("[filtro] erro ao processar", e.code ?? e.name);
@@ -256,6 +259,9 @@ async function verificarInterrompidos() {
 }
 // monitoramento: confere /api/saude a cada 5 min e alerta (jobs/monitorar.mjs)
 if (!process.env.WORKER_UMA_VEZ) {
+  const conferirAreas = () => verificarAreas(db).catch(e => console.error("[monitor territorial]", e.code ?? e.name));
+  setTimeout(conferirAreas, 10_000);
+  setInterval(conferirAreas, 60_000);
   const agendarSicor = () => agendarGlebasSicor(db).catch(e => console.error("[SICOR]", e.message));
   void agendarSicor();
   setInterval(agendarSicor, 6 * 3_600_000);

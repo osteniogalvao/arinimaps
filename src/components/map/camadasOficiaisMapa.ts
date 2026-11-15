@@ -125,10 +125,10 @@ export class GerenciadorCamadasOficiais {
   private async atualizar(id: CamadaOficialId) {
     if (!this.ativas.has(id)) return;
     const def = camadaOficialPorId(id)!;
-    const src = this.map.getSource(fonte(id)) as GeoJSONSource | undefined;
+    const fonteAtual = () => this.map.getSource(fonte(id)) as GeoJSONSource | undefined;
     if (this.map.getZoom() < def.zoomMin) {
       this.pedidos.get(id)?.abort();
-      src?.setData(VAZIO);
+      fonteAtual()?.setData(VAZIO);
       this.definir(id, { carregando: false, total: 0, aviso: "Aproxime o mapa para ver esta camada." });
       return;
     }
@@ -146,7 +146,7 @@ export class GerenciadorCamadasOficiais {
         this.definir(id, { carregando: false, aviso: j?.error ?? "O órgão não respondeu agora." });
         return;
       }
-      src?.setData(j);
+      fonteAtual()?.setData(j);
       this.definir(id, {
         carregando: false, total: j.features.length,
         aviso: j.falhas ? "Parte da área não carregou: o órgão não respondeu. Tente de novo em instantes." : "",

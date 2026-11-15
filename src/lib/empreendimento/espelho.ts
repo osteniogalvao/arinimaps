@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ator as atorAtual, temSetor, type Ator } from "@/lib/authz";
 import {
   compararLote, type EventoEspelho, type OportunidadeLote, type StatusEspelho,
-  type UnidadeEspelho, type UnidadePublica,
+  type UnidadeEspelho, type UnidadePublica, type ConfigEspelho, type EstoquePublico,
 } from "./tipos";
 
 /**
@@ -51,13 +51,20 @@ type LinhaUnidade = {
   area_declarada: number | null; lote_quadra: string | null; lote_numero: string | null; lote_area_m2: number | null;
 };
 
-async function lerUnidades(empId: string): Promise<LinhaUnidade[]> {
-  const { data } = await supabaseAdmin().from("properties")
-    .select("id, codigo, titulo, status, valor, area_declarada, lote_quadra, lote_numero, lote_area_m2")
-    .eq("parent_property_id", empId)
-    .not("status", "in", "(reprovado,inativo)")
-    .limit(LIMITE_UNIDADES);
-  return ((data ?? []) as LinhaUnidade[]).sort((a, b) =>
+async function lerUnidades(empId: string, publicas = false): Promise<LinhaUnidade[]> {
+  const admin = supabaseAdmin();
+  const todas: LinhaUnidade[] = [];
+  for (let inicio = 0; inicio < LIMITE_UNIDADES; inicio += 500) {
+    const consulta = admin.from("properties")
+      .select("id, codigo, titulo, status, valor, area_declarada, lote_quadra, lote_numero, lote_area_m2")
+      .eq("parent_property_id", empId);
+    const filtro = publicas ? consulta.in("status", ["publicado", "em_negociacao", "vendido"]) : consulta.not("status", "in", "(reprovado,inativo)");
+    const { data, error } = await filtro.order("id").range(inicio, inicio + 499);
+    if (error) throw new Error("Não foi possível consultar os lotes do empreendimento.");
+    todas.push(...(data ?? []));
+    if (!data || data.length < 500) break;
+  }
+  return todas.sort((a, b) =>
     compararLote({ quadra: a.lote_quadra, numero: a.lote_numero }, { quadra: b.lote_quadra, numero: b.lote_numero }));
 }
 
@@ -190,17 +197,25 @@ export async function carregarEspelhoGestao(emp: Empreendimento, quem?: Ator | n
   return { unidades: lista, geometrias, ativo: situacao !== null };
 }
 
-/** Versão pública: só unidades publicadas, disponível/indisponível, sem nomes. */
+export async function lerConfigEspelho(id: string): Promise<ConfigEspelho> {
+  const { data } = await supabaseAdmin().from("espelho_config").select("reserva_online,prazo_horas,projeto_url,pre_lancamento,alterado_em").eq("empreendimento_id", id).maybeSingle();
+  return data ?? { reserva_online: false, prazo_horas: null, projeto_url: null, pre_lancamento: false, alterado_em: null };
+}
+
+export async function estoquePublico(id: string, usuario: string | null): Promise<EstoquePublico | null> {
+  const { data } = await supabaseAdmin().rpc("espelho_estoque_publico", { p_emp: id, p_ator: usuario });
+  return data;
+}
+
+/** Dados públicos do catálogo e geometria. O estoque pessoal é uma projeção separada. */
 export async function carregarEspelhoPublico(emp: Empreendimento) {
-  const unidades = (await lerUnidades(emp.id)).filter((u) => ["publicado", "em_negociacao", "vendido"].includes(u.status));
+  const unidades = await lerUnidades(emp.id, true);
   const ids = unidades.map((u) => u.id);
-  const [situacao, geometrias] = await Promise.all([lerSituacao(emp.id, false), lerGeometrias(emp.id, ids)]);
-  const agora = Date.now();
+  const geometrias = await lerGeometrias(emp.id, ids);
   const visiveis = new Set(ids);
   const lista: UnidadePublica[] = unidades.map((u) => ({
     id: u.id, codigo: u.codigo, titulo: u.titulo, quadra: u.lote_quadra, numero: u.lote_numero,
     area_m2: u.lote_area_m2 ?? u.area_declarada, valor: u.valor,
-    disponivel: u.status !== "vendido" && statusEfetivo(u, situacao?.get(u.id), agora) === "disponivel",
   }));
   return {
     unidades: lista,

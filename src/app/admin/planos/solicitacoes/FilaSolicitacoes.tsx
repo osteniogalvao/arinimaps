@@ -35,6 +35,24 @@ export default function FilaSolicitacoes() {
     return () => ac.abort();
   }, [filtro, pagina, versao]);
   function recarregar() { setResultado(null); setErro(""); setVersao(v => v + 1); }
+  async function conciliar(id:string) {
+    setOcupado(id);setErro("");
+    try {
+      const r=await fetch("/api/planos/contratacao",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({acao:"conciliar",id})});
+      if(!r.ok) throw Error((await r.json()).error??"Falha ao conferir a fatura.");
+      recarregar();
+    } catch(e){setErro(e instanceof Error?e.message:"Falha de conexão.");} finally {setOcupado(null);}
+  }
+  async function liberar(p:PedidoCentral) {
+    const escopo=window.prompt("Descreva os recursos e serviços já disponíveis para este titular. O titular verá e aceitará este escopo e o preço antes da primeira fatura.");
+    if (!escopo) return;
+    setOcupado(p.id); setErro("");
+    try {
+      const r=await fetch("/api/planos/contratacao",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({acao:"liberar",id:p.id,escopo})});
+      if(!r.ok) throw Error((await r.json()).error??"Falha ao liberar oferta.");
+      recarregar();
+    } catch(e) {setErro(e instanceof Error?e.message:"Falha de conexão.");} finally {setOcupado(null);}
+  }
   async function conceder(id:string, quantidade:number) {
     if (!window.confirm(`Conceder ${quantidade} vaga(s) de propriedade ao titular deste pedido?`)) return;
     setOcupado(id); setErro("");
@@ -84,7 +102,11 @@ export default function FilaSolicitacoes() {
       {p.cotacao.profissao && <p>Profissão: {p.cotacao.profissao}</p>}
       {!!p.cotacao.itens.length && <ul className="list-disc pl-6 text-sm">{p.cotacao.itens.map(i =>
         <li key={i.id}>{i.quantidade} × {i.nome} · {i.subtotalMensalCentavos === null ? "Sob orçamento" : dinheiro(i.subtotalMensalCentavos) + "/mês"}</li>)}</ul>}
-      {p.status === "concluido" && p.cotacao.itens.filter(i => i.id === "propriedade_adicional").map(i =>
+      {p.assinatura ? <div><p>{p.assinatura.cancelado?"Renovação cancelada":p.assinatura.aceite?"Contratação aceita":"Aguardando aceite do titular"} · {p.assinatura.escopo_confirmado}</p>
+        {p.assinatura.faturas_cotadas.map(f=><p className="text-sm" key={f.id}>{dinheiro(f.valor)} · {f.status} {f.operacao && " · "+f.operacao} · {f.pagamento??"plano_"+f.id} {f.status!=="nova"&&<button className="underline" disabled={!!ocupado} onClick={()=>conciliar(f.id)}>Conferir no Asaas</button>}</p>)}</div> :
+        ["em_analise","concluido"].includes(p.status) && p.cotacao.personaId!=="corretor_imobiliaria" && !p.cotacao.sobOrcamento && p.cotacao.baseCicloCentavos>0 &&
+        p.cotacao.itens.every(i=>i.id==="propriedade_adicional") && <button type="button" disabled={!!ocupado} className="btn-contorno px-4 py-2" onClick={()=>liberar(p)}>Confirmar escopo disponível e liberar contratação</button>}
+      {!p.assinatura && p.status === "concluido" && p.cotacao.itens.filter(i => i.id === "propriedade_adicional").map(i =>
         p.vagas_cofre ? <p key={i.id}>Cofre ampliado em {p.vagas_cofre.quantidade} vaga(s).</p> :
         <button key={i.id} type="button" className="btn-contorno px-4 py-2" disabled={!!ocupado}
           onClick={() => conceder(p.id,i.quantidade)}>Conceder {i.quantidade} vaga(s) no cofre</button>)}

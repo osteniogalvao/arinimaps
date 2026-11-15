@@ -17,20 +17,22 @@ const ABAS: { href: string; rotulo: string; icone: LucideIcon }[] = [
   { href: "/painel/insumos", rotulo: "Calculadora de insumos", icone: Calculator },
   { href: "/painel/crm", rotulo: "Meu CRM", icone: ContactRound },
   { href: "/painel/oportunidades", rotulo: "Minhas oportunidades", icone: Handshake },
+  { href: "/painel/leiloes", rotulo: "CRM de leilões", icone: Building2 },
   { href: "/painel/financiamento", rotulo: "Financiamento", icone: Calculator },
   { href: "/painel/interesses", rotulo: "Meus interesses", icone: Handshake },
   { href: "/painel/novo", rotulo: "Anunciar", icone: PlusCircle },
   { href: "/painel/empreendimentos", rotulo: "Espelho de vendas", icone: Grid3x3 },
   { href: "/painel/cartografia", rotulo: "Mapa: solicitações", icone: MapIcon },
+  { href: "/painel/territorio", rotulo: "Gestão territorial", icone: MapIcon },
   { href: "/painel/organizacao", rotulo: "Organização", icone: Users },
   { href: "/suporte", rotulo: "Suporte", icone: LifeBuoy },
   { href: "/conta", rotulo: "Minha conta", icone: UserRound },
   { href: "/conta/seguranca", rotulo: "Segurança da conta", icone: ShieldCheck },
 ];
 
-export default function AbasPainel({ crm = false, anunciar = false, cofre = false, insumos = false }: { crm?: boolean; anunciar?: boolean; cofre?: boolean; insumos?: boolean }) {
+export default function AbasPainel({ territorio = false, crm = false, anunciar = false, cofre = false, insumos = false, leiloes = false }: { leiloes?: boolean; territorio?: boolean; crm?: boolean; anunciar?: boolean; cofre?: boolean; insumos?: boolean }) {
   const caminho = usePathname();
-  const acessiveis: Record<string, boolean> = { "/painel/crm": crm, "/painel/novo": anunciar, "/painel/cofre": cofre, "/painel/insumos": insumos };
+  const acessiveis: Record<string, boolean> = { "/painel/leiloes": leiloes, "/painel/territorio": territorio, "/painel/crm": crm, "/painel/novo": anunciar, "/painel/cofre": cofre, "/painel/insumos": insumos };
   const abas = ABAS.filter(a => acessiveis[a.href] !== false);
   // a aba mais específica que casa com o caminho é a ativa (/painel não "engole" /painel/novo)
   const ativa = abas

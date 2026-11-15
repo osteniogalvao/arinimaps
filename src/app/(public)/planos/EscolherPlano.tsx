@@ -215,7 +215,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
           {!cotacao.sobOrcamento && ciclo === "mensal" && cotacao.mensalRecorrenteCentavos !== cotacao.primeiraMensalidadeCentavos && <p>Depois, {reais(cotacao.mensalRecorrenteCentavos!)}/mês com os complementos.</p>}
           {!cotacao.sobOrcamento && ciclo === "anual" && cotacao.adicionaisMensaisCentavos > 0 && <p>Complementos de {reais(cotacao.adicionaisMensaisCentavos)}/mês. Total estimado em 12 meses de {reais(cotacao.totalCentavos!)}.</p>}</>}
         {validacao && <p>{validacao}</p>}
-        <p className="mt-2 text-sm text-texto-2">{podeAtivar ? plano.teste ? "Experimente os recursos disponíveis por 72 horas. Ao terminar o teste, a conta continua sem cobrança." : "O cofre gratuito permite cadastrar até três propriedades." : "A Central confirma a disponibilidade e as condições antes da ativação. O envio deste pedido é gratuito."}</p>
+        <p className="mt-2 text-sm text-texto-2">{podeAtivar ? plano.teste ? "Experimente os recursos disponíveis por 72 horas. Ao terminar o teste, a conta continua sem cobrança." : "O cofre gratuito permite cadastrar até três propriedades." : "A Central confere o escopo e os valores. Quando sua proposta estiver liberada, abra Meus pedidos para aceitar e pagar a fatura. O envio do pedido é gratuito."}</p>
       </div>
       {erro && <p role="alert" className="text-alerta">{erro}</p>}
       {ativacao && podeAtivar ? <p role="status">{ativacao} <Link href={plano.id === "corretor_teste" ? "/painel/crm" : plano.id === "tecnico_teste" ? "/painel/crm/demonstracao" : "/painel/cofre"} className="font-semibold text-verde underline">Abrir recurso</Link></p> :
