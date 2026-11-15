@@ -60,7 +60,7 @@ export const PASSOS_TOUR: Record<PerfilTour, PassoTour[]> = {
   mapa: [
     {
       id: "busca", titulo: "Busca",
-      texto: "Procure por município, código do anúncio (AIB-000000) ou nome do imóvel. Os resultados aparecem na lista e no mapa.",
+      texto: "Procure pelo nome do imóvel, código do anúncio ou município. Para buscar ruas, bairros e lotes, digite a referência e escolha a busca urbana.",
       // no celular a lista começa recolhida e o campo não aparece: vale o chip
       // "Buscar imóveis" e, se ele estiver no menu, o botão "Mais"
       alvos: [dt("busca"), 'input[aria-label="Buscar imóveis"]', 'form[role="search"] input',

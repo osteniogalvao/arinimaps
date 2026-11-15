@@ -300,6 +300,9 @@ export const PERSONAS_CATALOGO: {
   },
 ];
 
+export const CATALOGO_POR_ENTRADA: Record<string, PersonaCatalogoId | undefined> = {
+  vender:"proprietario", corretor:"corretor_imobiliaria", produtor:"produtor_rural", tecnico:"profissional_tecnico",
+};
 export const PLANOS_CATALOGO: PlanoCatalogo[] = [
   {
     id: "proprietario_gratuito", personaId: "proprietario", nome: "Gratuito", descricao: "Cofre da Propriedade.",

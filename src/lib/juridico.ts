@@ -35,7 +35,7 @@ export const VERSOES: Record<DocId, string> = {
   "termos-de-uso": "1.0",
   privacidade: "1.2",
   autorizacao: "1.0",
-  exclusividade: "1.1",
+  exclusividade: "1.2",
   remuneracao: "1.0",
   parceiros: "1.1",
 };
@@ -76,7 +76,7 @@ function extenso(n: number) {
   return t[n] ?? `${n.toLocaleString("pt-BR")} por cento`;
 }
 
-export function documentos(cfg: Record<string, unknown>): Documento[] {
+export function documentos(cfg: Record<string, unknown>, meses?: 6 | 12): Documento[] {
   const d = dados(cfg);
   const base = { vigencia: VIGENCIA };
 
@@ -292,6 +292,7 @@ export function documentos(cfg: Record<string, unknown>): Documento[] {
     ...base,
     id: "exclusividade",
     versao: VERSOES.exclusividade,
+    vigencia: "15/11/2026",
     titulo: "Termo de Exclusividade",
     paraQuem: "Proprietário que escolhe a exclusividade Arini",
     resumo: "Complementa a autorização: durante o prazo, só a Arini (e parceiros indicados por ela) intermedia a venda.",
@@ -306,7 +307,7 @@ export function documentos(cfg: Record<string, unknown>): Documento[] {
       {
         titulo: "Prazo",
         itens: [
-          `A exclusividade vale por ${d.prazoAut} dias contados do aceite. Ao fim do prazo, o imóvel continua anunciado com autorização sem exclusividade, salvo nova escolha do Proprietário.`,
+          `A exclusividade vale por ${meses ? meses + " meses" : "6 ou 12 meses, conforme a opção registrada no anúncio,"} contados do aceite. Ao fim do prazo, o imóvel continua anunciado com autorização sem exclusividade, salvo nova escolha do Proprietário.`,
           "Antes do fim do prazo, o Proprietário pode encerrar a exclusividade se a Arini deixar de cumprir as obrigações do item seguinte, avisando por escrito e dando 10 (dez) dias para correção.",
         ],
       },
@@ -322,7 +323,9 @@ export function documentos(cfg: Record<string, unknown>): Documento[] {
         titulo: "Obrigações do Proprietário e remuneração",
         itens: [
           "Durante o prazo, o Proprietário não anuncia o imóvel com outra imobiliária ou corretor e encaminha à Arini qualquer interessado que o procure diretamente.",
-          "No aceite eletrônico deste termo, o Proprietário envia uma foto do próprio rosto (selfie). A foto serve apenas para a equipe da Arini conferir, visualmente, que quem aceitou é a pessoa do documento apresentado; fica guardada em área privada junto do registro do aceite, pelo prazo de guarda dos registros de negociação, e não é usada para reconhecimento facial nem para qualquer tratamento automatizado.",
+          cfg.juridico_selfie_exclusividade === true
+            ? "No aceite eletrônico deste termo, o Proprietário envia uma foto do próprio rosto (selfie). A foto serve apenas para a equipe da Arini conferir, visualmente, que quem aceitou é a pessoa do documento apresentado; fica guardada em área privada junto do registro do aceite, pelo prazo de guarda dos registros de negociação, e não é usada para reconhecimento facial nem para qualquer tratamento automatizado."
+            : "O aceite eletrônico registra o usuário, a data, o endereço IP e o prazo escolhido no cadastro do imóvel.",
           `Se o imóvel for vendido durante o prazo, a remuneração de ${d.pct} sobre o valor total da operação é devida à Arini ainda que a venda tenha ocorrido sem a sua mediação, salvo se comprovada a sua inércia ou ociosidade (art. 726 do Código Civil).`,
           "Considera-se inércia, entre outros casos, o descumprimento reiterado das obrigações do item anterior, desde que o Proprietário tenha avisado por escrito.",
         ],
@@ -444,8 +447,8 @@ export function documentos(cfg: Record<string, unknown>): Documento[] {
   return [termos, privacidade, autorizacao, exclusividade, remuneracao, parceiros];
 }
 
-export function documento(cfg: Record<string, unknown>, id: string) {
-  return documentos(cfg).find((doc) => doc.id === id) ?? null;
+export function documento(cfg: Record<string, unknown>, id: string, meses?: 6 | 12) {
+  return documentos(cfg, meses).find((doc) => doc.id === id) ?? null;
 }
 
 /** IP de origem do aceite (atrás do proxy do Dokploy vem no x-forwarded-for). */

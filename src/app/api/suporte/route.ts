@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
   if (categoria === "dados_pessoais") {
     const { data, error } = await admin.from("lgpd_requests").insert({
-      user_id: user?.id ?? null, nome, email,
+      user_id: user?.id ?? null, nome, email: user?.email?.toLowerCase() || email,
       cpf: b.cpf ? String(b.cpf).replace(/\D/g, "").slice(0, 14) : null,
       tipo: TIPOS_LGPD.includes(b.lgpd_tipo) ? b.lgpd_tipo : "informacao",
       descricao: mensagem.slice(0, 4000),

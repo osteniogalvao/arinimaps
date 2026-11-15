@@ -4,9 +4,13 @@ import { ArrowRight, LineChart } from "lucide-react";
 import Moldura from "@/components/shell/Moldura";
 import { CabecalhoPagina, Conteudo, Vazio } from "@/components/ui/Pagina";
 import { currentUser } from "@/lib/supabase/server";
+import { lerConfiguracoes, texto } from "@/lib/settings";
+import { numeroWhatsApp } from "@/lib/compartilhar";
 import { catalogoCotacoes, historicoCotacao } from "@/lib/mercado/cotacoes";
-import { type PeriodoId, PERIODOS, formatarDataHora } from "@/lib/mercado/formato";
+import { type PeriodoId, PERIODOS, competenciaMensal, formatarDataHora, localDaSerie } from "@/lib/mercado/formato";
+import { podeComparar, urlSerie } from "@/lib/mercado/pracas";
 import PainelMercado from "./PainelMercado";
+import ConsultaAgro from "./ConsultaAgro";
 
 /**
  * Cotações do agro (item 27 da segunda etapa): consulta por produto, praça e
@@ -14,23 +18,24 @@ import PainelMercado from "./PainelMercado";
  * (job `coletar_cotacoes` do worker, migration 0056) com cache de 15 min —
  * nenhuma chamada a fonte externa no acesso do visitante.
  */
-export const metadata: Metadata = {
-  title: "Cotações do agro: boi gordo, milho, soja e frango",
-  description:
-    "Cotações atualizadas do boi gordo, milho, soja, frango, dólar e Ibovespa, com praças regionais, gráfico de evolução e comparativo de 7 dias a 1 ano. Fontes: CEPEA/ESALQ, Scot Consultoria e Notícias Agrícolas.",
-  alternates: { canonical: "/mercado" },
-  openGraph: {
-    title: "Cotações do agro | Arini Imóveis Brasil",
-    description: "Boi gordo, milho, soja, frango, dólar e Ibovespa: valor do dia, variação e histórico de até 1 ano.",
-    type: "website",
-    url: "/mercado",
-  },
+type Props = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function Mercado({ searchParams }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const [sp, user, catalogo] = await Promise.all([searchParams, currentUser(), catalogoCotacoes()]);
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const { serie } = await searchParams;
+  const atual = typeof serie === "string" ? (await catalogoCotacoes()).find((c) => c.slug === serie) : null;
+  const titulo = atual ? `Cotação de ${[atual.nome, localDaSerie(atual)].filter(Boolean).join(" · ")}` : "Cotações do agro por produto e região";
+  const descricao = atual
+    ? `Histórico de ${atual.nome} em ${atual.unidade} segundo ${atual.fonte}. Consulte a evolução dos preços e compare praças.`
+    : "Pesquise cotações por produto, estado ou região. Compare praças, consulte históricos de 7, 15 e 30 dias e calcule o valor bruto da sua produção.";
+  const canonical = atual ? urlSerie(atual.slug) : "/mercado";
+  return { title: titulo, description: descricao, alternates: { canonical }, openGraph: { title: titulo, description: descricao, type: "website", url: canonical } };
+}
+
+export default async function Mercado({ searchParams }: Props) {
+  const [sp, user, catalogo, cfg] = await Promise.all([searchParams, currentUser(), catalogoCotacoes(), lerConfiguracoes()]);
+  const telefone = numeroWhatsApp(texto(cfg, "whatsapp_central"));
   const usuario = user
     ? { nome: user.nome || "Conta", papel: user.role === "admin_central" ? "Administrador" : "Usuário" }
     : null;
@@ -38,8 +43,12 @@ export default async function Mercado({ searchParams }: {
   const pedido = typeof sp.serie === "string" ? sp.serie : null;
   const selecionada =
     catalogo.find((c) => c.slug === pedido) ?? catalogo.find((c) => c.destaque) ?? catalogo[0] ?? null;
-  const pontos = selecionada ? await historicoCotacao(selecionada.id) : [];
-  const periodo = (PERIODOS.find((p) => p.id === sp.periodo)?.id ?? "30d") as PeriodoId;
+  const comparada = selecionada && catalogo.find((c) => c.slug === sp.comparar && podeComparar(selecionada, c));
+  const [pontos, pontosComparados] = await Promise.all([
+    selecionada ? historicoCotacao(selecionada.id) : [],
+    comparada ? historicoCotacao(comparada.id) : [],
+  ]);
+  const periodo = (PERIODOS.find((p) => p.id === sp.periodo)?.id ?? (selecionada && competenciaMensal(selecionada) ? "1a" : "30d")) as PeriodoId;
 
   // a coleta mais recente entre todas as séries
   const ultima = catalogo.reduce<string | null>(
@@ -55,7 +64,7 @@ export default async function Mercado({ searchParams }: {
         destaque="agro"
         subtitulo={
           <>
-            Boi gordo, milho, soja e frango, com praças de várias regiões, mais dólar e Ibovespa.
+            Consulte preços por produto e praça, incluindo gado, grãos e insumos agrícolas.
             {ultima && <> Última coleta em {formatarDataHora(ultima)}.</>}
           </>
         }
@@ -63,12 +72,13 @@ export default async function Mercado({ searchParams }: {
 
       <Conteudo className="py-10 md:py-14">
         {selecionada ? (
-          <PainelMercado catalogo={catalogo} selecionada={selecionada} pontos={pontos} periodoInicial={periodo} />
+          <PainelMercado catalogo={catalogo} selecionada={selecionada} pontos={pontos} periodoInicial={periodo}
+            comparada={comparada ?? null} pontosComparados={pontosComparados} />
         ) : (
           <Vazio
             icone={LineChart}
             titulo="As cotações estão a caminho"
-            texto="Estamos reunindo os valores do CEPEA/ESALQ e das praças regionais. Assim que a primeira coleta terminar, eles aparecem aqui com o histórico."
+            texto="Ainda não há fechamentos disponíveis para consulta. Você pode solicitar uma cotação à equipe."
             acao={
               <Link href="/" className="lp-btn lp-btn-contorno">
                 Voltar ao início <ArrowRight />
@@ -77,17 +87,24 @@ export default async function Mercado({ searchParams }: {
           />
         )}
 
+        {telefone && <ConsultaAgro key={selecionada?.id} telefone={telefone} produto={selecionada?.produto}
+          praca={selecionada && localDaSerie(selecionada)} />}
+
         <div className="mt-12 max-w-3xl space-y-2 text-sm leading-relaxed text-texto-2">
+          <p>Para consultar outros produtos e insumos diretamente no levantamento público, acesse os{" "}
+            <a href="https://www.gov.br/conab/pt-br/atuacao/informacoes-agropecuarias/precos-agropecuarios" target="_blank"
+              rel="noopener noreferrer" className="underline hover:text-verde">preços agropecuários da Conab</a>.</p>
           <p>
-            <strong className="text-texto-3">Sobre os dados.</strong> Os indicadores de boi gordo, milho, soja e frango são do
-            {" "}<a href="https://www.cepea.org.br/" target="_blank" rel="noopener noreferrer" className="underline hover:text-verde">CEPEA/ESALQ-USP</a>
-            {" "}(licença CC BY-NC 4.0); as praças regionais vêm da Scot Consultoria e de sindicatos e cooperativas, publicadas pelo
-            {" "}<a href="https://www.noticiasagricolas.com.br/cotacoes" target="_blank" rel="noopener noreferrer" className="underline hover:text-verde">Notícias Agrícolas</a>;
-            o dólar, da AwesomeAPI; o Ibovespa, da B3 via Yahoo Finance.
+            As séries de Santa Catarina usam os levantamentos regionais de preços ao produtor e as médias estaduais de insumos da
+            {" "}<a href="https://cepa.epagri.sc.gov.br/index.php/mercado-agricola/" target="_blank" rel="noopener noreferrer" className="underline hover:text-verde">Epagri/Cepa</a>.
+            {catalogo.some(c => c.slug.startsWith("cepea-")) && <> Os indicadores CEPEA são do{" "}
+              <a href="https://www.cepea.org.br/" target="_blank" rel="noopener noreferrer" className="underline hover:text-verde">CEPEA/ESALQ-USP</a>.</>}
+            {" "}As demais praças têm a fonte identificada junto de cada cotação.
+            O dólar vem da AwesomeAPI e o Ibovespa, da B3 via Yahoo Finance.
           </p>
           <p>
-            Os valores são atualizados algumas vezes por dia e servem como referência de mercado. Não são oferta de compra ou
-            venda, nem recomendação de investimento. Cada série mostra a fonte e o horário da última atualização.
+            Cada preço mostra a data do levantamento ou o mês de referência indicado pela fonte. O horário da última coleta
+            informa quando o sistema consultou os arquivos. Os valores servem como referência de mercado.
           </p>
         </div>
       </Conteudo>

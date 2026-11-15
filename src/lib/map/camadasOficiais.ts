@@ -34,15 +34,14 @@ export const CORES_BIOMAS: Record<string, string> = {
   "Mata Atlântica": "#5BC08A", "Pampa": "#A7C957", "Pantanal": "#4FA3C7",
 };
 
-/** Paleta da referência cartográfica fornecida pela ARINI. */
+/** Cores da cartografia ARINI, compartilhadas pela busca, pelo desenho e pela legenda. */
 export const CORES_RURAIS = {
-  sigef: "#ff0000",
-  snci: "#0000ff",
-  car: "#34db1e",
-  credito_rural: "#f97316",
-  funai: "#a855f7",
-  outorgas_federais: "#0ea5e9",
-  ambiental: "#e11d48",
+  sigef: "#5BC0EB",
+  snci: "#B6A7DA",
+  car: "#FF9D3D",
+  credito_rural: "#8BC34A",
+  funai: "#E4572E",
+  outorgas_federais: "#4FA8E0",
 } as const;
 
 export const CAMADAS_OFICIAIS: CamadaOficial[] = [

@@ -207,7 +207,7 @@ async function processarFiltros() {
     proximaBusca = Date.now() + minutos * 60_000;
     await db.query("select fn_filtro_corresponder()");
     if (process.env.SITE_URL && process.env.SAUDE_TOKEN) {
-      for (const rota of ["avisos-imoveis","avisos-territoriais","assinaturas"]) {
+      for (const rota of ["avisos-imoveis","avisos-territoriais","assinaturas","comunicados"]) {
         const r = await fetch(`${process.env.SITE_URL}/api/interno/${rota}`, {
           method: "POST", headers: { "x-saude-token": process.env.SAUDE_TOKEN }, signal: AbortSignal.timeout(90_000),
         });

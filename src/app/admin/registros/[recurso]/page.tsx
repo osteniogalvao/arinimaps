@@ -71,6 +71,14 @@ export default async function PaginaRegistro({ params, searchParams }: PageProps
     }
   }
 
+  let imovelInicial: string | undefined;
+  if (podeEscrever && r.id === "publicacoes" && typeof sp.imovel === "string" && /^[0-9a-f-]{36}$/i.test(sp.imovel)) {
+    const {data: imovel} = await admin.from("properties").select("id,codigo,titulo").eq("id",sp.imovel).in("status",["publicado","em_negociacao"]).maybeSingle();
+    if (imovel) {
+      imovelInicial=imovel.id;
+      if (!opcoes.property_id.some(o=>o.id===imovel.id)) opcoes.property_id.push({id:imovel.id,rotulo:imovel.codigo+" · "+imovel.titulo});
+    }
+  }
   const abas = r.status ? [
     ...(r.status.abertos ? [["abertos", "Em aberto"]] : []),
     ...Object.entries(r.status.rotulos),
@@ -90,7 +98,7 @@ export default async function PaginaRegistro({ params, searchParams }: PageProps
           </form>
         ) : null}
       </div>
-      <Registros recursoId={r.id} linhas={(data ?? []) as Linha[]} opcoes={opcoes} podeEscrever={podeEscrever} nomes={nomes} />
+      <Registros key={imovelInicial??r.id} imovelInicial={imovelInicial} recursoId={r.id} linhas={(data ?? []) as Linha[]} opcoes={opcoes} podeEscrever={podeEscrever} nomes={nomes} />
     </div>
   );
 }

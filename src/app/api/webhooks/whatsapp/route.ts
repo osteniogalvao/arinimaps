@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { assinaturaWebhookOk, telefoneWhatsapp } from "@/lib/meta";
+import { confirmarMensagemWhatsapp, dataWhatsapp } from "@/lib/confirmacao-whatsapp";
+import { receberOptIn } from "@/lib/retomada-cadastro";
 import { notificar } from "@/lib/notificacoes";
 
 /**
@@ -19,7 +21,7 @@ export async function GET(request: Request) {
 }
 
 type Valor = {
-  messages?: { id: string; from: string; type: string; text?: { body: string }; button?: { text: string }; interactive?: { button_reply?: { title: string } } }[];
+  messages?: { id: string; from: string; timestamp?: string; type: string; text?: { body: string }; button?: { text: string }; interactive?: { button_reply?: { title: string } } }[];
   statuses?: { id: string; status: string; errors?: { title: string }[] }[];
   contacts?: { wa_id: string; profile?: { name?: string } }[];
 };
@@ -35,10 +37,19 @@ export async function POST(request: Request) {
     for (const ch of entry.changes ?? []) {
       const v = ch.value ?? {};
       for (const s of v.statuses ?? []) {
-        await admin.from("whatsapp_mensagens").update({ status: s.status, erro: s.errors?.[0]?.title ?? null }).eq("wa_id", s.id);
+        const atualizacoes = [admin.from("whatsapp_mensagens").update({status:s.status,erro:s.errors?.[0]?.title??null}).eq("wa_id",s.id)];
+        if(s.status==="failed") for(const tabela of ["assinatura_contatos","retomadas_tentativas","assinatura_pix_whatsapp"]) {
+          atualizacoes.push(admin.from(tabela).update({status:"recusado"}).eq("wa_id",s.id).eq("status","enviado"));
+        }
+        const gravadas=await Promise.all(atualizacoes);
+        if(gravadas.some(r=>r.error))return NextResponse.json({error:"Falha ao registrar a entrega."},{status:503});
       }
       for (const m of v.messages ?? []) {
         const texto = m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? `[${m.type}]`;
+        const recebida=dataWhatsapp(m.timestamp);
+        if(await confirmarMensagemWhatsapp(m.from,texto,recebida))continue;
+        const remetente=v.contacts?.find(c=>c.wa_id===m.from)?.profile?.name ?? "";
+        if(await receberOptIn(m.from,texto,m.id,remetente)) continue;
         const final = m.from.slice(-8);
         // oportunidade aberta mais recente com telefone que termina igual
         const { data: leads } = await admin.from("leads").select("id, telefone").ilike("telefone", `%${final.slice(0, 4)}%${final.slice(4)}%`).limit(20);
@@ -50,7 +61,7 @@ export async function POST(request: Request) {
           opp = data;
         }
         const { error } = await admin.from("whatsapp_mensagens").insert({
-          wa_id: m.id, telefone: m.from, direcao: "entrada", tipo: m.type, texto, opportunity_id: opp?.id ?? null,
+          wa_id: m.id, telefone: m.from, recebida_em:recebida, direcao: "entrada", tipo: m.type, texto, opportunity_id: opp?.id ?? null,
         });
         if (error && error.code !== "23505") return NextResponse.json({ ok: false }, { status: 503 });
         if (error?.code === "23505") continue; // a Meta reenviou

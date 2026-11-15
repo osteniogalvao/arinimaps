@@ -48,10 +48,10 @@ export async function POST(request: Request) {
 
   const url = admin.storage.from("media").getPublicUrl(path).data.publicUrl;
   const { data: antes } = await admin.from("profiles").select("avatar_url").eq("user_id", user.id).single();
-  const { error } = await admin.from("profiles").update({ avatar_url: url }).eq("user_id", user.id);
-  if (error) {
+  const { data: salvo, error } = await admin.from("profiles").update({ avatar_url: url }).eq("user_id", user.id).eq("ativo",true).select("user_id").maybeSingle();
+  if (error || !salvo) {
     await admin.storage.from("media").remove([path]);
-    return falha(500, "erro_banco", "Não foi possível salvar a foto.", { motivo: error.message });
+    return falha(500, "erro_banco", "Não foi possível salvar a foto.", { motivo: error?.message ?? "Conta inativa." });
   }
   const velha = caminhoDaFoto(antes?.avatar_url, user.id);
   if (velha) await admin.storage.from("media").remove([velha]);

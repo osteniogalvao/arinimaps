@@ -15,7 +15,7 @@ import CabecalhoPlanos from "./CabecalhoPlanos";
 import OfertasDoPerfil from "./OfertasDoPerfil";
 import ModulosDoPerfil from "./ModulosDoPerfil";
 import { PERFIS_COM_VITRINE, type OfertaPerfil } from "@/lib/ofertas-perfis";
-import { PLANOS_CATALOGO, type PersonaCatalogoId, type PrecoVigente } from "@/lib/planos-catalogo";
+import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA, type PrecoVigente } from "@/lib/planos-catalogo";
 import {
   COTAS, GRUPO_RECURSO_LABEL, NICHO_LABEL, PERIODICIDADE_LABEL, PERSONAS_PLANOS, RECURSOS,
   personaPorId, planosDaPersona, type PersonaPlano, type Plano, type Recurso,
@@ -28,9 +28,7 @@ export const metadata: Metadata = {
 };
 
 const GRUPOS = Object.keys(GRUPO_RECURSO_LABEL) as Recurso["grupo"][];
-const CATALOGOS: Record<string, PersonaCatalogoId | undefined> = {
-  vender: "proprietario", corretor: "corretor_imobiliaria", produtor: "produtor_rural", tecnico: "profissional_tecnico",
-};
+
 
 /** Cadastro já no perfil da persona (o /entrar lê ?cadastro=1&papel=…&nicho=…). */
 function linkCadastro(persona: PersonaPlano | null) {
@@ -53,7 +51,7 @@ function precoDe(p: Plano) {
 export default async function Planos({ searchParams }: PageProps<"/planos">) {
   const sp = await searchParams;
   const persona = personaPorId(typeof sp.perfil === "string" ? sp.perfil : "vender") ?? PERSONAS_PLANOS[0];
-  const catalogo = persona && CATALOGOS[persona.id];
+  const catalogo = persona && CATALOGO_POR_ENTRADA[persona.id];
   const temVitrine = PERFIS_COM_VITRINE.includes(persona.id);
   const [{ data: planosRaw }, user, { acesso }, cfg, vitrine] = await Promise.all([
     supabaseAdmin().from("plans").select("*").eq("ativo", true).order("ordem").order("id"),

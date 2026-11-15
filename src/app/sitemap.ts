@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { catalogoCotacoes } from "@/lib/mercado/cotacoes";
+import { urlSerie } from "@/lib/mercado/pracas";
 
 // Gerado a cada requisição (não no build): imóveis novos entram no sitemap
 // sem redeploy, e o build não depende das envs do Supabase.
@@ -10,15 +12,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return [{ url: base, changeFrequency: "hourly", priority: 1 }];
   }
-  const { data: imoveis } = await supabaseAdmin()
-    .from("properties")
-    .select("codigo, updated_at")
-    .in("status", ["publicado", "em_negociacao"]);
+  const [{ data: imoveis }, series] = await Promise.all([
+    supabaseAdmin().from("properties").select("codigo, updated_at").in("status", ["publicado", "em_negociacao"]),
+    catalogoCotacoes(),
+  ]);
 
   return [
     { url: base, changeFrequency: "daily", priority: 1 },
     { url: `${base}/mapa`, changeFrequency: "hourly", priority: 0.9 },
     { url: `${base}/mercado`, changeFrequency: "daily", priority: 0.7 },
+    ...series.map((c) => ({
+      url: `${base}${urlSerie(c.slug)}`,
+      lastModified: new Date(c.data),
+      changeFrequency: "daily" as const,
+      priority: 0.6,
+    })),
     { url: `${base}/planos`, changeFrequency: "weekly", priority: 0.6 },
     { url: `${base}/relatorios`, changeFrequency: "weekly", priority: 0.5 },
     { url: `${base}/ajuda`, changeFrequency: "monthly", priority: 0.4 },

@@ -78,7 +78,7 @@ try {
 
   const r = await p.evaluate(async (id) => {
     const fd = new FormData();
-    fd.set("dados", JSON.stringify({ tipo: "urbano", titulo: "TESTE AUTOMATIZADO — lote", condicao: "autorizacao", aceite_termos: true, lote_id: id }));
+    fd.set("dados", JSON.stringify({ tipo: "urbano", titulo: "TESTE AUTOMATIZADO — lote", condicao: "exclusividade", prazo_exclusividade_meses: 6, termo_exclusividade:(await (await fetch("/api/conta/anunciar")).json()).termos[6], aceite_termos: true, lote_id: id }));
     // geometria falsa de propósito: a rota tem de ignorar e usar a do banco
     fd.set("geometria", JSON.stringify({ fonte: "lote", geometry: { type: "Point", coordinates: [0, 0] } }));
     // PDF mínimo válido: desde a 9.5 o upload confere o conteúdo, não só a extensão

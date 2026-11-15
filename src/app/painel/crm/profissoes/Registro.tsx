@@ -39,12 +39,12 @@ export default function Registro({modelos,registro:r,atendimento=null,profissaoI
    {r?.documento&&<Link className="ml-3 underline" href={"/painel/crm/profissoes/documento/"+r.id}>Abrir documento para revisão e impressão</Link>}
   </div>}{aviso&&<p role="status">{aviso}</p>}</form>;
 }
-export function NovaProfissao(){
+export function NovaProfissao({sugerida}:{sugerida?:string}){
  const router=useRouter(),chave=useRef<string|null>(null);const [aviso,set]=useState(""),[ocupado,ocupar]=useState(false);
  async function enviar(e:FormEvent<HTMLFormElement>){e.preventDefault();ocupar(true);const f=e.currentTarget,fd=new FormData(f);chave.current??=crypto.randomUUID();
   try{const r=await pedirProfissao(chave.current,String(fd.get("nome")),String(fd.get("descricao")));set(r.erro??"Pedido registrado.");if(!r.erro){f.reset();chave.current=null;router.refresh();}}catch{set("Falha de conexão.");}finally{ocupar(false);}}
- return <details className="cartao space-y-3 p-5"><summary className="cursor-pointer font-semibold">Solicitar outra profissão</summary>
- <form className="max-w-2xl space-y-3" onSubmit={enviar}><label className="block">Profissão<input name="nome" className={campo} minLength={3} maxLength={100} required/></label>
+ return <details open={sugerida ? true : undefined} className="cartao space-y-3 p-5"><summary className="cursor-pointer font-semibold">Solicitar outra profissão</summary>
+ <form className="max-w-2xl space-y-3" onSubmit={enviar}><label className="block">Profissão<input name="nome" defaultValue={sugerida} className={campo} minLength={3} maxLength={100} required/></label>
  <label className="block">Módulos e documentos que precisa usar<textarea name="descricao" className={campo} minLength={8} maxLength={2000} required/></label>
  <button className={botao} disabled={ocupado}>Enviar pedido</button>{aviso&&<p role="status">{aviso}</p>}</form></details>;
 }

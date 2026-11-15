@@ -16,6 +16,17 @@ export async function POST(req:Request) {
  const erro=(e:{message:string;code:string})=>falha(e.code==="42501"?403:409,"condicao",
    ["55000","22023"].includes(e.code) && e.message.length>25 && !e.message.includes("parameter") ? e.message:
     "Confira o perfil ativo, a organização e as condições vigentes da proposta. Uma assinatura ou concessão existente pode exigir conciliação pela Central.");
+ if(dados.acao==="propor_reajuste" || dados.acao==="aceitar_reajuste") {
+   if(!Number.isSafeInteger(dados.valor) || dados.valor<=0 || dados.valor>100000000) return falha(400,"valor","Valor inválido.");
+   const propor=dados.acao==="propor_reajuste";
+   if(propor && !temSetor(a,"financeiro","diretoria"))return falha(403,"acesso","Acesso restrito ao Financeiro.");
+   if(propor && (typeof dados.condicoes!=="string" || dados.condicoes.trim().length<10 || dados.condicoes.length>1500 || !/^\d{4}-\d{2}-\d{2}$/.test(dados.data)))
+      return falha(400,"condicoes","Informe a vigência e as condições da renovação.");
+   const res=propor?await db.rpc("assinatura_propor_reajuste",{p_ator:a.userId,p_assinatura:dados.id,p_data:dados.data,p_valor:dados.valor,p_condicoes:dados.condicoes})
+      : await db.rpc("assinatura_aceitar_reajuste",{p_titular:a.userId,p_id:dados.id,p_valor:dados.valor});
+   if(res.error)return erro(res.error);
+   return NextResponse.json({ok:true});
+ }
  if(dados.acao==="conciliar") {
    if(!temSetor(a,"financeiro")) return falha(403,"acesso","Acesso restrito ao financeiro.");
    if(!checkoutAtivo()) return falha(503,"asaas","O Asaas está indisponível.");

@@ -87,6 +87,7 @@ export function CartaoLote({ lote, onFechar, onVarios }: { lote: LoteInfo; onFec
         </div>
         <BotaoFechar onClick={onFechar} />
       </div>
+      <p className="text-xs text-texto-2">Referência para busca: Lote {lote.id.slice(0, 8)}</p>
       <dl className="text-sm divide-y divide-linha rounded-xl border border-linha bg-superficie-2/60 px-3.5">
         <div className="flex justify-between gap-2 py-2.5">
           <dt className="text-texto-2">Perímetro</dt><dd className="font-semibold text-texto tabular-nums">{metros(lote.perimetro_m)} m</dd>

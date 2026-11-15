@@ -4,6 +4,7 @@ import { conferirRecurso, registrarTentativa, respostaNegacao } from "@/lib/plan
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { lerConfiguracoes, numero } from "@/lib/settings";
+import { exclusividadeVigente } from "@/lib/exclusividade-servidor";
 import { assinatura, ipDe } from "@/lib/juridico";
 import { ehParceiro } from "@/lib/perfis";
 import { registrarOrigemDado } from "@/lib/imovel/eventos";
@@ -78,6 +79,16 @@ export async function POST(request: Request) {
   const condicao: "autorizacao" | "exclusividade" | "parceiro" = partner_id
     ? "parceiro"
     : equipe && dados.condicao !== "exclusividade" ? "autorizacao" : "exclusividade";
+  const meses = condicao === "exclusividade" && (dados.prazo_exclusividade_meses === 6 || dados.prazo_exclusividade_meses === 12)
+    ? dados.prazo_exclusividade_meses as 6 | 12 : null;
+  if (condicao === "exclusividade" && !meses) {
+    return NextResponse.json({ error: "Escolha o prazo de exclusividade de 6 ou 12 meses." }, { status: 400 });
+  }
+  const cfg = await lerConfiguracoes();
+  const vigente = meses && !equipe ? exclusividadeVigente(cfg,meses) : null;
+  if (vigente && dados.termo_exclusividade !== vigente.assinatura) {
+    return NextResponse.json({ error: "O termo precisa ser conferido novamente. Abra o documento e marque o aceite.", assinatura: vigente.assinatura }, {status:409});
+  }
   // Leilão: só leiloeiro ou a equipe cadastram; o documento que sustenta o
   // anúncio é o edital, não a autorização do proprietário.
   const modalidade: "venda" | "leilao" =
@@ -282,8 +293,17 @@ export async function POST(request: Request) {
   }
 
   // aceite versionado: versão do termo, data/hora, usuário e IP
-  const cfg = await lerConfiguracoes();
-  const validade = new Date(Date.now() + numero(cfg, "juridico_prazo_autorizacao_dias", 180) * 86_400_000);
+  const instanteAceite = new Date();
+  const dataLocal = instanteAceite.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+  const validade = new Date(dataLocal + "T12:00:00Z");
+  if (meses) {
+    const dia = validade.getUTCDate();
+    validade.setUTCMonth(validade.getUTCMonth() + meses + 1, 0);
+    validade.setUTCDate(Math.min(dia, validade.getUTCDate()));
+  } else {
+    validade.setUTCDate(validade.getUTCDate() + numero(cfg, "juridico_prazo_autorizacao_dias", 180));
+  }
+  const termoAceito = vigente?.termo ?? null;
   const versao = condicao === "parceiro"
     ? (modalidade === "leilao" ? assinatura("parceiros") : assinatura("parceiros", "remuneracao"))
     : condicao === "exclusividade"
@@ -313,16 +333,22 @@ export async function POST(request: Request) {
     }
   }
 
-  await admin.from("property_authorizations").insert({
+  const { error: erroAutorizacao } = await admin.from("property_authorizations").insert({
     property_id: property.id,
     selfie_path: selfiePath,
     tipo: condicao,
-    validade: validade.toISOString().slice(0, 10),
-    aceite_at: equipe ? null : new Date().toISOString(),
+    prazo_meses: meses, termo_aceito: termoAceito, validade: validade.toISOString().slice(0, 10),
+    aceite_at: equipe ? null : instanteAceite.toISOString(),
     versao: equipe ? null : versao,
     aceite_por: equipe ? null : user.id,
     aceite_ip: equipe ? null : ipDe(request),
   });
+
+  if (erroAutorizacao) {
+    await admin.from("properties").delete().eq("id", property.id);
+    if (selfiePath) await admin.storage.from("docs").remove([selfiePath]);
+    return NextResponse.json({ error: "Não foi possível registrar o termo do imóvel. Tente novamente." }, { status: 503 });
+  }
 
   // geometria (fonte: desenho | kml | kmz | ponto | car | lote)
   // §1.5 origem do dado: CAR e lote vêm do nosso banco (fonte oficial); o
@@ -444,13 +470,17 @@ export async function POST(request: Request) {
       p_motivo: "Cadastro do loteamento", p_user_id: user.id,
     });
     if (gErro) { await admin.from("properties").delete().eq("id", un.id); continue; }
-    await Promise.all([
-      admin.from("property_authorizations").insert({
+    const { error: erroTermoUnidade } = await admin.from("property_authorizations").insert({
         property_id: un.id, selfie_path: selfiePath, tipo: condicao,
-        validade: validade.toISOString().slice(0, 10),
-        aceite_at: equipe ? null : new Date().toISOString(), versao: equipe ? null : versao,
+        prazo_meses: meses, termo_aceito: termoAceito, validade: validade.toISOString().slice(0, 10),
+        aceite_at: equipe ? null : instanteAceite.toISOString(), versao: equipe ? null : versao,
         aceite_por: equipe ? null : user.id, aceite_ip: equipe ? null : ipDe(request),
-      }),
+      });
+    if (erroTermoUnidade) {
+      await admin.from("properties").delete().eq("id", un.id);
+      continue;
+    }
+    await Promise.all([
       fotosSalvas.length
         ? admin.from("property_media").insert(fotosSalvas.map((storage_path, i) => ({
           property_id: un.id, tipo: "foto", storage_path, ordem: i, capa: i === 0,

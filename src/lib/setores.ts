@@ -78,6 +78,7 @@ export const SETORES: Setor[] = [
     descricao: "Origem dos leads, imóveis mais procurados, materiais de divulgação e vitrine do site.",
     itens: [
       { href: "/admin/marketing", rotulo: "Painel do setor", icone: "◫" },
+      { href: "/admin/marketing/comunicados", rotulo: "Comunicados da Matriz", icone: "✉" },
       { href: "/admin/ranking", rotulo: "Ranking de imóveis", icone: "★" },
       { href: "/admin/registros/publicacoes", rotulo: "Central de publicação", icone: "↗" },
       { href: "/admin/marketing/trafego", rotulo: "Tráfego e resultados", icone: "◢" },

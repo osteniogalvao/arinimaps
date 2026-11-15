@@ -33,12 +33,22 @@ export default async function CrmsDosSetores() {
     if (i.prazo_etapa && +new Date(i.prazo_etapa) < agora) c.atrasados++;
     conta.set(i.pipeline_id, c);
   }
+  const sac = user.setores.includes("suporte")
+    ? await admin.from("support_tickets").select("id,codigo,assunto,status",{count:"exact"})
+        .neq("status","resolvido").order("updated_at",{ascending:false}).limit(5) : null;
   const setores = SETORES.filter((s) => user.setores.includes(s.id));
 
   return (
     <div className="max-w-6xl space-y-8">
       <CabecalhoPagina eyebrow="Central" titulo="CRMs dos setores"
         subtitulo="Cada setor tem os seus funis, com etapas, prazos e campos próprios. Etapa vencida vira tarefa para o responsável." />
+      {sac && <section className="cartao space-y-3 p-5">
+        <h2 className="text-xl font-semibold"><Link className="underline" href="/admin/suporte">SAC · Protocolos de atendimento</Link></h2>
+        {sac.error ? <p>Não foi possível carregar a fila de suporte.</p> : <>
+          <p>{sac.count??0} em aberto</p>
+          <ul>{sac.data?.map(t=><li key={t.id}><Link className="block py-1 hover:underline" href={"/admin/suporte/"+t.id}>{t.codigo} · {t.assunto}</Link></li>)}</ul>
+        </>}
+      </section>}
       {diretoria && <NovoFunil setores={setores.map((s) => ({ id: s.id, nome: s.nome }))} />}
       {!funis?.length && <Vazio icone={Kanban} titulo="Nenhum funil no seu setor" texto="A Diretoria cria os funis e define as etapas e os campos de cada um." />}
       {setores.map((s) => {

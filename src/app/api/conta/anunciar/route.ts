@@ -1,3 +1,4 @@
+import { exclusividadeVigente } from "@/lib/exclusividade-servidor";
 import { NextResponse } from "next/server";
 import { lerConfiguracoes } from "@/lib/settings";
 
@@ -10,9 +11,11 @@ export const dynamic = "force-dynamic";
  * /api/imoveis confere). Só booleanos públicos: nada de dado de conta.
  */
 export async function GET() {
-  const cfg = await lerConfiguracoes().catch(() => ({} as Record<string, unknown>));
+  const cfg = await lerConfiguracoes();
   return NextResponse.json(
-    { selfie_exclusividade: cfg.juridico_selfie_exclusividade === true },
-    { headers: { "Cache-Control": "private, max-age=60" } }
+    { selfie_exclusividade: cfg.juridico_selfie_exclusividade === true, termos:{
+      6:exclusividadeVigente(cfg,6).assinatura, 12:exclusividadeVigente(cfg,12).assinatura
+    } },
+    { headers: { "Cache-Control": "private, no-store" } }
   );
 }

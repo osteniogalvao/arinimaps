@@ -8,7 +8,7 @@ import { ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
 
 export async function GET() {
   const u=await currentUser();
-  const fins: Finalidade[]=u ? ["rastro","historico_ari","whatsapp"] : ["rastro"];
+  const fins: Finalidade[]=u ? ["rastro","historico_ari","whatsapp","whatsapp_assinatura","whatsapp_recuperacao"] : ["rastro"];
   const valores=await Promise.all(fins.map(async f=>[f,await consentimentoDaConta(u?.id,f)]));
   return NextResponse.json({logado:!!u,escolhas:Object.fromEntries(valores)},{headers:{"Cache-Control":"private, no-store"}});
 }
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const limite=await limitar("preferencias-privacidade:"+(u?.id??ip),40,600);
   if (!limite.permitido) return respostaLimite(limite,"alteração de privacidade");
   const body=await request.json().catch(()=>null);
-  if (!body || !["rastro","historico_ari","whatsapp"].includes(body.finalidade) || typeof body.permitido !== "boolean")
+  if (!body || !["rastro","historico_ari","whatsapp","whatsapp_assinatura","whatsapp_recuperacao"].includes(body.finalidade) || typeof body.permitido !== "boolean")
     return NextResponse.json({error:"Escolha inválida."},{status:400});
   if (!u && body.finalidade!=="rastro") return NextResponse.json({error:"Entre na conta."},{status:401});
   if (u) {

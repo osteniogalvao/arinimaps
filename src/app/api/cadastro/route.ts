@@ -24,8 +24,19 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const { email, senha, nome, telefone, role, nicho, cpf, razao_social, registro_profissional, aceite_termos } = body ?? {};
 
-  if (!email?.trim() || !senha || !nome?.trim()) {
+  if (typeof email !== "string" || !email.trim() || typeof senha !== "string" || !senha || typeof nome !== "string" || !nome.trim()) {
     return NextResponse.json({ error: "Preencha nome, e-mail e senha." }, { status: 400 });
+  }
+  if ([telefone, cpf, razao_social, registro_profissional].some((v) => v != null && typeof v !== "string")) {
+    return NextResponse.json({ error: "Confira o documento e os dados de contato e registro profissional." }, { status: 400 });
+  }
+  const qualificacao: Record<string, string> = {};
+  for (const [campo, max] of [["profissao_declarada",100],["especialidade",120]] as const) {
+    const valor = body?.[campo];
+    if (valor == null || valor === "") continue;
+    if (typeof valor !== "string" || valor.trim().length < 2 || valor.trim().length > max)
+      return NextResponse.json({error:"Confira a profissão e a especialidade informadas."}, {status:400});
+    qualificacao[campo] = valor.trim();
   }
   const erroSenha = validarSenha(String(senha));
   if (erroSenha) return NextResponse.json({ error: erroSenha }, { status: 400 });
@@ -99,6 +110,7 @@ export async function POST(request: Request) {
   const { error: perfilErro } = await admin.from("profiles").update({
     telefone: telefone?.trim() || null,
     ...colunasCpf(doc.valor),
+    ...qualificacao,
     aceite_termos_at: agora,
     aceite_termos_versao: versao,
     aceite_termos_ip: ip,

@@ -32,6 +32,12 @@ export default async function Busca({ searchParams }: PageProps<"/admin/busca">)
         for (const p of data ?? []) achados.push({ grupo: "Imóveis", titulo: p.titulo || p.codigo, detalhe: `${p.codigo} · ${p.status}`, href: `/admin/imoveis/${p.id}` });
       })());
     }
+    if (tem("suporte")) {
+      buscas.push((async () => {
+        const {data} = await admin.from("support_tickets").select("id,codigo,assunto,status").or(`codigo.ilike.${like},assunto.ilike.${like}`).limit(10);
+        for (const c of data??[]) achados.push({grupo:"Protocolos do SAC",titulo:c.assunto,detalhe:c.codigo+" · "+c.status,href:"/admin/suporte/"+c.id});
+      })());
+    }
     if (tem("comercial")) {
       buscas.push((async () => {
         const filtros = [`nome.ilike.${like}`, `email.ilike.${like}`];

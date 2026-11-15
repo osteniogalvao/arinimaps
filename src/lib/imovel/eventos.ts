@@ -2,6 +2,8 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { consentimentoDaConta } from "@/lib/privacidade/consentimento";
 import { ipDoPedido } from "@/lib/seguranca/limite";
+import { limitarEmMemoria } from "@/lib/geo/limiteMemoria";
+import { STATUS_VITRINE } from "@/lib/imovel/vitrine";
 
 /**
  * Histórico de acessos e interações do imóvel (requisitos cartográficos §1.1,
@@ -27,7 +29,16 @@ export async function registrarEventoImovel(dados: {
   try {
     const navegacao = ["visualizacao","ficha","tour","relatorio","camada","favorito","consulta","compartilhamento"].includes(dados.tipo);
     if (navegacao && !await consentimentoDaConta(dados.userId,"rastro")) return;
-    await supabaseAdmin().from("property_events").insert({
+    const admin = supabaseAdmin();
+    if (dados.tipo === "visualizacao") {
+      if (!dados.request) return;
+      const chave = "visualizacao-imovel:" + (dados.userId ?? ipDoPedido(dados.request)) + ":" + dados.propertyId;
+      if (!limitarEmMemoria(chave, 1, 60).permitido) return;
+      const { data: imovel } = await admin.from("properties").select("id").eq("id", dados.propertyId)
+        .in("status", STATUS_VITRINE).maybeSingle();
+      if (!imovel) return;
+    }
+    const { error } = await admin.from("property_events").insert({
       property_id: dados.propertyId,
       user_id: dados.userId ?? null,
       partner_id: dados.partnerId ?? null,
@@ -35,6 +46,7 @@ export async function registrarEventoImovel(dados: {
       detalhe: dados.detalhe ?? {},
       ip: navegacao ? null : dados.ip ?? (dados.request ? ipDoPedido(dados.request) : null),
     });
+    if (error) console.error("property_events falhou:", error.code);
   } catch (e) {
     console.error("property_events falhou:", e);
   }

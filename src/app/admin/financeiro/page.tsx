@@ -50,6 +50,7 @@ export default async function PainelFinanceiro() {
   return (
     <div className="space-y-10 md:space-y-12">
       <CabecalhoSetor setor="financeiro">
+        <LinkAcao href="/admin/planos/contatos">Assinaturas e contatos</LinkAcao>
         <LinkAcao href="/admin/planos/solicitacoes">Solicitações de planos</LinkAcao>
         <LinkAcao href="/admin/financeiro/financiamento">Linhas de financiamento e vagas</LinkAcao>
         <a href="/api/admin/financeiro/exportar" className="btn-contorno inline-flex items-center gap-2 px-4 py-2.5 text-sm"><Download className="size-4" /> Baixar planilha (CSV)</a>

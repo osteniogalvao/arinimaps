@@ -39,6 +39,9 @@ jobs:
       - name: Tipos
         run: npx next typegen && npx tsc --noEmit
 
+      - name: Testar recorte de camadas
+        run: node scripts/testa-recorte-camadas.mjs
+
       - name: Lint
         run: npm run lint
 

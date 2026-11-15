@@ -4,6 +4,8 @@ import Link from "next/link";
 const textos: Record<string,[string,string]>={
   rastro:["Histórico de navegação em imóveis","Permitir que a ARINI registre consultas, favoritos e a origem da campanha para entender o interesse nos anúncios."],
   historico_ari:["Histórico da Ari","Permitir que a ARINI guarde as perguntas e respostas para consultar a conversa depois."],
+  whatsapp_assinatura:["WhatsApp da assinatura","Receber avisos sobre renovação, vencimento e confirmação de pagamento no número da conta."],
+  whatsapp_recuperacao:["Lembretes de contratação no WhatsApp","Receber até duas mensagens para retomar uma contratação de plano que ficou incompleta."],
   whatsapp:["Avisos pelo WhatsApp","Permitir avisos da ARINI sobre os imóveis acompanhados no número da conta."],
 };
 export default function Preferencias() {

@@ -1,5 +1,7 @@
 "use client";
 
+import RetomarCadastro from "@/components/conta/RetomarCadastro";
+import CamposProfissao from "@/components/conta/CamposProfissao";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -41,7 +43,7 @@ export default function Entrar() {
   const [form, setForm] = useState({
     nome: "", email: "", senha: "", telefone: "", cpf: "", role: "comprador",
     nicho: nichoPadrao("comprador") ?? "",
-    razao_social: "", registro_profissional: "",
+    razao_social: "", registro_profissional: "", profissao_declarada:"", especialidade:"",
   });
   const [aceite, setAceite] = useState(false);
   // o nicho (perfil de uso) acompanha o papel; só vira pergunta quando há mais de uma opção
@@ -246,6 +248,15 @@ export default function Entrar() {
                   value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} />
               </div>
 
+              <RetomarCadastro volta={volta} telefone={form.telefone}/>
+
+              <details open={ehParceiro || undefined} className="rounded-xl border border-linha p-3">
+                <summary className="cursor-pointer text-sm font-semibold">Profissão e especialidade (opcional)</summary>
+                <div className="mt-3">
+                  <CamposProfissao classe={INPUT} profissao={form.profissao_declarada} especialidade={form.especialidade}
+                    mudar={(campo,valor)=>setForm(f=>({...f,[campo]:valor}))} />
+                </div>
+              </details>
               {ehParceiro && (
                 <>
                   <div>

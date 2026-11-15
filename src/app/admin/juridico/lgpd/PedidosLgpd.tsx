@@ -28,6 +28,8 @@ export default function PedidosLgpd({ pedidos }: { pedidos: Pedido[] }) {
   const [form, setForm] = useState({ nome: "", email: "", cpf: "", tipo: "acesso", descricao: "" });
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState("");
+  const [identidade, setIdentidade] = useState(false);
+  const [simulacao, setSimulacao] = useState("");
   const hoje = new Date().toISOString().slice(0, 10);
 
   async function chamar(method: "POST" | "PATCH", body: unknown) {
@@ -71,7 +73,7 @@ export default function PedidosLgpd({ pedidos }: { pedidos: Pedido[] }) {
           return (
             <div key={p.id} className="px-5 py-3.5 text-[0.95rem]">
               <button className="w-full flex items-center gap-4 flex-wrap text-left" aria-expanded={aberto === p.id}
-                onClick={() => { setAberto(aberto === p.id ? null : p.id); setResposta(p.resposta ?? ""); }}>
+                onClick={() => { setAberto(aberto === p.id ? null : p.id); setResposta(p.resposta ?? ""); setIdentidade(false); setSimulacao(""); }}>
                 {aberto === p.id ? <ChevronDown className="size-4 shrink-0 text-verde" /> : <ChevronRight className="size-4 shrink-0 text-texto-2" />}
                 <span className={CODIGO}>{p.codigo}</span>
                 <span className="flex-1 min-w-48 font-semibold text-texto">{TIPO[p.tipo] ?? p.tipo}<span className="font-normal text-sm text-texto-2"> · {p.nome}</span></span>
@@ -90,6 +92,26 @@ export default function PedidosLgpd({ pedidos }: { pedidos: Pedido[] }) {
                   {p.descricao && <p className="whitespace-pre-wrap leading-relaxed text-texto">{p.descricao}</p>}
                   <textarea rows={4} className={input} placeholder="Resposta ao titular (obrigatória para encerrar; é enviada por e-mail)"
                     value={resposta} onChange={(e) => setResposta(e.target.value)} disabled={!emAberto} />
+                  {emAberto && p.tipo === "exclusao" && <section className="space-y-3 rounded-xl border border-linha p-4">
+                    <h3 className="font-semibold">Encerramento da conta</h3>
+                    <p className="text-sm text-texto-2">O encerramento bloqueia o login, remove identificadores do perfil, filtros, monitoramentos, conversas com a Ari e cofres pessoais fora de guarda. Documentos do anúncio, aceites e trilhas de negócio seguem a política de guarda.</p>
+                    <button disabled={ocupado} type="button" className="btn-contorno px-3 py-2 text-sm" onClick={async () => {
+                      setOcupado(true); setErro("");
+                      const r = await enviarJson<{ resumo: { favoritos?: number; conversas?: number; propriedades_cofre?: number; filtros?: number; monitoramentos?: number; cofres?: {id:string;nome:string}[] } }>("/api/admin/lgpd", "PATCH", { id:p.id, acao:"simular_exclusao" });
+                      setOcupado(false);
+                      if (!r.ok) { setErro(r.erro.mensagem); return; }
+                      const s = r.dados.resumo;
+                      setSimulacao(s.favoritos == null ? "O encerramento já foi iniciado." : [
+                        `${s.favoritos} favoritos, ${s.conversas} conversas, ${s.filtros} filtros, ${s.monitoramentos} monitoramentos e ${s.propriedades_cofre} cofres fora de guarda.`,
+                        ...(s.cofres ?? []).map(c=>`${c.nome} · COFRE-${c.id}`),
+                      ].join("\n"));
+                    }}>Simular exclusão de dados pessoais</button>
+                    {simulacao && <p role="status" className="whitespace-pre-wrap break-words text-sm">{simulacao}</p>}
+                    <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={identidade} onChange={e => setIdentidade(e.target.checked)} />
+                      Conferi a identidade do titular e a solicitação de encerramento desta conta.</label>
+                    <button disabled={ocupado || !identidade || !resposta.trim()} className="btn-perigo px-4 py-2 text-sm disabled:opacity-50"
+                      onClick={() => chamar("PATCH",{ id:p.id, acao:"encerrar_conta", identidadeConferida:identidade, resposta })}>Encerrar conta e responder</button>
+                  </section>}
                   {emAberto && (
                     <div className="flex flex-wrap gap-2.5">
                       {p.status === "recebido" && (
@@ -97,7 +119,7 @@ export default function PedidosLgpd({ pedidos }: { pedidos: Pedido[] }) {
                           className="btn-contorno px-4 py-2 text-sm">Marcar em análise</button>
                       )}
                       <button disabled={ocupado} onClick={() => chamar("PATCH", { id: p.id, status: "atendido", resposta })}
-                        className="btn-verde px-4 py-2 text-sm disabled:opacity-60">Atender e responder</button>
+                        className="btn-verde px-4 py-2 text-sm disabled:opacity-60">{p.tipo === "exclusao" ? "Registrar atendimento sem encerrar conta" : "Atender e responder"}</button>
                       <button disabled={ocupado} onClick={() => chamar("PATCH", { id: p.id, status: "negado", resposta })}
                         className="btn-perigo px-4 py-2 text-sm">Negar com justificativa</button>
                     </div>

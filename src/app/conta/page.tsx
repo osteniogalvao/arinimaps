@@ -26,14 +26,17 @@ export default async function MinhaConta() {
   if (!user) redirect("/entrar");
   const daEquipe = ["admin_central", "analista_arini"].includes(user.role);
 
-  const [{ data: perfil }, vinculo, convites, acesso] = await Promise.all([
-    supabaseAdmin().from("profiles").select("nome, telefone, avatar_url, preferencias").eq("user_id", user.id).single(),
+  const [{ data: perfil }, vinculo, convites, acesso, avisos] = await Promise.all([
+    supabaseAdmin().from("profiles").select("nome, telefone, avatar_url, preferencias, profissao_declarada, especialidade, avisos_email").eq("user_id", user.id).single(),
     organizacaoDoUsuario(user.id),
     convitesPendentes(user.email),
     acessoDe(user.id),
+    supabaseAdmin().from("matriz_entregas").select("comunicado",{count:"exact",head:true}).eq("titular",user.id).is("lido_em",null),
   ]);
 
   const mais = [
+    {href:"/conta/comunicados",rotulo:"Comunicados da Matriz",texto:avisos.count ? `${avisos.count} aviso(s) por ler` : "Avisos de manutenção, planos e atualizações",icone:LifeBuoy},
+    ...(user.nicho==="engenheiro" ? [{href:"/painel/crm/profissoes",rotulo:"CRM da minha profissão",texto:"Modelos disponíveis e pedidos de módulos técnicos",icone:BadgeCheck}] : []),
     ...(["proprietario","produtor_rural"].includes(user.nicho??"") ? [{href:"/conta/monitoramento",rotulo:"Monitoramento territorial",texto:"Áreas acompanhadas e ocorrências nas fontes oficiais",icone:ShieldCheck}] : []),
     ...(user.nicho==="comprador_investidor" ? [{href:"/conta/filtros",rotulo:"Filtros de interesse",texto:"Buscas salvas e novos imóveis que combinam com você",icone:BadgeCheck}] : []),
     ...(!daEquipe ? [{ href: "/conta/creditos", rotulo: "Carteira da Ari", texto: "Créditos do plano, compras e histórico de uso", icone: BadgeCheck }] : []),
@@ -66,6 +69,9 @@ export default async function MinhaConta() {
             nome: perfil?.nome ?? "",
             telefone: perfil?.telefone ?? "",
             avatar: perfil?.avatar_url ?? null,
+            profissao_declarada: perfil?.profissao_declarada ?? "",
+            especialidade: perfil?.especialidade ?? "",
+            avisos_email: perfil?.avisos_email === true,
             preferencias: normalizar(perfil?.preferencias),
           }}
           convites={convites.map((c) => ({

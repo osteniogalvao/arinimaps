@@ -41,7 +41,7 @@ export default async function PainelOperacoes() {
 
   return (
     <div className="space-y-10 md:space-y-12">
-      <CabecalhoSetor setor="operacoes" />
+      <CabecalhoSetor setor="operacoes"><LinkAcao href="/admin/mercado/importar">Importar cotações regionais</LinkAcao></CabecalhoSetor>
 
       <Indicadores itens={[
         { rotulo: "Anúncios na fila de análise", icone: Inbox, valor: emAnalise, href: "/admin/imoveis?filtro=analise", destaque: emAnalise > 0 },

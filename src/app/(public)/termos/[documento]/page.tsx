@@ -16,10 +16,11 @@ export async function generateMetadata({ params }: PageProps<"/termos/[documento
   return doc ? { title: doc.titulo, description: doc.resumo } : {};
 }
 
-export default async function DocumentoJuridico({ params }: PageProps<"/termos/[documento]">) {
+export default async function DocumentoJuridico({ params, searchParams }: PageProps<"/termos/[documento]">) {
   const { documento: id } = await params;
   const cfg = await lerConfiguracoes();
-  const doc = documento(cfg, id);
+  const { meses } = await searchParams;
+  const doc = documento(cfg, id, meses === "6" ? 6 : meses === "12" ? 12 : undefined);
   if (!doc) notFound();
   const outros = documentos(cfg).filter((d) => d.id !== doc.id);
 

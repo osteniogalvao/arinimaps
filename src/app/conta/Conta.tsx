@@ -1,4 +1,5 @@
 "use client";
+import CamposProfissao from "@/components/conta/CamposProfissao";
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -52,7 +53,7 @@ async function reduzir(arquivo: File): Promise<Blob> {
 export default function Conta({
   inicial, convites,
 }: {
-  inicial: { nome: string; telefone: string; avatar: string | null; preferencias: Preferencias };
+  inicial: { nome: string; telefone: string; avatar: string | null; profissao_declarada:string; especialidade:string; avisos_email:boolean; preferencias: Preferencias };
   convites: Convite[];
 }) {
   const router = useRouter();
@@ -96,6 +97,8 @@ export default function Conta({
   // ---------- dados ----------
   const [nome, setNome] = useState(inicial.nome);
   const [telefone, setTelefone] = useState(inicial.telefone);
+  const [profissional,setProfissional]=useState({profissao_declarada:inicial.profissao_declarada,especialidade:inicial.especialidade});
+  const [avisosEmail,setAvisosEmail]=useState(inicial.avisos_email);
   const [dadosMsg, setDadosMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const [salvandoDados, setSalvandoDados] = useState(false);
 
@@ -103,7 +106,7 @@ export default function Conta({
     e.preventDefault();
     setSalvandoDados(true); setDadosMsg(null);
     const res = await fetch("/api/conta", {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome, telefone }),
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome, telefone, ...profissional, avisos_email:avisosEmail }),
     });
     const d = await res.json().catch(() => ({}));
     setSalvandoDados(false);
@@ -198,6 +201,10 @@ export default function Conta({
                 <input id="c-tel" className={input} placeholder="(34) 90000-0000" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
               </div>
             </div>
+            <CamposProfissao classe={input} profissao={profissional.profissao_declarada} especialidade={profissional.especialidade}
+              mudar={(campo,valor)=>setProfissional(p=>({...p,[campo]:valor}))} />
+            <label className="flex items-center gap-3"><input type="checkbox" checked={avisosEmail} onChange={e=>setAvisosEmail(e.target.checked)}/>
+              Receber por e-mail os avisos operacionais da Matriz disponíveis na minha conta</label>
             {dadosMsg && <p className={"text-sm font-semibold " + (dadosMsg.ok ? "text-verde" : "text-critico")}>{dadosMsg.texto}</p>}
             <button disabled={salvandoDados} className="btn-verde px-6 py-3 text-sm disabled:opacity-60">{salvandoDados ? "Salvando…" : "Salvar dados"}</button>
           </div>

@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /**
  * Corpo HTML no padrão "Assinatura de e-mail · 600 px" do manual (prancha 22):
@@ -32,16 +32,18 @@ export function emailHtml(assunto: string, texto: string): string {
 </table></td></tr></table></body></html>`;
 }
 
-/** E-mail via Resend. Sem RESEND_API_KEY, vira no-op silencioso (nunca lança). */
-export async function sendEmail(to: string | null | undefined, subject: string, text: string) {
-  if (!process.env.RESEND_API_KEY || !to) return;
+/** Distingue um erro definitivo de uma falha temporária na fila de envio. */
+export async function enviarEmailComStatus(to: string | null | undefined, subject: string, text: string, chave?: string) {
+  if (!process.env.RESEND_API_KEY || !to) return "falhou";
   try {
-    await fetch("https://api.resend.com/emails", {
+    const resposta = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         "Content-Type": "application/json",
+        ...(chave ? {"Idempotency-Key":chave} : {}),
       },
+      signal: AbortSignal.timeout(12_000),
       body: JSON.stringify({
         from: process.env.RESEND_FROM ?? "Arini Imóveis Brasil <naoresponda@arinibrasil.com.br>",
         to: [to],
@@ -50,9 +52,19 @@ export async function sendEmail(to: string | null | undefined, subject: string, 
         html: emailHtml(subject, text),
       }),
     });
-  } catch (e) {
-    console.error("sendEmail falhou:", e);
+    if (resposta.ok) return "enviado";
+    if (resposta.status === 409) {
+      const detalhe = await resposta.json().catch(() => null);
+      return detalhe?.name === "concurrent_idempotent_requests" ? "temporario" : "falhou";
+    }
+    return resposta.status === 408 || resposta.status === 429 || resposta.status >= 500 ? "temporario" : "falhou";
+  } catch {
+    return "temporario";
   }
+}
+
+export async function sendEmail(to: string | null | undefined, subject: string, text: string, chave?: string) {
+  return (await enviarEmailComStatus(to, subject, text, chave)) === "enviado";
 }
 
 /** E-mail da central Arini: settings.notify_email > env ARINI_NOTIFY_EMAIL. */

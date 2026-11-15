@@ -42,8 +42,23 @@ export async function descarteRetencao(payload, db, job) {
     return;
   }
 
+  const conexao = await db.connect();
+  try {
+    await conexao.query("begin");
+    await conexao.query("select pg_advisory_xact_lock(109,1)");
+    await aplicarDescarte(conexao, cfg, jobId);
+    await conexao.query("commit");
+  } catch (erro) {
+    await conexao.query("rollback");
+    throw erro;
+  } finally {
+    conexao.release();
+  }
+}
+
+async function aplicarDescarte(db, cfg, jobId) {
   const { rows: [c] } = await db.query(`select fn_descarte_candidatos($1, $2, $3) as c`, [cfg.selfie, cfg.docs, cfg.logs]);
-  const paths = [...c.c.selfies, ...c.c.documentos].map((x) => x.path).filter(Boolean);
+  const paths = [...new Set([...c.c.selfies, ...c.c.documentos].map((x) => x.path).filter(Boolean))];
   const removidos = [];
   if (paths.length) {
     const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });

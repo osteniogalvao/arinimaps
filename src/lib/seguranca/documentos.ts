@@ -61,9 +61,15 @@ export async function resolverArquivo(a: Ator, path: string): Promise<ArquivoRes
   const base = { documentoId: null, propertyId: null, opportunityId: null, requestId: null, motivo: null };
 
   if (prefixo === "cofre") {
-    if (chave !== a.userId || !temPerfilCofre(a.role,a.nicho) || !await cofreAprovado(a.userId,path.split("/")[2]??"")) return null;
+    const cofreId = path.split("/")[2];
+    const dono = chave === a.userId && temPerfilCofre(a.role,a.nicho) && await cofreAprovado(a.userId,cofreId);
+    if (!dono) {
+      if (!temSetor(a,"juridico") || !UUID.test(cofreId ?? "")) return null;
+      const {data:guardas} = await admin.from("lgpd_guardas").select("id").eq("cofre_id",cofreId).is("liberada_em",null).limit(1);
+      if (!guardas?.length) return null;
+    }
     const { data: doc } = await admin.from("cofre_documentos").select("id,nome_arquivo")
-      .eq("titular_id",a.userId).eq("storage_path",path).maybeSingle();
+      .eq("titular_id",chave).eq("propriedade_id",cofreId).eq("storage_path",path).maybeSingle();
     return doc ? { ...base, categoria:"documento", permitido:true, documentoId:doc.id, nome:doc.nome_arquivo } : null;
   }
 

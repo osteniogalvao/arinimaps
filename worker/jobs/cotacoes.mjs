@@ -17,6 +17,7 @@
 //  · Yahoo Finance (gráfico público, sem chave) — Ibovespa (^BVSP).
 //
 // Uso fora do worker: scripts/coleta-cotacoes.mjs [--seco] [--historico].
+import { coletarEpagri } from "./epagri.mjs";
 import { lerXls } from "./lerXls.mjs";
 
 const UA = "AriniImoveisBrasil/1.0 (+https://arinibrasil.com.br; cotacoes)";
@@ -315,9 +316,13 @@ async function ibovespa(historico) {
  * sozinha. `historico`: carga inicial de ~1 ano (CEPEA .xls, AwesomeAPI diário,
  * Yahoo 1y); as regionais do Notícias Agrícolas só têm os últimos fechamentos.
  */
-export async function coletar({ historico = false, dias = 380, log = console.log } = {}) {
+export async function coletar({ historico = false, historicoEpagri = historico, cepeaAutorizado = false, dias = 380, fonte, log = console.log } = {}) {
+  if (fonte && fonte !== "epagri") throw Error("Fonte de coleta desconhecida");
+  const epagri = () => coletarEpagri({ dias: historicoEpagri ? dias : 45 });
+  if (fonte === "epagri") return epagri();
   const tarefas = [
-    ...SERIES_CEPEA.map((s) => async () => {
+    epagri,
+    ...(cepeaAutorizado ? SERIES_CEPEA : []).map((s) => async () => {
       const { na } = s;
       const serie = { ...s };
       delete serie.cepea;
@@ -378,7 +383,10 @@ export async function coletar({ historico = false, dias = 380, log = console.log
 async function gravar(db, resultado, log = console.log) {
   let series = 0, valores = 0, falhas = 0;
   const ids = [];
+  const idsEpagri = [];
   for (const r of resultado) {
+    // As séries de fornecedores importadas pela Matriz têm histórico e autorização próprios.
+    if (r.serie?.slug?.startsWith("manual-")) continue;
     if (r.erro) {
       falhas++;
       log(`[cotacoes] ${r.serie?.slug ?? r.chave}: ${r.erro}`);
@@ -399,6 +407,7 @@ async function gravar(db, resultado, log = console.log) {
       [s.slug, s.produto, s.nome, s.descricao, s.praca, s.uf, s.unidade, s.casas, s.fonte, s.url_fonte, s.destaque, s.ordem, r.aviso ?? null]);
     series++;
     ids.push(id);
+    if (s.slug.startsWith("epagri-sc-")) idsEpagri.push(id);
     if (!r.pontos.length) continue;
     const { rowCount } = await db.query(`
       insert into cotacoes_valores (serie_id, data, valor, variacao, coletado_em)
@@ -418,17 +427,21 @@ async function gravar(db, resultado, log = console.log) {
         select serie_id, data, lag(valor) over (partition by serie_id order by data) as anterior
         from cotacoes_valores where serie_id = any($1::uuid[])
       ) p
-      where v.serie_id = p.serie_id and v.data = p.data and v.variacao is null and p.anterior > 0`, [ids]);
+      where v.serie_id = p.serie_id and v.data = p.data and p.anterior > 0
+        and (v.variacao is null or v.serie_id = any($2::uuid[]))
+        and v.variacao is distinct from round((v.valor / p.anterior - 1) * 100, 4)`, [ids, idsEpagri]);
   }
   return { series, valores, falhas };
 }
 
 /** handler do worker: payload { historico?: boolean } */
 export async function coletarCotacoes(payload, db) {
-  // tabela vazia (primeira execução depois da migration) = carga inicial de 1 ano
-  const { rows: [{ n }] } = await db.query(`select count(*)::int as n from cotacoes_valores`);
-  const historico = !!payload?.historico || n === 0;
-  const resultado = await coletar({ historico });
+  const { rows: [{ coletou, tem_epagri, cepea_autorizado }] } = await db.query(`select exists(
+    select from cotacoes_valores v join cotacoes_series s on s.id=v.serie_id where s.slug not like 'manual-%'
+  ) as coletou, exists (select from cotacoes_series where slug like 'epagri-sc-%') as tem_epagri,
+    public.cotacoes_cepea_autorizado() as cepea_autorizado`);
+  const historico = !!payload?.historico || !coletou;
+  const resultado = await coletar({ historico, historicoEpagri: historico || !tem_epagri, cepeaAutorizado: cepea_autorizado, fonte: payload?.fonte });
   const r = await gravar(db, resultado);
   console.log(`[cotacoes] ${r.series} série(s), ${r.valores} valor(es) novos ou alterados, ${r.falhas} falha(s)${historico ? " · carga de 1 ano" : ""}`);
   if (r.falhas && !resultado.some((serie) => serie.pontos.length)) {

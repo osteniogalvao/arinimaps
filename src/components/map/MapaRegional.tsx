@@ -7,19 +7,19 @@
  * fullscreen, escala e localização do usuário.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpecification, VectorTileSource } from "maplibre-gl";
 import { CENTRO_REGIAO, SATELITE, SATELITE_ALTO, ZOOM_SATELITE_ALTO } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
 import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeoJSON, TRANSFORM_ZERO, type Transform, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
-import PaletaRural from "./PaletaRural";
-import { PainelCamadas, Legenda, VIDRO, BotaoFechar } from "@/components/map/UiMapa";
+import { PainelCamadas, Legenda, VIDRO, BotaoFechar, type GrupoCamadas } from "@/components/map/UiMapa";
 import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
+import BuscaUrbana from "@/components/map/BuscaUrbana";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
 import Ferramentas from "@/components/map/Ferramentas";
@@ -31,9 +31,11 @@ import { IMAGENS_HISTORICAS, imagemHistoricaPorId } from "@/lib/map/historico";
 import { useTema } from "@/components/shell/BotaoTema";
 import { usePreferencias } from "@/lib/usePreferencias";
 import { escaparHtml } from "@/lib/seguranca/html";
-import { GerenciadorCamadasOficiais, type EstadoCamada, type FeicaoNoPonto } from "@/components/map/camadasOficiaisMapa";
+import { GerenciadorCamadasOficiais, type AreaCamadas, type EstadoCamada, type FeicaoNoPonto } from "@/components/map/camadasOficiaisMapa";
+import { exibirCarNasAreas } from "@/components/map/vetoresNasAreas";
+import RelevoNasAreas from "@/components/map/RelevoNasAreas";
 import { CAMADAS_OFICIAIS, CORES_RURAIS, camadaOficialPorId, descreverFeicao, type CamadaOficialId } from "@/lib/map/camadasOficiais";
-import { GerenciadorRelevo, type EstadoRelevo, type RelevoId } from "@/components/map/camadasRelevo";
+import { CAMADAS_RELEVO, ESTILO_RUAS, GerenciadorRelevo, type EstadoRelevo, type RelevoId } from "@/components/map/camadasRelevo";
 import { FORMATOS_BUSCA, interpretarBusca } from "@/lib/map/buscaRural";
 import BotaoCompartilharPonto, { MarcadorDaUrl } from "@/components/map/CompartilharPonto";
 import CartaoPonto, { usePressaoLonga, type PontoLivre } from "@/components/map/CartaoPonto";
@@ -208,12 +210,6 @@ const CARTO_CONTORNO = ["interpolate", ["linear"], ["zoom"], 12, 1.4, 15, 2.4, 1
 const comEspessura = (expr: (string | number | string[])[], k = 1) =>
   k === 1 ? expr : expr.map((v, i) => (i >= 4 && i % 2 === 0 && typeof v === "number" ? Math.round(v * k * 100) / 100 : v));
 
-// a base vetorial acompanha o tema: dark-matter no escuro, positron no claro
-const ESTILO_RUAS = {
-  escuro: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  claro: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-} as const;
-
 // O satélite desenha direto sobre um fundo local. O estilo e os tiles de
 // ruas só são baixados se a pessoa escolher a base cartográfica.
 const FUNDO_SATELITE: StyleSpecification = {
@@ -305,6 +301,17 @@ export default function MapaRegional({
   // satélite é a base de abertura (pedido do Carlos em 01/10/2026); "Mapa" vira opção
   const [base, setBase] = useState<"ruas" | "satelite">("satelite");
   const [selecionado, setSelecionado] = useState<ImovelProps | null>(null);
+  const imovelAberto = selecionado?.id;
+  useEffect(() => {
+    if (imovelAberto) {
+      void fetch("/api/vitrine/visualizacao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imovel: imovelAberto }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+  }, [imovelAberto]);
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "urbano" | "rural" | "leilao">("todos");
   const [faixaPreco, setFaixaPreco] = useState(0);
   const [busca, setBusca] = useState("");
@@ -313,13 +320,14 @@ export default function MapaRegional({
   const [painelAberto, setPainelAberto] = useState(false);
   const [raio, setRaio] = useState(5000);
   const [camadasAbertas, setCamadasAbertas] = useState(false);
-  const [paletaAberta, setPaletaAberta] = useState(false);
-  useEffect(() => { setPaletaAberta(window.matchMedia("(min-width: 1024px)").matches); }, []);
+  const [grupoCamadas, setGrupoCamadas] = useState<GrupoCamadas | null>(null);
+  useEffect(() => { setCamadasAbertas(window.matchMedia("(min-width: 1024px)").matches); }, []);
   const [pronto, setPronto] = useState(false);
   const [avisoCarga, setAvisoCarga] = useState("");
   const [lista, setLista] = useState<ImovelProps[]>([]);
   const [mapaPronto, setMapaPronto] = useState<MLMap | null>(null);
   const [carAtivo, setCarAtivo] = useState(true);
+  const carEscolhido = useRef(false);
   // 5.10: base do mapa e camada do CAR vêm das preferências da conta (ou do navegador)
   // e cada troca fica lembrada. Aplicadas uma vez, quando chegam do servidor.
   const { prefs, carregado: prefsCarregadas, salvar: salvarPrefs } = usePreferencias();
@@ -328,13 +336,30 @@ export default function MapaRegional({
     if (!prefsCarregadas || prefsAplicadasRef.current) return;
     prefsAplicadasRef.current = true;
     setBase(prefs.mapa_base === "mapa" ? "ruas" : "satelite");
-    setCarAtivo(prefs.camada_car);
+    if (!carEscolhido.current) setCarAtivo(prefs.camada_car);
   }, [prefsCarregadas, prefs.mapa_base, prefs.camada_car]);
   const [carSel, setCarSel] = useState<CarProps | null>(null);
   // camadas oficiais (SIGEF, embargos, ANM…): ligadas no painel, pedidas por janela
   const camadasRef = useRef<GerenciadorCamadasOficiais | null>(null);
   const [camadasAtivas, setCamadasAtivas] = useState<Set<CamadaOficialId>>(new Set());
   const camadasAtivasRef = useRef(camadasAtivas);
+  const [areasCamadas, setAreasCamadas] = useState<AreaCamadas[]>([]);
+  const [areaId, setAreaId] = useState("");
+  const areaEscolhida = areasCamadas.find(a => a.id === areaId);
+  const [pedidoRecorte, setPedidoRecorte] = useState(0);
+  const sequenciaArea = useRef(0);
+  const salvarArea = useCallback((geometria: GeoJSON.Polygon) => {
+    const numero = ++sequenciaArea.current;
+    const id = String(numero);
+    setAreasCamadas(antes => [...antes, { id, nome: `Área ${numero}`, geometria, camadas: new Set(), car: false, relevo: new Set() }]);
+    setAreaId(id);
+    setGrupoCamadas("Fundiário");
+    setCamadasAbertas(true);
+  }, []);
+  const camadasVisiveis = useMemo(() => new Set([...camadasAtivas, ...areasCamadas.flatMap(a => [...a.camadas])]), [camadasAtivas, areasCamadas]);
+  const areasComCar = areasCamadas.filter(a => a.car).map(a => a.id).join(",");
+  const geometriasCar = useEffectEvent(() => areasCamadas.filter(a => a.car).map(a => a.geometria));
+  const carVisivel = carAtivo || !!areasComCar;
   const [estadoCamadas, setEstadoCamadas] = useState<Partial<Record<CamadaOficialId, EstadoCamada>>>({});
   const [noPonto, setNoPonto] = useState<FeicaoNoPonto[]>([]);
   // onde foi o último clique: o cartão "Neste ponto" oferece compartilhar esse ponto
@@ -345,14 +370,45 @@ export default function MapaRegional({
     const nova = new Set(camadasAtivasRef.current);
     if (nova.has(id)) nova.delete(id); else nova.add(id);
     camadasAtivasRef.current = nova;
-    camadasRef.current?.alternar(id, nova.has(id));
     setCamadasAtivas(nova);
   }, []);
+  const alternarNaArea = (id: CamadaOficialId) => {
+    if (!areaId) { alternarCamada(id); return; }
+    setAreasCamadas(antes => antes.map(a => {
+      if (a.id !== areaId) return a;
+      const camadas = new Set(a.camadas);
+      if (camadas.has(id)) camadas.delete(id); else camadas.add(id);
+      return { ...a, camadas };
+    }));
+  };
+  useEffect(() => {
+    if (!pronto) return;
+    camadasRef.current?.atualizarSelecao(camadasAtivas, areasCamadas);
+  }, [pronto, camadasAtivas, areasCamadas]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!pronto || !map) return;
+    const dados: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: areasCamadas.map(a => ({ type: "Feature", geometry: a.geometria, properties: { selecionada: a.id === areaId } })),
+    };
+    const fonte = map.getSource("areas-camadas") as GeoJSONSource | undefined;
+    if (fonte) { fonte.setData(dados); return; }
+    if (!areasCamadas.length) return;
+    map.addSource("areas-camadas", { type: "geojson", data: dados });
+    map.addLayer({ id: "areas-camadas-divisas", source: "areas-camadas", type: "line",
+      paint: { "line-color": ["case", ["get", "selecionada"], "#D9BD6F", "#F2F2EC"], "line-dasharray": [3, 2], "line-width": 2 } });
+  }, [pronto, areasCamadas, areaId]);
   // relevo e água (itens 3 e 21 da segunda etapa): dados abertos, para qualquer plano
   const relevoRef = useRef<GerenciadorRelevo | null>(null);
+  const [gerenteRelevo, setGerenteRelevo] = useState<GerenciadorRelevo | null>(null);
   const [relevoAtivas, setRelevoAtivas] = useState<Set<RelevoId>>(new Set());
   const relevoAtivasRef = useRef(relevoAtivas);
   const [estadoRelevo, setEstadoRelevo] = useState<EstadoRelevo>({});
+  const [avisosRelevoLocal, setAvisosRelevoLocal] = useState<EstadoRelevo>({});
+  const avisarRelevoLocal = useCallback((id: RelevoId, aviso: string) => {
+    setAvisosRelevoLocal(antes => antes[id]?.aviso === aviso ? antes : { ...antes, [id]: { aviso } });
+  }, []);
   const alternarRelevo = useCallback((id: RelevoId) => {
     const nova = new Set(relevoAtivasRef.current);
     if (nova.has(id)) nova.delete(id); else nova.add(id);
@@ -360,6 +416,19 @@ export default function MapaRegional({
     relevoRef.current?.alternar(id, nova.has(id));
     setRelevoAtivas(nova);
   }, []);
+  const alternarRelevoNaArea = (id: RelevoId) => {
+    if (!areaId) { alternarRelevo(id); return; }
+    avisarRelevoLocal(id, "");
+    setAreasCamadas(antes => antes.map(a => {
+      if (a.id !== areaId) return a;
+      const relevo = new Set(a.relevo);
+      if (relevo.has(id)) relevo.delete(id); else relevo.add(id);
+      return { ...a, relevo };
+    }));
+  };
+  const recortesRelevo = useMemo(() => CAMADAS_RELEVO.map(c => ({
+    id: c.id, areas: areasCamadas.filter(a => a.relevo.has(c.id)),
+  })).filter(c => c.areas.length > 0 && !relevoAtivas.has(c.id)), [areasCamadas, relevoAtivas]);
   // camadas da base CARTO (as do tema): o resto é nosso e atravessa a troca de tema
   const baseEstiloRef = useRef<{ fontes: Set<string>; camadas: Set<string> } | null>(null);
   const estiloDeRuasRef = useRef<string | null>(null);
@@ -403,6 +472,28 @@ export default function MapaRegional({
   // que é limpa por construção e pesa ~1 MB na tela, contra 14 MB da planta.
   const [plantaAtiva, setPlantaAtiva] = useState(false);
   const plantaAtivaRef = useRef(false);
+  const camadaPedida = useSearchParams().get("camada");
+  useEffect(() => {
+    if (!camadaPedida) return;
+    const oficial = camadaOficialPorId(camadaPedida);
+    const relevo = CAMADAS_RELEVO.find(c => c.id === camadaPedida);
+    if (oficial) {
+      setGrupoCamadas(oficial.grupo);
+      if (!camadasAtivasRef.current.has(oficial.id)) alternarCamada(oficial.id);
+    } else if (relevo) {
+      setGrupoCamadas("Relevo e água");
+      if (!relevoAtivasRef.current.has(relevo.id)) alternarRelevo(relevo.id);
+    } else if (camadaPedida === "car") {
+      carEscolhido.current = true;
+      setGrupoCamadas("Fundiário");
+      setCarAtivo(true);
+    } else if (camadaPedida === "planta") {
+      setGrupoCamadas("Infraestrutura");
+      setPlantaAtiva(true);
+    } else return;
+    setAreaId("");
+    setCamadasAbertas(true);
+  }, [camadaPedida, alternarCamada, alternarRelevo]);
   // desenho em curso (medir / consultar área): o clique é vértice, não abre cartão
   const desenhandoRef = useRef(false);
   const aoDesenhar = useCallback((ativo: boolean) => { desenhandoRef.current = ativo; }, []);
@@ -413,6 +504,7 @@ export default function MapaRegional({
   // busca por imagem (Revisão do Carlos, 29/10)
   const [buscaImagem, setBuscaImagem] = useState(false);
   const buscaInputRef = useRef<HTMLInputElement>(null);
+  const buscaUrbanaRef = useRef<HTMLButtonElement>(null);
   const [avisoPlano, setAvisoPlano] = useState("");
   const imagemAnoRef = useRef<string | null>(null);
   const compararRef = useRef(false);
@@ -1044,9 +1136,9 @@ export default function MapaRegional({
 
         // camadas oficiais: o mapa é recriado na troca de tema, então religa as que estavam ligadas
         camadasRef.current = new GerenciadorCamadasOficiais(map, setEstadoCamadas);
-        camadasAtivasRef.current.forEach((id) => camadasRef.current?.alternar(id, true));
         // relevo e água: nada é baixado até alguém ligar uma camada no painel
         relevoRef.current = new GerenciadorRelevo(map, setEstadoRelevo, tema);
+        setGerenteRelevo(relevoRef.current);
         relevoRef.current.mudarBase(baseRef.current);
         relevoAtivasRef.current.forEach((id) => relevoRef.current?.alternar(id, true));
         // clique: reúne no cartão tudo o que as camadas ligadas têm no ponto;
@@ -1056,22 +1148,17 @@ export default function MapaRegional({
           const oficiais = camadasRef.current?.noPonto(e.point) ?? [];
           setNoPonto(oficiais);
           setPontoClicado({ lng: e.lngLat.lng, lat: e.lngLat.lat, zoom: map.getZoom() });
-          const noCar = !!map.getLayer("car-fill") && map.getLayoutProperty("car-fill", "visibility") !== "none"
-            && map.queryRenderedFeatures(e.point, { layers: ["car-fill"] }).length > 0;
+          const carLocal = map.getLayer("car-areas-fill") && map.queryRenderedFeatures(e.point, { layers: ["car-areas-fill"] })[0];
+          const noCar = carLocal || (!!map.getLayer("car-fill") && map.getLayoutProperty("car-fill", "visibility") !== "none"
+            && map.queryRenderedFeatures(e.point, { layers: ["car-fill"] }).length > 0);
+          if (carLocal && !map.queryRenderedFeatures(e.point, { layers: ["imoveis-fill", "imoveis-ponto"] }).length) {
+            setCarSel(carLocal.properties as unknown as CarProps);
+          }
           if (!noCar) setCarSel(null);
           // o cartão do clique abre no mesmo canto do painel de camadas: o painel cede a vez
           if (noCar || oficiais.length) setCamadasAbertas(false);
         });
 
-        // atalhos do menu (/mapa?camada=…): CAR ou uma camada oficial já ligada
-        const pedida = new URLSearchParams(window.location.search).get("camada");
-        if (pedida === "car") setCarAtivo(true);
-        else if (pedida && camadaOficialPorId(pedida)) {
-          setCamadasAbertas(true);
-          if (!camadasAtivasRef.current.has(pedida as CamadaOficialId)) {
-            alternarCamada(pedida as CamadaOficialId);
-          }
-        }
       });
     })();
 
@@ -1174,13 +1261,17 @@ export default function MapaRegional({
 
   // liga/desliga a malha do CAR
   useEffect(() => {
-    carAtivoRef.current = carAtivo;
+    carAtivoRef.current = carVisivel;
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("car-fill")) return;
     for (const id of ["car-fill", "car-linha"]) map.setLayoutProperty(id, "visibility", carAtivo ? "visible" : "none");
-    if (carAtivo) { conferirZoomCar(); garantirCarSobDemanda(); }
+    if (carVisivel) { conferirZoomCar(); garantirCarSobDemanda(); }
     else { setCarSel(null); setCarAviso(""); }
-  }, [carAtivo, pronto, conferirZoomCar, garantirCarSobDemanda]);
+  }, [carAtivo, carVisivel, pronto, conferirZoomCar, garantirCarSobDemanda]);
+
+  useEffect(() => {
+    if (pronto && mapRef.current && !carAtivo && areasComCar) return exibirCarNasAreas(mapRef.current, geometriasCar(), setCarAviso);
+  }, [pronto, carAtivo, areasComCar]);
 
   // busca rural inteligente (item 23): o formato do texto diz o que é
   const buscaLida = useMemo(() => interpretarBusca(busca), [busca]);
@@ -1311,8 +1402,8 @@ export default function MapaRegional({
     if (fonte) fonte.setData(dado);
     else {
       map.addSource("busca-sigef", { type: "geojson", data: dado });
-      map.addLayer({ id: "busca-sigef-fill", type: "fill", source: "busca-sigef", paint: { "fill-color": "#5BC0EB", "fill-opacity": 0.18 } });
-      map.addLayer({ id: "busca-sigef-linha", type: "line", source: "busca-sigef", paint: { "line-color": "#5BC0EB", "line-width": 3 } });
+      map.addLayer({ id: "busca-sigef-fill", type: "fill", source: "busca-sigef", paint: { "fill-color": CORES_RURAIS.sigef, "fill-opacity": 0.18 } });
+      map.addLayer({ id: "busca-sigef-linha", type: "line", source: "busca-sigef", paint: { "line-color": CORES_RURAIS.sigef, "line-width": 3 } });
     }
     const coords: number[][] = j.parcelas.flatMap((p) => p.geometria.coordinates.flat(2));
     const lngs = coords.map((c) => c[0]), lats = coords.map((c) => c[1]);
@@ -1336,7 +1427,8 @@ export default function MapaRegional({
     else if (b.tipo === "anuncio") escolherSugestao(() => abrirAnuncio(b.codigo));
     else if (b.tipo === "sigef") escolherSugestao(() => void abrirSigef(b.campo, b.valor));
     else if (municipioSugerido) escolherSugestao(irParaMunicipio);
-    else if (municipiosBrasil[0]) { const cod = municipiosBrasil[0].cod; escolherSugestao(() => void irParaMunicipioIbge(cod)); }
+    else if (municipiosBrasil[0] && norm(municipiosBrasil[0].nome).includes(norm(busca.trim()))) { const cod = municipiosBrasil[0].cod; escolherSugestao(() => void irParaMunicipioIbge(cod)); }
+    else buscaUrbanaRef.current?.click();
   };
 
   const irParaMunicipio = useCallback(() => {
@@ -1425,7 +1517,7 @@ export default function MapaRegional({
         <div className="p-4 space-y-3 border-b border-linha">
           <form role="search" className="relative" onSubmit={(e) => { e.preventDefault(); confirmarBusca(); }}>
             <input ref={buscaInputRef} data-tour="busca" value={busca} onChange={(e) => { setBusca(e.target.value); setBuscaAviso(""); }}
-              aria-label="Buscar imóvel, município, CAR, código ou coordenada"
+              aria-label="Buscar imóvel, rua, bairro, quadra, lote, município, CAR ou coordenada"
               placeholder="Imóvel, município, CAR, AIB-… ou coordenada"
               title="Também aceita graus/minutos/segundos e UTM (ex.: 22K 612345 7818123). Enter para ir."
               className="w-full rounded-full border border-linha-forte bg-superficie-2 pl-10 pr-10 py-2.5 text-sm text-texto placeholder:text-texto-2/70 transition focus:border-verde focus:outline-none focus:ring-2 focus:ring-verde/30" />
@@ -1506,6 +1598,10 @@ export default function MapaRegional({
                 <ArrowRight className="size-4 shrink-0" />
               </button>
             ))}
+          {buscaLida.tipo === "texto" && busca.trim().length >= 3 && (
+            <BuscaUrbana botao={buscaUrbanaRef} key={busca.trim()} termo={busca.trim()} centro={() => mapRef.current?.getCenter()}
+              abrir={(lng,lat) => escolherSugestao(() => irParaPonto(lat,lng), true)} />
+          )}
           {buscaAviso && <p className="text-xs text-texto-2" aria-live="polite">{buscaAviso}</p>}
 
           <div className="flex gap-1.5 flex-wrap">
@@ -1609,7 +1705,8 @@ export default function MapaRegional({
               {b === "ruas" ? "Mapa" : "Satélite"}
             </button>
           ))}
-          <button onClick={() => { setPaletaAberta(!(camadasAbertas || paletaAberta)); setCamadasAbertas(false); setMaisAberto(false); }} aria-expanded={camadasAbertas || paletaAberta} data-ativo={camadasAbertas || paletaAberta}
+          <button onClick={() => { setCamadasAbertas(!camadasAbertas); setMaisAberto(false); setBuscaImagem(false); setSeletorAno(false); setAvisoPlano(""); }}
+            aria-controls="catalogo-camadas" aria-expanded={camadasAbertas} data-ativo={camadasAbertas}
             className={chipBase} data-tour="camadas">
             <Layers className="size-3.5" /> Camadas e Dados
           </button>
@@ -1617,7 +1714,7 @@ export default function MapaRegional({
         className={chipBase} title="Abrir a lista com a busca e os filtros de imóveis">
         <Search className="size-3.5" /> Buscar imóveis
       </button>
-          <button onClick={() => setMaisAberto(!maisAberto)} data-ativo={maisAberto} aria-expanded={maisAberto} className={chipBase} data-tour="mais">
+          <button onClick={() => { setMaisAberto(!maisAberto); setCamadasAbertas(false); }} data-ativo={maisAberto} aria-expanded={maisAberto} className={chipBase} data-tour="mais">
             <Ellipsis className="size-3.5" /> Mais
           </button>
           {/* ancorado na barra (não no botão): não passa da borda da tela */}
@@ -1629,7 +1726,7 @@ export default function MapaRegional({
           )}
         </div>
 
-        {carAtivo && carAviso && !carSel && !paletaAberta && !camadasAbertas && (
+        {carAtivo && carAviso && !carSel && !camadasAbertas && (
           <p className={`absolute top-[var(--abaixo-chips,4rem)] left-3 right-14 sm:right-auto px-3.5 py-2 text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>
             {carAviso}
           </p>
@@ -1732,23 +1829,33 @@ export default function MapaRegional({
             onSair={() => { setAvisoVarios(""); mudarVarios(null); }} />
         )}
 
-        {paletaAberta && !camadasAbertas && !carSel && !avisoPlano && !buscaImagem && !seletorAno && !maisAberto && (
-          <PaletaRural car={carAtivo} alternarCar={() => { setCarAtivo(!carAtivo); void salvarPrefs({ camada_car: !carAtivo }); }}
-            ativas={camadasAtivas} alternar={alternarCamada} estados={estadoCamadas}
-            bloqueado={false} abrirCatalogo={() => setCamadasAbertas(true)} />
-        )}
         {camadasAbertas && (
           <PainelCamadas onFechar={() => setCamadasAbertas(false)}
-            bloqueado={false} logado={logado}
-            ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada}
-            relevoAtivas={relevoAtivas} estadoRelevo={estadoRelevo} onAlternarRelevo={alternarRelevo} />
+            globais={{ car: carAtivo, oficiais: camadasAtivas, relevo: relevoAtivas }}
+            grupo={grupoCamadas} selecionarGrupo={setGrupoCamadas}
+            areas={areasCamadas} areaId={areaId} escolherArea={setAreaId}
+            pronto={pronto} desenharArea={() => { setCamadasAbertas(false); setPedidoRecorte(n => n + 1); }}
+            excluirArea={() => { setAreasCamadas(antes => antes.filter(a => a.id !== areaId)); setAreaId(""); }}
+            car={areaEscolhida?.car ?? carAtivo} avisoCar={carAviso} alternarCar={() => {
+              if (areaId) { setAreasCamadas(antes => antes.map(a => a.id === areaId ? { ...a, car: !a.car } : a)); return; }
+              carEscolhido.current = true;
+              setCarAtivo(!carAtivo);
+              void salvarPrefs({ camada_car: !carAtivo });
+            }}
+            planta={plantaAtiva} corUrbana={CARTO_CORES[base].linha} alternarPlanta={() => setPlantaAtiva(!plantaAtiva)}
+            ativas={areaEscolhida?.camadas ?? camadasAtivas} estado={estadoCamadas} onAlternar={alternarNaArea}
+            relevoAtivas={areaEscolhida?.relevo ?? relevoAtivas} estadoRelevo={areaEscolhida ? avisosRelevoLocal : estadoRelevo} onAlternarRelevo={alternarRelevoNaArea} />
         )}
-        <Legenda relevo={[...relevoAtivas]} extras={CAMADAS_OFICIAIS.filter((c) => camadasAtivas.has(c.id))
+        {mapaPronto && gerenteRelevo && recortesRelevo.map(({id, areas}) => <RelevoNasAreas
+          key={id + "-" + areas.map(a => a.id).join(",")} id={id} areas={areas.map(a => a.geometria)}
+          mapa={mapaPronto} gerente={gerenteRelevo} aoErro={avisarRelevoLocal} />)}
+        <Legenda car={carVisivel} corUrbana={CARTO_CORES[base].linha} relevo={[...relevoAtivas, ...recortesRelevo.map(c => c.id)]} extras={CAMADAS_OFICIAIS.filter((c) => camadasVisiveis.has(c.id))
           // camada com cor por valor (biomas): uma linha por valor na legenda
           .flatMap((c) => (c.cores ? Object.entries(c.cores).map(([nome, cor]) => ({ nome, cor })) : [c]))} />
 
         <Ferramentas
           mapa={mapaPronto}
+          pedidoRecorte={pedidoRecorte} onDelimitar={salvarArea}
           recursos={recursos}
           logado={logado}
           onDesenhando={aoDesenhar}

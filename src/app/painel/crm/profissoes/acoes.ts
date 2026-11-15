@@ -1,4 +1,5 @@
 "use server";
+import { currentUser, supabaseServer } from "@/lib/supabase/server";
 import {sessaoCrm} from "@/lib/crm-privado-servidor";
 import {UUID_CRM} from "@/lib/crm-privado";
 import {revalidatePath} from "next/cache";
@@ -11,8 +12,9 @@ export async function gravarRegistro(dados:{id:string;versao:number;modulo:strin
  revalidatePath("/painel/crm/profissoes");return{id:dados.id};
 }
 export async function pedirProfissao(id:string,nome:string,descricao:string) {
- const s=await sessaoCrm();if(s.status!==200||!UUID_CRM.test(id))return {erro:"Seu acesso ao CRM técnico está indisponível."};
- const {error}=await s.banco.rpc("tecnico_pedir_profissao",{p_id:id,p_profissao:nome,p_descricao:descricao});
+ const user=await currentUser();if(user?.nicho!=="engenheiro" || !UUID_CRM.test(id))return {erro:"Entre com o perfil profissional técnico para fazer o pedido."};
+ const db=await supabaseServer();
+ const {error}=await db.rpc("tecnico_pedir_profissao",{p_id:id,p_profissao:nome,p_descricao:descricao});
  if(error)return{erro:error.code==="55000"?"Esta profissão já tem modelo publicado. Selecione-o na lista.":"Confira o nome e a descrição do setor solicitado."};
  revalidatePath("/painel/crm/profissoes");return{ok:true};
 }

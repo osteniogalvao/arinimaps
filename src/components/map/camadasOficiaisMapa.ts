@@ -2,6 +2,7 @@
 
 import type { Map as MLMap, GeoJSONSource, PointLike } from "maplibre-gl";
 import { CAMADAS_OFICIAIS, camadaOficialPorId, type CamadaOficialId } from "@/lib/map/camadasOficiais";
+import type { RelevoId } from "./camadasRelevo";
 
 /**
  * Camadas oficiais no mapa (SIGEF, embargos, ANM, FUNAI, UCs, quilombolas,
@@ -15,13 +16,34 @@ import { CAMADAS_OFICIAIS, camadaOficialPorId, type CamadaOficialId } from "@/li
  */
 export type EstadoCamada = { carregando: boolean; aviso: string; total: number };
 export type FeicaoNoPonto = { camada: CamadaOficialId; props: Record<string, unknown> };
+export type AreaCamadas = {
+  id: string; nome: string; geometria: GeoJSON.Polygon; camadas: ReadonlySet<CamadaOficialId>; car: boolean; relevo: Set<RelevoId>;
+};
 
 const VAZIO: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 const fonte = (id: string) => `of-${id}`;
 const camadasDe = (id: string) => [`of-${id}-fill`, `of-${id}-linha`, `of-${id}-ponto`];
 
+export function recortarEmWorker(dados: GeoJSON.FeatureCollection, areas: GeoJSON.Polygon[], signal: AbortSignal, contorno: boolean, car = false) {
+  return new Promise<GeoJSON.FeatureCollection>((resolve, reject) => {
+    signal.throwIfAborted();
+    const worker = new Worker(new URL("./recorteCamadas.worker.ts", import.meta.url));
+    const abortar = () => { worker.terminate(); reject(signal.reason); };
+    signal.addEventListener("abort", abortar, { once: true });
+    const encerrar = () => { worker.terminate(); signal.removeEventListener("abort", abortar); };
+    worker.onmessage = ({ data }) => {
+      encerrar();
+      if (data.erro) reject(new Error(data.erro));
+      else resolve(data.dados);
+    };
+    worker.onerror = () => { encerrar(); reject(new Error("Não foi possível recortar a geometria desta camada.")); };
+    worker.postMessage({ dados, areas, contorno, car });
+  });
+}
+
 export class GerenciadorCamadasOficiais {
-  private ativas = new Set<CamadaOficialId>();
+  // null desenha no mapa inteiro; uma lista desenha só nos polígonos indicados.
+  private ativas = new Map<CamadaOficialId, GeoJSON.Polygon[] | null>();
   private pedidos = new Map<CamadaOficialId, AbortController>();
   private estado: Partial<Record<CamadaOficialId, EstadoCamada>> = {};
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -37,26 +59,34 @@ export class GerenciadorCamadasOficiais {
     this.pedidos.forEach((p) => p.abort());
   }
 
-  estaAtiva = (id: CamadaOficialId) => this.ativas.has(id);
-
-  alternar(id: CamadaOficialId, ligar = !this.ativas.has(id)) {
-    if (ligar) {
-      this.ativas.add(id);
+  atualizarSelecao(globais: ReadonlySet<CamadaOficialId>, areas: AreaCamadas[]) {
+    for (const { id } of CAMADAS_OFICIAIS) {
+      const antes = this.ativas.get(id);
+      const recortes = globais.has(id) ? null : areas.filter(a => a.camadas.has(id)).map(a => a.geometria);
+      if (recortes?.length === 0) {
+        if (antes === undefined) continue;
+        this.ativas.delete(id);
+        this.pedidos.get(id)?.abort();
+        this.visivel(id, false);
+        delete this.estado[id];
+        this.aoMudar({ ...this.estado });
+        continue;
+      }
+      if (antes === recortes || (antes && recortes && antes.length === recortes.length && antes.every((a, i) => a === recortes[i]))) continue;
+      this.ativas.set(id, recortes);
       this.criar(id);
+      const linha = `of-${id}-linha`;
+      if (this.map.getLayer(linha)) this.map.setFilter(linha, recortes ? ["==", ["geometry-type"], "LineString"] : null);
+      // Um pedido em voo pode ter a cobertura anterior, inclusive a cidade inteira.
+      (this.map.getSource(fonte(id)) as GeoJSONSource).setData(VAZIO);
       this.visivel(id, true);
       void this.atualizar(id);
-    } else {
-      this.ativas.delete(id);
-      this.pedidos.get(id)?.abort();
-      this.visivel(id, false);
-      delete this.estado[id];
-      this.aoMudar({ ...this.estado });
     }
   }
 
   /** Tudo o que as camadas ligadas têm no ponto clicado (para o cartão do clique). */
   noPonto(ponto: PointLike): FeicaoNoPonto[] {
-    const layers = [...this.ativas].flatMap(camadasDe).filter((l) => this.map.getLayer(l) && !l.endsWith("-linha"));
+    const layers = [...this.ativas.keys()].flatMap(camadasDe).filter((l) => this.map.getLayer(l) && !l.endsWith("-linha"));
     if (!layers.length) return [];
     const vistas = new Set<string>();
     const pad = 4; // focos são pontos pequenos: tolera o dedo/mouse
@@ -73,7 +103,7 @@ export class GerenciadorCamadasOficiais {
 
   private agendar() {
     if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.ativas.forEach((id) => void this.atualizar(id)), 400);
+    this.timer = setTimeout(() => this.ativas.forEach((_, id) => void this.atualizar(id)), 400);
   }
 
   private criar(id: CamadaOficialId) {
@@ -141,8 +171,24 @@ export class GerenciadorCamadasOficiais {
     this.pedidos.set(id, ctrl);
     this.definir(id, { carregando: true, aviso: "" });
     const b = this.map.getBounds();
+    const recortes = this.ativas.get(id);
+    let janela = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    if (recortes) {
+      // Só pede ao órgão a parte visível da extensão selecionada.
+      const limites = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const area of recortes) for (const [x, y] of area.coordinates[0]) {
+        limites[0] = Math.min(limites[0], x); limites[1] = Math.min(limites[1], y);
+        limites[2] = Math.max(limites[2], x); limites[3] = Math.max(limites[3], y);
+      }
+      janela = [Math.max(janela[0], limites[0]), Math.max(janela[1], limites[1]), Math.min(janela[2], limites[2]), Math.min(janela[3], limites[3])];
+      if (janela[0] >= janela[2] || janela[1] >= janela[3]) {
+        fonteAtual()?.setData(VAZIO);
+        this.definir(id, { carregando: false, aviso: "", total: 0 });
+        return;
+      }
+    }
     try {
-      const r = await fetch(`/api/camadas/${id}?bbox=${[b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v) => v.toFixed(4)).join(",")}`,
+      const r = await fetch(`/api/camadas/${id}?bbox=${janela.map(v => v.toFixed(7)).join(",")}`,
         { signal: ctrl.signal });
       const j = await r.json().catch(() => null) as (GeoJSON.FeatureCollection & { falhas?: number; error?: string }) | null;
       if (ctrl.signal.aborted) return;
@@ -150,13 +196,15 @@ export class GerenciadorCamadasOficiais {
         this.definir(id, { carregando: false, aviso: j?.error ?? "O órgão não respondeu agora." });
         return;
       }
-      fonteAtual()?.setData(j);
+      const exibidas = recortes ? await recortarEmWorker(j, recortes, ctrl.signal, !def.semContorno && !def.ponto) : j;
+      if (ctrl.signal.aborted) return;
+      fonteAtual()?.setData(exibidas);
       this.definir(id, {
-        carregando: false, total: j.features.length,
+        carregando: false, total: exibidas.features.filter(f => f.geometry?.type !== "MultiLineString").length,
         aviso: j.falhas ? "Parte da área não carregou: o órgão não respondeu. Tente de novo em instantes." : "",
       });
     } catch (e) {
-      if ((e as Error).name !== "AbortError") this.definir(id, { carregando: false, aviso: "Falha de conexão ao carregar a camada." });
+      if (!ctrl.signal.aborted) this.definir(id, { carregando: false, aviso: e instanceof Error && e.message.includes("recortar") ? e.message : "Falha de conexão ao carregar a camada." });
     }
   }
 }

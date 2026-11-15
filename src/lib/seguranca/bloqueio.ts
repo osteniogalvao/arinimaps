@@ -17,6 +17,7 @@ const LIVRES = [
   "/api/asaas/webhook", // servidor do Asaas chamando; tem token próprio
   "/api/saude", // monitor externo (Uptime Kuma etc.); sem token só responde ok/falha
   "/api/webhooks/whatsapp", // servidor da Meta; confere a assinatura
+  "/api/interno/comunicados",
   "/api/interno/avisos-imoveis",
   "/api/interno/avisos-territoriais",
   "/api/interno/assinaturas",

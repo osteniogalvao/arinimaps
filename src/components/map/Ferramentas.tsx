@@ -22,18 +22,21 @@ import MarcaArini from "@/components/marca/MarcaArini";
 import { VIDRO, BotaoFechar } from "@/components/map/UiMapa";
 import { distanciaM } from "@/lib/geo/distancia";
 import { areaPoligonoM2 } from "@/lib/geo/areaGeodesica";
+import { kinks } from "@turf/turf";
 
-type Modo = null | "area" | "distancia" | "consulta";
+type Modo = null | "area" | "distancia" | "consulta" | "recorte";
 
 /** Teto da área desenhada para consulta — o mesmo do servidor (src/lib/geo/consultaArea.ts). */
 const CONSULTA_MAX_HA = 50_000;
 
 export default function Ferramentas({
-  mapa, onImportarKml, onCapturar, recursos, logado = false, onDesenhando,
+  mapa, onImportarKml, onCapturar, recursos, logado = false, onDesenhando, pedidoRecorte, onDelimitar,
 }: {
   mapa: MLMap | null;
   /** avisa o mapa que um desenho está em curso (o clique não deve abrir cartão de lote/CAR) */
   onDesenhando?: (ativo: boolean) => void;
+  pedidoRecorte: number;
+  onDelimitar: (g: GeoJSON.Polygon) => void;
   onImportarKml: (arquivo: File) => void;
   onCapturar: () => void;
   /** recursos do plano de quem está olhando (planos por nicho); ausente = tudo liberado */
@@ -42,6 +45,7 @@ export default function Ferramentas({
 }) {
   const [modo, setModo] = useState<Modo>(null);
   const [resultado, setResultado] = useState<string>("");
+  const [erroRecorte, setErroRecorte] = useState("");
   const [bloqueio, setBloqueio] = useState<string>("");
   const router = useRouter();
   // área desenhada para consulta, já fechada (duplo clique), esperando o "Consultar"
@@ -148,6 +152,25 @@ export default function Ferramentas({
     }
   };
 
+  const concluirRecorte = () => {
+    if (modoRef.current !== "recorte") return;
+    const pontos = pontosRef.current;
+    if (pontos.length < 3) { setErroRecorte("Marque pelo menos três vértices."); return; }
+    const anel = [...pontos, pontos[0]];
+    const geometria: GeoJSON.Polygon = { type: "Polygon", coordinates: [anel] };
+    if (!areaPoligonoM2([anel]) || kinks(geometria).features.length) {
+      setErroRecorte("Delimite uma área com lados que não se cruzam.");
+      return;
+    }
+    setModo(null);
+    setResultado("");
+    setErroRecorte("");
+    pontosRef.current = [];
+    desenhar([], false);
+    if (mapa) mapa.getCanvas().style.cursor = "";
+    onDelimitar(geometria);
+  };
+
   // clique adiciona vértice; duplo clique encerra a medição
   useEffect(() => {
     if (!mapa) return;
@@ -157,12 +180,14 @@ export default function Ferramentas({
       // o duplo clique chega antes como dois cliques no mesmo lugar: não duplica o vértice
       const ult = pontosRef.current[pontosRef.current.length - 1];
       if (ult && Math.abs(ult[0] - p[0]) < 1e-7 && Math.abs(ult[1] - p[1]) < 1e-7) return;
+      setErroRecorte("");
       pontosRef.current = [...pontosRef.current, p];
       desenhar(pontosRef.current, modoRef.current !== "distancia");
       calcular(pontosRef.current, modoRef.current);
     };
     const aoDuploClique = async () => {
       if (!modoRef.current) return;
+      if (modoRef.current === "recorte") { concluirRecorte(); return; }
       if (modoRef.current === "consulta" && pontosRef.current.length >= 3) {
         const pts = pontosRef.current;
         setConsultaPronta({ pontos: pts, ha: areaPoligonoM2([[...pts, pts[0]]]) / 10000 });
@@ -186,6 +211,7 @@ export default function Ferramentas({
     setAreaMedida(null);
     setConsultaPronta(null);
     setErroConsulta(null);
+    setErroRecorte("");
     desenhar([], false);
     const proximo = modo === novo ? null : novo;
     setModo(proximo);
@@ -198,10 +224,19 @@ export default function Ferramentas({
     setAreaMedida(null);
     setConsultaPronta(null);
     setErroConsulta(null);
+    setErroRecorte("");
     desenhar([], false);
     setModo(null);
     if (mapa) mapa.getCanvas().style.cursor = "";
   };
+
+  const ultimoRecorte = useRef(0);
+  useEffect(() => {
+    if (!mapa || pedidoRecorte === ultimoRecorte.current) return;
+    ultimoRecorte.current = pedidoRecorte;
+    iniciar("recorte");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapa, pedidoRecorte]);
 
   const consultar = async () => {
     if (!consultaPronta) return;
@@ -339,9 +374,12 @@ export default function Ferramentas({
             {modo === "area" ? "Clique nos vértices; duplo clique encerra."
               : modo === "distancia" ? "Clique nos pontos; duplo clique encerra."
               : modo === "consulta" ? "Desenhe a área a consultar (qualquer lugar do Brasil); duplo clique fecha."
+              : modo === "recorte" ? (erroRecorte || "Marque os vértices da área para aplicar as camadas.")
               : "Medição"}
           </span>
           {resultado && <span className="ml-auto lp-display text-2xl text-verde tabular-nums">{resultado}</span>}
+          {modo === "recorte" && <button type="button" onClick={concluirRecorte}
+            className="btn-verde shrink-0 px-3 py-1.5 text-xs">Concluir área</button>}
           {botaoLimpar}
         </div>
       )}

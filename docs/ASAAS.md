@@ -2,6 +2,18 @@
 
 Integração com a API v3 do Asaas. Código: `src/lib/asaas.ts` (cliente HTTP), `src/app/api/admin/mensalidades/route.ts` (botão **Cobrar via Asaas**), `src/app/api/asaas/webhook/route.ts` (confirmações), `scripts/asaas-webhook.mjs` (cadastro do webhook).
 
+## Assinaturas, Pix e comunicação
+
+A Matriz configura a periodicidade e o texto do painel em **Financeiro → Assinaturas e contatos**. Cada regra aceita o ID de um modelo aprovado da conta oficial do WhatsApp. O corpo do modelo recebe o primeiro nome e o link do pedido, nessa ordem. O modelo de confirmação de pagamento deve comunicar o recebimento. A integração consulta a aprovação da Meta antes do envio.
+
+O cliente autoriza separadamente os avisos de assinatura e a recuperação de contratação em **Preferências de privacidade**. Durante o cadastro, pode autorizar até duas tentativas enviando pelo próprio número a mensagem exibida no WhatsApp. A resposta **PARAR LEMBRETES** encerra a recuperação. Depois do pagamento, o cliente encontra as confirmações no histórico do pedido.
+
+Em **Meus pedidos → Ver Pix copia e cola e QR Code**, o titular pode pedir o envio para o seu WhatsApp. O número precisa ser único, ter autorização para avisos da assinatura e ser confirmado com uma mensagem enviada do próprio telefone ao WhatsApp oficial. A confirmação expira em 15 minutos. A troca de número invalida a prova anterior e exige um novo consentimento para assinaturas e recuperação. O webhook valida a assinatura da Meta.
+
+Dentro da janela de atendimento de 24 horas, a ARINI envia a imagem privada do QR Code com o Pix copia e cola na legenda. Fora dessa janela, configure `WHATSAPP_PIX_TEMPLATE_ID` com o modelo aprovado, cabeçalho de imagem e dois parâmetros no corpo, o código Pix e o link autenticado do pedido. Como alternativa, `WHATSAPP_FATURA_LINK_TEMPLATE_ID` envia somente o link autenticado em um modelo aprovado de um parâmetro. O titular também pode iniciar uma nova janela pelo WhatsApp oficial.
+
+O servidor confere o titular, o valor e o estado da fatura no Asaas antes da entrega. A imagem é enviada à conta Meta por upload privado e só o ID dessa mídia acompanha a mensagem. A fila registra um envio de Pix e um de link por fatura e dia. Entregas incertas ficam em conferência. Os canais usam `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN`, `WHATSAPP_APP_SECRET` e o webhook oficial da conta.
+
 ## Variáveis
 
 | Variável | Obrigatória | Para quê |

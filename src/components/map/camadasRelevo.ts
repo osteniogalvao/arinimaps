@@ -1,6 +1,6 @@
 "use client";
 
-import type { Map as MLMap, AddProtocolAction } from "maplibre-gl";
+import type { Map as MLMap, AddProtocolAction, StyleSpecification } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 
 /**
@@ -58,6 +58,10 @@ export const LEGENDA_DECLIVE: { nome: string; cor: string }[] = [
 ];
 
 export const COR_AGUA = "#4FA8E0";
+export const ESTILO_RUAS = {
+  escuro: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+  claro: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+} as const;
 
 /** Cor da curva de nível: clara sobre o satélite, terra sobre o mapa. */
 const COR_CURVA = { satelite: "#F3E6BF", claro: "#8E6239", escuro: "#C9A97A" } as const;
@@ -77,7 +81,7 @@ const ORDEM: [RelevoId, string][] = [
   ["curvas", "relevo-curvas"],
   ["curvas", "relevo-curvas-rotulo"],
 ];
-const camadasDe = (id: RelevoId) => ORDEM.filter(([r]) => r === id).map(([, l]) => l);
+export const camadasDeRelevo = (id: RelevoId) => ORDEM.filter(([r]) => r === id).map(([, l]) => l);
 
 // ---------------------------------------------------------------- protocolos
 /** z/x/y do fim da URL do tile (`arini-curvas://12/1476/2277`). */
@@ -111,6 +115,7 @@ function registrarProtocolos(): Promise<void> {
 export type EstadoRelevo = Partial<Record<RelevoId, { aviso: string }>>;
 
 export class GerenciadorRelevo {
+  private destruido = false;
   private ativas = new Set<RelevoId>();
   private estado: EstadoRelevo = {};
   private base: "satelite" | "ruas" = "satelite";
@@ -133,6 +138,7 @@ export class GerenciadorRelevo {
   }
 
   destruir() {
+    this.destruido = true;
     this.map.off("zoomend", this.aoZoom);
     this.map.off("error", this.aoErro as never);
   }
@@ -144,7 +150,7 @@ export class GerenciadorRelevo {
         if (!this.ativas.has(id)) return; // desligada enquanto carregava
         this.visivel(id, true);
         this.conferirZoom();
-      });
+      }).catch(() => { if (!this.destruido && this.ativas.has(id)) this.definir(id, "A fonte desta camada não respondeu."); });
     } else {
       this.ativas.delete(id);
       this.visivel(id, false);
@@ -165,10 +171,10 @@ export class GerenciadorRelevo {
   }
 
   private pintarCurvas() {
-    if (this.map.getLayer("relevo-curvas")) {
+    for (const sufixo of ["", "-local"]) if (this.map.getLayer("relevo-curvas" + sufixo)) {
       const cor = this.corCurva();
-      this.map.setPaintProperty("relevo-curvas", "line-color", cor);
-      this.map.setPaintProperty("relevo-curvas-rotulo", "text-color", cor);
+      this.map.setPaintProperty("relevo-curvas" + sufixo, "line-color", cor);
+      if (this.map.getLayer("relevo-curvas-rotulo" + sufixo)) this.map.setPaintProperty("relevo-curvas-rotulo" + sufixo, "text-color", cor);
     }
   }
 
@@ -186,7 +192,7 @@ export class GerenciadorRelevo {
     const z = this.map.getZoom();
     for (const c of CAMADAS_RELEVO) {
       if (!this.ativas.has(c.id)) continue;
-      if (c.id === "hidrografia" && !this.fonteAgua()) { this.definir(c.id, "A hidrografia não está disponível neste fundo de mapa."); continue; }
+      if (c.id === "hidrografia" && !this.map.getSource("relevo-agua-osm")) { this.definir(c.id, "A fonte da hidrografia não respondeu."); continue; }
       const atual = this.estado[c.id]?.aviso ?? "";
       if (c.zoomMin && z < c.zoomMin) this.definir(c.id, `Aproxime o mapa (zoom ${c.zoomMin} ou mais) para ver esta camada.`);
       else if (atual.startsWith("Aproxime")) this.definir(c.id, "");
@@ -201,10 +207,23 @@ export class GerenciadorRelevo {
     return acima ?? (this.map.getLayer("municipios-linha") ? "municipios-linha" : undefined);
   }
 
-  /** Fonte vetorial da base CARTO que traz a água do OSM (`protomaps` hoje). */
-  private fonteAgua() {
-    const l = this.map.getStyle().layers.find((c) => "source-layer" in c && c["source-layer"] === "water") as { source?: string } | undefined;
-    return l?.source;
+  private async fonteAgua() {
+    const id = "relevo-agua-osm";
+    if (this.map.getSource(id)) return id;
+    const fonteDoEstilo = (estilo: StyleSpecification) => {
+      const agua = estilo.layers.find(c => "source-layer" in c && c["source-layer"] === "water");
+      return agua && "source" in agua ? estilo.sources[agua.source] : undefined;
+    };
+    let fonte = fonteDoEstilo(this.map.getStyle());
+    if (!fonte) {
+      // No satélite, a CARTO só é consultada quando a hidrografia é escolhida.
+      const r = await fetch(ESTILO_RUAS[this.tema]);
+      if (!r.ok) throw new Error("CARTO indisponível");
+      fonte = fonteDoEstilo(await r.json());
+    }
+    if (this.destruido || fonte?.type !== "vector") return undefined;
+    if (!this.map.getSource(id)) this.map.addSource(id, fonte);
+    return id;
   }
 
   private garantirDem() {
@@ -212,9 +231,9 @@ export class GerenciadorRelevo {
     this.map.addSource(DEM, { type: "raster-dem", tiles: [URL_DEM], encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: ATRIBUICAO });
   }
 
-  private async criar(id: RelevoId) {
+  async criar(id: RelevoId) {
     const m = this.map;
-    if (camadasDe(id).every((l) => m.getLayer(l))) return;
+    if (camadasDeRelevo(id).every((l) => m.getLayer(l))) return;
     const oculto = { visibility: "none" as const };
     if (id === "sombra") {
       this.garantirDem();
@@ -233,6 +252,7 @@ export class GerenciadorRelevo {
       }, this.antesDe("relevo-altitude"));
     } else if (id === "declividade") {
       await registrarProtocolos();
+      if (this.destruido || m.getLayer("relevo-declive")) return;
       if (!m.getSource("relevo-declive")) {
         m.addSource("relevo-declive", {
           type: "raster", tiles: ["arini-declive://{z}/{x}/{y}"], tileSize: 256, minzoom: 12, maxzoom: 15, attribution: ATRIBUICAO,
@@ -244,6 +264,7 @@ export class GerenciadorRelevo {
       }, this.antesDe("relevo-declive"));
     } else if (id === "curvas") {
       await registrarProtocolos();
+      if (this.destruido || m.getLayer("relevo-curvas")) return;
       if (!m.getSource("relevo-curvas")) {
         m.addSource("relevo-curvas", { type: "vector", tiles: ["arini-curvas://{z}/{x}/{y}"], minzoom: 11, maxzoom: 15, attribution: ATRIBUICAO });
       }
@@ -268,8 +289,8 @@ export class GerenciadorRelevo {
         paint: { "text-color": cor, "text-halo-color": "rgba(10,19,16,0.85)", "text-halo-width": 1.3 },
       }, this.antesDe("relevo-curvas-rotulo"));
     } else if (id === "hidrografia") {
-      const fonte = this.fonteAgua();
-      if (!fonte) return;
+      const fonte = await this.fonteAgua();
+      if (!fonte || this.destruido || m.getLayer("relevo-agua-fill")) return;
       m.addLayer({
         id: "relevo-agua-fill", type: "fill", source: fonte, "source-layer": "water", layout: oculto,
         filter: ["all", ["==", ["geometry-type"], "Polygon"], ["!", ["in", ["get", "kind"], ["literal", ["ocean", "sea", "fountain"]]]]] as never,
@@ -301,6 +322,6 @@ export class GerenciadorRelevo {
   }
 
   private visivel(id: RelevoId, sim: boolean) {
-    for (const l of camadasDe(id)) if (this.map.getLayer(l)) this.map.setLayoutProperty(l, "visibility", sim ? "visible" : "none");
+    for (const l of camadasDeRelevo(id)) if (this.map.getLayer(l)) this.map.setLayoutProperty(l, "visibility", sim ? "visible" : "none");
   }
 }

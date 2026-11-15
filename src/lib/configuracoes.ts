@@ -111,6 +111,17 @@ export const GRUPOS: Grupo[] = [
     ],
   },
   {
+    id: "fontes_mercado",
+    titulo: "Fontes de cotações",
+    descricao: "Fontes utilizadas no portal de mercado e na coleta automática.",
+    icone: "📈",
+    campos: [
+      { chave: "cotacoes_cepea_autorizado", rotulo: "Uso comercial dos indicadores CEPEA autorizado", tipo: "sim_nao",
+        padrao: false, somenteDiretoria: true,
+        ajuda: "Ative quando a ARINI tiver autorização expressa para coletar e publicar essas séries." },
+    ],
+  },
+  {
     id: "financeiro_central",
     titulo: "Financeiro e notas fiscais",
     descricao: "Alçada de aprovação de despesas e dados da nota fiscal de serviço emitida pelo Asaas (migration 0066).",
@@ -146,7 +157,7 @@ export const GRUPOS: Grupo[] = [
       { chave: "juridico_selfie_exclusividade", rotulo: "Selfie no aceite da exclusividade", tipo: "sim_nao", padrao: false, somenteDiretoria: true,
         ajuda: "Com “Sim”, o proprietário tira uma selfie ao aceitar a exclusividade. A foto fica no cofre de documentos, só para conferência — não há reconhecimento facial." },
       { chave: "juridico_prazo_autorizacao_dias", rotulo: "Prazo da autorização de venda", tipo: "numero", padrao: 180, min: 30, max: 730, sufixo: "dias",
-        ajuda: "Vale para a autorização e para a exclusividade. Renova automaticamente enquanto o anúncio estiver ativo.", somenteDiretoria: true },
+        ajuda: "Prazo da autorização simples. A exclusividade segue os 6 ou 12 meses escolhidos no cadastro do imóvel.", somenteDiretoria: true },
       { chave: "juridico_protecao_meses", rotulo: "Proteção contra venda por fora", tipo: "numero", padrao: 12, min: 0, max: 36, sufixo: "meses",
         ajuda: "Por quanto tempo depois do fim da autorização a comissão continua devida se o imóvel for vendido a um interessado apresentado pela Arini.", somenteDiretoria: true },
       { chave: "protecao_dias", rotulo: "Janela de proteção do interesse", tipo: "numero", padrao: 0, min: 0, max: 3650, sufixo: "dias",

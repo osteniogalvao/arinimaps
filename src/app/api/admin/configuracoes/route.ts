@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
   const { error } = await admin.from("settings").upsert(paraGravar as never);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  if (paraGravar.some(c => c.chave === "cotacoes_cepea_autorizado")) revalidateTag("cotacoes", { expire: 0 });
   await logAudit({
     user_id: a.userId, acao: "configuracoes_alteradas", entidade: "settings",
     dados_depois: Object.fromEntries(paraGravar.map((p) => [p.chave, p.valor])),

@@ -62,6 +62,7 @@ const STATUS_REVISAO: Record<string, { label: string; tom: Tom }> = {
   cancelada: { label: "Cancelada pelo anunciante", tom: "neutro" },
 };
 const CONTADORES: { tipo: string; rotulo: string }[] = [
+  { tipo: "visualizacao", rotulo: "Aberturas no mapa" },
   { tipo: "ficha", rotulo: "Visualizações da ficha" },
   { tipo: "tour", rotulo: "Tours 3D" },
   { tipo: "relatorio", rotulo: "Relatórios" },
@@ -94,9 +95,9 @@ export default async function HistoricoImovel({ propertyId, modo, tipoImovel = "
       admin.from("audit_log")
         .select("id, acao, entidade, user_id, created_at, dados_antes, dados_depois")
         .eq("property_id", propertyId).order("created_at", { ascending: false }).limit(50),
-      admin.from("property_events")
+      modo === "admin" ? admin.from("property_events")
         .select("id, tipo, user_id, ip, detalhe, created_at")
-        .eq("property_id", propertyId).order("created_at", { ascending: false }).limit(20),
+        .eq("property_id", propertyId).order("created_at", { ascending: false }).limit(20) : { data: [] },
       ...CONTADORES.map((c) =>
         admin.from("property_events").select("id", { count: "exact", head: true })
           .eq("property_id", propertyId).eq("tipo", c.tipo)

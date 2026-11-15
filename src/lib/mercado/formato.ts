@@ -31,12 +31,18 @@ export const PRODUTOS: Record<string, string> = {
   milho: "Milho",
   soja: "Soja",
   frango: "Frango",
+  vacas: "Vacas",
+  novilhas: "Novilhas",
+  semoventes: "Outros semoventes",
+  graos: "Outros grãos",
+  insumos: "Insumos agrícolas",
   dolar: "Dólar",
   ibovespa: "Ibovespa",
 };
 
 export const PERIODOS = [
   { id: "7d", rotulo: "7 dias", dias: 7 },
+  { id: "15d", rotulo: "15 dias", dias: 15 },
   { id: "30d", rotulo: "30 dias", dias: 30 },
   { id: "90d", rotulo: "90 dias", dias: 90 },
   { id: "1a", rotulo: "1 ano", dias: 365 },
@@ -58,8 +64,13 @@ export const sentido = (v: number | null | undefined): "alta" | "baixa" | "estav
   v == null || Math.abs(v) < 0.005 ? "estavel" : v > 0 ? "alta" : "baixa";
 
 /** "2026-11-06" → "06/11/2026" (ou "06/11" no curto) */
-export function formatarData(iso: string, curto = false) {
+export function competenciaMensal(serie: Pick<CotacaoAtual, "slug">) {
+  return serie.slug.startsWith("epagri-sc-insumo-");
+}
+
+export function formatarData(iso: string, curto = false, mensal = false) {
   const [a, m, d] = iso.slice(0, 10).split("-");
+  if (mensal) return `${m}/${a}`;
   return curto ? `${d}/${m}` : `${d}/${m}/${a}`;
 }
 
@@ -86,7 +97,7 @@ export function rotuloFaixa(s: CotacaoAtual) {
 export function recortar(pontos: PontoCotacao[], dias: number) {
   if (!pontos.length) return pontos;
   const ultima = new Date(`${pontos[pontos.length - 1].data}T12:00:00Z`).getTime();
-  const corte = new Date(ultima - dias * 86_400_000).toISOString().slice(0, 10);
+  const corte = new Date(ultima - (dias - 1) * 86_400_000).toISOString().slice(0, 10);
   return pontos.filter((p) => p.data >= corte);
 }
 

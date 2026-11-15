@@ -85,6 +85,14 @@ export async function publicarFacebook(imagem: string | null, legenda: string, l
   return { id, link: `https://www.facebook.com/${id}` };
 }
 
+export async function numeroDaApiWhatsapp() {
+  if (!whatsappConfigurado()) return null;
+  const r=await fetch(GRAPH+"/"+process.env.WHATSAPP_PHONE_ID+"?fields=display_phone_number",{
+    headers:{Authorization:"Bearer "+process.env.WHATSAPP_TOKEN},signal:AbortSignal.timeout(8_000),cache:"no-store"});
+  if(!r.ok)return null;
+  return telefoneWhatsapp((await r.json()).display_phone_number);
+}
+
 /** Telefone brasileiro só com dígitos e DDI 55. */
 export function telefoneWhatsapp(t: string | null | undefined) {
   const d = String(t ?? "").replace(/\D/g, "");
@@ -116,22 +124,32 @@ export async function enviarWhatsapp(telefone: string, texto: string) {
 /** O modelo aprovado usa um parâmetro de corpo {{1}} para o link público do imóvel. */
 export async function modeloFiltroWhatsapp(finalidade: "filtro" | "monitoramento" = "filtro") {
   const id = finalidade === "monitoramento" ? process.env.WHATSAPP_MONITORAMENTO_TEMPLATE_ID : process.env.WHATSAPP_FILTRO_TEMPLATE_ID;
+  return modeloWhatsappAprovado(id, 1);
+}
+
+export async function modeloWhatsappAprovado(id: string | undefined, parametros: number, comImagem=false) {
   if (!whatsappConfigurado() || !id || !/^\d+$/.test(id)) return null;
   const r = await fetch(GRAPH + "/" + id + "?fields=name,language,status,components", {
     headers: { Authorization: "Bearer " + process.env.WHATSAPP_TOKEN }, cache: "no-store", signal: AbortSignal.timeout(10_000),
   });
   if (!r.ok) return null;
-  const m = await r.json() as { name?: string; language?: string; status?: string; components?: { type: string; text?: string }[] };
+  const m = await r.json() as { name?: string; language?: string; status?: string; components?: { type: string; text?: string; format?:string }[] };
   const corpo = m.components?.find((c) => c.type === "BODY");
-  if (m.status !== "APPROVED" || !m.name || !m.language || corpo?.text?.match(/\{\{[^}]+\}\}/g)?.join("") !== "{{1}}") return null;
+  const cabecalho = m.components?.find(c=>c.type==="HEADER");
+  if (comImagem ? cabecalho?.format!=="IMAGE" : cabecalho && (cabecalho.format!=="TEXT" || cabecalho.text?.includes("{{"))) return null;
+  if (m.status !== "APPROVED" || !m.name || !m.language || corpo?.text?.match(/\{\{[^}]+\}\}/g)?.join("") !== Array.from({length:parametros}, (_, i) => "{{" + (i+1) + "}}").join("")) return null;
   return { name: m.name, language: { code: m.language } };
 }
 
 export async function enviarFiltroWhatsapp(telefone: string, link: string, modelo: NonNullable<Awaited<ReturnType<typeof modeloFiltroWhatsapp>>>) {
+  return enviarModeloWhatsapp(telefone, [link], modelo);
+}
+
+export async function enviarModeloWhatsapp(telefone: string, valores: string[], modelo: NonNullable<Awaited<ReturnType<typeof modeloWhatsappAprovado>>>, imagemId?:string) {
   const r = await fetch(GRAPH + "/" + process.env.WHATSAPP_PHONE_ID + "/messages", {
     method: "POST", headers: { Authorization: "Bearer " + process.env.WHATSAPP_TOKEN, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", to: telefone, type: "template", template: { ...modelo,
-      components: [{ type: "body", parameters: [{ type: "text", text: link }] }] } }),
+      components: [...(imagemId?[{type:"header",parameters:[{type:"image",image:{id:imagemId}}]}]:[]), { type: "body", parameters: valores.map(text => ({type:"text", text})) }] } }),
     signal: AbortSignal.timeout(12_000),
   }).catch(() => null);
   if (!r || r.status >= 500) throw new MetaErro("Entrega incerta.", undefined, true);
@@ -139,6 +157,31 @@ export async function enviarFiltroWhatsapp(telefone: string, link: string, model
   const msg = await r.json().catch(() => null);
   if (typeof msg?.messages?.[0]?.id !== "string") throw new MetaErro("Entrega sem confirmação.", undefined, true);
   return msg.messages[0].id as string;
+}
+
+export async function subirImagemWhatsapp(bytes:Uint8Array<ArrayBuffer>) {
+  const form=new FormData();
+  form.set("messaging_product","whatsapp");
+  form.set("file",new Blob([bytes],{type:"image/png"}),"pagamento-pix.png");
+  const r=await fetch(GRAPH+"/"+process.env.WHATSAPP_PHONE_ID+"/media",{method:"POST",
+    headers:{Authorization:"Bearer "+process.env.WHATSAPP_TOKEN},body:form,signal:AbortSignal.timeout(12_000)});
+  if(!r.ok) throw new MetaErro("O WhatsApp recusou a imagem.");
+  const m=await r.json();
+  if(typeof m?.id!=="string") throw new MetaErro("O WhatsApp não retornou a imagem.");
+  return m.id as string;
+}
+
+/** Resposta de serviço com a imagem privada. O chamador reserva uma janela comprovada antes do envio. */
+export async function enviarPixNaJanela(telefone:string,imagem:string,codigo:string) {
+  const r=await fetch(GRAPH+"/"+process.env.WHATSAPP_PHONE_ID+"/messages",{method:"POST",
+    headers:{Authorization:"Bearer "+process.env.WHATSAPP_TOKEN,"Content-Type":"application/json"},
+    body:JSON.stringify({messaging_product:"whatsapp",to:telefone,type:"image",image:{id:imagem,caption:codigo}}),
+    signal:AbortSignal.timeout(12_000)}).catch(()=>null);
+  if(!r || r.status>=500)throw new MetaErro("Entrega incerta.",undefined,true);
+  if(!r.ok)throw new MetaErro("O WhatsApp recusou o Pix.",r.status);
+  const id=(await r.json().catch(()=>null))?.messages?.[0]?.id;
+  if(typeof id!=="string")throw new MetaErro("Entrega sem confirmação.",undefined,true);
+  return id;
 }
 
 /** Confere a assinatura X-Hub-Signature-256 do webhook. */

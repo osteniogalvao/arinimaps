@@ -13,7 +13,8 @@ export async function PATCH(request: Request) {
   if (!limite.permitido) return respostaLimite(limite, "gravação");
 
   const b = await request.json().catch(() => ({}));
-  const patch: Record<string, string | null> = {};
+  if (!b || typeof b !== "object" || Array.isArray(b)) return falha(400, "perfil_invalido", "Confira os dados do perfil.");
+  const patch: Record<string, string | boolean | null> = {};
   if (b.nome !== undefined) {
     const nome = String(b.nome).replace(/\s+/g, " ").trim();
     if (nome.length < 2 || nome.length > 120) return falha(400, "nome_invalido", "Informe seu nome (2 a 120 letras).");
@@ -27,6 +28,13 @@ export async function PATCH(request: Request) {
     }
     patch.telefone = tel ? tel.slice(0, 30) : null;
   }
+  for (const [campo,max] of [["profissao_declarada",100],["especialidade",120]] as const) {
+    if (b[campo] === undefined) continue;
+    if (typeof b[campo] !== "string" || (b[campo].trim() && b[campo].trim().length < 2) || b[campo].trim().length > max)
+      return falha(400, "qualificacao_invalida", "Confira a profissão e a especialidade.");
+    patch[campo]=b[campo].trim() || null;
+  }
+  if (typeof b.avisos_email === "boolean") patch.avisos_email = b.avisos_email;
   if (!Object.keys(patch).length) return falha(400, "nada_para_alterar", "Nada para alterar.");
 
   const admin = supabaseAdmin();

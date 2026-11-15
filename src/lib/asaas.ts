@@ -87,6 +87,10 @@ export async function asaasCriarCliente(dados: {
   return chamar<AsaasCliente>("/customers", { method: "POST", body: { notificationDisabled: false, ...dados } });
 }
 
+export async function asaasPixDaCobranca(id:string) {
+  return chamar<{encodedImage:string;payload:string;expirationDate:string}>("/payments/"+encodeURIComponent(id)+"/pixQrCode");
+}
+
 export async function asaasBuscarCobranca(id: string) {
   if (!asaasConfigurado()) return null;
   try {

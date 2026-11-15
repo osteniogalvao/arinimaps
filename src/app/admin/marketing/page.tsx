@@ -68,6 +68,7 @@ export default async function PainelMarketing() {
   return (
     <div className="space-y-10 md:space-y-12">
       <CabecalhoSetor setor="marketing">
+        <Link href="/admin/marketing/comunicados" className="btn-contorno px-4 py-2.5 text-sm">Comunicados da Matriz</Link>
         <Link href="/admin/configuracoes" className="btn-contorno inline-flex items-center gap-2 px-4 py-2.5 text-sm"><PenLine className="size-4" /> Textos do site</Link>
       </CabecalhoSetor>
 
@@ -110,6 +111,7 @@ export default async function PainelMarketing() {
       </div>
 
       <Secao titulo="Imóveis no ar e material de divulgação">
+        <p className="text-sm text-texto-2">Para integrar o site da Arini Negócios Imobiliários, use o <a className="underline" href="/api/feeds/portais?canal=site">feed de anúncios aprovados para o site</a>. Os <a className="underline" href="/api/feeds/portais">portais têm um feed próprio</a>.</p>
         <div className={TABELA_CAIXA}>
           <table className={TABELA}>
             <thead>
@@ -127,6 +129,7 @@ export default async function PainelMarketing() {
                 <tr key={p.id} className={TR}>
                   <td className="px-4 py-3.5">
                     <Link href={`/imovel/${p.codigo}`} target="_blank" className="font-medium text-texto hover:text-verde">{p.titulo}</Link>
+                    <Link href={`/admin/registros/publicacoes?imovel=${p.id}`} className="ml-2 text-sm text-verde underline">Preparar divulgação</Link>
                     <span className="mt-0.5 block text-sm text-texto-2">
                       {(p.municipality as unknown as { nome: string } | null)?.nome} · {formatBRL(p.valor)}
                     </span>

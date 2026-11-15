@@ -174,6 +174,7 @@ function interpretar(texto: string): ResultadoBusca {
 /** Formatos aceitos, para a ajuda da caixa de busca. */
 export const FORMATOS_BUSCA: { rotulo: string; exemplo: string }[] = [
   { rotulo: "Imóvel, município ou lugar", exemplo: "Iturama" },
+  { rotulo: "Rua, bairro, quadra ou lote", exemplo: "Rua Treze Iturama" },
   { rotulo: "Código do anúncio", exemplo: "AIB-000029" },
   { rotulo: "Código do CAR", exemplo: "MG-3134202-0A1B…" },
   { rotulo: "Parcela do SIGEF", exemplo: "6f1c2a3e-…-9b2d (código da certificação)" },

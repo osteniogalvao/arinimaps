@@ -14,10 +14,13 @@ import {
 const ALTURA = 280;
 const M = { topo: 16, dir: 14, base: 30, esq: 64 };
 
-export default function GraficoPrecos({ pontos, casas, unidade }: {
+export default function GraficoPrecos({ pontos, casas, unidade, comparacao, mensal }: {
   pontos: PontoCotacao[];
   casas: number;
   unidade: string;
+  mensal: boolean;
+  /** Valores nas mesmas datas dos pontos, já alinhados no comparativo. */
+  comparacao?: { nome: string; valores: number[] };
 }) {
   const caixa = useRef<HTMLDivElement>(null);
   const [largura, setLargura] = useState(720);
@@ -39,7 +42,7 @@ export default function GraficoPrecos({ pontos, casas, unidade }: {
 
   const g = useMemo(() => {
     const n = pontos.length;
-    const valores = pontos.map((p) => p.valor);
+    const valores = [...pontos.map((p) => p.valor), ...(comparacao?.valores ?? [])];
     let min = Math.min(...valores), max = Math.max(...valores);
     if (min === max) { min *= 0.99; max *= 1.01; }
     const folga = (max - min) * 0.08;
@@ -48,12 +51,13 @@ export default function GraficoPrecos({ pontos, casas, unidade }: {
     const x = (i: number) => M.esq + (n <= 1 ? w / 2 : (i / (n - 1)) * w);
     const y = (v: number) => M.topo + (1 - (v - min) / (max - min)) * h;
     const linha = pontos.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.valor).toFixed(1)}`).join("");
+    const segundaLinha = comparacao?.valores.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
     const area = n > 1 ? `${linha}L${x(n - 1).toFixed(1)},${M.topo + h}L${x(0).toFixed(1)},${M.topo + h}Z` : "";
     const marcasY = Array.from({ length: 4 }, (_, k) => min + ((max - min) * (k + 0.5)) / 4);
     const qtdX = Math.min(n, largura < 520 ? 3 : 5);
     const marcasX = qtdX <= 1 ? [0] : Array.from({ length: qtdX }, (_, k) => Math.round((k * (n - 1)) / (qtdX - 1)));
-    return { x, y, linha, area, marcasY, marcasX, w, h };
-  }, [pontos, largura]);
+    return { x, y, linha, segundaLinha, area, marcasY, marcasX, w, h };
+  }, [pontos, largura, comparacao]);
 
   if (!pontos.length) return null;
 
@@ -76,7 +80,7 @@ export default function GraficoPrecos({ pontos, casas, unidade }: {
 
   const p = foco == null ? null : pontos[foco];
   const ini = pontos[0], fim = pontos[pontos.length - 1];
-  const resumo = `Gráfico de ${formatarData(ini.data)} a ${formatarData(fim.data)}: de ${formatarValor(ini.valor, casas)} para ${formatarValor(fim.valor, casas)} ${unidade}.`;
+  const resumo = `Gráfico de ${formatarData(ini.data, false, mensal)} a ${formatarData(fim.data, false, mensal)}: de ${formatarValor(ini.valor, casas)} para ${formatarValor(fim.valor, casas)} ${unidade}.`;
 
   return (
     <div ref={caixa} className="relative w-full select-none">
@@ -85,7 +89,7 @@ export default function GraficoPrecos({ pontos, casas, unidade }: {
         // largura 100%: antes da 1ª medida o desenho só escala; depois, 1 unidade = 1 px
         className="block h-auto w-full touch-pan-y rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-verde"
         role="img"
-        aria-label={resumo}
+        aria-label={comparacao ? `${resumo} ${comparacao.nome}: de ${formatarValor(comparacao.valores[0], casas)} para ${formatarValor(comparacao.valores[comparacao.valores.length - 1], casas)} ${unidade}.` : resumo}
         aria-describedby={idDesc}
         tabIndex={0}
         onKeyDown={teclado}
@@ -113,7 +117,7 @@ export default function GraficoPrecos({ pontos, casas, unidade }: {
             fill="var(--texto-2)"
             textAnchor={k === 0 && g.marcasX.length > 1 ? "start" : k === g.marcasX.length - 1 && g.marcasX.length > 1 ? "end" : "middle"}
           >
-            {formatarData(pontos[i].data, pontos.length < 200)}
+            {formatarData(pontos[i].data, pontos.length < 200, mensal)}
           </text>
         ))}
 
@@ -122,6 +126,9 @@ export default function GraficoPrecos({ pontos, casas, unidade }: {
           <path d={g.linha} fill="none" stroke="var(--verde)" strokeWidth="2.25" strokeLinejoin="round" strokeLinecap="round" />
         )}
         {pontos.length === 1 && <circle cx={g.x(0)} cy={g.y(fim.valor)} r="5" fill="var(--verde)" />}
+        {comparacao && (pontos.length === 1
+          ? <circle cx={g.x(0)} cy={g.y(comparacao.valores[0])} r="4" stroke="var(--ouro)" fill="none" strokeWidth="2" />
+          : <path d={g.segundaLinha} fill="none" stroke="var(--ouro)" strokeWidth="2.25" strokeDasharray="5 3" />)}
 
         {p && foco != null && (
           <g pointerEvents="none">
@@ -137,18 +144,19 @@ export default function GraficoPrecos({ pontos, casas, unidade }: {
           className="pointer-events-none absolute top-2 z-10 min-w-36 rounded-xl border border-linha bg-superficie px-3 py-2 text-sm shadow-[0_12px_30px_-14px_var(--sombra-popup)]"
           style={g.x(foco) > largura / 2 ? { right: largura - g.x(foco) + 12 } : { left: g.x(foco) + 12 }}
         >
-          <p className="text-xs text-texto-2">{formatarData(p.data)}</p>
+          <p className="text-xs text-texto-2">{formatarData(p.data, false, mensal)}</p>
           <p className="font-semibold tabular-nums text-texto">
             {formatarValor(p.valor, casas)} <span className="text-xs font-normal text-texto-2">{unidade}</span>
           </p>
+          {comparacao && <p className="text-xs text-ouro">{comparacao.nome} · {formatarValor(comparacao.valores[foco], casas)} {unidade}</p>}
           {p.variacao != null && (
             <p className={`text-xs font-semibold tabular-nums ${sentido(p.variacao) === "alta" ? "text-verde" : sentido(p.variacao) === "baixa" ? "text-critico" : "text-texto-2"}`}>
-              {formatarVariacao(p.variacao)} no dia
+              {formatarVariacao(p.variacao)} desde a observação anterior
             </p>
           )}
         </div>
       )}
-      <p id={idDesc} className="sr-only">Use as setas para a esquerda e para a direita para ler cada dia.</p>
+      <p id={idDesc} className="sr-only">Use as setas para a esquerda e para a direita para ler cada observação.</p>
     </div>
   );
 }

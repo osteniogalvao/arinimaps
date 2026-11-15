@@ -59,6 +59,7 @@ export default function NovoImovel() {
   });
   const [papel, setPapel] = useState<string | null>(null);
   // revisão do Carlos (29/10): venda pela plataforma só com exclusividade Arini
+  const [prazoMeses, setPrazoMeses] = useState<6 | 12 | null>(null);
   const [condicao, setCondicao] = useState<Condicao>("exclusividade");
   const [docs, setDocs] = useState<Docs>({ matricula: [], edital: [], ccir_itr: [], autorizacao: [], outro: [] });
   const [videos, setVideos] = useState<File[]>([]);
@@ -158,11 +159,12 @@ export default function NovoImovel() {
   const emLeilao = modalidade === "leilao";
   // selfie só no aceite eletrônico de exclusividade (a equipe anexa contrato assinado),
   // e só se a Central não a desligou (juridico_selfie_exclusividade, a mesma regra da API)
+  const [assinaturas,setAssinaturas]=useState<Partial<Record<6|12,string>>>({});
   const [selfieExigida, setSelfieExigida] = useState(false);
   const pedeSelfie = condicao === "exclusividade" && !ehEquipe && selfieExigida;
   useEffect(() => {
     fetch("/api/conta/anunciar").then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d && typeof d.selfie_exclusividade === "boolean") setSelfieExigida(d.selfie_exclusividade); })
+      .then((d) => { if (d && typeof d.selfie_exclusividade === "boolean") { setSelfieExigida(d.selfie_exclusividade); setAssinaturas(d.termos??{}); } })
       .catch(() => undefined);
   }, []);
   // anúncio criado, mas algum documento ou vídeo não subiu: mostra antes de sair da página
@@ -236,6 +238,10 @@ export default function NovoImovel() {
       setErro("Marque a localização do imóvel no mapa (desenho, ponto ou KML).");
       return;
     }
+    if (!ehParceiro && !prazoMeses) {
+      setErro("Escolha o prazo de exclusividade de 6 ou 12 meses.");
+      return;
+    }
     if (!ehEquipe && emLeilao && !docs.edital.length && !docs.autorizacao.length) {
       setErro("Envie o edital, a ordem judicial ou o contrato com o comitente.");
       return;
@@ -284,6 +290,8 @@ export default function NovoImovel() {
         ...(form.medidas.trim() && { medidas_informadas: form.medidas.trim().slice(0, 2000) }),
       },
       condicao,
+      prazo_exclusividade_meses: prazoMeses,
+      termo_exclusividade: prazoMeses ? assinaturas[prazoMeses] : undefined,
       aceite_termos: aceite,
       car_codigo: geometria.fonte === "car" ? car?.cod ?? null : null,
       lote_id: geometria.fonte === "lote" ? lote?.id ?? null : null,
@@ -306,8 +314,9 @@ export default function NovoImovel() {
       }
 
       const res = await fetch("/api/imoveis", { method: "POST", body: fd });
-      const data = (await res.json().catch(() => null)) as { id?: string; codigo?: string; error?: string; documentos_falharam?: string[] } | null;
+      const data = (await res.json().catch(() => null)) as { id?: string; codigo?: string; error?: string; assinatura?: string; documentos_falharam?: string[] } | null;
       if (!res.ok || !data?.id || !data.codigo) {
+        if (res.status===409 && data?.assinatura && prazoMeses) {setAceite(false);setAssinaturas(s=>({...s,[prazoMeses]:data.assinatura}));}
         setErro(data?.error ?? (res.status === 413
           ? "Os arquivos passaram do tamanho que o servidor aceita num envio. Envie menos fotos ou documentos menores."
           : `O servidor não respondeu como esperado (erro ${res.status}). Confira em Meus imóveis se o anúncio entrou antes de enviar de novo.`));
@@ -352,7 +361,7 @@ export default function NovoImovel() {
     { id: "localizacao", rotulo: "Localização", pronto: !!geometria },
     { id: "midia", rotulo: "Fotos e vídeos", pronto: fotos.length > 0 },
     { id: "documentos", rotulo: "Documentos", pronto: Object.values(docs).some((l) => l.length > 0) },
-    { id: "condicao", rotulo: "Comercialização", pronto: ehEquipe || aceite },
+    { id: "condicao", rotulo: "Comercialização", pronto: (ehParceiro || !!prazoMeses) && (ehEquipe || aceite) },
   ];
   const numero = (id: string) => etapas.findIndex((e) => e.id === id) + 1;
 
@@ -658,21 +667,19 @@ export default function NovoImovel() {
             <Link href="/termos/parceiros" target="_blank" className="text-verde underline">Termo de Parceria</Link>.
           </p>
         ) : (
-          <div className="grid gap-4">
-            {([
-              ["exclusividade", "Exclusividade Arini", "Só a Arini (e parceiros indicados por ela) intermedia durante o prazo, com compromissos de prazo de atendimento."],
-            ] as const).map(([v, t, d]) => (
-              <label key={v}
-                className={"cursor-pointer rounded-2xl border-2 p-5 transition-colors " +
-                  (condicao === v ? "border-verde bg-verde/6" : "border-linha hover:border-linha-forte")}>
-                <span className="flex items-center gap-2.5 text-base font-semibold text-texto">
-                  <input type="radio" name="condicao" className="size-4 accent-[var(--verde)]" checked={condicao === v} onChange={() => setCondicao(v)} />
-                  {t}
-                </span>
-                <span className="mt-2 block text-sm leading-relaxed text-texto-2">{d}</span>
-              </label>
-            ))}
-          </div>
+          <fieldset>
+            <legend className="mb-3 font-semibold text-texto">Por quanto tempo a ARINI terá exclusividade na venda?</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {([6, 12] as const).map((meses) => (
+                <label key={meses} className={"flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 " +
+                  (prazoMeses === meses ? "border-verde bg-verde/10" : "border-linha")}>
+                  <input required type="radio" name="prazo-exclusividade" checked={prazoMeses === meses}
+                    onChange={() => { setPrazoMeses(meses); setAceite(false); }} />
+                  <strong>{meses} meses</strong>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         )}
 
         {pedeSelfie && (
@@ -709,7 +716,7 @@ export default function NovoImovel() {
                 <>Declaro ser proprietário (ou ter poderes para vender) e aceito o{" "}
                 <Link href="/termos/autorizacao" target="_blank" className="text-verde underline">Termo de Autorização de Venda</Link>
                 {condicao === "exclusividade" && <>, o{" "}
-                  <Link href="/termos/exclusividade" target="_blank" className="text-verde underline">Termo de Exclusividade</Link>
+                  <Link href={prazoMeses ? "/termos/exclusividade?meses=" + prazoMeses : "/termos/exclusividade"} target="_blank" className="text-verde underline">Termo de Exclusividade{prazoMeses && ` por ${prazoMeses} meses`}</Link>
                 </>}</>
               )}
               {!ehLeiloeiro && <> e a <Link href="/termos/remuneracao" target="_blank" className="text-verde underline">Regra de Remuneração</Link></>}.

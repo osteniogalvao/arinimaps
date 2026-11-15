@@ -13,7 +13,8 @@ const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g,
 
 const TIPO_VRSYNC: Record<string, string> = { rural: "Residential / Farm Ranch", urbano: "Residential / Land Lot" };
 
-export async function GET() {
+export async function GET(request:Request) {
+  const canal = new URL(request.url).searchParams.get("canal") === "site" ? "site" : "portais";
   const admin = supabaseAdmin();
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://arinibrasil.com.br";
   const midia = (p: string) => `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${p}`;
@@ -25,7 +26,7 @@ export async function GET() {
     let consulta = admin.from("properties")
       .select("id, codigo, titulo, descricao, tipo, valor, area_declarada, updated_at, municipio:municipalities!properties_municipality_id_fkey(nome, uf), media:property_media(storage_path, capa, ordem, tipo), publicacoes!inner(id)")
       .in("status", ["publicado", "em_negociacao"])
-      .eq("publicacoes.canal", "portais").eq("publicacoes.status", "publicada")
+      .eq("publicacoes.canal", canal).eq("publicacoes.status", "publicada")
       .limit(1, { referencedTable: "publicacoes" }).order("id").limit(200);
     if (ultimoId) consulta = consulta.gt("id", ultimoId);
     const { data: imoveis, error } = await consulta;

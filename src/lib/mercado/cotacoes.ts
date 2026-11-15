@@ -25,11 +25,18 @@ const normalizar = (r: Record<string, unknown>): CotacaoAtual => ({
 async function lerUltimas(soDestaques: boolean): Promise<CotacaoAtual[]> {
   if (!temBanco()) return [];
   try {
-    let q = supabaseAdmin().from("cotacoes_ultimas").select("*");
-    if (soDestaques) q = q.eq("destaque", true);
-    const { data, error } = await q.order("ordem").order("uf").order("praca").limit(500);
-    if (error) throw error;
-    return (data ?? []).map(normalizar);
+    const db = supabaseAdmin();
+    const series: CotacaoAtual[] = [];
+    const tamanho = 500;
+    for (let inicio = 0; ; inicio += tamanho) {
+      let q = db.from("cotacoes_ultimas").select("*");
+      if (soDestaques) q = q.eq("destaque", true);
+      const { data, error } = await q.order("ordem").order("uf").order("praca").order("id")
+        .range(inicio, inicio + tamanho - 1);
+      if (error) throw error;
+      series.push(...data.map(normalizar));
+      if (data.length < tamanho) return series;
+    }
   } catch (e) {
     console.warn("cotações indisponíveis:", (e as Error).message);
     return [];

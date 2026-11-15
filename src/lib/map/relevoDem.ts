@@ -1,5 +1,7 @@
 "use client";
 
+import { recortarLinha } from "./recorteLinha";
+
 /**
  * Contas de relevo feitas no navegador, tile a tile, a partir do mesmo modelo
  * de elevação do tour 3D e da pré-avaliação (Terrarium, SRTM ~30 m, tiles PNG
@@ -66,7 +68,7 @@ export function demDoTile(z: number, x: number, y: number, sinal?: AbortSignal):
 }
 
 /** Metros por pixel no centro do tile (Web Mercator). */
-function metrosPorPixel(z: number, y: number) {
+export function metrosPorPixel(z: number, y: number) {
   const n = Math.PI - (2 * Math.PI * (y + 0.5)) / 2 ** z;
   const lat = Math.atan(Math.sinh(n));
   return (40075016.686 * Math.cos(lat)) / (LADO * 2 ** z);
@@ -83,8 +85,12 @@ export const CLASSES_DECLIVE = [
 ] as const;
 
 let pngVazio: Promise<ArrayBuffer> | null = null;
-async function tileTransparente(): Promise<ArrayBuffer> {
-  pngVazio ??= new OffscreenCanvas(1, 1).convertToBlob({ type: "image/png" }).then((b) => b.arrayBuffer());
+export async function tileTransparente(): Promise<ArrayBuffer> {
+  if (!pngVazio) {
+    const tela = new OffscreenCanvas(1, 1);
+    tela.getContext("2d");
+    pngVazio = tela.convertToBlob({ type: "image/png" }).then(b => b.arrayBuffer());
+  }
   return pngVazio;
 }
 
@@ -285,7 +291,7 @@ function codificarMvt(feicoes: { linha: Linha; ele: number; mestra: boolean }[])
 }
 
 /** Tile vetorial (camada `curvas`, atributos `ele` e `mestra`); vazio se o DEM não veio. */
-export async function tileCurvas(z: number, x: number, y: number, sinal?: AbortSignal): Promise<ArrayBuffer> {
+export async function tileCurvas(z: number, x: number, y: number, sinal?: AbortSignal, mascaras?: number[][][][]): Promise<ArrayBuffer> {
   const dem = await demDoTile(Math.min(z, DEM_ZOOM_MAX), x, y, sinal);
   if (!dem) return new ArrayBuffer(0);
   const h = suavizar(dem, z >= 14 ? 2 : 1);
@@ -295,7 +301,10 @@ export async function tileCurvas(z: number, x: number, y: number, sinal?: AbortS
   const feicoes: { linha: Linha; ele: number; mestra: boolean }[] = [];
   for (let L = Math.ceil(min / eq) * eq; L <= max; L += eq) {
     const mestra = L % (eq * 5) === 0;
-    for (const linha of isolinhas(h, L)) feicoes.push({ linha, ele: L, mestra });
+    for (const linha of isolinhas(h, L)) {
+      const partes = mascaras ? recortarLinha(linha, mascaras) as Linha[] : [linha];
+      for (const parte of partes) feicoes.push({ linha: parte, ele: L, mestra });
+    }
   }
   return codificarMvt(feicoes);
 }

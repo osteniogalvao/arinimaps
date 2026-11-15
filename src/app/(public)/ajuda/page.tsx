@@ -31,6 +31,7 @@ const FERRAMENTAS: Ferramenta[] = [
     passos: [
       "Abra o Mapa Interativo ou a página Imóveis.",
       "Digite o município, o código do anúncio (AIB-000000) ou parte do nome do imóvel.",
+      "Para encontrar uma rua, bairro, quadra ou lote, digite a referência e toque em Buscar rua, bairro, quadra ou lote. Inclua o município para restringir a busca. Cada resultado identifica a fonte.",
       "Use os filtros Rural, Urbano e Leilão para estreitar a lista.",
       "Clique no imóvel para ver fotos, divisa, valor e pontos de interesse com a distância.",
     ],
@@ -40,9 +41,9 @@ const FERRAMENTAS: Ferramenta[] = [
     id: "camadas", icone: Layers, titulo: "Camadas e dados oficiais",
     passos: [
       "No mapa, toque em Camadas e Dados.",
-      "Ligue o que precisa: CAR, embargos ambientais, focos de queimada, processos minerários, biomas.",
+      "Abra o grupo desejado e ative as camadas que quer consultar. O CAR fica em Fundiário.",
       "Clique numa área para ver o que cada fonte diz sobre ela, com órgão e data.",
-      "Algumas camadas dependem do plano; as travadas aparecem com cadeado.",
+      "Para consultar só um trecho, toque em Delimitar área, marque o contorno e escolha suas camadas. Repita para comparar áreas diferentes.",
     ],
     link: { href: "/mapa?camada=car", rotulo: "Abrir o CAR no mapa" },
   },
@@ -78,7 +79,7 @@ const FERRAMENTAS: Ferramenta[] = [
       "Entre na sua conta e vá em Painel › Anunciar.",
       "Preencha os dados, marque a divisa no mapa (desenho, ponto, KML, área do CAR ou lote) e envie fotos.",
       "Anexe a matrícula (ou escritura registrada): nenhum imóvel é publicado sem a Arini conferir.",
-      "Aceite os termos e envie. Você acompanha a análise em Meus imóveis.",
+      "Se você é o proprietário, escolha 6 ou 12 meses de exclusividade, leia o termo e confirme. Acompanhe a análise em Meus imóveis.",
     ],
     link: { href: "/painel/novo", rotulo: "Anunciar agora" },
   },

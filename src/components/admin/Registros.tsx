@@ -36,17 +36,18 @@ const TOM_STATUS: Record<string, "verde" | "ouro" | "critico" | "neutro" | "aler
  * Lista e formulário de um cadastro da Central (src/lib/registros.ts):
  * criar, editar em linha e executar as ações do fluxo (aprovar, emitir…).
  */
-export default function Registros({ recursoId, linhas, opcoes, podeEscrever, nomes = {} }: {
-  recursoId: string; linhas: Linha[]; opcoes: Opcoes; podeEscrever: boolean; nomes?: Record<string, string>;
+export default function Registros({ recursoId, linhas, opcoes, podeEscrever, nomes = {}, imovelInicial }: {
+  imovelInicial?:string; recursoId: string; linhas: Linha[]; opcoes: Opcoes; podeEscrever: boolean; nomes?: Record<string, string>;
 }) {
   const r = recursoPorId(recursoId)!;
   const router = useRouter();
-  const [aberto, setAberto] = useState<"novo" | string | null>(null);
-  const [form, setForm] = useState<Record<string, unknown>>({});
+  const editaveis = r.campos.filter((c) => !c.sistema);
+  const novoFormulario = () => Object.fromEntries(editaveis.map(c=>[c.nome,c.padrao ?? (c.tipo==="bool"?false:"")]));
+  const [aberto, setAberto] = useState<"novo" | string | null>(imovelInicial ? "novo" : null);
+  const [form, setForm] = useState<Record<string, unknown>>(()=>imovelInicial?{...novoFormulario(),property_id:imovelInicial}:{});
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState("");
 
-  const editaveis = r.campos.filter((c) => !c.sistema);
   const colunas = r.campos.filter((c) => c.lista);
 
   async function enviar(method: "POST" | "PATCH" | "DELETE", corpo: Record<string, unknown>) {
@@ -64,7 +65,7 @@ export default function Registros({ recursoId, linhas, opcoes, podeEscrever, nom
   function abrir(l?: Linha) {
     setErro("");
     if (!l) {
-      setForm(Object.fromEntries(editaveis.map((c) => [c.nome, c.padrao ?? (c.tipo === "bool" ? false : "")])));
+      setForm(novoFormulario());
       setAberto("novo");
     } else {
       setForm(Object.fromEntries(editaveis.map((c) => [c.nome, l[c.nome] ?? (c.tipo === "bool" ? false : "")])));

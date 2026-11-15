@@ -44,6 +44,7 @@ const api = (p, url, body, method = "POST") => p.evaluate(async (u, bd, m) => {
 /** Cria um imóvel pela rota multipart, com arquivos de mentira montados no navegador. */
 const anunciar = (p, dados, arquivos) => p.evaluate(async (d, arqs) => {
   const fd = new FormData();
+  if (d.prazo_exclusividade_meses) d.termo_exclusividade=(await (await fetch("/api/conta/anunciar")).json()).termos[d.prazo_exclusividade_meses];
   fd.set("dados", JSON.stringify(d));
   fd.set("geometria", JSON.stringify({ fonte: "desenho", geometry: { type: "Polygon", coordinates: [[[-50.21, -19.73], [-50.209, -19.73], [-50.209, -19.729], [-50.21, -19.729], [-50.21, -19.73]]] } }));
   // conteúdo com a assinatura real do formato: o servidor confere os bytes, não o tipo declarado
@@ -132,15 +133,18 @@ try {
   // ---------- selfie na exclusividade ----------
   const q = await nova();
   await api(q, "/api/auth/entrar", { email: "proprietario.teste@arinibrasil.com.br", senha: process.env.SEED_USER_PASSWORD });
-  const semSelfie = await anunciar(q, { tipo: "rural", titulo: "TESTE exclusividade", condicao: "exclusividade", aceite_termos: true }, [["doc_matricula", "matricula.pdf", "application/pdf"]]);
+  const semPrazo = await anunciar(q, { tipo:"rural", titulo:"TESTE prazo obrigatório", condicao:"exclusividade", aceite_termos:true }, []);
+  ok("exclusividade exige prazo escolhido", semPrazo.status===400 && /6 ou 12/.test(semPrazo.corpo), semPrazo.corpo);
+  const semSelfie = await anunciar(q, { tipo: "rural", titulo: "TESTE exclusividade", condicao: "exclusividade", prazo_exclusividade_meses: 12, aceite_termos: true }, [["doc_matricula", "matricula.pdf", "application/pdf"]]);
   ok("exclusividade sem selfie é recusada", semSelfie.status === 400 && /selfie/i.test(semSelfie.corpo), semSelfie.corpo);
   const { count: orfaos } = await admin.from("properties").select("id", { count: "exact", head: true }).eq("titulo", "TESTE exclusividade");
   ok("recusa não deixa imóvel órfão", orfaos === 0, String(orfaos));
-  const comSelfie = await anunciar(q, { tipo: "rural", titulo: "TESTE AUTOMATIZADO — exclusividade", condicao: "exclusividade", aceite_termos: true },
+  const comSelfie = await anunciar(q, { tipo: "rural", titulo: "TESTE AUTOMATIZADO — exclusividade", condicao: "exclusividade", prazo_exclusividade_meses: 12, aceite_termos: true },
     [["doc_matricula", "matricula.pdf", "application/pdf"], ["selfie", "selfie.jpg", "image/jpeg"]]);
   ok("exclusividade com selfie é criada", comSelfie.status === 200, comSelfie.corpo);
   if (comSelfie.json?.id) imoveis.push(comSelfie.json.id);
-  const { data: aut } = await admin.from("property_authorizations").select("tipo, selfie_path, versao").eq("property_id", comSelfie.json?.id).single();
+  const { data: aut } = await admin.from("property_authorizations").select("tipo, selfie_path, versao, prazo_meses, termo_aceito").eq("property_id", comSelfie.json?.id).single();
+  ok("prazo e versão do texto aceito preservados", aut?.prazo_meses===12 && /12 meses/.test(JSON.stringify(aut?.termo_aceito)), aut?.versao);
   ok("selfie guardada junto do aceite", aut?.tipo === "exclusividade" && !!aut?.selfie_path, JSON.stringify(aut));
   const publica = await q.evaluate(async (path, base) => (await fetch(`${base}/storage/v1/object/public/docs/${path}`)).status, aut?.selfie_path, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
   ok("a selfie NÃO é acessível por endereço público", publica !== 200, String(publica));
