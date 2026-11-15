@@ -9,11 +9,16 @@ import { pontoNaArea as pertenceNoWorker } from "../worker/jobs/ajustes.mjs";
 
 const jiti = createJiti(import.meta.url);
 const { cortarTileCar } = jiti("../src/lib/map/cortarTileCar.ts");
-const { recortesNoTile } = jiti("../src/lib/map/recortesUrbanos.ts");
+const { recortesNoTile, coordenadasTileCar } = jiti("../src/lib/map/recortesUrbanos.ts");
 const { detectarBlocosCad, termosDescricaoCad } = jiti("../src/lib/geo/blocosCad.ts");
 const { centroArea, partesDasLinhas, ajustarPorPontos, aplicarMatrizPonto, afim, TRANSFORM_ZERO } = jiti("../src/lib/geo/deslocar.ts");
 
 const z = 12, x = 1475, y = 2275, n = 2 ** z;
+const prefixo = "pmtiles://https://mapa.arini.test/car.pmtiles/";
+for (const final of ["", ".mvt", ".pbf?versao=1"]) {
+  assert.deepEqual(coordenadasTileCar(prefixo+`${z}/${x}/${y}${final}`,prefixo),[z,x,y]);
+}
+assert.equal(coordenadasTileCar("pmtiles://https://mapa.arini.test/urbano.pmtiles/12/1/2.mvt",prefixo), null);
 const lnglat = ([i, j]) => [(x + i / 4096) / n * 360 - 180,
   Math.atan(Math.sinh(Math.PI * (1 - (y + j / 4096) * 2 / n))) * 180 / Math.PI];
 const ret = (x1, y1, x2, y2) => [[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]];

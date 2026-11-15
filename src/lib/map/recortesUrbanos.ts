@@ -3,6 +3,13 @@ export type RecorteUrbano = {
   bbox: [number, number, number, number];
 };
 
+/** O TileJSON do PMTiles 4 inclui .mvt; mapas antigos usam a rota sem extensão. */
+export function coordenadasTileCar(url: string, prefixo: string): [number, number, number] | null {
+  if (!url.startsWith(prefixo)) return null;
+  const xyz = /^(\d+)\/(\d+)\/(\d+)(?:\.(?:mvt|pbf))?(?:\?.*)?$/.exec(url.slice(prefixo.length));
+  return xyz ? [Number(xyz[1]), Number(xyz[2]), Number(xyz[3])] : null;
+}
+
 let pedido: Promise<RecorteUrbano[]> | undefined;
 let expira = 0;
 export function recortesPublicados() {

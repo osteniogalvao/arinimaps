@@ -19,7 +19,7 @@
 import type * as MapLibreNS from "maplibre-gl";
 import { URL_MAPLIBRE } from "./config";
 import { Protocol } from "pmtiles";
-import { recortesNoTile, recortesPublicados } from "./recortesUrbanos";
+import { coordenadasTileCar, recortesNoTile, recortesPublicados } from "./recortesUrbanos";
 
 declare global {
   interface Window {
@@ -43,10 +43,10 @@ function registrarPmtiles(ml: typeof MapLibreNS) {
   const car = arquivo ? `pmtiles://${new URL(arquivo, window.location.origin).href}/` : null;
   ml.addProtocol("pmtiles", async (params, abort) => {
     const resposta = await carregar(params, abort);
-    if (!car || !params.url.startsWith(car) || !(resposta.data instanceof Uint8Array) || !resposta.data.length) return resposta;
-    const xyz = /^(\d+)\/(\d+)\/(\d+)$/.exec(params.url.slice(car.length));
+    if (!car || !(resposta.data instanceof Uint8Array) || !resposta.data.length) return resposta;
+    const xyz = coordenadasTileCar(params.url, car);
     if (!xyz) return resposta;
-    const [z, x, y] = xyz.slice(1).map(Number);
+    const [z, x, y] = xyz;
     const recortes = recortesNoTile(await recortesPublicados(), z, x, y);
     abort.signal.throwIfAborted();
     if (!recortes.length) return { ...resposta, cacheControl: "max-age=30", expires: undefined };
