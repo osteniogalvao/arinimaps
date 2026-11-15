@@ -15,6 +15,7 @@ const LIVRES = [
   "/acesso",
   "/api/acesso",
   "/api/asaas/webhook", // servidor do Asaas chamando; tem token próprio
+  "/api/asaas/nfse-tecnologia", // webhook fiscal autenticado da conta emissora
   "/api/saude", // monitor externo (Uptime Kuma etc.); sem token só responde ok/falha
   "/api/webhooks/whatsapp", // servidor da Meta; confere a assinatura
   "/api/interno/comunicados",

@@ -89,6 +89,28 @@ test("sem configuração, CNPJ divergente, tomador divergente ou POST incerto",a
   assert.equal(recuperada.confirmacoes[0].p_estado,"emitida");
 });
 
+test("webhook sem referência associa somente o ID já conhecido do mesmo emitente, com tomador e valor conferidos",async()=>{
+  let nota, leituras=0;
+  const db=createClient("https://teste.invalid","teste-local",{auth:{persistSession:false},global:{fetch:async(url,init)=>{
+    const u=new URL(url);
+    if(u.pathname.endsWith("/rpc/nfse_assinatura_confirmar")) {nota=JSON.parse(init.body);return Response.json(true);}
+    assert.equal(u.searchParams.get("emitente"),"eq."+regras.CNPJ_IMOVEIS);
+    const encontrado=u.searchParams.get("gateway_id")==="eq.inv_certa";
+    return Response.json(encontrado?{fatura,emitente:regras.CNPJ_IMOVEIS,gateway_id:"inv_certa",faturas_cotadas:{
+      valor:2400,pagamento:"pay_x",assinaturas_cotadas:{cliente:"cus_x"}}}:null);
+  }}});
+  const worker=carregar("nfse-assinaturas",{"@/lib/nfse-regras":regras,"@/lib/supabase/admin":{supabaseAdmin:()=>db},
+    "@/lib/asaas":{chamarAsaasFiscal:async(path,init,recebedora)=>{
+      leituras++;assert.equal(recebedora,true);
+      if(path==="/myAccount/commercialInfo")return {cpfCnpj:regras.CNPJ_IMOVEIS};
+      assert.equal(path,"/invoices/inv_certa");return {id:"inv_certa",status:"CANCELED",customer:"cus_x",payment:"pay_x",value:24};
+    }}});
+  assert.equal(await worker.eventoFiscalAssinatura(null,"inv_alheia",regras.CNPJ_IMOVEIS),false);
+  assert.equal(leituras,0);
+  assert.equal(await worker.eventoFiscalAssinatura(null,"inv_certa",regras.CNPJ_IMOVEIS),true);
+  assert.equal(nota.p_estado,"cancelada");assert.equal(nota.p_fatura,fatura);
+});
+
 const url=process.env.ARINI_TESTE_CARTEIRA_DB;
 test("fila PostgreSQL, reservas simultâneas, estornos, emitentes e reentregas",{
   skip:!url || !["localhost","127.0.0.1","[::1]"].includes(new URL(url).hostname)

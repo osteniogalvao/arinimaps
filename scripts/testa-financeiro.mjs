@@ -31,6 +31,20 @@ const cliente = (fetch) => createClient("https://teste.invalid", "teste-local", 
   global: { fetch }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 const erro = () => json({ message: "Falha simulada", code: "TEST" }, 503);
+test("o webhook da conta fiscal passa pela proteção de pré-lançamento e exige seu próprio token",async()=>{
+  const fiscal="/api/asaas/nfse-tecnologia";
+  const bloqueio=carregar("lib/seguranca/bloqueio.ts");
+  assert.ok(bloqueio.caminhoLivre(fiscal));
+  assert.equal(bloqueio.caminhoLivre("/api/planos/cartao"),false);
+  const rota=carregar("app/api/asaas/nfse-tecnologia/route.ts",{
+    "node:crypto":require("node:crypto"), "next/server":{NextResponse:Response},
+    "@/lib/nfse-regras":carregar("lib/nfse-regras.ts"),"@/lib/nfse-assinaturas":{},
+    "@/lib/geo/limiteMemoria":{limitarEmMemoria:()=>({permitido:true})},
+    "@/lib/seguranca/limite":{ipDoPedido:()=>"127.0.0.1"},
+  },{process:{env:{ASAAS_NFSE_TECNOLOGIA_WEBHOOK_TOKEN:"fiscal-sintetico"}}});
+  const pedido=new Request("https://teste.invalid"+fiscal,{method:"POST",body:"{}"});
+  assert.equal((await rota.POST(pedido)).status,401);
+});
 test("o cartão só paga a fatura reservada com o token do cliente e do final autorizados", async()=>{
   const a={assinatura:"contrato",origem:"origem",autorizado_em:"2026-11-01",final:"8829",situacao:"aguardando"};
   const origem={id:"origem",pagamento:"pay_inicial",status:"paga",valor:4990,operacao:null};

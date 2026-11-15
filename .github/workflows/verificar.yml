@@ -25,6 +25,16 @@ jobs:
   verificar:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: teste-local
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +54,11 @@ jobs:
 
       - name: Conferir recortes urbanos e calibração CAD
         run: node scripts/testa-recortes-cad.mjs
+
+      - name: Testar assinaturas, cartão e emissão fiscal com dados sintéticos
+        env:
+          ARINI_TESTE_CARTEIRA_DB: postgresql://postgres:teste-local@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres
+        run: node --test --test-concurrency=1 scripts/testa-assinaturas-planos.mjs scripts/testa-financeiro.mjs scripts/testa-nfse-assinaturas.mjs
 
       - name: Lint
         run: npm run lint
