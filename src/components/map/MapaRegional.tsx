@@ -11,7 +11,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useS
 import bbox from "@turf/bbox";
 import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpecification, VectorTileSource } from "maplibre-gl";
 import { DETALHES_SATELITE, camadaDeDetalhe } from "@/lib/map/ortofotos";
-import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, SATELITE, ZOOM_INICIAL_REGIONAL } from "@/lib/map/config";
+import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, MOSAICO_MENOS_NUVENS, SATELITE, ZOOM_INICIAL_REGIONAL } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
 import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeoJSON, TRANSFORM_ZERO, type Transform, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
@@ -313,6 +313,7 @@ export default function MapaRegional({
   const carHoverRef = useRef<string | null>(null);
 
   // satélite é a base de abertura (pedido do Carlos em 01/10/2026); "Mapa" vira opção
+  const [mosaicoAnual, setMosaicoAnual] = useState(false);
   const [base, setBase] = useState<"ruas" | "satelite">("satelite");
   const [selecionado, setSelecionado] = useState<ImovelProps | null>(null);
   const imovelAberto = selecionado?.id;
@@ -843,6 +844,8 @@ export default function MapaRegional({
         // satélite fica acima da base vetorial e abaixo das camadas de dados
         map.addSource("satelite", SATELITE);
         map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" } });
+        map.addSource("mosaico-anual", MOSAICO_MENOS_NUVENS);
+        map.addLayer({ id: "mosaico-anual", type: "raster", source: "mosaico-anual", layout: { visibility: "none" } });
         for (const detalhe of DETALHES_SATELITE) {
           map.addSource(detalhe.id, detalhe.fonte);
           map.addLayer(camadaDeDetalhe(detalhe, baseRef.current==="satelite"));
@@ -1268,9 +1271,13 @@ export default function MapaRegional({
     baseRef.current = base; // planta que chegar depois já nasce na cor certa
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("satelite")) return;
-    map.setLayoutProperty("satelite", "visibility", base === "satelite" ? "visible" : "none");
+    const mostrarDetalhe = base === "satelite" && !mosaicoAnual;
+    map.setLayoutProperty("satelite", "visibility", mostrarDetalhe ? "visible" : "none");
+    if (map.getLayer("mosaico-anual")) {
+      map.setLayoutProperty("mosaico-anual", "visibility", base === "satelite" && mosaicoAnual ? "visible" : "none");
+    }
     for (const {id} of DETALHES_SATELITE) {
-      if (map.getLayer(id)) map.setLayoutProperty(id,"visibility",base === "satelite" ? "visible" : "none");
+      if (map.getLayer(id)) map.setLayoutProperty(id,"visibility",mostrarDetalhe ? "visible" : "none");
     }
     relevoRef.current?.mudarBase(base);
     const cores = CARTO_CORES[base];
@@ -1285,7 +1292,7 @@ export default function MapaRegional({
         map.setPaintProperty(id, "line-color", id.endsWith("-contorno") ? cores.contorno : cores.linha);
       }
     }
-  }, [base, pronto]);
+  }, [base, pronto, mosaicoAnual]);
 
   // imagem do ano / comparar
   useEffect(() => {
@@ -1754,10 +1761,16 @@ export default function MapaRegional({
             <Flag className="size-3.5" /> Não encontrei meu imóvel
           </button>
           {(["satelite", "ruas"] as const).map((b) => (
-            <button key={b} onClick={() => { setBase(b); void salvarPrefs({ mapa_base: b === "ruas" ? "mapa" : "satelite" }); }} data-ativo={base === b} className={chipBase}>
+            <button key={b} onClick={() => { setMosaicoAnual(false); setBase(b); void salvarPrefs({ mapa_base: b === "ruas" ? "mapa" : "satelite" }); }} data-ativo={base === b && (b === "ruas" || !mosaicoAnual)} className={chipBase}>
               {b === "ruas" ? "Mapa" : "Satélite"}
             </button>
           ))}
+          <button type="button" className={chipBase} data-ativo={base === "satelite" && mosaicoAnual}
+            aria-pressed={base === "satelite" && mosaicoAnual}
+            title="Panorama da NASA na visão do país. Ao aproximar, mosaico Sentinel-2 de 2021 com filtro de nuvens e resolução de 10 metros."
+            onClick={() => { setBase("satelite"); setMosaicoAnual(true); setImagemAno(null); setComparar(false); }}>
+            Mosaico com menos nuvens
+          </button>
           <button onClick={() => { setPainelMapa(camadasAbertas ? null : "camadas"); setAvisoPlano(""); }}
             aria-controls="catalogo-camadas" aria-expanded={camadasAbertas} data-ativo={camadasAbertas}
             className={chipBase} data-tour="camadas">
@@ -1825,7 +1838,7 @@ export default function MapaRegional({
               onChange={(e) => {
                 const v = e.target.value || null;
                 setImagemAno(v);
-                if (v) setBase("satelite");
+                if (v) { setMosaicoAnual(false); setBase("satelite"); }
                 else setComparar(false);
               }}
               className="w-full rounded-xl border border-linha-forte bg-superficie-2 px-3.5 py-2.5 text-sm text-texto transition focus:border-verde focus:outline-none focus:ring-2 focus:ring-verde/30">
@@ -1850,7 +1863,7 @@ export default function MapaRegional({
               Comparar com a imagem atual (cortina)
             </label>
             <CenasCopernicus mapa={mapaPronto} selecionada={imagemAno}
-              aoEscolher={(id) => { setImagemAno(id); if (id) setBase("satelite"); else setComparar(false); }} />
+              aoEscolher={(id) => { setImagemAno(id); if (id) { setMosaicoAnual(false); setBase("satelite"); } else setComparar(false); }} />
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-3">
               Wayback mostra o mosaico da Esri como estava publicado no fim de cada ano — a foto de um lugar
               pode ser anterior. Sentinel-2 é um mosaico anual sem nuvens, bom para vegetação e mancha urbana,

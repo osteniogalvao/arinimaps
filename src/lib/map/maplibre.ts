@@ -17,7 +17,8 @@
  */
 
 import type * as MapLibreNS from "maplibre-gl";
-import { TILE_DETALHE, URL_MAPLIBRE, urlTileAtivo } from "./config";
+import { URL_MAPLIBRE } from "./config";
+import { carregarTileSatelite } from "./tileSatelite";
 import { Protocol } from "pmtiles";
 import { coordenadasTileCar, recortesNoTile, recortesPublicados } from "./recortesUrbanos";
 
@@ -37,27 +38,7 @@ let promessa: Promise<typeof MapLibreNS> | null = null;
 function registrarProtocolos(ml: typeof MapLibreNS) {
   const w = window as unknown as { __protocolosAriniRegistrados?: boolean };
   if (w.__protocolosAriniRegistrados) return ml;
-  ml.addProtocol("arini-satelite", async ({ url }, abort) => {
-    const xyz = /^arini-satelite:\/\/tile\/(\d+)\/(\d+)\/(\d+)$/.exec(url);
-    if (!xyz) throw new Error("Endereço de tile de satélite inválido.");
-    const [z, x, y] = xyz.slice(1).map(Number);
-    const principal = urlTileAtivo(z, x, y);
-    const reserva = TILE_DETALHE.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
-    async function carregar(endereco: string, signal: AbortSignal) {
-      const r = await fetch(endereco, { signal });
-      if (!r.ok || !r.headers.get("content-type")?.startsWith("image/")) throw new Error("Imagem de satélite indisponível.");
-      return { data: await r.arrayBuffer(), cacheControl: r.headers.get("cache-control") ?? undefined };
-    }
-    if (principal === reserva) return carregar(principal, abort.signal);
-    try {
-      return await carregar(principal, AbortSignal.any([abort.signal, AbortSignal.timeout(12000)]));
-    } catch (erro) {
-      if (abort.signal.aborted) throw erro;
-      // Uma indisponibilidade real ainda permite navegar. A reserva não disputa a tela com o mosaico.
-      const imagem = await carregar(reserva, abort.signal);
-      return { ...imagem, cacheControl: "max-age=300" };
-    }
-  });
+  ml.addProtocol("arini-satelite", carregarTileSatelite);
   const protocolo = new Protocol({ metadata: true });
   const carregar: MapLibreNS.AddProtocolAction = protocolo.tile;
   const arquivo = process.env.NEXT_PUBLIC_CAR_NACIONAL_URL?.trim();

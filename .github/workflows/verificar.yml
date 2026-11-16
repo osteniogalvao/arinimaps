@@ -51,6 +51,7 @@ jobs:
 
       - name: Testar recorte de camadas
         run: |
+          node --experimental-strip-types --test scripts/testa-satelite-nuvens.mjs
           node scripts/testa-recorte-camadas.mjs
           node scripts/testa-consulta-rural-recorte.mjs
           node scripts/testa-relatorio-area.mjs

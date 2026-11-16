@@ -90,6 +90,14 @@ export const urlTileSatelite = (
 ) =>
   `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${release}/${z}/${y}/${x}`;
 
+export const urlTileHistorico = (z: number, x: number, y: number, release: string) =>
+  urlTileSatelite(z, x, y, release) + (ARCGIS_KEY ? "?token=" + ARCGIS_KEY : "");
+
+export const MOSAICO_MENOS_NUVENS: RasterSourceSpecification = {
+  type: "raster", tiles: ["arini-satelite://mosaico/{z}/{x}/{y}"], tileSize: 256, maxzoom: 14,
+  attribution: "Panorama NASA Blue Marble · Mosaico anual Sentinel-2 (2021, 10 m) © ESA WorldCover / Copernicus · CC BY 4.0",
+};
+
 export const TILE_DETALHE = PROVEDOR_SATELITE === "maptiler"
   ? `https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`
   : urlTileSatelite("{z}", "{x}", "{y}") + (ARCGIS_KEY ? "?token=" + ARCGIS_KEY : "");
@@ -101,9 +109,9 @@ export const SATELITE: RasterSourceSpecification = {
   tiles: ["arini-satelite://tile/{z}/{x}/{y}"],
   tileSize: 256,
   maxzoom: PROVEDOR_SATELITE === "maptiler" ? 20 : 17,
-  attribution: 'Sentinel-2 © ESA WorldCover / Copernicus (2021), CC BY 4.0 · ' +
-    (PROVEDOR_SATELITE === "maptiler" ? "© MapTiler © OpenStreetMap contributors" :
-      "Powered by Esri · Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community (World Imagery, 2025-10-23)"),
+  attribution: 'Panorama NASA Blue Marble · Sentinel-2 © ESA WorldCover / Copernicus (2021), CC BY 4.0 · ' +
+    (PROVEDOR_SATELITE === "maptiler" ? "© MapTiler © OpenStreetMap contributors · Imagem alternativa © Esri e colaboradores" :
+      "Powered by Esri · Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community (World Imagery Wayback, edições 2024 e 2025)"),
 };
 
 /**
@@ -121,11 +129,14 @@ export const SATELITE: RasterSourceSpecification = {
  *
  * O mosaico recente é opcional. Ative somente depois de conferir as imagens de perto.
  */
+export const urlTileAlto = (z: number, x: number, y: number) =>
+  `https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}?token=${ARCGIS_KEY}`;
+
 export const SATELITE_ALTO: RasterSourceSpecification | null =
   PROVEDOR_SATELITE === "esri" && process.env.NEXT_PUBLIC_SATELITE_ALTO === "1"
     ? {
         type: "raster",
-        tiles: [`https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${ARCGIS_KEY}`],
+        tiles: ["arini-satelite://alto/{z}/{x}/{y}"],
         tileSize: 256,
         minzoom: 18,
         maxzoom: 19,
