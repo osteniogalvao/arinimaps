@@ -17,7 +17,7 @@
  */
 
 import type * as MapLibreNS from "maplibre-gl";
-import { URL_MAPLIBRE } from "./config";
+import { TILE_DETALHE, URL_MAPLIBRE, urlTileAtivo } from "./config";
 import { Protocol } from "pmtiles";
 import { coordenadasTileCar, recortesNoTile, recortesPublicados } from "./recortesUrbanos";
 
@@ -34,9 +34,30 @@ let promessa: Promise<typeof MapLibreNS> | null = null;
  * Cloudflare R2): o MapLibre lê só os pedaços da tela por Range request.
  * Registrado uma vez, junto com o carregamento do MapLibre.
  */
-function registrarPmtiles(ml: typeof MapLibreNS) {
-  const w = window as unknown as { __pmtilesRegistrado?: boolean };
-  if (w.__pmtilesRegistrado) return ml;
+function registrarProtocolos(ml: typeof MapLibreNS) {
+  const w = window as unknown as { __protocolosAriniRegistrados?: boolean };
+  if (w.__protocolosAriniRegistrados) return ml;
+  ml.addProtocol("arini-satelite", async ({ url }, abort) => {
+    const xyz = /^arini-satelite:\/\/tile\/(\d+)\/(\d+)\/(\d+)$/.exec(url);
+    if (!xyz) throw new Error("Endereço de tile de satélite inválido.");
+    const [z, x, y] = xyz.slice(1).map(Number);
+    const principal = urlTileAtivo(z, x, y);
+    const reserva = TILE_DETALHE.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+    async function carregar(endereco: string, signal: AbortSignal) {
+      const r = await fetch(endereco, { signal });
+      if (!r.ok || !r.headers.get("content-type")?.startsWith("image/")) throw new Error("Imagem de satélite indisponível.");
+      return { data: await r.arrayBuffer(), cacheControl: r.headers.get("cache-control") ?? undefined };
+    }
+    if (principal === reserva) return carregar(principal, abort.signal);
+    try {
+      return await carregar(principal, AbortSignal.any([abort.signal, AbortSignal.timeout(12000)]));
+    } catch (erro) {
+      if (abort.signal.aborted) throw erro;
+      // Uma indisponibilidade real ainda permite navegar. A reserva não disputa a tela com o mosaico.
+      const imagem = await carregar(reserva, abort.signal);
+      return { ...imagem, cacheControl: "max-age=300" };
+    }
+  });
   const protocolo = new Protocol({ metadata: true });
   const carregar: MapLibreNS.AddProtocolAction = protocolo.tile;
   const arquivo = process.env.NEXT_PUBLIC_CAR_NACIONAL_URL?.trim();
@@ -53,7 +74,7 @@ function registrarPmtiles(ml: typeof MapLibreNS) {
     const { cortarTileCar } = await import("./cortarTileCar");
     return { ...resposta, data: cortarTileCar(resposta.data, z, x, y, recortes), cacheControl: "max-age=30", expires: undefined };
   });
-  w.__pmtilesRegistrado = true;
+  w.__protocolosAriniRegistrados = true;
   return ml;
 }
 
@@ -61,7 +82,7 @@ export function carregarMaplibre(): Promise<typeof MapLibreNS> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("carregarMaplibre só roda no navegador"));
   }
-  if (window.maplibregl) return Promise.resolve(registrarPmtiles(window.maplibregl));
+  if (window.maplibregl) return Promise.resolve(registrarProtocolos(window.maplibregl));
   if (promessa) return promessa;
 
   const modulo = import(/* webpackIgnore: true */ /* turbopackIgnore: true */ URL_MAPLIBRE) as Promise<
@@ -70,7 +91,7 @@ export function carregarMaplibre(): Promise<typeof MapLibreNS> {
   promessa = modulo.then(
     (ml) => {
       window.maplibregl = ml; // diagnóstico (scripts/debug-mapa.mjs) e reuso entre mapas
-      return registrarPmtiles(ml);
+      return registrarProtocolos(ml);
     },
     (e: unknown) => {
       promessa = null;

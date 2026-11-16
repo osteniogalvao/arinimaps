@@ -1,4 +1,5 @@
 import type { StyleSpecification, RasterSourceSpecification } from "maplibre-gl";
+import { urlDoTile } from "../../../public/vendor/fonte-satelite.mjs";
 import { version as versaoMapLibre } from "maplibre-gl/package.json";
 
 export const URL_MAPLIBRE = `/vendor/maplibre-gl.mjs?v=${versaoMapLibre}`;
@@ -77,14 +78,6 @@ export type ProvedorSatelite = "esri" | "maptiler" | "wayback";
 export const PROVEDOR_SATELITE: ProvedorSatelite =
   ARCGIS_KEY ? "esri" : MAPTILER_KEY ? "maptiler" : "wayback";
 
-/** Tile do satélite que o mapa está usando AGORA — o medidor de nuvem confere este. */
-export const urlTileAtivo = (z: number | string, x: number | string, y: number | string) =>
-  PROVEDOR_SATELITE === "esri"
-    ? `${urlTileSatelite(z, x, y)}?token=${ARCGIS_KEY}`
-    : PROVEDOR_SATELITE === "maptiler"
-      ? `https://api.maptiler.com/tiles/satellite-v2/${z}/${x}/${y}.jpg?key=${MAPTILER_KEY}`
-      : urlTileSatelite(z, x, y);
-
 /**
  * Release do Wayback em uso. Trocar aqui troca em todo lugar — inclusive no
  * medidor de nuvem do painel (src/lib/map/nuvem.ts), que confere este mesmo
@@ -97,31 +90,21 @@ export const urlTileSatelite = (
 ) =>
   `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${release}/${z}/${y}/${x}`;
 
-export const SATELITE: RasterSourceSpecification = PROVEDOR_SATELITE === "esri"
-  ? {
-      type: "raster",
-      tiles: [urlTileAtivo("{z}", "{x}", "{y}")],
-      tileSize: 256,
-      // z18 na região devolve 404 no release 20512 (medido em 10/09/2026)
-      maxzoom: 17,
-      attribution: "Powered by Esri · Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community (World Imagery, 2025-10-23)",
-    }
-  : PROVEDOR_SATELITE === "maptiler"
-  ? {
-      type: "raster",
-      tiles: [`https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`],
-      tileSize: 256,
-      maxzoom: 20,
-      attribution: "© MapTiler © OpenStreetMap contributors",
-    }
-  : {
-      type: "raster",
-      // os {z}/{x}/{y} são substituídos pelo MapLibre na hora de pedir o tile
-      tiles: [urlTileSatelite("{z}", "{x}", "{y}")],
-      tileSize: 256,
-      maxzoom: 17,
-      attribution: "Imagery © Esri (World Imagery, 2025-10-23)",
-    };
+export const TILE_DETALHE = PROVEDOR_SATELITE === "maptiler"
+  ? `https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`
+  : urlTileSatelite("{z}", "{x}", "{y}") + (ARCGIS_KEY ? "?token=" + ARCGIS_KEY : "");
+
+export const urlTileAtivo = (z: number, x: number, y: number) => urlDoTile(z, x, y, TILE_DETALHE);
+
+export const SATELITE: RasterSourceSpecification = {
+  type: "raster",
+  tiles: ["arini-satelite://tile/{z}/{x}/{y}"],
+  tileSize: 256,
+  maxzoom: PROVEDOR_SATELITE === "maptiler" ? 20 : 17,
+  attribution: 'Sentinel-2 © ESA WorldCover / Copernicus (2021), CC BY 4.0 · ' +
+    (PROVEDOR_SATELITE === "maptiler" ? "© MapTiler © OpenStreetMap contributors" :
+      "Powered by Esri · Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community (World Imagery, 2025-10-23)"),
+};
 
 /**
  * SATÉLITE DE PERTO (11/11/2026, áudio do Carlos: "o mapa, quando se aproxima,

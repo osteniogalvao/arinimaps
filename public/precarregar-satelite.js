@@ -1,6 +1,6 @@
 // O fragmento #pos só chega ao navegador. Antecipe o mesmo bloco central que o
 // MapLibre pediria, em paralelo ao download do motor, inclusive ao abrir um link.
-(() => {
+(async () => {
   const dados = document.currentScript.dataset;
   try {
     const preferencias = JSON.parse(localStorage.getItem(dados.preferencias) || "{}");
@@ -30,6 +30,7 @@
   link.rel = "preload";
   link.as = "fetch";
   link.crossOrigin = "anonymous";
-  link.href = dados.fonte.replace("{z}", z).replace("{x}", x).replace("{y}", y);
+  const { urlDoTile } = await import("/vendor/fonte-satelite.mjs");
+  link.href = urlDoTile(z, x, y, dados.fonte);
   document.head.appendChild(link);
-})();
+})().catch(() => { /* A antecipação é opcional. */ });

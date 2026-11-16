@@ -1,7 +1,7 @@
 import type { RasterSourceSpecification, StyleSpecification, RasterLayerSpecification } from "maplibre-gl";
 import { SATELITE, SATELITE_ALTO } from "./config";
 
-type Detalhe = { id: string; fonte: RasterSourceSpecification; ateZoom?: number };
+type Detalhe = { id: string; fonte: RasterSourceSpecification };
 type Limites = [number, number, number, number];
 
 function fonteConfigurada(): Detalhe | null {
@@ -42,16 +42,11 @@ const fazendaLaranja: Detalhe = {
 
 const configurada = fonteConfigurada();
 export const DETALHES_SATELITE: Detalhe[] = [
-  {id:"mosaico-regional-sentinel",ateZoom:13,fonte:{
-    type:"raster",minzoom:6,maxzoom:13,tileSize:256,
-    tiles:["https://titiler.terrascope.be/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=esa-worldcover-s2rgbnir-10m-2021-v2_tcc&STYLES=&TIME=2021-01-01&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/jpeg"],
-    attribution:"Mosaico Sentinel-2 de 2021 · © ESA WorldCover / Copernicus · CC BY 4.0",
-  }},
   ...(SATELITE_ALTO ? [{id:"satelite-alto",fonte:SATELITE_ALTO}] : []),
   fazendaLaranja, ...(configurada ? [configurada] : []),
 ];
-export const camadaDeDetalhe = ({id,fonte,ateZoom}: Detalhe, visivel=true): RasterLayerSpecification => ({
-  id,type:"raster",source:id,minzoom:fonte.minzoom,...(ateZoom ? {maxzoom:ateZoom} : {}),layout:{visibility:visivel ? "visible" : "none"},
+export const camadaDeDetalhe = ({id,fonte}: Detalhe, visivel=true): RasterLayerSpecification => ({
+  id,type:"raster",source:id,minzoom:fonte.minzoom,layout:{visibility:visivel ? "visible" : "none"},
 });
 export function estiloSatelite(): StyleSpecification {
   return {

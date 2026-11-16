@@ -316,7 +316,7 @@ export default function HeroCarrossel({ slides, h1 }: { slides: SlideHero[]; h1:
 
       {slideDeMapa && mapaPronto && (
         <p className="pointer-events-none absolute bottom-2 right-4 z-[3] hidden text-[11px] text-white/55 md:block">
-          Imagem de satélite © Esri · malha do CAR e lotes sobre o satélite
+          Imagem de satélite © ESA WorldCover / Copernicus e Esri · malha do CAR e lotes sobre o satélite
         </p>
       )}
     </section>
