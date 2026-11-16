@@ -31,14 +31,13 @@ const LIMITES = {
   parteEscalaMax: 1.25,
   partes: 100,
   verticesArea: 300,
-  // linhas apagadas à mão (áudio do Carlos, 05/11/2026): limpeza pontual, não
-  // substituto de reenviar um DXF errado
+  // A planta municipal de Iturama tem mais de 200 mil linhas.
   linhasExcluidas: 300_000,
   espessuraMin: 0.25,
   espessuraMax: 5,
-  edicoes: 2_000,
+  edicoes: 100_000,
   verticesLinha: 2_000,
-  verticesEditadosTotal: 50_000,
+  verticesEditadosTotal: 500_000,
 };
 
 function lerEdicoes(v: unknown): { ok: true; edicoes: EdicaoGeometria[] } | { ok: false; motivo: string } {
