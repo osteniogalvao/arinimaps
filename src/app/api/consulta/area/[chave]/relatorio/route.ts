@@ -1,3 +1,4 @@
+import { perfilDaArea } from "@/lib/relatorio/territorio";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 import { carregarConsultaArea } from "@/lib/geo/consultaArea";
 import { acessoAtual } from "@/lib/planos-servidor";
@@ -29,6 +30,7 @@ export async function GET(request: Request, ctx: { params: Promise<{chave: strin
     "Data de registro: " + dataDaBase(area.created_at),
     "Raio de consulta: " + rotuloRaio(opcoes.raioM),
   ]});
+  secoes.push(...await perfilDaArea(area.geometry, userId + ":" + chave, Number(area.area_ha), opcoes.escolhidas));
   if (opcoes.escolhidas.has("fontes")) {
     const consulta = await carregarConsultaArea(chave, {relatorio:true, raioM:opcoes.raioM});
     secoes.push(...secoesResultados(consulta.lista));

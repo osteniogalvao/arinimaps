@@ -136,11 +136,10 @@ export const SATELITE: RasterSourceSpecification = PROVEDOR_SATELITE === "esri"
  * Wayback foi medida no z14–z16; no z18 ainda falta medir (escolha do Stenio
  * em 11/11/2026: testar antes de pagar outra fonte).
  *
- * Só existe com a chave da Esri. Para desligar sem mexer no código:
- * NEXT_PUBLIC_SATELITE_ALTO=0 no ambiente (pede novo build).
+ * O mosaico recente é opcional. Ative somente depois de conferir as imagens de perto.
  */
 export const SATELITE_ALTO: RasterSourceSpecification | null =
-  PROVEDOR_SATELITE === "esri" && process.env.NEXT_PUBLIC_SATELITE_ALTO !== "0"
+  PROVEDOR_SATELITE === "esri" && process.env.NEXT_PUBLIC_SATELITE_ALTO === "1"
     ? {
         type: "raster",
         tiles: [`https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${ARCGIS_KEY}`],

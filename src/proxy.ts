@@ -16,7 +16,7 @@ export async function proxy(request: NextRequest) {
     if (!origem.ok) return respostaOrigemNegada(origem.motivo);
   }
   if (bloqueioAtivo() && !caminhoLivre(pathname) &&
-      !(await cookieValido(request.cookies.get(COOKIE_BLOQUEIO)?.value))) {
+      !(await cookieValido(request.cookies.get(COOKIE_BLOQUEIO)?.value, pathname, request.method))) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Site em acesso restrito." }, { status: 401 });
     }

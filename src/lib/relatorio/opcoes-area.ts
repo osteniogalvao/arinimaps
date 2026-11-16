@@ -15,7 +15,7 @@ export function opcoesRelatorio(request: Request, car: boolean) {
   const modelo = opcoes.get("modelo") ?? "simples";
   const disposicao = opcoes.get("visualizar") === "1" ? "inline" : "attachment";
   if (!["simples","completo"].includes(modelo)) return "Modelo inválido.";
-  const secoesPermitidas = ["cadastro", "mapa", ...(modelo === "completo" ? [...(car ? ["ambiente"] : []), "fontes"] : [])];
+  const secoesPermitidas = ["cadastro", "mapa", "matricula", "uso", ...(modelo === "completo" ? [...(car ? ["ambiente"] : []), "clima", "fontes"] : [])];
   const escolhidas = new Set(opcoes.has("personalizar") ? opcoes.getAll("secao") : secoesPermitidas);
   if (!escolhidas.size || [...escolhidas].some(s => !secoesPermitidas.includes(s))) {
     return "Escolha ao menos uma seção disponível no modelo.";

@@ -33,7 +33,7 @@ const LIMITES = {
   verticesArea: 300,
   // linhas apagadas à mão (áudio do Carlos, 05/11/2026): limpeza pontual, não
   // substituto de reenviar um DXF errado
-  linhasExcluidas: 20_000,
+  linhasExcluidas: 300_000,
   espessuraMin: 0.25,
   espessuraMax: 5,
   edicoes: 2_000,

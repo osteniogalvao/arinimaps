@@ -135,10 +135,10 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
                 }} />
             </div>
             <div className="border-t border-linha pt-4"><MatriculaSigef cod={p.cod} /></div>
-            <RelatorioPersonalizado caminho={"/api/consulta/car/" + encodeURIComponent(p.cod) + "/relatorio"} raioM={raioM} completo={!!consulta.user && consulta.acesso.recursos.has("relatorio_territorial")} />
+            <RelatorioPersonalizado caminho={"/api/consulta/car/" + encodeURIComponent(p.cod) + "/relatorio"} raioM={raioM} completo />
             {whatsappConfigurado() && <p className="text-sm text-texto-2">Para receber esta consulta pelo WhatsApp oficial da ARINI, envie <strong>CONSULTAR CAR {p.cod}</strong>.</p>}
             <div className="flex flex-wrap gap-2 border-t border-linha pt-4">
-              {(["simples", ...(consulta.user && consulta.acesso.recursos.has("relatorio_territorial") ? ["completo"] : [])]).map(modelo => {
+              {(["simples", "completo"]).map(modelo => {
                 const href = `/api/consulta/car/${encodeURIComponent(p.cod)}/relatorio?modelo=${modelo}&raio_m=${raioM}`;
                 return <div key={modelo} className="flex items-center gap-3 rounded-xl border border-linha px-4 py-2 text-sm">
                   <strong>Modelo {modelo}</strong>
@@ -146,7 +146,6 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
                   <a className="text-verde underline" href={href} aria-label={`Baixar PDF ${modelo}`}>Baixar</a>
                 </div>;
               })}
-              <BotaoLink href={`/suporte?assunto=${encodeURIComponent("Solicitação de relatório completo do CAR " + p.cod)}`}>Solicitar relatório completo à equipe</BotaoLink>
             </div>
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-4">
               Dados públicos do SICAR, copiados em{" "}

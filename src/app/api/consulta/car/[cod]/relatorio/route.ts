@@ -1,7 +1,8 @@
 import { dataDaBase, opcoesRelatorio, secoesResultados } from "@/lib/relatorio/opcoes-area";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { consultarCar } from "@/lib/geo/car";
-import { acessoAtual } from "@/lib/planos-servidor";
+import { perfilDaArea } from "@/lib/relatorio/territorio";
+import { fontesPublicasCar } from "@/lib/relatorio/fontes-car";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 import { carregarConsultaArea } from "@/lib/geo/consultaArea";
 import { pdfDaArea, type SecaoPdf } from "@/lib/relatorio/pdf-area";
@@ -13,14 +14,10 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
   const opcoes = opcoesRelatorio(request, true);
   if (typeof opcoes === "string") return Response.json({error:opcoes}, {status:400});
   const {raioM, modelo, disposicao, escolhidas} = opcoes;
-  const bloqueio = await limiteLeituraMapa(request, "geo");
+  const bloqueio = await limiteLeituraMapa(request, "relatorio");
   if (bloqueio) return bloqueio;
   const cod = (await ctx.params).cod.toUpperCase();
   if (!/^[A-Z]{2}-\d{7}-[0-9A-F.-]{20,45}$/i.test(cod)) return Response.json({ error: "Código CAR inválido." }, { status: 400 });
-  if (modelo === "completo") {
-    const { userId, acesso } = await acessoAtual();
-    if (!userId || !acesso.recursos.has("relatorio_territorial")) return Response.json({error:"O relatório completo exige acesso profissional."},{ status:userId ? 403 : 401 });
-  }
   const db = supabaseAdmin();
   const {data, error} = await consultarCar(cod);
   if (error) return Response.json({ error:"A consulta está indisponível." }, {status:503});
@@ -37,6 +34,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
     "Fonte: SICAR · atualização do cadastro: " + dataDaBase(p.atualizado_sicar),
     ...(p.importado_em ? ["Cópia consultada pela ARINI em " + dataDaBase(p.importado_em) + "."] : []),
   ]});
+  const perfil = perfilDaArea(data.geometry, "car:" + cod, hectares, escolhidas);
   if (escolhidas.has("fontes") || escolhidas.has("ambiente")) {
     const [consulta, ambiente] = await Promise.all([
       escolhidas.has("fontes") ? carregarConsultaArea("car:" + cod, { excluir: ["car"], relatorio: true, raioM }) : null,
@@ -49,8 +47,14 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
       if (tema !== "area_imovel") contagem.set(tema, (contagem.get(tema) ?? 0) + 1);
     }
     if (ambiente) secoes.push({titulo:"Ambiente no perímetro cadastrado", linhas:ambiente.error ? ["Base ambiental indisponível na emissão."] : contagem.size ? Array.from(contagem, ([k,v]) => (k === "nascente" ? "Nascentes aproximadas (FBDS)" : TEMAS_CAR[k as TemaCar] ?? k) + ": " + v.toLocaleString("pt-BR") + (v === 1 ? " feição mapeada." : " feições mapeadas.")) : ["Sem feições na cobertura ambiental disponível para este perímetro."]});
-    if (consulta) secoes.push(...secoesResultados(consulta.lista));
-  }
+    secoes.push(...await perfil);
+    if (consulta) {
+      const fontes = await fontesPublicasCar(cod, raioM, consulta.lista);
+      secoes.push(...secoesResultados(fontes.filter(f=>f.consulta)));
+      const pendentes = fontes.filter(f=>!f.consulta);
+      if(pendentes.length) secoes.push({titulo:"Cobertura complementar",linhas:["Sem resultado disponível nesta emissão: "+pendentes.map(f=>f.nome).join(", ")+"."]});
+    }
+  } else secoes.push(...await perfil);
   secoes.push({ titulo:"Sobre os dados", linhas:["O CAR é autodeclarado. Esta consulta é informativa e não substitui certidão, matrícula ou vistoria. A ausência de registro na base não confirma ausência de restrição no terreno."] });
   const titulo = opcoes.personalizado ? "Relatório territorial personalizado" : "Relatório territorial " + modelo;
   const bytes = await pdfDaArea(titulo, cod, secoes, escolhidas.has("mapa") ? data.geometry : null);

@@ -137,9 +137,9 @@ const numerosCache = unstable_cache(async () => {
     admin.from("properties").select("id", { count: "exact", head: true }).in("status", ["publicado", "em_negociacao", "vendido"]),
     admin.from("urban_lots").select("id", { count: "exact", head: true }),
     // visualizações das páginas de imóvel nos últimos 30 dias e nos 30 anteriores
-    admin.from("property_events").select("id", { count: "exact", head: true }).eq("tipo", "visualizacao").gte("created_at", ha30),
-    admin.from("property_events").select("id", { count: "exact", head: true }).eq("tipo", "visualizacao").gte("created_at", ha60).lt("created_at", ha30),
-    admin.from("sales").select("valor_final"),
+    admin.from("property_events").select("id,properties!inner(demonstracao)", { count: "exact", head: true }).eq("properties.demonstracao",false).eq("tipo", "visualizacao").gte("created_at", ha30),
+    admin.from("property_events").select("id,properties!inner(demonstracao)", { count: "exact", head: true }).eq("properties.demonstracao",false).eq("tipo", "visualizacao").gte("created_at", ha60).lt("created_at", ha30),
+    admin.from("sales").select("valor_final,properties!inner(demonstracao)").eq("properties.demonstracao", false),
   ]);
   // a contagem principal falhou: não guarda zeros no cache
   if (mun.error) throw new Error(mun.error.message);

@@ -54,8 +54,25 @@ function iguais(a: string, b: string) {
   return d === 0;
 }
 
-export async function cookieValido(valor: string | undefined) {
+/** Convite de pré-lançamento para gravar as telas públicas. Não cria sessão de usuário. */
+export async function validadeGravacao(convite: string): Promise<number> {
+  const partes = /^gravacao\.(\d{10})\.([0-9a-f]{64})$/.exec(convite);
+  if (!partes || !process.env.SITE_SENHA || !(process.env.SITE_BLOQUEIO_SEGREDO || process.env.SUPABASE_SERVICE_ROLE_KEY)) return 0;
+  const segundos = Number(partes[1]) - Math.floor(Date.now() / 1000);
+  if (segundos <= 0 || segundos > 7 * 86400) return 0;
+  const assinatura = await hmac("arini-gravacao:v1:" + partes[1] + ":" + process.env.SITE_SENHA);
+  return iguais(partes[2], assinatura) ? segundos : 0;
+}
+
+export function telaDeGravacao(pathname: string, metodo: string) {
+  if (metodo !== "GET" && metodo !== "HEAD") return false;
+  return pathname === "/" || pathname === "/precarregar-satelite.js" || ["/vendor", "/img", "/mapa", "/imoveis", "/mercado", "/planos", "/consulta/car", "/api/consulta/car",
+    "/api/geo", "/api/tiles", "/api/sentinel", "/fonts"].some(p => pathname === p || pathname.startsWith(p + "/"));
+}
+
+export async function cookieValido(valor: string | undefined, pathname = "", metodo = "") {
   if (!valor) return false;
+  if (valor.startsWith("gravacao.")) return telaDeGravacao(pathname, metodo) && (await validadeGravacao(valor)) > 0;
   return iguais(valor, await fichaDeAcesso());
 }
 

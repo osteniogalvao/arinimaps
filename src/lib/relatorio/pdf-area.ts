@@ -1,6 +1,7 @@
+import { imagemDaFonte } from "./imagem-fonte";
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
 
-export type SecaoPdf = { titulo: string; linhas: string[] };
+export type SecaoPdf = { titulo: string; linhas: string[]; serie?: (number|null)[] };
 const verde = rgb(.07,.27,.20), tinta = rgb(.12,.18,.16), cinza = rgb(.30,.37,.34);
 const largura = 595, altura = 842, margem = 44, util = largura - 2*margem;
 
@@ -52,11 +53,7 @@ async function desenharDivisa(doc: PDFDocument, pagina: PDFPage, geo: GeoJSON.Ge
     }
     parametros.set("LAYERS", fonte.camada);
     try {
-      const r = await fetch(fonte.url + "?" + parametros, {
-        signal:AbortSignal.timeout(6000), ...(privada ? {cache:"no-store" as const} : {next:{revalidate:86400}}),
-      });
-      if (!r.ok || !r.headers.get("content-type")?.startsWith("image/jpeg")) continue;
-      const jpg = await doc.embedJpg(await r.arrayBuffer());
+      const jpg = await doc.embedJpg(await imagemDaFonte(fonte.url+"?"+parametros,"image/jpeg",privada));
       pagina.drawImage(jpg,{x:margem,y:topo-h,width:w,height:h});
       imagem = fonte.id;
       break;
@@ -119,9 +116,25 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
     } else linha("Imagem de satélite indisponível na emissão. A figura apresenta somente o perímetro.");
   }
   for(const secao of secoes) {
-    if(y<100) quebra();
-    y-=12;linha(secao.titulo,true);
+    if(y<136) quebra();
+    y-=8;
+    pagina.drawRectangle({x:margem-2,y:y-6,width:util+4,height:23,color:rgb(.92,.96,.93)});
+    pagina.drawRectangle({x:margem-7,y:y-6,width:3,height:23,color:verde});
+    linha(secao.titulo,true);
+    y-=4;
     for(const item of secao.linhas) linha(item);
+    if(secao.serie?.length) {
+      if(y<155) quebra();
+      const max=Math.max(1,...secao.serie.map(v=>v??0));
+      const passo=util/secao.serie.length;
+      const base=y-56;
+      pagina.drawLine({start:{x:margem,y:base},end:{x:margem+util,y:base},color:cinza,thickness:.5});
+      secao.serie.forEach((valor,i)=>{
+        if(valor===null) return;
+        pagina.drawRectangle({x:margem+i*passo+1,y:base,width:passo-2,height:Math.max(.5,valor/max*48),color:rgb(.16,.45,.59)});
+      });
+      y=base-15;linha("Precipitação diária (mm) · da primeira à última data do período.");
+    }
   }
   const paginas=doc.getPages();
   paginas.forEach((p,i)=>{

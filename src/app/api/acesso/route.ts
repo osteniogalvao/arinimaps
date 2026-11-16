@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { BLOQUEIO_DIAS, COOKIE_BLOQUEIO, fichaDeAcesso, senhaConfere } from "@/lib/seguranca/bloqueio";
+import { BLOQUEIO_DIAS, COOKIE_BLOQUEIO, fichaDeAcesso, senhaConfere, validadeGravacao } from "@/lib/seguranca/bloqueio";
 import { destinoSeguro } from "@/lib/seguranca/destino";
 import { consultarLimite, ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
 
@@ -14,19 +14,20 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const senha = typeof body?.senha === "string" ? body.senha : "";
-  if (!(await senhaConfere(senha))) {
+  const gravacao = await validadeGravacao(senha);
+  if (!gravacao && !(await senhaConfere(senha))) {
     const limite = await limitar(chave, 10, 15 * 60);
     if (!limite.permitido) return respostaLimite(limite, "senha");
     return NextResponse.json({ error: "Senha incorreta." }, { status: 401 });
   }
 
   const res = NextResponse.json({ ok: true, volta: destinoSeguro(body?.volta) });
-  res.cookies.set(COOKIE_BLOQUEIO, await fichaDeAcesso(), {
+  res.cookies.set(COOKIE_BLOQUEIO, gravacao ? senha : await fichaDeAcesso(), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: BLOQUEIO_DIAS * 24 * 60 * 60,
+    maxAge: gravacao || BLOQUEIO_DIAS * 24 * 60 * 60,
   });
   return res;
 }

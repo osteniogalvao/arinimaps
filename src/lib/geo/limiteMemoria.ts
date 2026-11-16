@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { ipDoPedido, respostaLimite, type Limite } from "@/lib/seguranca/limite";
-import { bloqueioAtivo, COOKIE_BLOQUEIO, fichaDeAcesso } from "@/lib/seguranca/bloqueio";
+import { bloqueioAtivo, COOKIE_BLOQUEIO, cookieValido, fichaDeAcesso } from "@/lib/seguranca/bloqueio";
 
 /**
  * Limite de requisições das LEITURAS DO MAPA (tiles e /api/geo), por IP, em
@@ -37,6 +37,7 @@ let ultimaLimpeza = Date.now();
 export const LIMITES_MAPA = {
   tiles: { max: 3000, janelaS: 300 },
   geo: { max: 600, janelaS: 300 },
+  relatorio: { max: 24, janelaS: 300 },
 } as const;
 
 /** Conta mais uma requisição para a chave e diz se ainda pode. */
@@ -96,6 +97,7 @@ let fichaCache: { senha: string; ficha: Promise<string> } | null = null;
 async function acessoLiberado(request: Request) {
   const valor = lerCookie(request.headers.get("cookie"), COOKIE_BLOQUEIO);
   if (!valor) return false;
+  if (valor.startsWith("gravacao.")) return cookieValido(valor, new URL(request.url).pathname, request.method);
   const senha = process.env.SITE_SENHA ?? "";
   if (!fichaCache || fichaCache.senha !== senha) fichaCache = { senha, ficha: fichaDeAcesso() };
   const certa = await fichaCache.ficha;

@@ -4,9 +4,9 @@ import { useState } from "react";
 
 export default function RelatorioPersonalizado({ caminho, raioM, completo, desenho = false }: { caminho: string; raioM: number; completo: boolean; desenho?: boolean }) {
   const opcoes = [
-    ["cadastro", desenho ? "Dados da área desenhada" : "Dados cadastrais"], ["mapa", "Imagem de satélite e divisa"],
+    ["cadastro", desenho ? "Dados da área desenhada" : "Dados cadastrais"], ["mapa", "Imagem de satélite e divisa"], ["matricula", "Matrículas no SIGEF"], ["uso", "Uso e cobertura do solo"],
     ...(completo && !desenho ? [["ambiente", "Ambiente no perímetro"]] : []),
-    ...(completo ? [["fontes", "Consultas às fontes oficiais"]] : []),
+    ...(completo ? [["clima", "Precipitação regional"], ["fontes", "Consultas às fontes oficiais"]] : []),
   ];
   const [secoes, setSecoes] = useState(new Set(opcoes.map(([id]) => id)));
   return <details className="mt-3 text-sm">
