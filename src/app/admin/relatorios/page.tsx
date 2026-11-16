@@ -28,11 +28,11 @@ async function lerKpis(): Promise<Kpis> {
   if (!error && data) return data as Kpis;
 
   const [opps, vendas, comissoes, faturas, leads] = await Promise.all([
-    lerEmLotes<{ etapa: string }>((de, ate) => admin.from("opportunities").select("etapa").order("id").range(de, ate)),
-    lerEmLotes<{ valor_final: number }>((de, ate) => admin.from("sales").select("valor_final").order("id").range(de, ate)),
-    lerEmLotes<{ valor: number; status: string }>((de, ate) => admin.from("commissions").select("valor, status").order("id").range(de, ate)),
+    lerEmLotes<{ etapa: string }>((de, ate) => admin.from("oportunidades_oficiais").select("etapa").order("id").range(de, ate)),
+    lerEmLotes<{ valor_final: number }>((de, ate) => admin.from("vendas_oficiais").select("valor_final").order("id").range(de, ate)),
+    lerEmLotes<{ valor: number; status: string }>((de, ate) => admin.from("comissoes_oficiais").select("valor, status").order("id").range(de, ate)),
     lerEmLotes<{ valor: number; status: string }>((de, ate) => admin.from("invoices").select("valor, status").order("id").range(de, ate)),
-    lerEmLotes<{ origem: string }>((de, ate) => admin.from("leads").select("origem").order("id").range(de, ate)),
+    lerEmLotes<{ origem: string }>((de, ate) => admin.from("leads_oficiais").select("origem").order("id").range(de, ate)),
   ]);
   const contar = (linhas: Record<string, unknown>[], campo: string) => {
     const m: Record<string, number> = {};

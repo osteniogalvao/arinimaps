@@ -33,7 +33,7 @@ export default async function AdminImoveis({ searchParams }: PageProps<"/admin/i
 
   let consulta = admin
     .from("properties")
-    .select("id, codigo, titulo, tipo, status, valor, created_at, municipality:municipalities!properties_municipality_id_fkey(nome)", { count: "exact" });
+    .select("id, codigo, titulo, tipo, status, valor, created_at, municipality:municipalities!properties_municipality_id_fkey(nome)", { count: "exact" }).eq("demonstracao", false);
   consulta = soRevisao
     ? consulta.in("id", comRevisao.size ? [...comRevisao] : ["00000000-0000-0000-0000-000000000000"])
     : consulta.in("status", FILTROS[chave]);

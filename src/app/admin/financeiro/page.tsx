@@ -23,7 +23,7 @@ export default async function PainelFinanceiro() {
 
   const [mensal, comissoes, faturas, atrasadas, assinaturas] = await Promise.all([
     admin.rpc("fn_financeiro_mensal", { p_meses: 12 }),
-    lerEmLotes((de, ate) => admin.from("commissions")
+    lerEmLotes((de, ate) => admin.from("comissoes_oficiais")
       .select("id, valor, recebido, status, created_at, sale:sales(data_venda, property:properties(codigo, titulo))")
       .in("status", ["registrada", "cobrada"]).order("created_at").order("id").range(de, ate), { maximo: Infinity }),
     admin.from("invoices")

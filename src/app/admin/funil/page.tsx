@@ -16,7 +16,7 @@ const MAX_CARDS = 500;
 export default async function AdminFunil() {
   await exigirSetor("comercial");
   const { data: recentes, count } = await supabaseAdmin()
-    .from("opportunities")
+    .from("oportunidades_oficiais")
     .select(`
       id, codigo, etapa, responsavel_tipo, created_at,
       lead:leads(nome),

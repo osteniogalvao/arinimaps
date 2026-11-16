@@ -34,7 +34,7 @@ export default async function Rodizio() {
   const comercial = (membros ?? []).filter((m) => m.role === "admin_central" || (m.setores ?? []).includes("comercial"));
 
   // números dos últimos 30 dias por corretor
-  const { data: opps } = await admin.from("opportunities")
+  const { data: opps } = await admin.from("oportunidades_oficiais")
     .select("responsavel_user_id, atribuida_em, primeiro_atendimento_em, etapa, created_at")
     .gte("created_at", ha30).not("responsavel_user_id", "is", null);
   const stats = new Map<string, { leads: number; atendidos: number; minutos: number[]; ganhos: number }>();

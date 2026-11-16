@@ -20,8 +20,8 @@ export default async function PainelComercial() {
   const ha30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
   const [leads30, { data: opps }, { data: visitas }, { data: propostas }, vendas30, parceirosAtivos] = await Promise.all([
-    contar("leads", (q) => q.gte("created_at", ha30)),
-    admin.from("opportunities")
+    contar("leads_oficiais", (q) => q.gte("created_at", ha30)),
+    admin.from("oportunidades_oficiais")
       .select("id, codigo, etapa, updated_at, responsavel_tipo, lead:leads(nome), property:properties(codigo, titulo)")
       .not("etapa", "in", "(fechado,pos_venda,perdido)").order("updated_at").limit(300),
     admin.from("visits")
@@ -30,7 +30,7 @@ export default async function PainelComercial() {
     admin.from("proposals")
       .select("id, valor, autor_lado, created_at, opportunity:opportunities(id, codigo, property:properties(titulo))")
       .eq("status", "enviada").order("created_at", { ascending: false }).limit(12),
-    admin.from("sales").select("valor_final").gte("created_at", ha30)
+    admin.from("vendas_oficiais").select("valor_final").gte("created_at", ha30)
       .then(({ data }) => ({ n: data?.length ?? 0, volume: (data ?? []).reduce((s, v) => s + Number(v.valor_final), 0) })),
     contar("partners", (q) => q.in("status", ["aprovado", "ativo"])),
   ]);

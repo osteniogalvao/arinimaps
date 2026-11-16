@@ -41,15 +41,15 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
       contar("owners", (q) => q.in("status", ["solicitado", "em_analise"])),
     ]).then(([a, b]) => a + b),
     contar("property_documents", (q) => q.eq("verificado", false).is("substituido_por", null)),
-    contar("opportunities", (q) => q.eq("etapa", "novo_lead")),
-    contar("opportunities", (q) => q.in("etapa", ["proposta_enviada", "contraproposta", "negociacao", "aceite", "contrato"])),
-    admin.from("commissions").select("valor,recebido").in("status", ["registrada", "cobrada"])
+    contar("oportunidades_oficiais", (q) => q.eq("etapa", "novo_lead")),
+    contar("oportunidades_oficiais", (q) => q.in("etapa", ["proposta_enviada", "contraproposta", "negociacao", "aceite", "contrato"])),
+    admin.from("comissoes_oficiais").select("valor,recebido").in("status", ["registrada", "cobrada"])
       .then(({ data }) => (data ?? []).reduce((s, c) => s + Number(c.valor) - Number(c.recebido ?? 0), 0)),
     contar("invoices", (q) => q.eq("status", "vencida")),
     contar("lgpd_requests", (q) => q.in("status", ["recebido", "em_analise"])),
     contar("property_authorizations", (q) => q.gte("validade", hoje).lte("validade", em30)),
     contar("properties", (q) => q.in("status", ["publicado", "em_negociacao"])),
-    contar("leads", (q) => q.gte("created_at", new Date(Date.now() - 30 * 86_400_000).toISOString())),
+    contar("leads_oficiais", (q) => q.gte("created_at", new Date(Date.now() - 30 * 86_400_000).toISOString())),
     contar("support_tickets", (q) => q.in("status", ["aberto", "em_atendimento"])),
     contar("auth_events", (q) => q.in("evento", ["login_falhou", "login_bloqueado", "mfa_falhou"]).gte("created_at", ha24h)),
     // requisitos cartográficos §2: fila de "não encontrei meu imóvel" / "mapa divergente"

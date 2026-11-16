@@ -55,10 +55,10 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
     .filter(Boolean).join(",");
   const [{ data: imoveis }, { data: publicados }] = filtroDono
     ? await Promise.all([
-        supabase.from("properties").select(CAMPOS).or(filtroDono)
+        supabase.from("properties").select(CAMPOS).eq("demonstracao", false).or(filtroDono)
           .not("status", "in", '("publicado","em_negociacao","vendido","historico")')
           .order("created_at", { ascending: false }).limit(200),
-        supabase.from("properties").select(CAMPOS).or(filtroDono)
+        supabase.from("properties").select(CAMPOS).eq("demonstracao", false).or(filtroDono)
           .in("status", ["publicado", "em_negociacao", "vendido"])
           .order("created_at", { ascending: false }).limit(200),
       ])

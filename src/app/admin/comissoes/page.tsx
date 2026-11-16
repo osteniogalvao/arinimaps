@@ -27,7 +27,7 @@ export default async function AdminComissoes({ searchParams }: PageProps<"/admin
   // tabela paginada; os totais leem só valor+status de todas, em lotes
   // (o PostgREST corta cada pedido em 1000 linhas sem avisar)
   const [{ data: comissoes, count, error: erroLista }, { data: todas, error: erroTotais }] = await Promise.all([
-    admin.from("commissions")
+    admin.from("comissoes_oficiais")
       .select(`
         id, base_calculo, percentual, valor, regra_contratual, status, pago_em, created_at, recebido, autorizacao_id, captador_id,
         captador:partners(razao_social,perfil:profiles!partners_profile_id_fkey(nome)),
@@ -35,7 +35,7 @@ export default async function AdminComissoes({ searchParams }: PageProps<"/admin
         sale:sales(data_venda, opportunity:opportunities(codigo), property:properties(codigo, titulo))
       `, { count: "exact" })
       .order("created_at", { ascending: false }).order("id").range(de, ate),
-    lerEmLotes<{ valor: number; recebido: number | null; status: string }>((i, f) => admin.from("commissions").select("valor, recebido, status").order("id").range(i, f), { maximo: Infinity }),
+    lerEmLotes<{ valor: number; recebido: number | null; status: string }>((i, f) => admin.from("comissoes_oficiais").select("valor, recebido, status").order("id").range(i, f), { maximo: Infinity }),
   ]);
 
   if (erroLista || erroTotais) return <Vazio icone={Percent} titulo="Comissões indisponíveis" texto="Atualize a página para consultar os recebimentos." />;

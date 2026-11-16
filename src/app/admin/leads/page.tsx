@@ -18,7 +18,7 @@ export default async function AdminLeads({ searchParams }: PageProps<"/admin/lea
       property:properties(codigo, titulo)`;
   // com a 0065: quem atende e o prazo do primeiro contato; sem ela, a lista de antes
   const novo = (() => {
-    let q = admin.from("opportunities")
+    let q = admin.from("oportunidades_oficiais")
       .select(`${CAMPOS}, responsavel_user_id, prazo_atendimento, primeiro_atendimento_em`)
       .order("created_at", { ascending: false }).limit(100);
     if (visao === "meus") q = q.eq("responsavel_user_id", user.id).not("etapa", "in", "(fechado,pos_venda,perdido)");
@@ -27,7 +27,7 @@ export default async function AdminLeads({ searchParams }: PageProps<"/admin/lea
   })();
   const [r, equipe] = await Promise.all([novo, equipeAtiva()]);
   const opps = (r.error
-    ? (await admin.from("opportunities").select(CAMPOS).order("created_at", { ascending: false }).limit(100)).data
+    ? (await admin.from("oportunidades_oficiais").select(CAMPOS).order("created_at", { ascending: false }).limit(100)).data
     : r.data) as unknown as Array<{
       id: string; codigo: string; etapa: string; created_at: string; lead: unknown; property: unknown;
       responsavel_user_id?: string | null; prazo_atendimento?: string | null; primeiro_atendimento_em?: string | null;

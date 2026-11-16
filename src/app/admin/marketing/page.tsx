@@ -28,7 +28,7 @@ export default async function PainelMarketing() {
   // tudo vira contagem (origem, campanha, interessados por imóvel)
   const [{ data: leads }, { data: imoveis }, { data: apresentacoes }] = await Promise.all([
     lerEmLotes<{ property_id: string; origem: string; canal: string | null; utm: unknown; created_at: string }>((de, ate) =>
-      admin.from("leads").select("property_id, origem, canal, utm, created_at").gte("created_at", ha90).order("id").range(de, ate)),
+      admin.from("leads_oficiais").select("property_id, origem, canal, utm, created_at").gte("created_at", ha90).order("id").range(de, ate)),
     lerEmLotes((de, ate) => admin.from("properties")
       .select("id, codigo, titulo, tipo, valor, published_at, municipality:municipalities!properties_municipality_id_fkey(nome), media:property_media(id)")
       .in("status", ["publicado", "em_negociacao"]).order("published_at", { ascending: false }).order("id").range(de, ate)),
