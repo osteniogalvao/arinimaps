@@ -24,7 +24,7 @@ export default function ConfigurarEspelho({ id, config }: { id: string; config: 
     if (r.ok || r.erro.status === 409) router.refresh();
   }}>
     <h2 className="font-semibold">Condições do empreendimento</h2>
-    <label className="flex items-center gap-2"><input type="checkbox" checked={pre} onChange={e => setPre(e.target.checked)} /> Identificar como pré-lançamento</label>
+    <label className="flex items-center gap-2"><input type="checkbox" checked={pre} onChange={e => setPre(e.target.checked)} /> Pré-lançamento · ocultar o empreendimento e suas unidades no mapa principal</label>
     <label className="flex items-center gap-2"><input type="checkbox" checked={online} onChange={e => setOnline(e.target.checked)} /> Aceitar reservas online</label>
     <label className="block">Duração da reserva em horas
       <input className="input mt-1 block w-36" type="number" min="1" max="2160" step="1" required={online} value={horas} onChange={e => setHoras(e.target.value)} />

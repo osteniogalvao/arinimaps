@@ -49,8 +49,8 @@ export class GerenciadorCamadasOficiais {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private aoMover = () => this.agendar();
 
-  constructor(private map: MLMap, private aoMudar: (e: Partial<Record<CamadaOficialId, EstadoCamada>>) => void) {
-    map.on("moveend", this.aoMover);
+  constructor(private map: MLMap, private aoMudar: (e: Partial<Record<CamadaOficialId, EstadoCamada>>) => void, private areaFixa = false) {
+    if (!areaFixa) map.on("moveend", this.aoMover);
   }
 
   destruir() {
@@ -160,7 +160,7 @@ export class GerenciadorCamadasOficiais {
     if (!this.ativas.has(id)) return;
     const def = camadaOficialPorId(id)!;
     const fonteAtual = () => this.map.getSource(fonte(id)) as GeoJSONSource | undefined;
-    if (this.map.getZoom() < def.zoomMin) {
+    if (!this.areaFixa && this.map.getZoom() < def.zoomMin) {
       this.pedidos.get(id)?.abort();
       fonteAtual()?.setData(VAZIO);
       this.definir(id, { carregando: false, total: 0, aviso: "Aproxime o mapa para ver esta camada." });
@@ -180,7 +180,7 @@ export class GerenciadorCamadasOficiais {
         limites[0] = Math.min(limites[0], x); limites[1] = Math.min(limites[1], y);
         limites[2] = Math.max(limites[2], x); limites[3] = Math.max(limites[3], y);
       }
-      janela = [Math.max(janela[0], limites[0]), Math.max(janela[1], limites[1]), Math.min(janela[2], limites[2]), Math.min(janela[3], limites[3])];
+      janela = this.areaFixa ? limites : [Math.max(janela[0], limites[0]), Math.max(janela[1], limites[1]), Math.min(janela[2], limites[2]), Math.min(janela[3], limites[3])];
       if (janela[0] >= janela[2] || janela[1] >= janela[3]) {
         fonteAtual()?.setData(VAZIO);
         this.definir(id, { carregando: false, aviso: "", total: 0 });

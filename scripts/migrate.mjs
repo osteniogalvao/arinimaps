@@ -5,6 +5,9 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 
+const args = process.argv.slice(2);
+const ate = args[0]?.match(/^--ate=([0-9]{4})$/)?.[1];
+if (args.length && (!ate || args.length !== 1)) throw new Error("Uso: node scripts/migrate.mjs [--ate=NNNN]");
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // lê .env.local manualmente (sem dotenv)
@@ -45,7 +48,7 @@ await client.query(`create table if not exists _migrations (name text primary ke
 const done = new Set((await client.query(`select name from _migrations`)).rows.map(r => r.name));
 
 const dir = join(root, "supabase", "migrations");
-const files = readdirSync(dir).filter(f => f.endsWith(".sql")).sort();
+const files = readdirSync(dir).filter(f => f.endsWith(".sql") && (!ate || f.slice(0,4) <= ate)).sort();
 for (const f of files) {
   if (done.has(f)) { console.log(`pulando ${f} (já aplicada)`); continue; }
   console.log(`aplicando ${f}...`);

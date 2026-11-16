@@ -13,7 +13,7 @@ export default function NavegacaoPerfis({ persona }: { persona: PersonaPlano }) 
       <span>{persona.nome}</span><span>Trocar perfil <ChevronDown aria-hidden size={16} /></span>
     </button>
     <nav aria-label="Perfis da ARINI" id="opcoes-de-perfil" className="vitrine-personas" data-aberto={aberto}>
-      {PERSONAS_PLANOS.map((item) => <Link key={item.id} href={"/planos?perfil=" + item.id + "#perfis"}
+      {PERSONAS_PLANOS.map((item) => <Link key={item.id} href={"/planos?perfil=" + item.id + "#planos"}
         aria-current={persona.id === item.id ? "page" : undefined}>{item.nome}</Link>)}
     </nav>
   </>;

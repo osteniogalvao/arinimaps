@@ -50,15 +50,24 @@ jobs:
         run: npx next typegen && npx tsc --noEmit
 
       - name: Testar recorte de camadas
-        run: node scripts/testa-recorte-camadas.mjs
+        run: |
+          node scripts/testa-recorte-camadas.mjs
+          node scripts/testa-consulta-rural-recorte.mjs
+          node scripts/testa-relatorio-area.mjs
+          node scripts/testa-limites-rotas.mjs
 
       - name: Conferir recortes urbanos e calibração CAD
-        run: node scripts/testa-recortes-cad.mjs
+        env:
+          ARINI_TESTE_CARTEIRA_DB: postgresql://postgres:teste-local@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres
+        run: |
+          node scripts/testa-recortes-cad.mjs
+          node --test scripts/testa-privacidade-espelho.mjs
+          node --test scripts/testa-insumos-nota.mjs
 
       - name: Testar assinaturas, cartão e emissão fiscal com dados sintéticos
         env:
           ARINI_TESTE_CARTEIRA_DB: postgresql://postgres:teste-local@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres
-        run: node --test --test-concurrency=1 scripts/testa-assinaturas-planos.mjs scripts/testa-financeiro.mjs scripts/testa-nfse-assinaturas.mjs
+        run: node --test --test-concurrency=1 scripts/testa-assinaturas-planos.mjs scripts/testa-financeiro.mjs scripts/testa-nfse-assinaturas.mjs scripts/testa-privacidade-publicacao.mjs scripts/testa-divulgadores.mjs scripts/testa-tarefas-automaticas.mjs
 
       - name: Lint
         run: npm run lint

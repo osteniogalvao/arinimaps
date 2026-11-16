@@ -168,8 +168,8 @@ export const RECURSOS_CATALOGO = {
   },
   comparador_insumos: {
     nome: "Comparação de preços de insumos por nota fiscal",
-    disponibilidade: "em_implantacao",
-    motivo: "Leitura, normalização de produtos e comparação de notas fiscais ainda precisam ser implementadas.",
+    disponibilidade: "disponivel",
+    motivo: "Registre os itens de compra do XML da NF-e e compare o preço por unidade, fornecedor e data.",
   },
   regularizacao_ambiental: {
     nome: "Apoio à regularização de CAR, APP e Reserva Legal",

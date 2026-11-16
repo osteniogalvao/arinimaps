@@ -97,6 +97,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
   });
   // fila de Operações: a Matriz decide pela ficha do imóvel
   await admin.from("tasks").insert({
+    origem: "automatica", regra: "revisao_imovel", chave_evento: `revisao_imovel:${rev.id}`,
     titulo: `Alteração proposta — ${p.codigo}`.slice(0, 200),
     descricao: `Versão ${versao} do anúncio ${p.codigo} aguarda decisão.\n\n${resumo}`.slice(0, 4000),
     setor: "operacoes", criado_por: a.userId, prioridade: "normal", property_id: id,
@@ -122,13 +123,12 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/imoveis/[
     .eq("property_id", id).eq("status", "pendente").maybeSingle();
   if (!pendente) return falha(404, "sem_pendente", "Não há alteração pendente para cancelar.");
 
-  const { error } = await admin.from("property_revisions")
+  const { data: confirmada, error } = await admin.from("property_revisions")
     .update({ status: "cancelada", revisada_por: a.userId, revisada_em: new Date().toISOString() })
-    .eq("id", pendente.id).eq("status", "pendente");
+    .eq("id", pendente.id).eq("status", "pendente").select("id").maybeSingle();
   if (error) return falha(500, "banco", "Não foi possível cancelar.", { motivo: error.message });
 
-  await admin.from("tasks").update({ status: "cancelada" })
-    .eq("property_id", id).eq("setor", "operacoes").eq("status", "aberta").ilike("titulo", "Alteração proposta — %");
+  if (!confirmada) return falha(409, "revisao_decidida", "Esta alteração já foi decidida.");
   await logAudit({
     user_id: a.userId, acao: "revisao_cancelada", entidade: "property_revisions", entidade_id: pendente.id,
     property_id: id, dados_antes: { versao: pendente.versao, dados: pendente.dados as DadosRevisao },

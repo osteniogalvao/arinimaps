@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { ator, temSetor } from "@/lib/authz";
-import { SETOR_IDS, setorPorId, type SetorId } from "@/lib/setores";
+import { SETOR_IDS, setorPorId, setoresDe, type SetorId } from "@/lib/setores";
 import { eventoTarefa, prazoAceite } from "@/lib/central";
 import { emailDoProfile, sendEmail } from "@/lib/notify";
 
 const STATUS = ["aberta", "andamento", "aguardando", "bloqueada", "concluida", "cancelada"];
 const PRIORIDADES = ["baixa", "normal", "alta"];
+async function responsavelDoSetor(id: unknown, setor: string) {
+  if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return false;
+  const { data } = await supabaseAdmin().from("profiles").select("role, setores, ativo").eq("user_id",id).maybeSingle();
+  return !!data?.ativo && ["analista_arini","admin_central"].includes(data.role) &&
+    setoresDe(data.role,data.setores).includes(setor as SetorId);
+}
 const nomeSetor = (id: string | null | undefined) => (id ? setorPorId(id)?.nome ?? id : "—");
 
 /**
@@ -28,6 +34,8 @@ export async function POST(request: Request) {
   if (titulo.length < 3) return NextResponse.json({ error: "Descreva a tarefa em pelo menos 3 letras." }, { status: 400 });
 
   // encaminhar para um setor em que não atuo: preciso dizer de qual setor meu ela sai
+  const criterio = String(b.criterio_conclusao ?? "").trim().slice(0, 600);
+  if (!criterio) return NextResponse.json({ error: "Informe como a conclusão será comprovada." }, { status: 400 });
   const meu = temSetor(a, setor);
   const origem = String(b.setor_origem ?? "") as SetorId;
   if (!meu && !(SETOR_IDS.includes(origem) && temSetor(a, origem))) {
@@ -36,12 +44,15 @@ export async function POST(request: Request) {
   const encaminhada = !meu || (!!b.setor_origem && origem !== setor && temSetor(a, origem));
 
   const admin = supabaseAdmin();
+  if (!encaminhada && b.responsavel && b.responsavel!==a.userId && !(await responsavelDoSetor(b.responsavel,setor))) {
+    return NextResponse.json({error:"Escolha uma pessoa ativa do setor de destino."},{status:400});
+  }
   const base = {
     titulo: titulo.slice(0, 200),
     descricao: b.descricao ? String(b.descricao).slice(0, 4000) : null,
     setor,
     // quem encaminha não escolhe a pessoa do outro setor: o setor atribui ao aceitar
-    responsavel: encaminhada ? null : b.responsavel || null,
+    responsavel: encaminhada ? null : b.responsavel || a.userId,
     criado_por: a.userId,
     prazo: b.prazo || null,
     prioridade: PRIORIDADES.includes(b.prioridade) ? b.prioridade : "normal",
@@ -54,14 +65,9 @@ export async function POST(request: Request) {
     prazo_aceite: encaminhada ? await prazoAceite() : null,
     aceite_em: encaminhada ? null : new Date().toISOString(),
     aceite_por: encaminhada ? null : a.userId,
-    criterio_conclusao: b.criterio_conclusao ? String(b.criterio_conclusao).slice(0, 600) : null,
+    criterio_conclusao: criterio,
   };
-  let { data, error } = await admin.from("tasks").insert({ ...base, ...extra }).select("id").single();
-  if (error && /origem|setor_origem|prazo_aceite|aceite_|criterio/.test(error.message)) {
-    // banco sem a 0065: só tarefa do próprio setor, como antes
-    if (encaminhada) return NextResponse.json({ error: "Encaminhar para outro setor exige a atualização da Central (migration 0065)." }, { status: 400 });
-    ({ data, error } = await admin.from("tasks").insert(base).select("id").single());
-  }
+  const { data, error } = await admin.from("tasks").insert({ ...base, ...extra }).select("id").single();
   if (error || !data) return NextResponse.json({ error: error?.message ?? "Não foi possível criar." }, { status: 400 });
 
   await eventoTarefa(encaminhada
@@ -73,7 +79,7 @@ export async function POST(request: Request) {
 }
 
 type Antes = {
-  setor: string; status: string; responsavel: string | null; titulo: string; origem?: string | null;
+  setor: string; status: string; responsavel: string | null; titulo: string; evidencia?: string | null; origem?: string | null;
   setor_origem?: string | null; aceite_em?: string | null; prioridade: string; prazo: string | null; updated_at: string;
 };
 
@@ -89,7 +95,7 @@ export async function PATCH(request: Request) {
   const b = await request.json().catch(() => ({}));
   const admin = supabaseAdmin();
   const primeira = await admin.from("tasks")
-    .select("setor, status, responsavel, titulo, origem, setor_origem, aceite_em, prioridade, prazo, updated_at").eq("id", b.id).maybeSingle<Antes>();
+    .select("setor, status, responsavel, titulo, evidencia, origem, setor_origem, aceite_em, prioridade, prazo, updated_at").eq("id", b.id).maybeSingle<Antes>();
   let antes = primeira.data;
   if (primeira.error) ({ data: antes } = await admin.from("tasks").select("setor, status, responsavel, titulo, prioridade, prazo, updated_at").eq("id", b.id).maybeSingle<Antes>());
   if (!antes) return NextResponse.json({ error: "Tarefa não encontrada." }, { status: 404 });
@@ -174,22 +180,25 @@ export async function PATCH(request: Request) {
     }
     patch.status = b.status;
     patch.concluida_em = b.status === "concluida" ? agora : null;
-    if (b.status === "concluida" && b.evidencia) patch.evidencia = String(b.evidencia).slice(0, 2000);
+    if (b.status === "concluida") {
+      const evidencia = String(b.evidencia ?? antes.evidencia ?? "").trim().slice(0, 2000);
+      if (!evidencia) return NextResponse.json({ error: "Registre a evidência da conclusão." }, { status: 400 });
+      patch.evidencia = evidencia;
+      patch.responsavel = antes.responsavel ?? a.userId;
+    }
     if (b.motivo) patch.motivo = String(b.motivo).slice(0, 1000);
     // concluir uma tarefa encaminhada também conta como aceite
     if (antes.origem === "encaminhada" && !antes.aceite_em) Object.assign(patch, { aceite_em: agora, aceite_por: a.userId });
   }
-  if (b.responsavel !== undefined) patch.responsavel = b.responsavel || null;
+  if (b.responsavel !== undefined) {
+    if (b.responsavel && b.responsavel!==a.userId && !(await responsavelDoSetor(b.responsavel,antes.setor))) return NextResponse.json({error:"Responsável fora do setor ou inativo."},{status:400});
+    patch.responsavel = b.responsavel || a.userId;
+  }
   if (b.prazo !== undefined) patch.prazo = b.prazo || null;
   if (b.prioridade !== undefined && PRIORIDADES.includes(b.prioridade)) patch.prioridade = b.prioridade;
   if (!Object.keys(patch).length) return NextResponse.json({ error: "Nada para alterar." }, { status: 400 });
 
-  let err = await atualizar(patch);
-  if (err && /aceite_|evidencia|motivo/.test(err.message)) {
-    // banco sem a 0065
-    delete patch.aceite_em; delete patch.aceite_por; delete patch.evidencia; delete patch.motivo;
-    err = await atualizar(patch);
-  }
+  const err = await atualizar(patch);
   if (err) return NextResponse.json({ error: err.message }, { status: err.status });
 
   if (patch.status && patch.status !== antes.status) {

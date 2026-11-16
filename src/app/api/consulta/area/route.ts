@@ -3,11 +3,9 @@ import { currentUser } from "@/lib/supabase/server";
 import type { Bbox } from "@/lib/rural/adaptadores";
 import { executarConsultaArea, validarAreaDesenhada } from "@/lib/geo/consultaArea";
 import { falha } from "@/lib/erros";
+import { raioConsulta } from "@/lib/rural/raios";
 
 export const maxDuration = 120;
-
-/** Folga ao redor da área desenhada, como na consulta do CAR. */
-const RAIO_M = 2000;
 
 /**
  * Consulta de uma área DESENHADA no mapa, em qualquer ponto do Brasil
@@ -23,6 +21,8 @@ const RAIO_M = 2000;
 export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return falha(401, "sem_sessao", "Entre na sua conta para consultar a sua área.");
+  const raioM = raioConsulta(new URL(request.url).searchParams.get("raio_m"), 2000);
+  if (raioM === null) return falha(400, "raio_invalido", "Raio de consulta inválido.");
   const corpo = await request.json().catch(() => null);
   // "Atualizar consulta" da página manda só a chave: a geometria já está guardada
   let bruto = corpo?.geometria ?? corpo;
@@ -42,11 +42,11 @@ export async function POST(request: Request) {
 
   return executarConsultaArea(request, {
     chave,
-    raioM: RAIO_M,
+    raioM,
     naoEncontrado: "Não foi possível registrar a área desenhada.",
     bbox: async () => {
       const { data, error } = await supabaseAdmin().rpc("fn_registrar_area_propria", {
-        p_chave: chave, p_geojson: geometria, p_user: user.id, p_buffer_m: RAIO_M,
+        p_chave: chave, p_geojson: geometria, p_user: user.id, p_buffer_m: raioM,
       });
       const r = data as { valida: boolean; bbox?: Bbox } | null;
       if (error || !r?.valida || !r.bbox) return null;

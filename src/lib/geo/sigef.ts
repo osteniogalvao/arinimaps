@@ -7,11 +7,15 @@ const UF: Record<string, number> = {
 };
 type Envelope = { xmin:number; ymin:number; xmax:number; ymax:number };
 export type CampoBuscaSigef = "parcela_codigo" | "codigo_imovel" | "registro_matricula";
-type Opcoes = { max: number; geometria: boolean } & ({ bbox: Envelope } | { campo: CampoBuscaSigef; valores: string[]; ufs: string[] });
+type Opcoes = { max: number; geometria: boolean } & ({ bbox: Envelope; nome?: string } | { municipio: number; nome?: string } | { campo: CampoBuscaSigef; valores: string[]; ufs: string[] });
 export type FeicaoSigef = {
   geometry: GeoJSON.MultiPolygon | GeoJSON.Polygon | null;
   properties: Record<string, string | number | null>;
 };
+
+export function nomeRuralValido(nome: string) {
+  return nome.length >= 3 && nome.length <= 80 && /^[\p{L}\p{M}\p{N} .,'’()/-]+$/u.test(nome) && /\p{L}/u.test(nome);
+}
 
 export async function buscarSigef(opcoes: Opcoes) {
   let filtro: string;
@@ -19,11 +23,19 @@ export async function buscarSigef(opcoes: Opcoes) {
     const { xmin, ymin, xmax, ymax } = opcoes.bbox;
     if (![xmin,ymin,xmax,ymax].every(Number.isFinite) || xmin >= xmax || ymin >= ymax) throw new Error("Limites inválidos.");
     filtro = `BBOX(geometry,${xmin},${ymin},${xmax},${ymax},'EPSG:4326')`;
+  } else if ("municipio" in opcoes) {
+    if (!/^\d{7}$/.test(String(opcoes.municipio))) throw new Error("Município inválido.");
+    filtro = "municipio_id = " + opcoes.municipio;
   } else {
     const ids = opcoes.ufs.map(uf => UF[uf]).filter(Number.isInteger);
     const valores = [...new Set(opcoes.valores.filter(v => /^[a-zA-Z0-9.-]{1,64}$/.test(v)))];
     if (!ids.length || !valores.length) return { total: 0, features: [] as FeicaoSigef[] };
     filtro = `uf_id IN (${ids.join(",")}) AND ${opcoes.campo} IN (${valores.map(v => "'" + v + "'").join(",")})`;
+  }
+  if ("nome" in opcoes && opcoes.nome) {
+    if (!nomeRuralValido(opcoes.nome)) throw new Error("Nome de imóvel inválido.");
+    // Sem curingas fornecidos pelo cliente. Aspas em nomes como Pau d'Óleo são literais.
+    filtro += " AND nome_area ILIKE '%" + opcoes.nome.replaceAll("'", "''") + "%'";
   }
   const qs = new URLSearchParams({
     service: "WFS", version: "1.0.0", request: "GetFeature", typeName: "geonode:sigef_geo",

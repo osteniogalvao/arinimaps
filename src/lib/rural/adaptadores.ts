@@ -1,6 +1,7 @@
 import { buscarSigef, type FeicaoSigef, type CampoBuscaSigef } from "../geo/sigef";
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { booleanIntersects } from "@turf/boolean-intersects";
 import { ufsDoEnvelope } from "./ufs";
 // relativo (não "@/"): scripts/testa-apis-rurais.mjs carrega este arquivo pelo jiti, sem os aliases do Next
 import { EsperaEsgotada, fila, inteiroDoAmbiente } from "../seguranca/fila";
@@ -35,7 +36,11 @@ const TIMEOUT = 20_000;
 /** teto do adaptador inteiro, tentativas incluídas: o relatório não espera mais que isso */
 const PRAZO = 40_000;
 
-export type Bbox = { xmin: number; ymin: number; xmax: number; ymax: number; lng: number; lat: number };
+export type Bbox = {
+  xmin: number; ymin: number; xmax: number; ymax: number; lng: number; lat: number;
+  /** Polígono validado pelo PostGIS, incluindo o entorno em metros solicitado. */
+  geometria?: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+};
 
 /** oficial = órgão responsável; terceiro = base não governamental; derivado = cálculo do Arini; usuario = informado por quem cadastrou. */
 export type TipoOrigem = "oficial" | "terceiro" | "derivado" | "usuario";
@@ -335,13 +340,39 @@ async function adaptador(fonte_id: string, fn: () => Promise<Retorno>): Promise<
 /** ANM/SIGMINE — processos minerários ativos. Não aceita paginação. */
 export function consultarAnm(bbox: Bbox) {
   return adaptador("anm", async () => {
-    const base = "https://geo.anm.gov.br/arcgis/rest/services/SIGMINE/dados_anm/MapServer";
-    const [total, linhas] = await Promise.all([
-      arcgisTotal(base, 0, bbox),
-      arcgis(base, 0, bbox, "PROCESSO,FASE,NOME,SUBS,USO,AREA_HA,ULT_EVENTO", null),
-    ]);
+    const area = bbox.geometria;
+    if (!area) throw new Error("geometria da área indisponível para o cruzamento mineral");
+    const base = "https://geo.anm.gov.br/arcgis/rest/services/SIGMINE/dados_anm/MapServer/0/query";
+    // Apenas o envelope sai da ARINI. A lista de IDs independe da paginação,
+    // que o SIGMINE não oferece. Cada processo é intersectado na geometria real.
+    const ids = await (await buscar(`${base}?f=json&${filtroEsri(bbox)}&returnIdsOnly=true`)).json();
+    if (ids.error || !Array.isArray(ids.objectIds) || !ids.objectIds.every(Number.isSafeInteger)) {
+      throw new Error(ids.error?.message ?? "a ANM não devolveu a lista de processos");
+    }
+    const candidatos = [...new Set<number>(ids.objectIds)];
+    const linhas: Props[] = [];
+    for (let i = 0; i < candidatos.length; i += 100) {
+      const lote = candidatos.slice(i, i + 100);
+      const parametros = new URLSearchParams({
+        f: "geojson", objectIds: lote.join(","), returnGeometry: "true", outSR: "4326",
+        outFields: "OBJECTID,PROCESSO,FASE,NOME,SUBS,USO,AREA_HA,ULT_EVENTO",
+      });
+      const fc = await (await buscar(`${base}?${parametros}`)).json();
+      if (fc.error || !Array.isArray(fc.features) || fc.exceededTransferLimit) {
+        throw new Error(fc.error?.message ?? "a ANM não devolveu as geometrias completas");
+      }
+      const faltam = new Set(lote);
+      for (const f of fc.features as GeoJSON.Feature[]) {
+        if (!f.properties || !faltam.delete(Number(f.properties.OBJECTID)) ||
+            !(f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon")) {
+          throw new Error("processo minerário sem identificação ou geometria válida");
+        }
+        if (booleanIntersects(area, f.geometry)) linhas.push(f.properties);
+      }
+      if (faltam.size) throw new Error("a ANM respondeu com um lote incompleto de processos");
+    }
     return {
-      quantidade: Math.max(total, linhas.length),
+      quantidade: linhas.length,
       versao: "atualização diária declarada pela ANM",
       itens: linhas.slice(0, 40).map((p) => ({
         titulo: `${texto(p.SUBS, "substância não informada")} — ${texto(p.FASE, "fase não informada")}`,
@@ -406,9 +437,8 @@ export function consultarCar(bbox: Bbox) {
  */
 export function consultarCarAmbiental(bbox: Bbox) {
   return adaptador("car_ambiental", async () => {
-    const { data, error } = await supabaseAdmin().rpc("fn_car_ambiental_envelope", {
-      p_xmin: bbox.xmin, p_ymin: bbox.ymin, p_xmax: bbox.xmax, p_ymax: bbox.ymax,
-    });
+    if (!bbox.geometria) throw new Error("geometria da área indisponível para o cruzamento ambiental");
+    const { data, error } = await supabaseAdmin().rpc("fn_car_ambiental_geometria", { p_geojson: bbox.geometria });
     if (error) throw new Error(error.message);
     const r = data as {
       cobertura_pct: number | null;
@@ -1121,7 +1151,10 @@ export function linhaParaGravar(r: ResultadoFonte, anterior: LinhaConsulta | nul
     };
   }
   return {
-    resultado: { itens: r.itens, ...extra },
+    resultado: {
+      itens: r.itens, ...extra,
+      ...(!r.erro && (r.fonte_id === "anm" || r.fonte_id === "car_ambiental") ? { recorte: "geometria" } : {}),
+    },
     quantidade: r.quantidade, incide: r.incide, erro: r.erro ?? null, consultado_em: agora,
   };
 }

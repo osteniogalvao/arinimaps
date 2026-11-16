@@ -12,7 +12,7 @@
  */
 export type SetorId =
   | "diretoria" | "operacoes" | "comercial" | "financeiro" | "juridico"
-  | "marketing" | "cartografia" | "suporte" | "seguranca";
+  | "marketing" | "marketing_trafego" | "cartografia" | "suporte" | "seguranca";
 
 export type ItemMenu = { href: string; rotulo: string; icone: string };
 
@@ -74,16 +74,23 @@ export const SETORES: Setor[] = [
     ],
   },
   {
-    id: "marketing", nome: "Marketing", icone: "✦", href: "/admin/marketing",
+    id: "marketing", nome: "Marketing · Produção", icone: "✦", href: "/admin/marketing",
     descricao: "Origem dos leads, imóveis mais procurados, materiais de divulgação e vitrine do site.",
     itens: [
       { href: "/admin/marketing", rotulo: "Painel do setor", icone: "◫" },
       { href: "/admin/marketing/comunicados", rotulo: "Comunicados da Matriz", icone: "✉" },
+      { href: "/admin/marketing/divulgadores", rotulo: "Programa de divulgadores", icone: "◫" },
       { href: "/admin/ranking", rotulo: "Ranking de imóveis", icone: "★" },
       { href: "/admin/registros/publicacoes", rotulo: "Central de publicação", icone: "↗" },
+      { href: "/admin/conhecimento", rotulo: "Conhecimento e IA", icone: "✎" },
+    ],
+  },
+  {
+    id: "marketing_trafego", nome: "Marketing · Tráfego", icone: "◢", href: "/admin/marketing/trafego",
+    descricao: "Planejamento de campanhas, investimento, conversão e resultados.",
+    itens: [
       { href: "/admin/marketing/trafego", rotulo: "Tráfego e resultados", icone: "◢" },
       { href: "/admin/registros/campanhas", rotulo: "Campanhas", icone: "◎" },
-      { href: "/admin/conhecimento", rotulo: "Conhecimento e IA", icone: "✎" },
     ],
   },
   {

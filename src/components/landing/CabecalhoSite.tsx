@@ -138,7 +138,7 @@ export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usua
         }`}
       >
         <div className="lp-container flex h-16 items-center gap-4 lg:h-20">
-          <Link href="/" onClick={fechar} aria-label="Arini Imóveis Brasil — início" className="shrink-0">
+          <Link href="/" onClick={fechar} aria-label="ARINI — início" className="shrink-0">
             <Logo negativa={transparente} />
           </Link>
 

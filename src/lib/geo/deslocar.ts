@@ -1,3 +1,5 @@
+import { intersection } from "polyclip-ts";
+
 /**
  * Transformação da planta CAD sobre o mapa.
  *
@@ -140,8 +142,8 @@ export function transformarGeoJSON<T extends GeoJSON.FeatureCollection>(
   // com partes ajustadas, cada linha usa a matriz da sua parte (ou a da planta)
   if (ajustes.length) {
     const g = afim(centro, t);
-    const matrizes = ajustes.map((a) => compor(g, afim(centroArea(a.area), a.t)));
-    const areas = ajustes.map((a) => a.area);
+    const matrizes = ajustes.map((a) => compor(g, matrizParte(a)));
+    const areas = ajustes;
     return {
       ...fc,
       features: features.map((f) => {
@@ -331,6 +333,12 @@ export type AjusteLocal = {
   nomeCad?: string;
   /** anel da área, em graus, no desenho cru */
   area: [number, number][];
+  /** Outros perímetros da mesma seleção. O espaço entre eles continua fora da peça. */
+  areasExtras?: [number, number][][];
+  /** Agrupar fixa o encaixe atual e inicia um ajuste comum no centro do conjunto. */
+  grupo?: string;
+  pivo?: [number, number];
+  encaixe?: Matriz;
   t: Transform;
 };
 
@@ -417,13 +425,63 @@ export function centroFeature(f: GeoJSON.Feature): [number, number] | null {
   return x0 > x1 ? null : [(x0 + x1) / 2, (y0 + y1) / 2];
 }
 
+type AnelParte = [number, number][];
+type ContornoParte = Pick<AjusteLocal, "area" | "areasExtras">;
+type AreaDaLinha = AnelParte | ContornoParte;
+
+export function aneisParte(parte: ContornoParte): AnelParte[] {
+  return [parte.area, ...(parte.areasExtras ?? [])];
+}
+
+export function centroParte(parte: ContornoParte): [number, number] {
+  return centroArea(parte.areasExtras?.length ? aneisParte(parte).flat() : parte.area);
+}
+
+export function matrizParte(parte: AjusteLocal): Matriz {
+  const ajuste = afim(parte.pivo ?? centroParte(parte), parte.t);
+  return parte.encaixe ? compor(ajuste, parte.encaixe) : ajuste;
+}
+
+export function mesmaPeca(a: AjusteLocal, b: AjusteLocal): boolean {
+  return a.id === b.id || (!!a.grupo && a.grupo === b.grupo);
+}
+
+export function reunirPecas(lista: AjusteLocal[], escolhidas: AjusteLocal[], grupo: string): AjusteLocal[] {
+  const membros = lista.filter(a => escolhidas.some(b => mesmaPeca(a, b)));
+  const matrizes = new Map(membros.map(a => [a.id, matrizParte(a)]));
+  const pontos = membros.flatMap(a => aneisParte(a).flat().map(p => aplicarMatrizPonto(matrizes.get(a.id)!, p)));
+  const pivo = centroArea(pontos);
+  return lista.map(a => matrizes.has(a.id)
+    ? { ...a, grupo, pivo, encaixe: matrizes.get(a.id), t: { ...TRANSFORM_ZERO } }
+    : a);
+}
+
+export function separarPecas(lista: AjusteLocal[], selecionada: AjusteLocal): AjusteLocal[] {
+  return lista.map(a => {
+    if (!mesmaPeca(a, selecionada)) return a;
+    const encaixe = matrizParte(a);
+    const separada = { ...a, encaixe, pivo: aplicarMatrizPonto(encaixe, centroParte(a)), t: { ...TRANSFORM_ZERO } };
+    delete separada.grupo;
+    return separada;
+  });
+}
+
+export function pertenceParte(p: [number, number], parte: AreaDaLinha): boolean {
+  if (Array.isArray(parte)) return pontoNaArea(p, parte);
+  return pontoNaArea(p, parte.area) || !!parte.areasExtras?.some(anel => pontoNaArea(p, anel));
+}
+
+export function partesSobrepostas(a: ContornoParte, b: ContornoParte): boolean {
+  return aneisParte(a).some(x => aneisParte(b).some(y => areasSeSobrepoem(x, y)));
+}
+
 /** Índice da primeira parte que contém o centro desta linha (coordenadas de uma LineString), ou -1. */
-export function parteDaLinha(linha: [number, number][], areas: [number, number][][]): number {
+export function parteDaLinha(linha: [number, number][], areas: AreaDaLinha[]): number {
   if (!areas.length || !linha.length) return -1;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of linha) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   const c: [number, number] = [(x0 + x1) / 2, (y0 + y1) / 2];
-  for (let i = 0; i < areas.length; i++) if (pontoNaArea(c, areas[i])) return i;
+  for (let i = 0; i < areas.length; i++) if (pertenceParte(c, areas[i])) return i;
   return -1;
 }
 
@@ -431,7 +489,7 @@ export function parteDaLinha(linha: [number, number][], areas: [number, number][
  * Parte de cada linha do objeto: uma entrada por linha numa MultiLineString
  * (o formato do DXF convertido), uma só para os demais tipos.
  */
-export function partesDasLinhas(f: GeoJSON.Feature, areas: [number, number][][]): Int32Array {
+export function partesDasLinhas(f: GeoJSON.Feature, areas: AreaDaLinha[]): Int32Array {
   if (f.geometry?.type === "MultiLineString") {
     const ls = f.geometry.coordinates as [number, number][][];
     const m = new Int32Array(ls.length);
@@ -442,37 +500,27 @@ export function partesDasLinhas(f: GeoJSON.Feature, areas: [number, number][][])
 }
 
 /** Índice da primeira parte que contém o objeto inteiro (pelo centro), ou -1 (fica só com a calibração da planta). */
-export function parteDaFeature(f: GeoJSON.Feature, areas: [number, number][][]): number {
+export function parteDaFeature(f: GeoJSON.Feature, areas: AreaDaLinha[]): number {
   if (!areas.length) return -1;
   const c = centroFeature(f);
   if (!c) return -1;
-  for (let i = 0; i < areas.length; i++) if (pontoNaArea(c, areas[i])) return i;
+  for (let i = 0; i < areas.length; i++) if (pertenceParte(c, areas[i])) return i;
   return -1;
 }
 
-/** Duas áreas se sobrepõem? (algum vértice dentro da outra ou lados que se cruzam) */
+/** A interseção de dois polígonos com um lado em comum não tem superfície. */
 export function areasSeSobrepoem(a: [number, number][], b: [number, number][]): boolean {
-  const naBorda = (p: number[], area: [number, number][]) => area.some((q, i) => {
-    const r = area[(i + 1) % area.length];
-    const cruz = (r[0] - q[0]) * (p[1] - q[1]) - (r[1] - q[1]) * (p[0] - q[0]);
-    return Math.abs(cruz) < 1e-12 && p[0] >= Math.min(q[0], r[0]) - 1e-12 && p[0] <= Math.max(q[0], r[0]) + 1e-12 &&
-      p[1] >= Math.min(q[1], r[1]) - 1e-12 && p[1] <= Math.max(q[1], r[1]) + 1e-12;
-  });
-  const dentroEstrito = (p: [number, number], area: [number, number][]) => !naBorda(p, area) && pontoNaArea(p, area);
-  if (a.some((p) => dentroEstrito(p, b)) || b.some((p) => dentroEstrito(p, a))) return true;
-  const centro = (v: [number, number][]): [number, number] => [v.reduce((s, p) => s + p[0], 0) / v.length, v.reduce((s, p) => s + p[1], 0) / v.length];
-  if (dentroEstrito(centro(a), b) || dentroEstrito(centro(b), a)) return true;
-  const cruza = (p1: number[], p2: number[], p3: number[], p4: number[]) => {
-    const o = (p: number[], q: number[], r: number[]) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
-    const [a1, a2, b1, b2] = [o(p1, p2, p3), o(p1, p2, p4), o(p3, p4, p1), o(p3, p4, p2)];
-    return a1 * a2 < -1e-24 && b1 * b2 < -1e-24; // encostar na borda pode: quadras são vizinhas
-  };
-  for (let i = 0; i < a.length; i++) {
-    for (let j = 0; j < b.length; j++) {
-      if (cruza(a[i], a[(i + 1) % a.length], b[j], b[(j + 1) % b.length])) return true;
+  const limites = (anel: [number, number][]) => {
+    let oeste = Infinity, leste = -Infinity, sul = Infinity, norte = -Infinity;
+    for (const [x, y] of anel) {
+      oeste = Math.min(oeste, x); leste = Math.max(leste, x);
+      sul = Math.min(sul, y); norte = Math.max(norte, y);
     }
-  }
-  return false;
+    return { oeste, leste, sul, norte };
+  };
+  const p = limites(a), q = limites(b);
+  if (p.oeste >= q.leste || q.oeste >= p.leste || p.sul >= q.norte || q.sul >= p.norte) return false;
+  return intersection([a], [b]).length > 0;
 }
 
 /**
@@ -485,7 +533,11 @@ export function assinaturaAjustes(ajustes: AjusteLocal[]): string {
   const r = (n: number) => Math.round(n * 1e4) / 1e4;
   // a escala só entra quando existe, para as assinaturas antigas continuarem valendo
   const esc = (a: AjusteLocal) => (a.t.escala && Math.abs(a.t.escala - 1) > 1e-9 ? `,x${r(a.t.escala)}` : "");
-  return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}${esc(a)}`).join("|");
+  const base = (a: AjusteLocal) => {
+    const m = a.encaixe;
+    return m ? `,b${[m.a, m.b, m.d, m.e, m.xoff, m.yoff, ...(a.pivo ?? [])].join(",")}` : "";
+  };
+  return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}${esc(a)}${base(a)}`).join("|");
 }
 
 /* ---------------------------------------------------------------------------

@@ -1,7 +1,6 @@
 import "server-only";
 import { temSetor } from "@/lib/authz";
 import { lerConfiguracoes, numero, texto } from "@/lib/settings";
-import { concluirTarefaDoEvento } from "@/lib/central";
 import {
   AsaasErro, asaasBuscarClientePorReferencia, asaasBuscarNota, asaasCancelarNota, asaasConfigurado,
   asaasCriarCliente, asaasEmitirNota, asaasNotasPorReferencia, type AsaasNota,
@@ -22,19 +21,16 @@ registrarAcoes("despesas", {
     if (linha.solicitante === ator.userId && !diretoria) {
       throw new ErroRegistro("Quem pediu a despesa não pode aprovar a própria despesa.", 403);
     }
-    await concluirTarefaDoEvento(`despesa_aprovacao:${linha.id}`, ator.userId, "Despesa aprovada");
     return { status: "aprovada", aprovado_por: ator.userId, aprovado_em: new Date().toISOString(), motivo: null };
   },
   async reprovar({ ator, linha, motivo }) {
     if (!temSetor(ator, "diretoria") && linha.solicitante === ator.userId) {
       throw new ErroRegistro("Quem pediu a despesa não pode reprová-la; cancele.", 403);
     }
-    await concluirTarefaDoEvento(`despesa_aprovacao:${linha.id}`, ator.userId, `Despesa reprovada: ${motivo}`);
     return { status: "reprovada", aprovado_por: ator.userId, aprovado_em: new Date().toISOString(), motivo };
   },
-  async pagar({ ator, linha }) {
-    await concluirTarefaDoEvento(`despesa_vencida:${linha.id}`, ator.userId, "Despesa paga");
-    return { status: "paga", pago_em: hoje() };
+  async pagar({ ator }) {
+    return { status: "paga", pago_em: hoje(), pago_por: ator.userId };
   },
   async cancelar({ motivo }) {
     return { status: "cancelada", motivo };

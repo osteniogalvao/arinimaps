@@ -7,9 +7,9 @@ import { falha, falhaBanco } from "@/lib/erros";
 import { logAudit } from "@/lib/audit";
 import { ehEquipe } from "@/lib/perfis";
 import {
-  ehStatusSolicitacao, STATUS_ENCERRADOS, STATUS_SOLICITACAO_LABEL, TRANSICOES, type StatusSolicitacao,
+  ehStatusSolicitacao, STATUS_SOLICITACAO_LABEL, TRANSICOES, type StatusSolicitacao,
 } from "@/lib/cartografia/solicitacoes";
-import { avisarSolicitante, concluirTarefaDaSolicitacao, geojsonDaSolicitacao } from "@/lib/cartografia/servidor";
+import { avisarSolicitante, geojsonDaSolicitacao } from "@/lib/cartografia/servidor";
 
 const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Mudanças de status que o solicitante precisa saber por e-mail. */
@@ -68,7 +68,6 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
         p_id: id, p_status: novo, p_user_id: a.userId, p_mensagem: mensagem || null, p_interno: interno,
       });
       if (error) return falhaBanco("transicao_falhou", error);
-      if (STATUS_ENCERRADOS.includes(novo)) await concluirTarefaDaSolicitacao(req.protocolo);
       await auditar("status", { status: novo, mensagem, interno }, { status });
       if (AVISA.includes(novo)) {
         avisarSolicitante(req, novo, interno ? req.resposta : mensagem || req.resposta).catch(() => undefined);

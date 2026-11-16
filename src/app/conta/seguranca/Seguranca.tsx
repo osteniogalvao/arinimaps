@@ -51,7 +51,7 @@ export default function Seguranca({
     setOcupado(true); setErroMfa("");
     // sobras de um cadastro que não foi concluído impedem um novo com o mesmo nome
     for (const f of fatores ?? []) if (f.status !== "verified") await supabase.auth.mfa.unenroll({ factorId: f.id });
-    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `Arini Imóveis Brasil ${Date.now()}` });
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `ARINI ${Date.now()}` });
     setOcupado(false);
     if (error || !data) { setErroMfa(error?.message ?? "Não foi possível iniciar."); return; }
     setCadastro({ id: data.id, qr: data.totp.qr_code, segredo: data.totp.secret });

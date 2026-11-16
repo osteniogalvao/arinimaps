@@ -1,4 +1,4 @@
-// Worker do Arini Imóveis Brasil — polling da tabela jobs (Postgres/Supabase).
+// Worker da ARINI — polling da tabela jobs (Postgres/Supabase).
 // Processa: otimizar_video · render_video · screenshot_og · tile_raster · fetch_pois · refresh_pois · gerar_lotes · descarte_retencao · verificar_fontes · inteligencia_mercado · coletar_cotacoes
 // Uma fila para os jobs gerais e uma para consultas de POIs.
 import pg from "pg";
@@ -180,11 +180,15 @@ async function rodarCentral() {
       if (e.code === "42883") return { rows: [] };
       throw e;
     });
-    const exclusividades = await db.query("select fn_vigencia_exclusividades() as total").catch(e => {
+    const exclusividades = await db.query("select fn_vigencia_exclusividades() + fn_conferir_vigencia_documental() as total").catch(e => {
       if (e.code === "42883") return {rows:[]};
       throw e;
     });
-    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
+    const divulgacao = await db.query("select divulgacao_rotinas() as total").catch(e => {
+      if (e.code === "42883" && e.message.includes("divulgacao_rotinas")) return { rows: [] };
+      throw e;
+    });
+    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0, divulgacao: divulgacao.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
     if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
     await emailsCriticos();
     // publicações agendadas que chegaram na hora (Central de publicação)
@@ -241,7 +245,7 @@ async function emailsCriticos() {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          from: process.env.RESEND_FROM ?? "Arini Imóveis Brasil <naoresponda@arinibrasil.com.br>",
+          from: process.env.RESEND_FROM ?? "ARINI <naoresponda@arinibrasil.com.br>",
           to: [n.email], subject: n.titulo, text: `${n.texto ?? ""}\n\n${n.link ? site + n.link : ""}`.trim(),
         }),
       });
@@ -252,7 +256,7 @@ async function emailsCriticos() {
   }
 }
 
-console.log("Arini Imóveis Brasil worker iniciado.");
+console.log("ARINI worker iniciado.");
 async function verificarInterrompidos() {
   try {
     const total = await recuperarInterrompidos(db);

@@ -43,7 +43,7 @@ export async function PATCH(request: Request) {
         if (online) return;
         return sendEmail(
           ticket.email,
-          `Resposta ao chamado ${ticket.codigo} — Arini Imóveis Brasil`,
+          `Resposta ao chamado ${ticket.codigo} — ARINI`,
           `${corpo}\n\n—\nChamado ${ticket.codigo}: ${ticket.assunto}\n` +
           `Para continuar a conversa, responda em ${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/suporte`
         );

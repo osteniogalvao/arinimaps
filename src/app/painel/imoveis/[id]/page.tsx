@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, STATUS_LABEL } from "@/lib/format";
 import DocumentosImovel from "@/components/crm/DocumentosImovel";
 import VideosImovel from "@/components/crm/VideosImovel";
+import ConsentimentoDivulgacao from "@/components/imovel/ConsentimentoDivulgacao";
 import HistoricoImovel from "@/components/crm/HistoricoImovel";
 import ProporAlteracao from "./ProporAlteracao";
 import { Etiqueta } from "@/components/ui/Pagina";
@@ -91,6 +92,7 @@ export default async function MeuImovel({ params }: PageProps<"/painel/imoveis/[
 
       {/* §1: histórico do imóvel — versões da divisa, origem dos dados, alterações e auditoria */}
       <HistoricoImovel propertyId={p.id} modo="painel" tipoImovel={p.tipo as "urbano" | "rural"} />
+      <ConsentimentoDivulgacao imovel={p.id} />
     </div>
   );
 }

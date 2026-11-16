@@ -6,12 +6,16 @@ import { VectorTile } from "@mapbox/vector-tile";
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import { createJiti } from "jiti";
 import { pontoNaArea as pertenceNoWorker } from "../worker/jobs/ajustes.mjs";
+import { seletorDeMatriz, assinaturaAjustes as assinaturaWorker } from "../worker/jobs/ajustes.mjs";
 
 const jiti = createJiti(import.meta.url);
 const { cortarTileCar } = jiti("../src/lib/map/cortarTileCar.ts");
 const { recortesNoTile, coordenadasTileCar } = jiti("../src/lib/map/recortesUrbanos.ts");
 const { detectarBlocosCad, termosDescricaoCad } = jiti("../src/lib/geo/blocosCad.ts");
-const { centroArea, partesDasLinhas, ajustarPorPontos, aplicarMatrizPonto, afim, TRANSFORM_ZERO } = jiti("../src/lib/geo/deslocar.ts");
+const {
+  centroArea, partesDasLinhas, ajustarPorPontos, aplicarMatrizPonto, afim, TRANSFORM_ZERO,
+  pertenceParte, partesSobrepostas, reunirPecas, separarPecas, matrizParte, transformarGeoJSON, assinaturaAjustes,
+} = jiti("../src/lib/geo/deslocar.ts");
 
 const z = 12, x = 1475, y = 2275, n = 2 ** z;
 const prefixo = "pmtiles://https://mapa.arini.test/car.pmtiles/";
@@ -65,4 +69,46 @@ assert(Math.abs(tres.offsetLesteM-18)<0.001 && Math.abs(tres.offsetNorteM+6)<0.0
 assert.deepEqual(termosDescricaoCad("apagar linhas de área verde"), ["area","verde"]);
 assert.deepEqual(termosDescricaoCad("apagar arruamentos"), ["arruamento"]);
 assert.deepEqual(termosDescricaoCad("apagar todas as linhas"), []);
-console.log("Recorte nacional parcial/total, atributos, quadras, perímetros, pontos de controle e comandos CAD conferidos.");
+// Três quadras alinhadas: uma seleção descontínua das duas pontas deixa o meio livre.
+const quadra = i => ret(-50 + i * .002, -19.01, -49.999 + i * .002, -19.009);
+const pecas = [
+  { id:"extremos", area:quadra(0), areasExtras:[quadra(2)], t:{...base, rotacaoGraus:170} },
+  { id:"meio", area:quadra(1), t:{...base, escala:.9, offsetNorteM:23} },
+];
+assert(!partesSobrepostas(pecas[0],pecas[1]));
+assert(!pertenceParte(centroArea(quadra(1)),pecas[0]));
+assert(pertenceParte(centroArea(quadra(2)),pecas[0]));
+const reunidas = reunirPecas(pecas,pecas,"conjunto");
+const ancoras = [quadra(2)[1],quadra(1)[2]];
+const perto = (p,q) => assert(p.every((x,i)=>Math.abs(x-q[i])<1e-9));
+for (let i=0;i<2;i++) perto(aplicarMatrizPonto(matrizParte(pecas[i]),ancoras[i]),aplicarMatrizPonto(matrizParte(reunidas[i]),ancoras[i]));
+const zero = {dx:0,dy:0,rot:0,esc:1}, origem=centroArea(quadra(1));
+for (const graus of [-360,87,360]) {
+  const viradas = reunidas.map(p=>({...p,t:{...TRANSFORM_ZERO,escala:1.12,rotacaoGraus:graus,offsetLesteM:17}}));
+  const separadas=separarPecas(viradas,viradas[0]), worker=seletorDeMatriz(origem,zero,separadas);
+  assert(!separadas.some(p=>p.grupo));
+  assert.equal(assinaturaWorker(separadas),assinaturaAjustes(separadas));
+  const planta={type:"FeatureCollection",features:[f("lotes",[quadra(2),quadra(1)])]};
+  const linhas=transformarGeoJSON(planta,origem,TRANSFORM_ZERO,[],separadas).features[0].geometry.coordinates;
+  for (let i=0;i<2;i++) {
+    const ponto=ancoras[i], camada=i===0?2:1, vertice=i===0?1:2;
+    const movido=aplicarMatrizPonto(afim(viradas[i].pivo,viradas[i].t),aplicarMatrizPonto(matrizParte(pecas[i]),ponto));
+    perto(aplicarMatrizPonto(matrizParte(separadas[i]),ponto),movido);
+    perto(aplicarMatrizPonto(worker(centroArea(quadra(camada))),ponto),movido);
+    perto(linhas[i][vertice],movido);
+  }
+}
+const { sugerirParesVisuais }=jiti("../src/lib/geo/pontosVisuais.ts");
+const imagem={width:224,height:224,data:new Uint8ClampedArray(224*224*4)};
+const cantos=[[42,42],[142,42],[42,142],[142,142]];
+assert.deepEqual(sugerirParesVisuais(imagem,cantos),[]);
+for (const [x,y] of cantos) for (let j=0;j<32;j++) for (let i=0;i<32;i++) {
+  const k=((y+j+7)*imagem.width+x+i+5)*4;
+  imagem.data.fill(255,k,k+4);
+}
+const pontos=sugerirParesVisuais(imagem,cantos);
+assert.equal(pontos.length,4);
+for (const {planta,satelite} of pontos) {
+  assert(Math.abs(satelite[0]-planta[0]-5)<3 && Math.abs(satelite[1]-planta[1]-7)<3);
+}
+console.log("Recortes, quadras, seleção descontínua, agrupamento, separação, giro de 360°, escala, sugestão de pontos e paridade com o worker conferidos.");

@@ -29,5 +29,9 @@ export async function POST(request: Request) {
   }
   const r=NextResponse.json({ok:true});
   if (!u) r.cookies.set(COOKIE_ESCOLHA,body.permitido?"rastro-v1":"essenciais-v1",{httpOnly:true,path:"/",sameSite:"lax",secure:process.env.NODE_ENV==="production",maxAge:86400*180});
+  if(body.finalidade==="rastro"&&body.permitido===false){
+    r.cookies.delete("arini_div_visita");
+    r.cookies.delete("arini_div_link");
+  }
   return r;
 }

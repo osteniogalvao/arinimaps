@@ -185,7 +185,7 @@ export async function enviarPixNaJanela(telefone:string,imagem:string,codigo:str
 }
 
 /** Confere a assinatura X-Hub-Signature-256 do webhook. */
-export function assinaturaWebhookOk(corpo: string, assinatura: string | null) {
+export function assinaturaWebhookOk(corpo: string | Uint8Array, assinatura: string | null) {
   const segredo = process.env.WHATSAPP_APP_SECRET;
   if (!segredo || !assinatura?.startsWith("sha256=")) return false;
   const esperado = Buffer.from("sha256=" + createHmac("sha256", segredo).update(corpo).digest("hex"));

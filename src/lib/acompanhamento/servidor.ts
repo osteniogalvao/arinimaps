@@ -169,7 +169,7 @@ export async function carregarAcompanhamento(propertyId: string): Promise<Acompa
   const ref = abertas[abertas.length - 1] ?? null;
   let intermediador: Intermediador = { tipo: "nenhum", nome: "Central Arini", telefone: typeof whats?.valor === "string" ? whats.valor : null };
   if (ref?.responsavel_tipo === "arini") intermediador = { ...intermediador, tipo: "arini" };
-  else if (ref?.responsavel_tipo === "proprietario") intermediador = { tipo: "proprietario", nome: "Você conduz o atendimento", telefone: null };
+  else if (ref?.responsavel_tipo === "proprietario") intermediador = { ...intermediador, tipo: "arini" };
   else if (ref?.responsavel_tipo === "parceiro" && ref.responsavel_partner_id) {
     const { data: pa } = await admin.from("partners")
       .select("razao_social, perfil:profiles(nome, telefone)").eq("id", ref.responsavel_partner_id).maybeSingle();

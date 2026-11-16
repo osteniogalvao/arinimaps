@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
+import { textoCsv } from "@/lib/seguranca/csv";
 import { ator, temSetor } from "@/lib/authz";
 import { lerEmLotes } from "@/lib/supabase/lotes";
 
@@ -35,7 +36,6 @@ export async function GET() {
   }
 
   const num = (v: unknown) => Number(v ?? 0).toFixed(2).replace(".", ",");
-  const txt = (v: unknown) => `"${String(v ?? "").replace(/^[\s]*[=+\-@]/, c => "'" + c).replace(/"/g, '""')}"`;
   const linhas = [["tipo", "data", "imovel_codigo", "imovel", "referencia", "base", "percentual", "valor", "status", "pago_em","comprovante"].join(";")];
 
   for (const c of comissoes ?? []) {
@@ -44,22 +44,22 @@ export async function GET() {
       opportunity: { codigo: string } | null; property: { codigo: string; titulo: string } | null;
     } | null;
     linhas.push([
-      "comissao", s?.data_venda ?? "", s?.property?.codigo ?? "", txt(s?.property?.titulo), s?.opportunity?.codigo ?? "",
+      "comissao", s?.data_venda ?? "", textoCsv(s?.property?.codigo), textoCsv(s?.property?.titulo), textoCsv(s?.opportunity?.codigo),
       num(c.base_calculo), num(c.percentual), num(c.valor), c.status, c.pago_em ?? "", "",
     ].join(";"));
   }
   for (const f of faturas ?? []) {
     const p = (f.subscription as unknown as { property: { codigo: string; titulo: string } | null } | null)?.property;
     linhas.push([
-      "mensalidade", f.competencia, p?.codigo ?? "", txt(p?.titulo), "", "", "", num(f.valor), f.status, f.pago_em ?? "", "",
+      "mensalidade", f.competencia, textoCsv(p?.codigo), textoCsv(p?.titulo), "", "", "", num(f.valor), f.status, f.pago_em ?? "", "",
     ].join(";"));
   }
 
   for (const m of movimentos) {
     const r = m.rec as unknown as {referencia:string; comissao:{venda:{imovel:{codigo:string;titulo:string}}}} | null;
     const im = r?.comissao?.venda?.imovel;
-    linhas.push([m.tipo === "repasse" ? "repasse_captador" : "recebimento_comissao",m.data,im?.codigo ?? "",txt(im?.titulo),txt(r?.referencia),
-      "", "", num(m.tipo === "repasse" ? -m.diferenca : m.diferenca),"efetivado",m.data,txt(m.documento)].join(";"));
+    linhas.push([m.tipo === "repasse" ? "repasse_captador" : "recebimento_comissao",m.data,textoCsv(im?.codigo),textoCsv(im?.titulo),textoCsv(r?.referencia),
+      "", "", num(m.tipo === "repasse" ? -m.diferenca : m.diferenca),"efetivado",m.data,textoCsv(m.documento)].join(";"));
   }
   await logAudit({ user_id: a.userId, acao: "financeiro_exportado", entidade: "commissions", dados_depois: { linhas: linhas.length - 1 } });
   return new NextResponse("﻿" + linhas.join("\r\n"), {

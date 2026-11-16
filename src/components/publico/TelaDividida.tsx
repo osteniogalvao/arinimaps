@@ -41,7 +41,7 @@ export default function TelaDividida({
   children: React.ReactNode;
 }) {
   const marca = linkSite
-    ? <Link href="/" aria-label="Arini Imóveis Brasil — início"><Logo negativa /></Link>
+    ? <Link href="/" aria-label="ARINI — início"><Logo negativa /></Link>
     : <Logo negativa />;
 
   return (
@@ -81,7 +81,7 @@ export default function TelaDividida({
             </ul>
           </div>
 
-          <p className="hidden text-sm text-texto-2 lg:block">Arini Imóveis Brasil · Pontal do Triângulo Mineiro</p>
+          <p className="hidden text-sm text-texto-2 lg:block">ARINI · Pontal do Triângulo Mineiro</p>
         </div>
       </aside>
 

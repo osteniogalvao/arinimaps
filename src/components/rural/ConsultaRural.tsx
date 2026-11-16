@@ -11,6 +11,7 @@ import { LinhaOrigem, SeloClassificacao, SeloSituacao, type OrigemItem } from ".
 import { CAMPO, ROTULO } from "@/components/ui/Pagina";
 import { ChevronDown, FileText, LoaderCircle, Radar } from "lucide-react";
 import { detalhesRegistro } from "@/lib/rural/detalhes";
+import { alcanceDaFonte } from "@/lib/rural/raios";
 
 type Item = { titulo: string; detalhe?: string; extra?: Record<string, string | number | null>; origem?: OrigemItem };
 type Consulta = {
@@ -135,7 +136,7 @@ export default function ConsultaRural({ propertyId }: { propertyId: string }) {
                   <p className="mt-0.5 text-xs text-texto-2">
                     {f.orgao}
                     {c && !c.erro && ` · consultado em ${new Date(c.consultado_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`}
-                    {c?.raio_m ? ` · raio ${c.raio_m / 1000} km` : null}
+                    {c && !c.erro && ` · ${alcanceDaFonte(f.id, c.raio_m)}`}
                   </p>
                 </div>
                 <span className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${cor}`}>{estado}</span>
@@ -211,7 +212,7 @@ export default function ConsultaRural({ propertyId }: { propertyId: string }) {
 
       <p className="text-xs leading-relaxed text-texto-2">
         Dados oficiais dos órgãos citados, consultados na data indicada. Distâncias e interseções são
-        cálculos do Arini Imóveis Brasil sobre a geometria do imóvel — não substituem certidão oficial.
+        cálculos da ARINI sobre a geometria do imóvel — não substituem certidão oficial.
       </p>
     </div>
   );

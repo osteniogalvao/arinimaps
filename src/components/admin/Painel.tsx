@@ -19,6 +19,7 @@ export const ICONE_SETOR: Record<SetorId, LucideIcon> = {
   financeiro: Wallet,
   juridico: Scale,
   marketing: Megaphone,
+  marketing_trafego: Megaphone,
   cartografia: IconeMapa,
   suporte: Headset,
   seguranca: ShieldCheck,

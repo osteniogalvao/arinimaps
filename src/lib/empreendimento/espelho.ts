@@ -1,8 +1,9 @@
 import "server-only";
+import { oportunidadesDoEspelho, projetarAtendimento } from "./privacidade";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ator as atorAtual, temSetor, type Ator } from "@/lib/authz";
 import {
-  compararLote, type EventoEspelho, type OportunidadeLote, type StatusEspelho,
+  compararLote, type EventoEspelho, type StatusEspelho,
   type UnidadeEspelho, type UnidadePublica, type ConfigEspelho, type EstoquePublico,
 } from "./tipos";
 
@@ -43,7 +44,7 @@ export async function lerEmpreendimento(id: string): Promise<Empreendimento | nu
 export function podeGerirEmpreendimento(a: Ator | null, emp: Pick<Empreendimento, "owner_id" | "partner_id">) {
   if (!a) return false;
   if (a.ehArini) return temSetor(a, "comercial");
-  return (!!a.ownerId && emp.owner_id === a.ownerId) || (!!a.partnerId && emp.partner_id === a.partnerId);
+  return (!!a.ownerId && emp.owner_id === a.ownerId) || (!!a.parceiroAtivo && !!a.partnerId && emp.partner_id === a.partnerId);
 }
 
 type LinhaUnidade = {
@@ -120,18 +121,23 @@ function statusEfetivo(u: LinhaUnidade, e: LinhaEspelho | undefined, agora: numb
  */
 export async function carregarEspelhoGestao(emp: Empreendimento, quem?: Ator | null) {
   const a = quem === undefined ? await atorAtual() : quem;
+  if (!podeGerirEmpreendimento(a, emp)) throw new Error("Sem acesso ao espelho de gestão.");
   const admin = supabaseAdmin();
   const unidades = await lerUnidades(emp.id);
   const ids = unidades.map((u) => u.id);
+  const comercial = temSetor(a, "comercial");
+  const parceiro = a?.parceiroAtivo && a.partnerId === emp.partner_id ? a.partnerId : null;
+  let negociacoes = admin.from("opportunities").select("id, codigo, etapa, property_id, created_at, responsavel_tipo, responsavel_partner_id, partner_comprador_id, lead:leads(nome)")
+    .in("property_id", ids).order("created_at", { ascending: false }).limit(500);
+  if (parceiro && !comercial) negociacoes = negociacoes.or(
+    `and(responsavel_tipo.eq.parceiro,responsavel_partner_id.eq.${parceiro}),partner_comprador_id.eq.${parceiro}`);
   const [situacao, geometrias, { data: opps }, { data: eventos }] = await Promise.all([
     lerSituacao(emp.id, true),
     lerGeometrias(emp.id, ids),
-    ids.length
-      ? admin.from("opportunities").select("id, codigo, etapa, property_id, created_at, responsavel_tipo, responsavel_partner_id, lead:leads(nome)")
-        .in("property_id", ids).order("created_at", { ascending: false }).limit(500)
+    ids.length && (comercial || parceiro) ? negociacoes
       : Promise.resolve({ data: [] as never[] }),
     admin.from("property_espelho_eventos")
-      .select("id, property_id, de, para, motivo, cliente_nome, reserva_ate, autor, created_at")
+      .select("id, property_id, opportunity_id, de, para, motivo, cliente_nome, reserva_ate, autor, created_at")
       .eq("empreendimento_id", emp.id).order("created_at", { ascending: false }).limit(400)
       .then((r) => r, () => ({ data: null })),
   ]);
@@ -141,37 +147,19 @@ export async function carregarEspelhoGestao(emp: Empreendimento, quem?: Ator | n
   for (const e of situacao?.values() ?? []) if (e.alterado_por) autores.add(e.alterado_por);
   for (const e of (eventos ?? []) as { autor: string | null }[]) if (e.autor) autores.add(e.autor);
   const nomes = new Map<string, string>();
-  if (autores.size) {
+  if (comercial && autores.size) {
     const { data: perfis } = await admin.from("profiles").select("user_id, nome").in("user_id", [...autores]);
     for (const p of perfis ?? []) nomes.set(p.user_id, p.nome || "Usuário");
   }
 
-  type LinhaOpp = {
-    id: string; codigo: string; etapa: string; property_id: string;
-    responsavel_tipo: string | null; responsavel_partner_id: string | null; lead: unknown;
-  };
-  const veNome = (o: LinhaOpp) =>
-    !!a && (a.ehArini ||
-      (o.responsavel_tipo === "proprietario" && !!a.ownerId && emp.owner_id === a.ownerId) ||
-      (o.responsavel_tipo === "parceiro" && !!a.partnerId && o.responsavel_partner_id === a.partnerId));
-  // opps vêm da mais nova para a mais antiga: numera por unidade a partir da mais antiga
-  const porUnidade = new Map<string, LinhaOpp[]>();
-  for (const o of (opps ?? []) as LinhaOpp[]) {
-    const lista = porUnidade.get(o.property_id) ?? [];
-    lista.push(o);
-    porUnidade.set(o.property_id, lista);
-  }
-  const oppsPorUnidade = new Map<string, OportunidadeLote[]>();
-  for (const [unidade, lista] of porUnidade) {
-    oppsPorUnidade.set(unidade, lista.map((o, i) => ({
-      id: o.id, codigo: o.codigo, etapa: o.etapa,
-      cliente: veNome(o) ? (o.lead as { nome: string } | null)?.nome ?? null : `Interessado ${lista.length - i}`,
-    })));
-  }
+  const oppsPorUnidade = oportunidadesDoEspelho(opps ?? [], comercial, parceiro);
   const eventosPorUnidade = new Map<string, EventoEspelho[]>();
-  for (const e of (eventos ?? []) as (Omit<EventoEspelho, "autor"> & { property_id: string; autor: string | null })[]) {
+  for (const e of eventos ?? []) {
     const lista = eventosPorUnidade.get(e.property_id) ?? [];
-    if (lista.length < 8) lista.push({ ...e, autor: e.autor ? nomes.get(e.autor) ?? "Usuário" : null });
+    const dados = projetarAtendimento(comercial, oppsPorUnidade.get(e.property_id), e.opportunity_id,
+      e.cliente_nome, e.motivo, e.autor ? nomes.get(e.autor) ?? "Usuário" : null);
+    if (lista.length < 8) lista.push({ id:e.id, de:e.de, para:e.para, cliente_nome:dados.cliente,
+      motivo:dados.nota, autor:dados.autor, reserva_ate:e.reserva_ate, created_at:e.created_at });
     eventosPorUnidade.set(e.property_id, lista);
   }
 
@@ -180,17 +168,20 @@ export async function carregarEspelhoGestao(emp: Empreendimento, quem?: Ator | n
     const e = situacao?.get(u.id);
     const status = statusEfetivo(u, e, agora);
     const vale = status === e?.status;
+    const oportunidades = oppsPorUnidade.get(u.id) ?? [];
+    const dados = projetarAtendimento(comercial, oportunidades, e?.opportunity_id ?? null,
+      e?.cliente_nome ?? null, e?.observacao ?? null, e?.alterado_por ? nomes.get(e.alterado_por) ?? "Usuário" : null);
     return {
       id: u.id, codigo: u.codigo, titulo: u.titulo, quadra: u.lote_quadra, numero: u.lote_numero,
       area_m2: u.lote_area_m2 ?? u.area_declarada, valor: u.valor, status_anuncio: u.status, status,
       reserva_ate: vale && status === "reservado" ? e?.reserva_ate ?? null : null,
-      cliente_nome: vale && status !== "disponivel" ? e?.cliente_nome ?? null : null,
+      cliente_nome: vale && status !== "disponivel" ? dados.cliente : null,
       valor_venda: vale && status === "vendido" ? e?.valor_venda ?? null : null,
-      observacao: vale ? e?.observacao ?? null : null,
-      opportunity_id: vale ? e?.opportunity_id ?? null : null,
-      alterado_por: e?.alterado_por ? nomes.get(e.alterado_por) ?? "Usuário" : null,
+      observacao: vale ? dados.nota : null,
+      opportunity_id: vale ? dados.oportunidade : null,
+      alterado_por: dados.autor,
       alterado_em: e?.alterado_em ?? null,
-      oportunidades: oppsPorUnidade.get(u.id) ?? [],
+      oportunidades,
       eventos: eventosPorUnidade.get(u.id) ?? [],
     };
   });

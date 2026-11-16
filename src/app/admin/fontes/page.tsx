@@ -58,6 +58,13 @@ export default async function AdminFontes() {
         <Estatistica icone={Clock} valor={<span className="text-xl tabular-nums">{quando(ultima)}</span>} rotulo="Última verificação" />
       </div>
 
+      {fontes.length > 0 && <nav aria-label="Catálogo de integrações" className="flex snap-x gap-3 overflow-x-auto pb-3">
+        {fontes.map(f => <a key={f.id} href={`#fonte-${f.id}`} className="cartao w-60 shrink-0 snap-start p-4 hover:underline">
+          <strong className="block">{f.nome}</strong>
+          <span className="text-sm text-texto-2">{f.orgao} · {f.mecanismo ?? f.tipo}</span>
+        </a>)}
+      </nav>}
+
       <NavegacaoInterna itens={[
         { href: "#situacao", rotulo: "Situação das fontes ativas", icone: Activity, contagem: ativas.length },
         { href: "#matriz", rotulo: "Matriz técnica", icone: Table2, contagem: fontes.length },
@@ -129,7 +136,7 @@ export default async function AdminFontes() {
       >
         <div className="cartao divide-y divide-linha overflow-hidden">
           {fontes.map((f) => (
-            <details key={f.id} className="group">
+            <details key={f.id} id={`fonte-${f.id}`} className="group scroll-mt-24">
               <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 px-5 py-4 transition-colors hover:bg-superficie-2/60 [&::-webkit-details-marker]:hidden">
                 <ChevronRight className="size-4 shrink-0 text-texto-2 transition-transform group-open:rotate-90" />
                 <span className="font-semibold text-texto">{f.nome}</span>

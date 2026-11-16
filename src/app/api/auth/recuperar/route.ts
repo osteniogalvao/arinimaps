@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     if (token) {
       await sendEmail(
         email,
-        "Redefinição de senha — Arini Imóveis Brasil",
+        "Redefinição de senha — ARINI",
         "Recebemos um pedido para redefinir a senha da sua conta.\n\n" +
         "Abra o link abaixo para criar uma senha nova. Ele vale por 1 hora e só funciona uma vez:\n\n" +
         `${destino}?token_hash=${token}\n\n` +

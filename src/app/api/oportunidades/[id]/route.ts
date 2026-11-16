@@ -97,7 +97,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/oportunida
   if (body.acao === "encaminhar") {
     if (!a!.ehArini) return NextResponse.json({ error: "Só a Arini encaminha oportunidades." }, { status: 403 });
     const { responsavel_tipo, responsavel_partner_id, partner_comprador_id } = body;
-    if (!["arini", "parceiro", "proprietario"].includes(responsavel_tipo)) {
+    if (!["arini", "parceiro"].includes(responsavel_tipo)) {
       return NextResponse.json({ error: "Responsável inválido." }, { status: 400 });
     }
     await admin.from("opportunities").update({
@@ -113,7 +113,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/oportunida
       const { data: pa } = await admin.from("partners").select("profile_id").eq("id", responsavel_partner_id).single();
       if (pa) {
         const { data: u } = await admin.auth.admin.getUserById(pa.profile_id);
-        await sendEmail(u?.user?.email, "Nova oportunidade encaminhada — Arini Imóveis Brasil",
+        await sendEmail(u?.user?.email, "Nova oportunidade encaminhada — ARINI",
           `A Arini encaminhou uma oportunidade para você. Acesse o painel: ${process.env.NEXT_PUBLIC_SITE_URL}/painel/oportunidades`);
       }
     }
@@ -186,18 +186,18 @@ export async function POST(request: Request, ctx: RouteContext<"/api/oportunidad
         Object.assign(patch, { relatorio: v.relatorio, relatorio_em: new Date().toISOString(), relatorio_por: a!.userId });
       }
       patch.feedback = feedback;
-      let { error: errVisita } = await admin.from("visits").update(patch).eq("id", visitaId).eq("opportunity_id", id);
-      if (errVisita && /relatorio/.test(errVisita.message)) {
+      let visitaGravada = await admin.from("visits").update(patch).eq("id", visitaId).eq("opportunity_id", id).select("id").maybeSingle();
+      if (visitaGravada.error && /relatorio/.test(visitaGravada.error.message)) {
         // banco sem a 0065: guarda só o texto, como antes
-        ({ error: errVisita } = await admin.from("visits").update({ status, feedback }).eq("id", visitaId).eq("opportunity_id", id));
+        visitaGravada = await admin.from("visits").update({ status, feedback }).eq("id", visitaId).eq("opportunity_id", id).select("id").maybeSingle();
       }
-      if (errVisita) return NextResponse.json({ error: errVisita.message }, { status: 400 });
+      if (visitaGravada.error || !visitaGravada.data) return NextResponse.json({ error: "A visita não foi atualizada nesta oportunidade." }, { status: 409 });
       const resumo = status === "realizada" && patch.relatorio ? resumoRelatorio(patch.relatorio as never) : feedback;
       await evento(id, "anotacao", `Visita ${status}${resumo ? `: ${resumo}` : ""}`, a!.userId);
       await logAudit({ user_id: a!.userId, acao: body.tipo === "visita_relatorio" ? "visita_relatorio" : `visita_${status}`, entidade: "visits", entidade_id: visitaId, opportunity_id: id, property_id: opp.property_id, dados_depois: patch.relatorio ?? null });
       if (status === "realizada" || status === "cancelada" || status === "nao_compareceu") {
         await concluirTarefaDoEvento(`visita_sem_relatorio:${visitaId}`, a!.userId,
-          status === "realizada" ? "Relatório da visita preenchido" : `Visita marcada como ${status.replace("_", " ")}`);
+          status === "realizada" ? "Resultado da visita realizada registrado" : `Visita marcada como ${status.replace("_", " ")}`, "visits", visitaId);
       }
       if (body.tipo !== "visita_relatorio" || feedback) {
         await avisarVisitaAoProprietario({ opportunityId: id, autorId: a!.userId, status, feedback });

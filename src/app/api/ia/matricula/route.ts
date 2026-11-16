@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { tipoReal, CONTENT_TYPE } from "@/lib/seguranca/arquivos";
 import { ator } from "@/lib/authz";
 import { reservarAri } from "@/lib/ia/creditos";
 import { falha } from "@/lib/erros";
@@ -62,7 +63,10 @@ export async function POST(request: Request) {
   const a = await ator();
   const { negacao } = await conferirRecurso(request, a ? { id: a.userId, role: a.role } : null, "chat_ia");
   if (negacao) return respostaNegacao(negacao);
-  const userId = a!.userId;
+  if (!a) return falha(401, "sem_sessao", "Entre para enviar uma certidão.");
+  if (new URL(request.url).searchParams.get("autorizacao") !== "matricula-ia-v1")
+    return falha(400, "autorizacao_necessaria", "Confirme a autorização de envio da certidão ao prestador de IA.");
+  const userId = a.userId;
   // cada leitura custa ~R$ 0,30 a 1,50 (Sonnet, PDF de várias páginas): limite apertado
   for (const [chave, max, janela] of [[`iamat:hora:${userId}`, 6, 3600], [`iamat:dia:${userId}`, 20, 86400]] as const) {
     const l = await limitar(chave, max, janela);
@@ -82,6 +86,8 @@ export async function POST(request: Request) {
     return falha(400, "arquivo_grande", "O arquivo passou de 15 MB.", { solucao: "Envie o PDF da certidão digital ou fotos menores." });
   }
 
+  const detectado=tipoReal(bytes);
+  if (!detectado || CONTENT_TYPE[detectado]!==tipo) return falha(400, "tipo_invalido", "O conteúdo da certidão não corresponde ao formato informado.");
   const data = bytes.toString("base64");
   const anexo: Anthropic.ContentBlockParam = tipo === "application/pdf"
     ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
@@ -91,6 +97,7 @@ export async function POST(request: Request) {
   if (reserva.erro) return reserva.erro;
   let texto = "";
   try {
+    await logAudit({ user_id:userId, acao:"autorizar_leitura_matricula", entidade:"ia", dados_depois:{ versao:"matricula-ia-v1", prestador:"Anthropic" } });
     const client = new Anthropic();
     const r = await client.messages.create({
       model: reserva.modelo,

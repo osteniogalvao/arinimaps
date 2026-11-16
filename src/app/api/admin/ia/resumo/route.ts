@@ -60,6 +60,10 @@ export async function GET(request: Request) {
     const { data: cad } = await admin.from("properties").select("codigo, status, updated_at").in("status", ["pendente", "em_analise", "correcao"]).order("updated_at").limit(40);
     retrato.cadastros_em_analise = cad ?? [];
   }
+  if (setor === "marketing_trafego") {
+    const { data } = await admin.rpc("fn_campanhas_resultado");
+    retrato.resultados_por_campanha = data ?? [];
+  }
   if (setor === "marketing") {
     const { data: pub } = await admin.from("publicacoes").select("canal, status, agendada_para, property:properties(codigo)").in("status", ["rascunho", "aprovacao", "agendada", "erro"]).limit(40);
     retrato.publicacoes = pub ?? [];

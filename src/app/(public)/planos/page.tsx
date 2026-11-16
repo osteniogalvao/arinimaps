@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { chamadaPiloto, situacaoPiloto } from "@/lib/divulgacao";
 import type { Metadata } from "next";
 import {
   ArrowRight, BadgeCheck, Check, CreditCard, UserPlus,
@@ -25,7 +26,7 @@ import {
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Planos",
-  description: "Planos do Arini Imóveis Brasil por perfil de uso: compare as dez opções, os recursos e os complementos e escolha o caminho para o seu imóvel ou organização.",
+  description: "Conheça os perfis de uso da ARINI, os recursos de cada plano e os complementos disponíveis para sua conta ou organização.",
 };
 
 const GRUPOS = Object.keys(GRUPO_RECURSO_LABEL) as Recurso["grupo"][];
@@ -63,6 +64,7 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
     temVitrine ? supabaseAdmin().from("ofertas_perfis").select("*").eq("perfil", persona.id).eq("ativo", true).order("ordem") : { data: [] },
   ]);
   const acessoLeilao = persona.id==="leiloeiro" && user ? (await supabaseAdmin().rpc("leilao_acesso",{p_ator:user.id})).data : null;
+  const piloto = persona.id==="divulgador" ? await situacaoPiloto(user?.id) : null;
   const todos = (planosRaw ?? []) as (Plano & PrecoVigente)[];
   const precos = todos.filter((p) => PLANOS_CATALOGO.some((c) => c.id === p.id && c.personaId === catalogo))
     .map(({id, preco_mensal, preco_anual_centavos, primeiro_mes_centavos}) => ({id, preco_mensal, preco_anual_centavos, primeiro_mes_centavos}));
@@ -88,7 +90,7 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
           <div className="flex flex-wrap gap-3">
             {persona && <Link href="#perfis" className="lp-btn lp-btn-contorno">Escolher outro perfil</Link>}
             {user && <Link href="/planos/solicitacoes" className="lp-btn lp-btn-contorno">Meus pedidos</Link>}
-            {!user && !temVitrine && (
+            {!user && !temVitrine && !piloto && (
               <Link href={linkCadastro(persona)} className="lp-btn lp-btn-ouro">
                 <UserPlus /> Cadastre-se{persona?.papel ? " neste perfil" : ""}
               </Link>
@@ -99,7 +101,7 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
         {["instituicao","empresa","tecnico"].includes(persona.id) && <Link href="/balcao" className="mb-5 inline-block font-semibold text-verde underline">Balcão municipal · protocolar e acompanhar um pedido</Link>}
         {persona.id==="comprar" && <Link href="/conta/filtros" className="mb-5 inline-block font-semibold text-verde underline">
           Criar filtro de interesse · até {Number(cfg.filtros_comprador_gratis)} grátis ou {Number(cfg.filtros_comprador_pacote)} com o pacote da Ari</Link>}
-        {temVitrine ? <OfertasDoPerfil key={persona.id} ofertas={((vitrine.data ?? []) as OfertaPerfil[]).map((o) => o.id !== "comprar_creditos" ? o : {
+        {piloto ? <Link className="lp-btn lp-btn-verde" href="/divulgador">{chamadaPiloto(piloto)} <ArrowRight /></Link> : temVitrine ? <OfertasDoPerfil key={persona.id} ofertas={((vitrine.data ?? []) as OfertaPerfil[]).map((o) => o.id !== "comprar_creditos" ? o : {
           ...o, limites: [String(cfg.ari_pacote_comprados) + " créditos comprados", String(cfg.ari_pacote_cortesia) + " créditos de cortesia",
             "Validade de " + String(cfg.ari_validade_meses) + " meses"], detalhes: ["Pacote sem mensalidade", "Saldo liberado após a confirmação do pagamento."],
         })} autenticado={!!user} /> : catalogo && !precos.length ? <Vazio titulo="As opções deste perfil estão indisponíveis no momento." /> : persona && catalogo ? (

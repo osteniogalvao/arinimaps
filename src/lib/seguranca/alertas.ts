@@ -123,7 +123,7 @@ export async function analisarEntrada(request: Request, userId: string, email: s
     if ((falhas ?? 0) >= 5) {
       await registrarAlerta({
         tipo: "entrada_apos_falhas", severidade: "alta", userId, email, request, detalhe: { ...detalhe, falhas },
-        aviso: ["Entrada na sua conta após várias senhas erradas — Arini Imóveis Brasil",
+        aviso: ["Entrada na sua conta após várias senhas erradas — ARINI",
           `Sua conta foi acessada em ${quando()} (${aparelho}, endereço ${ip}) logo depois de ${falhas} tentativas com senha errada.\n\n` +
           "Se foi você, ignore este aviso. Se não foi, troque a senha agora em Minha segurança e ative o segundo fator."],
       });
@@ -140,7 +140,7 @@ export async function analisarEntrada(request: Request, userId: string, email: s
       tipo: aparelhoNovo ? "novo_aparelho" : "novo_local",
       severidade: aparelhoNovo && localNovo ? "media" : "baixa",
       userId, email, request, detalhe: { ...detalhe, aparelho_novo: aparelhoNovo, local_novo: localNovo },
-      aviso: ["Novo acesso à sua conta — Arini Imóveis Brasil",
+      aviso: ["Novo acesso à sua conta — ARINI",
         `Sua conta entrou em ${quando()} a partir de ${aparelhoNovo ? "um aparelho que ainda não tínhamos visto" : "um local que ainda não tínhamos visto"}:\n\n` +
         `  Aparelho: ${aparelho}\n  Endereço: ${ip}\n\n` +
         "Se foi você, não precisa fazer nada. Se não foi, troque a senha agora em Minha segurança, " +
@@ -168,7 +168,7 @@ export async function analisarFalha(request: Request, email: string) {
         .eq("email", email.toLowerCase()).eq("evento", "login_ok");
       await registrarAlerta({
         tipo: "excesso_falhas", severidade: "media", email, request, detalhe: { por: "conta", falhas: porConta, ip },
-        aviso: existe ? ["Tentativas de entrar na sua conta — Arini Imóveis Brasil",
+        aviso: existe ? ["Tentativas de entrar na sua conta — ARINI",
           `Registramos ${porConta} tentativas com senha errada na sua conta nos últimos 15 minutos (último endereço: ${ip}, em ${quando()}).\n\n` +
           "O sistema já bloqueia novas tentativas por alguns minutos. Se não foi você, troque a senha e ative o segundo fator."] : null,
       });

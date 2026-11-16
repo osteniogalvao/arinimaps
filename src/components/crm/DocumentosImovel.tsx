@@ -7,13 +7,14 @@ import { enviarJson } from "@/lib/api/enviar";
 
 type Doc = {
   id: string; tipo: string; nome_arquivo: string | null; verificado: boolean;
+  conferir_exclusividade?: boolean;
   verificado_em: string | null; created_at: string; url: string | null;
   versao?: number; substituido_em?: string | null; enviado_por_nome?: string | null;
 };
 
 const TIPOS = [
   ["matricula", "Matrícula / escritura"], ["edital", "Edital do leilão"], ["ccir_itr", "CCIR / ITR"], ["car", "CAR"], ["itr", "ITR"],
-  ["dwg", "Planta / DWG"], ["autorizacao", "Autorização de venda"], ["outro", "Outro"],
+  ["dwg", "Planta / DWG"], ["autorizacao", "Termo de exclusividade / contrato do leilão"], ["outro", "Outro"],
 ] as const;
 
 const rotuloTipo = (t: string) => TIPOS.find(([v]) => v === t)?.[1] ?? t;
@@ -33,6 +34,8 @@ export default function DocumentosImovel({ propertyId, podeConferir = false }: {
   const [anteriores, setAnteriores] = useState<Doc[] | null>(null);
   const [verAnteriores, setVerAnteriores] = useState(false);
   const [tipo, setTipo] = useState("matricula");
+  const [assinados, setAssinados] = useState<Record<string,string>>({});
+  const [prazos, setPrazos] = useState<Record<string,string>>({});
   const [ocupado, setOcupado] = useState(false);
   // mensagem com tom: sucesso em verde, falha em vermelho
   const [msg, setMsg] = useState<{ texto: string; erro: boolean } | null>(null);
@@ -112,12 +115,17 @@ export default function DocumentosImovel({ propertyId, podeConferir = false }: {
                 abrir <ExternalLink className="size-3.5" />
               </a>
             )}
+            {podeConferir && d.conferir_exclusividade && !d.verificado && <fieldset className="flex flex-wrap items-center gap-2 text-xs">
+              <legend>Confira a exclusividade na cópia assinada</legend>
+              <label>Assinatura <input type="date" value={assinados[d.id] ?? ""} onChange={e=>setAssinados({...assinados,[d.id]:e.target.value})}/></label>
+              <label>Prazo <select value={prazos[d.id] ?? ""} onChange={e=>setPrazos({...prazos,[d.id]:e.target.value})}><option value="">Selecione</option><option value="6">180 dias</option><option value="12">12 meses</option></select></label>
+            </fieldset>}
             {podeConferir ? (
               <button type="button" disabled={ocupado}
                 onClick={async () => {
                   setOcupado(true); setMsg(null);
                   const r = await enviarJson(`/api/imoveis/${propertyId}/documentos`, "PATCH",
-                    { documento_id: d.id, verificado: !d.verificado });
+                    { documento_id: d.id, verificado: !d.verificado, assinada_em: assinados[d.id], prazo_meses: Number(prazos[d.id]) });
                   setOcupado(false);
                   if (r.ok) carregar(verAnteriores); else setMsg({ erro: true, texto: r.erro.mensagem });
                 }}

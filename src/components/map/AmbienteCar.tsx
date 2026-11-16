@@ -15,14 +15,14 @@ type Dados = GeoJSON.FeatureCollection<GeoJSON.Geometry, { tema: Tema; fonte: st
 const IDS = ["car-ambiental-poligono", "car-ambiental-linha", "car-ambiental-ponto"];
 const FONTE = "car-ambiental-imovel";
 
-export default function AmbienteCar({ cod, mapa }: { cod: string; mapa: Mapa | null }) {
+export default function AmbienteCar({ cod, mapa, tour = false }: { cod: string; mapa: Mapa | null; tour?: boolean }) {
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState("");
   const [tentativa, setTentativa] = useState(0);
   const [ocultos, setOcultos] = useState<Tema[]>([]);
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch("/api/geo/car/" + encodeURIComponent(cod) + "/ambiente", { signal: ctrl.signal })
+    fetch("/api/geo/car/" + encodeURIComponent(cod) + "/ambiente" + (tour ? "?tour=1" : ""), { signal: ctrl.signal })
       .then(async r => {
         const j = await r.json();
         if (!r.ok) throw new Error(j.error || "Falha ao consultar a área.");
@@ -30,7 +30,7 @@ export default function AmbienteCar({ cod, mapa }: { cod: string; mapa: Mapa | n
       })
       .catch(e => { if (!ctrl.signal.aborted) setErro(e.message || "Falha ao consultar a área."); });
     return () => ctrl.abort();
-  }, [cod, tentativa]);
+  }, [cod, tentativa, tour]);
   const visiveis = useMemo((): GeoJSON.FeatureCollection => ({
     type: "FeatureCollection", features: (dados?.features ?? []).filter(f => !ocultos.includes(f.properties.tema))
       .map(f => ({ ...f, properties: { ...f.properties, cor: CORES[f.properties.tema] } })),

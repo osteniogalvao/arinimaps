@@ -67,6 +67,7 @@ export const config = {
   // movimento do mapa e nenhum precisa de sessão — passar cada um pelo refresh
   // do token (uma ida ao Supabase Auth) era parte da lentidão do zoom.
   matcher: [
-    "/((?!api/admin/cartografia|api/tiles|api/geo|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|pbf)).*)",
+    // O webhook autentica a Meta e mede o corpo em fluxo. O proxy copiaria o corpo antes dessa validação.
+    "/((?!api/admin/cartografia|api/webhooks/whatsapp(?:/|$)|api/tiles|api/geo|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|pbf)).*)",
   ],
 };

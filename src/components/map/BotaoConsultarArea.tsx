@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, RefreshCw, ScanSearch } from "lucide-react";
+import { RAIOS_CONSULTA, rotuloRaio } from "@/lib/rural/raios";
 
 /**
  * Dispara o cruzamento da área com as fontes oficiais (CAR, lote ou área
@@ -20,14 +21,16 @@ import { LoaderCircle, RefreshCw, ScanSearch } from "lucide-react";
 const MAX_VOLTAS_FILA = 12;
 
 export default function BotaoConsultarArea({
-  url, corpo, jaConsultou, planNome, cotaRestante,
+  url, corpo, jaConsultou, planNome, cotaRestante, raioM,
 }: {
   url: string;
   /** corpo JSON do POST, quando a rota precisa (área desenhada: a chave) */
   corpo?: unknown;
+  raioM: number;
   jaConsultou: boolean; planNome?: string | null; cotaRestante?: number | null;
 }) {
   const router = useRouter();
+  const [mudandoRaio, navegar] = useTransition();
   const [rodando, setRodando] = useState(false);
   const [msg, setMsg] = useState("");
   const [solucao, setSolucao] = useState("");
@@ -39,7 +42,7 @@ export default function BotaoConsultarArea({
     let r: Response | null = null;
     let data: Record<string, unknown> & { error?: string; solucao?: string; codigo?: string } = {};
     for (let volta = 0; ; volta++) {
-      r = await fetch(url, corpo === undefined ? { method: "POST" } : {
+      r = await fetch(`${url}?raio_m=${raioM}`, corpo === undefined ? { method: "POST" } : {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
       }).catch(() => null);
       data = r ? await r.json().catch(() => ({})) : {};
@@ -74,7 +77,18 @@ export default function BotaoConsultarArea({
 
   return (
     <div className="text-right space-y-1.5">
-      <button onClick={consultar} disabled={rodando || semCota} className="btn-verde inline-flex items-center gap-2 px-5 py-3 text-sm disabled:opacity-60">
+      <label className="flex items-center justify-end gap-2 text-sm">
+        Entorno da consulta
+        <select className="rounded border border-linha bg-superficie px-3 py-2" value={raioM}
+          disabled={rodando || mudandoRaio} onChange={(e) => {
+            const destino = new URL(window.location.href);
+            destino.searchParams.set("raio_m", e.target.value);
+            navegar(() => router.replace(destino.pathname + destino.search + destino.hash, { scroll: false }));
+          }}>
+          {RAIOS_CONSULTA.map(m => <option key={m} value={m}>{rotuloRaio(m)}</option>)}
+        </select>
+      </label>
+      <button onClick={consultar} disabled={rodando || semCota || mudandoRaio} className="btn-verde inline-flex items-center gap-2 px-5 py-3 text-sm disabled:opacity-60">
         {rodando ? <LoaderCircle className="size-4 animate-spin" /> : jaConsultou ? <RefreshCw className="size-4" /> : <ScanSearch className="size-4" />}
         {posicaoFila != null ? `Na fila (posição ${posicaoFila})…` : rodando ? "Consultando os órgãos…" : jaConsultou ? "Atualizar consulta" : "Consultar fontes oficiais"}
       </button>

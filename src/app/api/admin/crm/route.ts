@@ -155,6 +155,7 @@ export async function POST(request: Request) {
           const destino = etapas.find((e) => e.id === b.etapa_id);
           if (!destino) throw new Erro("Etapa inválida.");
           if (item.status !== "aberto") throw new Erro("Reabra o item antes de mover.");
+          if (destino.id === item.etapa_id) throw new Erro("O item já está nesta etapa.", 409);
           const falta = camposFaltando(campos, etapas, destino.id, item.dados ?? {});
           if (falta.length) throw new Erro(`Para entrar em "${destino.nome}", preencha: ${falta.map((c) => c.rotulo).join(", ")}.`);
           const de = etapas.find((e) => e.id === item.etapa_id);
@@ -162,7 +163,7 @@ export async function POST(request: Request) {
             etapa_id: destino.id, entrou_etapa_em: new Date().toISOString(), prazo_etapa: prazoDaEtapa(destino),
             ...(destino.final ? { status: "concluido" } : {}),
           });
-          if (de) await concluirTarefaDoEvento(`crm_sla:${item.id}:${de.id}`, a.userId, `Item seguiu para "${destino.nome}"`);
+          if (de) await concluirTarefaDoEvento(`crm_sla:${item.id}:${de.id}`, a.userId, `Item seguiu para "${destino.nome}"`, "crm_itens", item.id);
           await evento(item.id, "etapa", a.userId, `${de?.nome ?? "—"} → ${destino.nome}`, { de: de?.id, para: destino.id });
         } else if (acao === "editar_item") {
           const dados = { ...(item.dados ?? {}), ...normalizarDados(campos, (b.dados as Record<string, unknown>) ?? {}) };

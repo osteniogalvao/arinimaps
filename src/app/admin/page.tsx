@@ -89,6 +89,10 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
       { rotulo: "imóveis no ar", n: publicados, href: "/admin/marketing" },
       { rotulo: "interessados nos últimos 30 dias", n: leads30, href: "/admin/marketing" },
     ],
+    marketing_trafego: [
+      { rotulo: "interessados nos últimos 30 dias", n: leads30, href: "/admin/marketing/trafego" },
+      { rotulo: "campanhas e investimento", n: "→", href: "/admin/registros/campanhas" },
+    ],
     cartografia: [
       { rotulo: "solicitações cartográficas abertas", n: cartAbertas, href: "/admin/cartografia/solicitacoes", urgente: cartRecebidas > 0 },
       { rotulo: "plantas e malha do CAR", n: "→", href: "/admin/cartografia" },

@@ -10,6 +10,7 @@ const ACEITOS = ".pdf,.jpg,.jpeg,.png,.webp";
 
 export default function LeituraMatriculaCliente({ logado }: { logado: boolean }) {
   const [estado, setEstado] = useState<"livre" | "lendo" | "pronto">("livre");
+  const [autorizado, setAutorizado] = useState(false);
   const [pct, setPct] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
   const [leitura, setLeitura] = useState<LeituraMatricula | null>(null);
@@ -17,8 +18,9 @@ export default function LeituraMatriculaCliente({ logado }: { logado: boolean })
   const input = useRef<HTMLInputElement>(null);
 
   async function ler(arquivo: File) {
+    if (!autorizado) { setErro("Confirme a autorização antes de enviar a certidão."); return; }
     setErro(null); setLeitura(null); setNome(arquivo.name); setEstado("lendo"); setPct(0);
-    const r = await enviarArquivo<{ leitura: LeituraMatricula }>("/api/ia/matricula", arquivo, {}, (p) => setPct(p));
+    const r = await enviarArquivo<{ leitura: LeituraMatricula }>("/api/ia/matricula", new File([arquivo], "certidao", {type:arquivo.type}), { autorizacao: "matricula-ia-v1" }, (p) => setPct(p));
     if (!r.ok) {
       setErro([r.erro.mensagem, r.erro.solucao].filter(Boolean).join(" "));
       setEstado("livre");
@@ -50,6 +52,7 @@ export default function LeituraMatriculaCliente({ logado }: { logado: boolean })
 
   return (
     <div className="space-y-8">
+      <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={autorizado} onChange={e=>setAutorizado(e.target.checked)} />Tenho autorização para compartilhar esta certidão, inclusive os dados pessoais nela contidos, com a Anthropic para a leitura pela Ari.</label>
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f && estado !== "lendo") void ler(f); }}
@@ -63,8 +66,8 @@ export default function LeituraMatriculaCliente({ logado }: { logado: boolean })
           <>
             <Upload className="mx-auto size-8 text-verde" />
             <p className="text-texto">Arraste a certidão aqui ou</p>
-            <button type="button" onClick={() => input.current?.click()} className="btn-verde inline-flex px-5 py-2.5 text-sm">Escolher arquivo</button>
-            <p className="text-xs text-texto-2">PDF, JPG, PNG ou WEBP, até 15 MB. O arquivo não fica guardado.</p>
+            <button type="button" disabled={!autorizado} onClick={() => input.current?.click()} className="btn-verde inline-flex px-5 py-2.5 text-sm">Escolher arquivo</button>
+            <p className="text-xs text-texto-2">PDF, JPG, PNG ou WEBP, até 15 MB. A ARINI não arquiva a certidão nesta ferramenta.</p>
           </>
         )}
         <input ref={input} type="file" accept={ACEITOS} className="hidden"

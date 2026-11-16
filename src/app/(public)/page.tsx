@@ -11,7 +11,6 @@ import HeroCarrossel, { type SlideHero } from "@/components/landing/HeroCarrosse
 import ComoUsar from "@/components/landing/ComoUsar";
 import Municipios, { type MunicipioCartao } from "@/components/landing/Municipios";
 import ComoFunciona from "@/components/landing/ComoFunciona";
-import FontesMarquee from "@/components/landing/FontesMarquee";
 import MosaicoSatelite from "@/components/landing/MosaicoSatelite";
 import RodapeSite, { PreRodape } from "@/components/landing/RodapeSite";
 import { BTN_ACAO, MaisLink, TituloSecao } from "@/components/landing/Titulo";
@@ -231,7 +230,7 @@ export default async function Home() {
   const vitrine1: Quadro[] = baratos.length
     ? baratos
     : [{ tipo: "foto", src: "/img/fazenda-gado.jpg", alt: "Propriedade rural", legenda: "Oportunidades da região" }];
-  const marca = texto(cfg, "nome_sistema", "Arini Imóveis Brasil");
+  const marca = texto(cfg, "nome_sistema", "ARINI");
   const siteArini = texto(cfg, "sobre_site");
   const comissao = pct(numero(cfg, "comissao_percentual_padrao", 1.9));
   const paragrafosSobre = texto(cfg, "sobre_texto").split("\n").map((p) => p.trim()).filter(Boolean);
@@ -556,15 +555,6 @@ export default async function Home() {
             />
             <div className="mt-16"><ComoFunciona /></div>
           </div>
-        </section>
-
-        {/* ---------- fontes oficiais ---------- */}
-        <section aria-labelledby="titulo-fontes" className="lp-clara border-b border-linha py-12 md:py-14">
-          <div className="lp-container mb-8 flex flex-wrap items-baseline justify-between gap-3">
-            <h2 id="titulo-fontes" className="lp-display text-2xl text-texto md:text-3xl">Informações oficiais</h2>
-            <p className="text-base text-texto-2">Fonte fora do ar aparece como indisponível, nunca como &ldquo;nada encontrado&rdquo;.</p>
-          </div>
-          <FontesMarquee />
         </section>
 
         {/* ---------- sobre a Arini ---------- */}

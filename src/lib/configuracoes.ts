@@ -38,7 +38,7 @@ export const GRUPOS: Grupo[] = [
     icone: "🏷️",
     campos: [
       { chave: "fichas_visitante", rotulo: "Imóveis que o visitante pode abrir", tipo: "numero", padrao: 2, min: 0, max: 30, ajuda: "Quantidade de resumos de imóveis diferentes por navegador em 30 dias. A ficha completa exige login." },
-      { chave: "nome_sistema", rotulo: "Nome do sistema", tipo: "texto", padrao: "Arini Imóveis Brasil",
+      { chave: "nome_sistema", rotulo: "Nome do sistema", tipo: "texto", padrao: "ARINI",
         ajuda: "Aparece no topo do site, nos e-mails e no título das páginas." },
       { chave: "whatsapp_central", rotulo: "WhatsApp da central", tipo: "telefone", padrao: "553499745140",
         ajuda: "Botão “Chamar no WhatsApp” em cada anúncio. Use DDI+DDD+número, só dígitos." },
@@ -154,6 +154,8 @@ export const GRUPOS: Grupo[] = [
         ajuda: "Canal para pedidos de acesso, correção e exclusão de dados. Vazio = usa o e-mail público de contato." },
       { chave: "juridico_selfie_exclusividade", rotulo: "Selfie no aceite da exclusividade", tipo: "sim_nao", padrao: false, somenteDiretoria: true,
         ajuda: "Com “Sim”, o proprietário tira uma selfie ao aceitar a exclusividade. A foto fica no cofre de documentos, só para conferência — não há reconhecimento facial." },
+      { chave: "juridico_carencia_publicacao_dias", rotulo: "Espera antes de publicar venda exclusiva", tipo: "numero", padrao: 7, min: 7, max: 30, sufixo: "dias", somenteDiretoria: true,
+        ajuda: "Conta da assinatura. A autorização antecipada expressa prevista no termo eletrônico continua válida." },
       { chave: "juridico_prazo_autorizacao_dias", rotulo: "Prazo da autorização de venda", tipo: "numero", padrao: 180, min: 30, max: 730, sufixo: "dias",
         ajuda: "Prazo da autorização simples. A exclusividade segue os 6 ou 12 meses escolhidos no cadastro do imóvel.", somenteDiretoria: true },
       { chave: "juridico_protecao_meses", rotulo: "Proteção contra venda por fora", tipo: "numero", padrao: 12, min: 0, max: 36, sufixo: "meses",

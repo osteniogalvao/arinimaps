@@ -1,3 +1,5 @@
+import { raioConsulta } from "@/lib/rural/raios";
+import { tourDaArea } from "@/components/tour/tourDaArea";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
@@ -33,19 +35,24 @@ const metros = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits:
  * os pontos de referência ao redor com a distância, e o cruzamento com as
  * fontes oficiais — este último com conta, plano e cota, como no rural.
  */
-export default async function ConsultaLote({ params }: PageProps<"/consulta/lote/[id]">) {
+export default async function ConsultaLote({ params, searchParams }: PageProps<"/consulta/lote/[id]">) {
+  const raioM = raioConsulta((await searchParams).raio_m, 500);
+  if (raioM === null) notFound();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const admin = supabaseAdmin();
   const [{ data: loteRaw }, { data: raioCfg }, consulta] = await Promise.all([
     admin.rpc("fn_lote", { p_id: id }),
     admin.from("settings").select("valor").eq("chave", "poi_raio_urbano_m").maybeSingle(),
-    carregarConsultaArea(`lote:${id}`),
+    carregarConsultaArea(`lote:${id}`, { raioM }),
   ]);
   const lote = loteRaw as Lote | null;
   if (!lote?.geometry) notFound();
   const pontoLote = pointOnFeature(lote.geometry).geometry.coordinates;
   const p = lote.properties;
+  const abrir = (await searchParams).tour === "1";
+  const tour = await tourDaArea(consulta, { abrir, geometria: lote.geometry, caminho: "/consulta/lote/" + id, raio: raioM, titulo: p.numero ? "Lote " + p.numero : "Lote urbano", area: m2(p.area_m2) + " m²" });
+  if (abrir) return tour;
 
   const raio = Number(raioCfg?.valor ?? 4000) || 4000;
   const { data: poisRaw } = await admin.rpc("fn_pois_proximos", { p_lng: p.lng, p_lat: p.lat, p_raio_m: raio, p_por_categoria: 2 });
@@ -89,6 +96,7 @@ export default async function ConsultaLote({ params }: PageProps<"/consulta/lote
             className="h-80 lg:h-full lg:min-h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{m2(p.area_m2)} m²</p>
+            {tour}
             <dl className="divide-y divide-linha border-y border-linha">
               {dados.map(([r, v]) => (
                 <div key={r} className="flex items-baseline justify-between gap-4 py-3">
@@ -144,7 +152,7 @@ export default async function ConsultaLote({ params }: PageProps<"/consulta/lote
         <SecaoFontesOficiais
           url={`/api/consulta/lote/${p.id}`}
           alvo="o lote"
-          descricao="Cruzamento do lote (com 500 m ao redor) com CAR, mineração, terras indígenas, desmatamento, queimadas, unidades de conservação, água e energia. Cada resultado mostra o órgão e a data."
+          raioM={raioM} descricao="Consulte as fontes oficiais sobre o lote ou o entorno selecionado. Cada resultado mostra o órgão e a data."
           logado={!!consulta.user} podeConsultar={consulta.podeConsultar} acesso={consulta.acesso}
           cotaRestante={consulta.cotaRestante} lista={consulta.lista} pendentes={consulta.pendentes}
           jaConsultou={consulta.jaConsultou} />

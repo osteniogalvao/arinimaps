@@ -39,7 +39,7 @@ export default function Tarefas({
   const router = useRouter();
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState("");
-  const [nova, setNova] = useState({ titulo: "", prazo: "", prioridade: "normal", responsavel: souEu, para: setor ?? "" });
+  const [nova, setNova] = useState({ titulo: "", criterio: "", prazo: "", prioridade: "normal", responsavel: souEu, para: setor ?? "" });
 
   async function chamar(method: "POST" | "PATCH", body: unknown) {
     setOcupado(true); setErro("");
@@ -67,10 +67,12 @@ export default function Tarefas({
             const corpo = encaminhando
               ? { titulo: nova.titulo, prazo: nova.prazo, prioridade: nova.prioridade, setor: nova.para, setor_origem: setor }
               : { titulo: nova.titulo, prazo: nova.prazo, prioridade: nova.prioridade, responsavel: nova.responsavel, setor };
-            if (await chamar("POST", corpo)) setNova({ ...nova, titulo: "", prazo: "", para: setor });
+            if (await chamar("POST", { ...corpo, criterio_conclusao: nova.criterio })) setNova({ ...nova, titulo: "", criterio: "", prazo: "", para: setor });
           }}>
           <input required className={input + " flex-1 min-w-56"} placeholder={encaminhando ? "O que o outro setor precisa fazer…" : "Nova tarefa do setor…"}
             value={nova.titulo} onChange={(e) => setNova({ ...nova, titulo: e.target.value })} />
+          <input required className={input + " flex-1 min-w-48"} maxLength={600} aria-label="Critério de conclusão"
+            placeholder="Como conferir a conclusão?" value={nova.criterio} onChange={e => setNova({ ...nova, criterio: e.target.value })} />
           <select className={input} value={nova.para} aria-label="Para o setor"
             onChange={(e) => setNova({ ...nova, para: e.target.value })}>
             {Object.entries(setoresNome).map(([id, nome]) => (
@@ -80,7 +82,7 @@ export default function Tarefas({
           {!encaminhando && (
             <select className={input} value={nova.responsavel} aria-label="Responsável"
               onChange={(e) => setNova({ ...nova, responsavel: e.target.value })}>
-              <option value="">Sem responsável</option>
+              <option value="">Assumir a tarefa</option>
               {equipe.map((m) => <option key={m.user_id} value={m.user_id}>{m.nome || "—"}</option>)}
             </select>
           )}
@@ -111,8 +113,8 @@ export default function Tarefas({
             <div key={t.id} className={"px-5 py-3.5 flex items-start gap-3.5 flex-wrap transition-colors hover:bg-superficie-2/70 " + (esperandoAceite ? "bg-ouro/5" : "")}>
               {esperandoAceite
                 ? <Inbox className="mt-1 size-4 shrink-0 text-ouro" aria-label="Aguardando aceite" />
-                : <input type="checkbox" className="mt-1 size-4 accent-[var(--verde)] cursor-pointer" disabled={ocupado || !possoAgir} aria-label="Concluir tarefa"
-                    onChange={() => chamar("PATCH", { id: t.id, status: "concluida" })} />}
+                : possoAgir && <Link href={`/admin/tarefas/${t.id}`} aria-label="Registrar evidência e concluir tarefa" className="mt-1 text-verde">
+                    <CheckCircle2 className="size-4" /></Link>}
               <div className="flex-1 min-w-52">
                 <p className="text-[0.95rem] font-medium text-texto leading-snug">
                   <Link href={`/admin/tarefas/${t.id}`} className="hover:text-verde hover:underline underline-offset-4">{t.titulo}</Link>

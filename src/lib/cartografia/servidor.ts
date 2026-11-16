@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { emailDoProfile, sendEmail } from "@/lib/notify";
 import { ARQUIVOS_ACEITOS, STATUS_SOLICITACAO_LABEL, type ArquivoSolicitacao, type StatusSolicitacao } from "./solicitacoes";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
+import { tipoReal } from "@/lib/seguranca/arquivos";
 
 /**
  * Peças de servidor das solicitações cartográficas: referência (CAR/lote)
@@ -60,17 +61,32 @@ const CONTENT_TYPE: Record<string, string> = {
 const extensaoDe = (nome: string) => (nome.split(".").pop() ?? "").toLowerCase();
 
 /** Lê os arquivos do campo `arquivos` do multipart e confere tipo, tamanho e quantidade. */
-export function lerArquivos(form: FormData): { arquivos: File[]; erro: string | null } {
+export async function lerArquivos(form: FormData): Promise<{ arquivos: File[]; erro: string | null }> {
   const arquivos = form.getAll("arquivos").filter((f): f is File => f instanceof File && f.size > 0);
   if (arquivos.length > ARQUIVOS_ACEITOS.maxQuantidade) {
     return { arquivos, erro: `Envie no máximo ${ARQUIVOS_ACEITOS.maxQuantidade} arquivos por vez.` };
   }
   for (const f of arquivos) {
-    if (!ARQUIVOS_ACEITOS.extensoes.includes(extensaoDe(f.name))) {
+    const ext = extensaoDe(f.name);
+    if (!ARQUIVOS_ACEITOS.extensoes.includes(ext)) {
       return { arquivos, erro: `O arquivo ${f.name} não é de um tipo aceito (${ARQUIVOS_ACEITOS.extensoes.join(", ")}).` };
     }
     if (f.size > ARQUIVOS_ACEITOS.maxBytes) {
       return { arquivos, erro: `O arquivo ${f.name} passa de ${ARQUIVOS_ACEITOS.maxMB} MB.` };
+    }
+    const cabecalho = new Uint8Array(await f.slice(0, 4096).arrayBuffer());
+    const esperado = ext === "jpeg" ? "jpg" : ext === "kmz" ? "zip" : ext;
+    let valido = tipoReal(cabecalho, f.name) === esperado;
+    if (ext === "kml") {
+      const codificacao = cabecalho[0] === 0xff && cabecalho[1] === 0xfe ? "utf-16le"
+        : cabecalho[0] === 0xfe && cabecalho[1] === 0xff ? "utf-16be" : "utf-8";
+      const inicio = new TextDecoder(codificacao).decode(cabecalho);
+      valido = /^\s*(?:<\?xml\s[^?]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<(?:[\w.-]+:)?kml(?=[\s/>])/.test(inicio);
+    } else if (ext === "dxf" && !valido) {
+      valido = new TextDecoder().decode(cabecalho.subarray(0, 22)) === "AutoCAD Binary DXF\r\n\x1a\0";
+    }
+    if (!valido) {
+      return { arquivos, erro: `O conteúdo de ${f.name} não corresponde ao formato .${ext}.` };
     }
   }
   return { arquivos, erro: null };
@@ -142,11 +158,4 @@ export async function avisarSolicitante(
   } catch (e) {
     console.error("avisarSolicitante falhou:", e);
   }
-}
-
-/** Encerra a tarefa interna ligada ao protocolo (quando a solicitação chega ao fim). */
-export async function concluirTarefaDaSolicitacao(protocolo: string) {
-  await supabaseAdmin().from("tasks")
-    .update({ status: "concluida", concluida_em: new Date().toISOString() })
-    .like("titulo", `Solicitação ${protocolo}%`).in("status", ["aberta", "andamento"]);
 }

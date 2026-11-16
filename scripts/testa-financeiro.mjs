@@ -89,6 +89,7 @@ function modulosFinanceiros(admin) {
     "@/lib/supabase/admin": { supabaseAdmin: () => admin }, "@/lib/supabase/lotes": lotes,
     "@/lib/authz": { ator: async () => ({ userId: "teste" }), temSetor: () => true },
     "@/lib/audit": { logAudit: async () => {} }, "next/server": { NextResponse: Response },
+    "@/lib/seguranca/csv": carregar("lib/seguranca/csv.ts"),
     "@/components/admin/Painel": exibicao, "@/components/admin/estilos": {},
     "@/components/ui/Pagina": { CabecalhoPagina: "Cabecalho", Vazio: "Vazio" }, "next/link": "Link",
     "@/lib/setores-servidor": { exigirSetor: async () => ({ id: "teste" }) },
@@ -105,6 +106,22 @@ function indicadores(no) {
   }
 }
 
+test("CSV de ponto torna fórmula no nome do colaborador texto literal", async () => {
+  const nome = '\t=HYPERLINK("https://example.invalid";"teste")';
+  const admin = cliente(async (url) => {
+    const caminho = new URL(url).pathname;
+    return json(caminho.endsWith("/profiles") ? [{ nome }] : []);
+  });
+  const { GET } = carregar("app/api/admin/ponto/exportar/route.ts", {
+    ...modulosFinanceiros(admin),
+    "@/lib/authz": { ator: async () => ({ ehArini: true, userId: "diretoria" }), temSetor: () => true },
+    "@/lib/ponto": carregar("lib/ponto.ts"),
+  });
+  const resposta = await GET(new Request("https://teste.invalid/ponto?mes=2026-01&user=colaborador"));
+  assert.equal(resposta.status, 200);
+  assert.equal((await resposta.text()).split("\r\n")[0], 'Espelho de ponto;"\'\t=HYPERLINK(""https://example.invalid"";""teste"")";2026-01');
+});
+
 test("CSV percorre 2.005 lançamentos, ordena empates e recusa página incompleta", async () => {
   let falhar = false;
   const offsets = [];
@@ -116,7 +133,7 @@ test("CSV percorre 2.005 lançamentos, ordena empates e recusa página incomplet
     assert.equal(p.get("limit"), "1000");
     if (falhar && de === 1000) return erro();
     return json(Array.from({ length: Math.min(1000, 2005 - de) }, (_, i) => ({
-      data: "2026-01-15", historico: "Registro " + (de + i), valor: 2.5, natureza: "entrada",
+      data: "2026-01-15", historico: de + i === 0 ? "=1+1" : "Registro " + (de + i), valor: 2.5, natureza: "entrada",
     })));
   });
   const { GET } = carregar("app/api/admin/financeiro/contabil/route.ts", modulosFinanceiros(admin));
@@ -125,9 +142,23 @@ test("CSV percorre 2.005 lançamentos, ordena empates e recusa página incomplet
   const linhas = (await resposta.text()).split("\r\n");
   assert.deepEqual(offsets, [0, 1000, 2000]);
   assert.equal(linhas.length, 2006);
+  assert.ok(linhas[1].includes('"\'=1+1"'));
   assert.match(linhas.at(-1), /"Registro 2004"/);
   falhar = true;
   assert.equal((await GET(pedido)).status, 503);
+});
+
+test("CSV financeiro preserva o valor negativo e escapa fórmulas na referência e comprovante", async () => {
+  const admin = cliente(async (url) => json(new URL(url).pathname.endsWith("/comissao_movimentos") ? [{
+    tipo: "repasse", diferenca: 152.50, data: "2026-01-15", documento: '=1+1', rec: { referencia: '@SUM(A1)' },
+  }] : []));
+  const { GET } = carregar("app/api/admin/financeiro/exportar/route.ts", modulosFinanceiros(admin));
+  const resposta = await GET();
+  assert.equal(resposta.status, 200);
+  const csv = await resposta.text();
+  assert.ok(csv.includes('"\'@SUM(A1)"'));
+  assert.ok(csv.includes('"\'=1+1"'));
+  assert.ok(csv.includes(";-152,50;"));
 });
 
 test("indicadores incluem despesas além das primeiras 20 e lançamentos além da primeira página", async () => {

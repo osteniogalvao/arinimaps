@@ -47,18 +47,19 @@ export async function POST(request:Request) {
   // A Cloud API aplica a janela de atendimento também aos contatos iniciados fora da Central.
   try{
     const waId=await enviarWhatsapp(c.tel,texto);
-    const {error}=await db.from("whatsapp_mensagens").insert({wa_id:waId||null,telefone:c.tel,direcao:"saida",texto,opportunity_id:c.opp,enviado_por:a!.userId,status:"sent"});
-    if(error)return NextResponse.json({error:"O WhatsApp aceitou a mensagem, mas o registro local falhou. Confira o envio antes de tentar de novo."},{status:503});
+    const {data:saida,error}=await db.from("whatsapp_mensagens").insert({wa_id:waId||null,telefone:c.tel,direcao:"saida",texto,opportunity_id:c.opp,enviado_por:a!.userId,status:"sent"}).select("id, created_at").single();
+    if(error||!saida)return NextResponse.json({error:"O WhatsApp aceitou a mensagem, mas o registro local falhou. Confira o envio antes de tentar de novo."},{status:503});
     if(c.opp){
       await db.from("opportunity_events").insert({opportunity_id:c.opp,tipo:"contato",descricao:"WhatsApp enviado: "+texto.slice(0,500),autor:a!.userId});
       await marcarPrimeiroAtendimento(c.opp,a!.userId);
-      const {data:entradas}=await db.from("whatsapp_mensagens").select("id").eq("opportunity_id",c.opp).eq("direcao","entrada").order("created_at",{ascending:false}).limit(3);
-      for(const m of entradas??[])await concluirTarefaDoEvento("whatsapp_sem_resposta:"+m.id,a!.userId,"Cliente respondido pelo WhatsApp");
+      const {data:entradas}=await db.from("whatsapp_mensagens").select("id").eq("opportunity_id",c.opp).eq("direcao","entrada")
+        .lte("created_at",saida.created_at).order("created_at",{ascending:false}).limit(3);
+      for(const m of entradas??[])await concluirTarefaDoEvento("whatsapp_sem_resposta:"+m.id,a!.userId,"Mensagem de saída aceita pelo WhatsApp","whatsapp_mensagens",saida.id);
     }else{
       const {data:entradas}=await db.from("whatsapp_mensagens").select("created_at").eq("telefone",c.tel).is("opportunity_id",null)
-        .eq("direcao","entrada").gt("created_at",new Date(Date.now()-86400000).toISOString());
+        .eq("direcao","entrada").lte("created_at",saida.created_at).gt("created_at",new Date(Date.parse(saida.created_at)-86400000).toISOString());
       for(const dia of new Set((entradas??[]).map(e=>e.created_at.slice(0,10))))
-        await concluirTarefaDoEvento("whatsapp_sem_lead:"+c.tel+":"+dia,a!.userId,"Cliente respondido pelo WhatsApp");
+        await concluirTarefaDoEvento("whatsapp_sem_lead:"+c.tel+":"+dia,a!.userId,"Mensagem de saída aceita pelo WhatsApp","whatsapp_mensagens",saida.id);
     }
     await logAudit({user_id:a!.userId,acao:"whatsapp_enviado",entidade:"whatsapp_mensagens",opportunity_id:c.opp});
     return NextResponse.json({ok:true});

@@ -8,7 +8,7 @@ import { ariniEmail, sendEmail } from "@/lib/notify";
 import {
   STATUS_CANCELAVEIS, STATUS_SOLICITACAO_LABEL, type ArquivoSolicitacao, type StatusSolicitacao,
 } from "@/lib/cartografia/solicitacoes";
-import { concluirTarefaDaSolicitacao, lerArquivos, subirArquivos } from "@/lib/cartografia/servidor";
+import { lerArquivos, subirArquivos } from "@/lib/cartografia/servidor";
 
 /**
  * O solicitante fala na própria solicitação: manda mensagem, anexa o que a
@@ -32,7 +32,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/cartografia
     if (!form) return falha(400, "corpo_invalido", "O pedido chegou sem dados.");
     mensagem = String(form.get("mensagem") ?? "").trim();
     acao = String(form.get("acao") ?? "mensagem");
-    const lidos = lerArquivos(form);
+    const lidos = await lerArquivos(form);
     if (lidos.erro) return falha(400, "arquivo_invalido", lidos.erro);
     arquivos = lidos.arquivos;
   } else {
@@ -59,7 +59,6 @@ export async function POST(request: Request, ctx: RouteContext<"/api/cartografia
       p_mensagem: mensagem ? `Cancelada pelo solicitante: ${mensagem}` : "Cancelada pelo solicitante", p_interno: false,
     });
     if (error) return falhaBanco("cancelamento_falhou", error);
-    await concluirTarefaDaSolicitacao(req.protocolo);
     await logAudit({ user_id: a.userId, acao: "solicitacao_cartografica_cancelada", entidade: "cartographic_requests", entidade_id: id, dados_antes: { status }, dados_depois: { status: "cancelada" } });
     return NextResponse.json({ ok: true, status: "cancelada" });
   }

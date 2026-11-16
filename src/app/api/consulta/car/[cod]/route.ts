@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Bbox } from "@/lib/rural/adaptadores";
 import { executarConsultaArea } from "@/lib/geo/consultaArea";
+import { raioConsulta } from "@/lib/rural/raios";
 
 export const maxDuration = 120;
 
@@ -16,14 +17,15 @@ export const maxDuration = 120;
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/consulta/car/[cod]">) {
   const cod = decodeURIComponent((await ctx.params).cod);
-  const RAIO_M = 2000;
+  const raioM = raioConsulta(new URL(request.url).searchParams.get("raio_m"), 2000);
+  if (raioM === null) return Response.json({ error: "Raio de consulta inválido." }, { status: 400 });
   return executarConsultaArea(request, {
     chave: `car:${cod}`,
-    raioM: RAIO_M,
+    raioM,
     excluir: ["car"],
     naoEncontrado: "Área não encontrada no CAR importado.",
     bbox: async () => {
-      const { data } = await supabaseAdmin().rpc("fn_car_bbox_imovel", { p_cod: cod, p_buffer_m: RAIO_M });
+      const { data } = await supabaseAdmin().rpc("fn_car_bbox_imovel", { p_cod: cod, p_buffer_m: raioM });
       return (data as Bbox | null) ?? null;
     },
   });

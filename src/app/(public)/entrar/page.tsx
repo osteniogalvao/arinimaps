@@ -82,12 +82,13 @@ export default function Entrar() {
   const ehParceiro = papelEhParceiro(form.role);
   const docInvalido = form.cpf.length > 0 && !validarDocumento(form.cpf).ok;
 
-  function destinoDe(role: string) {
+  function destinoDe(role: string, entradaAtiva?: string) {
     // clicou numa área do CAR antes de entrar: volta direto para anunciá-la
     const carPendente = lerCarPendente();
     const anuncia = podeAnunciar(role);
     if (volta && !carPendente) return volta;
     return role === "admin_central" || role === "analista_arini" ? "/admin"
+      : entradaAtiva === "divulgador" ? "/divulgador"
       : carPendente && anuncia ? `/painel/novo?car=${encodeURIComponent(carPendente)}`
       : ["comprador", "consulta"].includes(role) ? "/mapa"
       : "/painel";
@@ -102,7 +103,7 @@ export default function Entrar() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "Não foi possível entrar.");
-    const para = data.escolherPerfil && !volta && !lerCarPendente() ? "/conta/perfis" : destinoDe(data.role);
+    const para = data.escolherPerfil && !volta && !lerCarPendente() ? "/conta/perfis" : destinoDe(data.role,data.entradaAtiva);
     if (data.mfa) {
       // conta com segundo fator: a sessão só vale depois do código
       setDestino(para);

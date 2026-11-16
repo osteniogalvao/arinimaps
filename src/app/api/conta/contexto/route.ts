@@ -11,7 +11,10 @@ export async function POST(request: Request) {
   const versao = assinatura("termos-de-uso", "privacidade");
   if (body.aceite === true && body.versao !== versao) return NextResponse.json(
     { error: "Os termos foram atualizados. Recarregue a página e confira a versão vigente." }, { status:409 });
-  const { error } = await supabaseAdmin().rpc("fn_trocar_contexto", { p_titular: a.userId,
+  const db = supabaseAdmin();
+  const { error } = body.entrada === "divulgador"
+    ? await db.rpc("divulgacao_entrar", { p_titular: a.userId })
+    : await db.rpc("fn_trocar_contexto", { p_titular: a.userId,
     p_entrada: body.entrada, p_aceite: body.aceite === true ? versao : null });
   if (error) return NextResponse.json({ error: error.code.startsWith("P86") ? error.message : "Não foi possível trocar de perfil." },
     { status: error.code.startsWith("P86") ? 403 : 503 });

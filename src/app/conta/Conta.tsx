@@ -236,7 +236,7 @@ export default function Conta({
             </label>
             <label className="flex cursor-pointer items-start gap-3 px-4 py-4 text-base text-texto">
               <input type="checkbox" className="mt-1 size-4 shrink-0 accent-[var(--verde)]" checked={prefs.emails_novidades} onChange={(e) => mudar({ emails_novidades: e.target.checked })} />
-              <span>Quero receber e-mails de novidades do Arini Imóveis Brasil<span className="mt-0.5 block text-sm text-texto-2">Imóveis novos e recursos do sistema. Você pode desmarcar quando quiser. Avisos da sua conta e dos seus anúncios continuam chegando.</span></span>
+              <span>Quero receber e-mails de novidades da ARINI<span className="mt-0.5 block text-sm text-texto-2">Imóveis novos e recursos do sistema. Você pode desmarcar quando quiser. Avisos da sua conta e dos seus anúncios continuam chegando.</span></span>
             </label>
           </div>
           {prefMsg && <p className="text-sm text-texto-2">{prefMsg}</p>}

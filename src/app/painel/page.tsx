@@ -75,8 +75,8 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
   const comRevisao = new Set((revisoes ?? []).map((r) => r.property_id));
 
   // RLS: só as oportunidades encaminhadas a esta conta
-  const { count: oportunidades } = await supabase
-    .from("opportunities").select("id", { count: "exact", head: true });
+  const { count: oportunidades } = partner ? await supabase
+    .from("opportunities").select("id", { count: "exact", head: true }) : { count: 0 };
 
   const emAnalise = meus.filter((p) => EM_ANALISE.includes(p.status)).length;
   const noAr = meus.filter((p) => ["publicado", "em_negociacao"].includes(p.status)).length;
@@ -118,7 +118,7 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
       <div className="grid gap-5 sm:grid-cols-3">
         <Estatistica icone={Clock} valor={emAnalise} rotulo="Em análise pela Arini" urgente={emAnalise > 0} />
         <Estatistica icone={CheckCircle2} valor={noAr} rotulo="Publicados no site" />
-        <Estatistica icone={Handshake} valor={oportunidades ?? 0} rotulo="Oportunidades encaminhadas" href="/painel/oportunidades" />
+        {partner && <Estatistica icone={Handshake} valor={oportunidades ?? 0} rotulo="Oportunidades encaminhadas" href="/painel/oportunidades" />}
       </div>
 
       {pendencias && <PendenciasIntermediador pendencias={pendencias} hrefOportunidade="/painel/oportunidades" />}

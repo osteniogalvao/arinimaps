@@ -15,6 +15,9 @@ import { RotateCcw } from "lucide-react";
 import type { Map as MLMap, ErrorEvent as MLErrorEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { SATELITE } from "@/lib/map/config";
+import type { CamadasTour } from "@/lib/map/acesso-tour";
+import CamadasDoTour from "./CamadasDoTour";
+import AmbienteCar from "@/components/map/AmbienteCar";
 
 export type TourData = {
   codigo: string;
@@ -27,6 +30,8 @@ export type TourData = {
   municipio: { nome: string; sede_lng: number | null; sede_lat: number | null } | null;
   pois: { nome: string | null; categoria: string; lng: number; lat: number; distancia_m: number; destaque: boolean }[];
   record?: boolean;
+  camadas?: CamadasTour | null;
+  consulta?: { voltar: string; limites: [number, number, number, number]; car?: string };
 };
 
 type Cam = { lng: number; lat: number; zoom: number; pitch: number; bearing: number };
@@ -56,7 +61,7 @@ function esperarMapa(map: MLMap, tetoMs: number) {
 const distancia = (m: number) =>
   m >= 1000 ? `${(m / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} km` : `${Math.round(m)} m`;
 
-function buildKeyframes(d: TourData, ritmo = 1): { keys: Key[]; orbit: { start: number; end: number; base: Cam } } {
+function buildKeyframes(d: TourData, ritmo = 1, zoomArea?: number): { keys: Key[]; orbit: { start: number; end: number; base: Cam } } {
   const c = d.centroid;
   const sede = d.municipio?.sede_lng != null
     ? { lng: d.municipio.sede_lng!, lat: d.municipio.sede_lat! }
@@ -86,6 +91,15 @@ function buildKeyframes(d: TourData, ritmo = 1): { keys: Key[]; orbit: { start: 
     for (const k of keys) k.t *= ritmo;
     orbit.start *= ritmo;
     orbit.end *= ritmo;
+  }
+  if (zoomArea != null) {
+    const zoom = Math.min(18, Math.max(3, zoomArea - 0.4));
+    orbit.base.zoom = zoom;
+    for (const key of keys) {
+      key.cam.lat = c.lat;
+      key.cam.lng = c.lng;
+      key.cam.zoom = key.t === 0 ? zoom - 1.5 : zoom;
+    }
   }
   return { keys, orbit };
 }
@@ -127,13 +141,14 @@ const ponto = (cor: string) =>
 export default function Tour3D(dados: TourData) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  const [mapaPronto, setMapaPronto] = useState<MLMap | null>(null);
+  const velocidade = useRef(1);
+  const controlar = useRef<(reiniciar: boolean) => void>(() => {});
+  const [esperandoTiles, setEsperandoTiles] = useState(false);
+  const [ambienteCar, setAmbienteCar] = useState(false);
   const [fase, setFase] = useState<"carregando" | "tocando" | "pausado" | "fim">("carregando");
   const [etapa, setEtapa] = useState("Carregando o mapa…");
   const faseRef = useRef(fase);
-  faseRef.current = fase;
-
-  const { keys, orbit } = buildKeyframes(dados, dados.record ? 1 : RITMO_AO_VIVO);
-  const duracao = keys[keys.length - 1].t;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -163,6 +178,9 @@ export default function Tour3D(dados: TourData) {
         },
         center: [dados.centroid.lng, dados.centroid.lat + 0.9],
         zoom: 6.2,
+        ...(dados.consulta ? {
+          bounds: dados.consulta.limites, fitBoundsOptions: {padding: 48, maxZoom: 18},
+        } : {}),
         pitch: 0,
         maxPitch: 75,
         attributionControl: { compact: true },
@@ -172,6 +190,10 @@ export default function Tour3D(dados: TourData) {
       map.on("error", (e: MLErrorEvent) => console.error("[tour] erro do mapa:", e.error?.message ?? e));
 
       map.on("load", async () => {
+        const b = dados.consulta?.limites;
+        const zoomArea = b && map.cameraForBounds([[b[0], b[1]], [b[2], b[3]]], {padding: 48, maxZoom: 18})?.zoom;
+        const { keys, orbit } = buildKeyframes(dados, dados.record ? 1 : RITMO_AO_VIVO, zoomArea);
+        const duracao = keys[keys.length - 1].t;
         map.addSource("imovel", { type: "geojson", data: { type: "Feature", geometry: dados.geometry, properties: {} } });
         if (dados.geometry.type !== "Point") {
           map.addLayer({ id: "imovel-fill", type: "fill", source: "imovel", paint: { "fill-color": "#D9BD6F", "fill-opacity": 0.22 } });
@@ -249,20 +271,41 @@ export default function Tour3D(dados: TourData) {
         await esperarMapa(map, 8_000);
         if (cancelado) return;
 
-        // reprodução ao vivo
-        setFase("tocando");
-        const inicio = performance.now();
-        const tick = () => {
-          if (faseRef.current !== "tocando") return;
-          const t = (performance.now() - inicio) / 1000;
-          if (t >= duracao) { setFase("fim"); return; }
-          seek(t);
+        setMapaPronto(map);
+        let t = 0, ultimo = 0, verificarEm = 0, aguardarAte = 0;
+        let aguardando = false;
+        const tick = (agora: number) => {
+          if (cancelado || faseRef.current !== "tocando") return;
+          const passo = Math.min(120, Math.max(0, agora - ultimo)) / 1000;
+          ultimo = agora;
+          // Com conexão lenta, conserva a câmera até o tile chegar. Um órgão
+          // indisponível não pode suspender o roteiro indefinidamente.
+          if (agora >= verificarEm) {
+            verificarEm = agora + 400;
+            if (map.areTilesLoaded()) aguardarAte = 0;
+            else if (!aguardarAte || agora > aguardarAte + 5000) aguardarAte = agora + 2500;
+            const esperar = agora < aguardarAte;
+            if (esperar !== aguardando) { aguardando = esperar; setEsperandoTiles(esperar); }
+          }
+          if (!aguardando && !document.hidden) t += passo * velocidade.current;
+          if (t >= duracao) { seek(duracao); faseRef.current = "fim"; setFase("fim"); return; }
+          if (!aguardando && !document.hidden) seek(t);
           raf = requestAnimationFrame(tick);
         };
-        raf = requestAnimationFrame(tick);
+        controlar.current = (reiniciar) => {
+          if (reiniciar || faseRef.current === "fim") t = 0;
+          cancelAnimationFrame(raf);
+          ultimo = performance.now();
+          faseRef.current = "tocando"; setFase("tocando");
+          raf = requestAnimationFrame(tick);
+        };
+        controlar.current(true);
 
         // qualquer interação devolve o controle ao usuário
-        const parar = () => setFase((f) => (f === "tocando" ? "pausado" : f));
+        const parar = () => {
+          if (faseRef.current !== "tocando") return;
+          faseRef.current = "pausado"; setFase("pausado");
+        };
         map.on("mousedown", parar);
         map.on("touchstart", parar);
         map.on("wheel", parar);
@@ -291,20 +334,32 @@ export default function Tour3D(dados: TourData) {
             <span className="block h-0.5 w-7 rounded bg-[#D9BD6F]" aria-hidden />
             <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D3DCD2]">Tour 3D · {dados.codigo}</p>
             <p className="lp-display mt-1.5 text-3xl text-[#F2F2EC]">{dados.titulo}</p>
-            <p className="lp-display mt-2 text-2xl text-[#FFE299]">{brl}</p>
+            {!dados.consulta && <p className="lp-display mt-2 text-2xl text-[#FFE299]">{brl}</p>}
             <p className="mt-1 text-xs text-[#B3C3B8]">{dados.areaLabel}{dados.municipio ? ` · ${dados.municipio.nome}` : ""}</p>
+            <label className="mt-3 block text-sm">Velocidade <select className="ml-1 rounded bg-[#123b2a] px-1" defaultValue={1}
+              onChange={e => { velocidade.current = Number(e.target.value); }}>
+              {[0.5, 1, 1.5, 2].map(v => <option key={v} value={v}>{v.toLocaleString("pt-BR")}×</option>)}
+            </select></label>
+            {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
+              && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
+              && <CamadasDoTour mapa={mapaPronto} geometria={dados.geometry} permitidas={dados.camadas} />}
+            {mapaPronto && dados.consulta?.car && !!dados.camadas?.ambiente.length && <>
+              <label className="mt-2 block text-sm"><input type="checkbox" checked={ambienteCar} onChange={e => setAmbienteCar(e.target.checked)} /> Ambiente do CAR</label>
+              {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={dados.consulta.car} mapa={mapaPronto} tour /></div>}
+            </>}
+            {dados.consulta && <a className="mt-2 block text-sm underline" href={dados.consulta.voltar}>Voltar à consulta</a>}
           </div>
 
           {(fase === "pausado" || fase === "fim") && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
               <button
                 className="rounded-full border-[1.5px] border-[#F2F2EC]/80 bg-[#0A2219]/85 text-[#F2F2EC] font-semibold px-5 py-2.5 hover:bg-[#F2F2EC] hover:text-[#124431]"
-                onClick={() => window.location.reload()}>
-                <RotateCcw className="mr-1.5 inline size-4 -translate-y-px" />Repetir tour
+                onClick={() => controlar.current(fase === "fim")}>
+                <RotateCcw className="mr-1.5 inline size-4 -translate-y-px" />{fase === "fim" ? "Repetir tour" : "Continuar tour"}
               </button>
-              <a href={`/imovel/${dados.codigo}`}
+              <a href={dados.consulta?.voltar ?? `/imovel/${dados.codigo}`}
                 className="rounded-full bg-[#D80B0B] text-white font-semibold px-5 py-2.5 shadow-[0_0_0_5px_rgba(216,11,11,0.22)] hover:brightness-110">
-                Ver o imóvel
+                {dados.consulta ? "Ver a consulta" : "Ver o imóvel"}
               </a>
             </div>
           )}
@@ -318,7 +373,7 @@ export default function Tour3D(dados: TourData) {
           )}
           {fase === "tocando" && (
             <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[#F2F2EC] text-xs bg-[#0A2219]/85 rounded-full px-4 py-1.5">
-              Toque no mapa para explorar livremente
+              {esperandoTiles ? "Aguardando as imagens do mapa…" : "Toque no mapa para explorar livremente"}
             </p>
           )}
         </>

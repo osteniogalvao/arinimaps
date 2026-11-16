@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     else geom = g;
   }
 
-  const { arquivos, erro: erroArquivos } = lerArquivos(form);
+  const { arquivos, erro: erroArquivos } = await lerArquivos(form);
   if (erroArquivos) return falha(400, "arquivo_invalido", erroArquivos);
 
   const dispensaDescricao = tipo === "inclusao" && (geom || ponto);
@@ -148,6 +148,7 @@ export async function POST(request: Request) {
 
   // vira tarefa da Cartografia (fila do setor na Matriz)
   await admin.from("tasks").insert({
+    origem: "automatica", regra: "solicitacao_cartografica", chave_evento: `solicitacao_cartografica:${req.id}`,
     titulo: `Solicitação ${req.protocolo} — ${rotuloTipo}`,
     descricao: [
       descricao || null,

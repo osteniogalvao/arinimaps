@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+import { union } from "polyclip-ts";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
@@ -6,7 +8,7 @@ import { conferirOrigem, respostaOrigemNegada } from "@/lib/seguranca/origem";
 import { falha, falhaBanco } from "@/lib/erros";
 import { gerarPlantaPublica } from "@/lib/geo/plantaPublica";
 import {
-  afim, compor, inverter, centroArea, centroDe, areasSeSobrepoem, assinaturaAjustes, assinaturaEdicoes, TRANSFORM_ZERO, CHAVE_LINHA,
+  afim, compor, inverter, matrizParte, aneisParte, centroDe, partesSobrepostas, assinaturaAjustes, assinaturaEdicoes, CHAVE_LINHA,
   type AjusteLocal, type EdicaoGeometria, type Matriz, type Transform,
 } from "@/lib/geo/deslocar";
 
@@ -19,7 +21,7 @@ import {
  */
 const LIMITES = {
   offset: 5_000,     // 5 km: acima disso não é erro de datum, é planta errada
-  rotacao: 45,       // planta de cidade não vem girada meia-volta
+  rotacao: 360,
   escalaMin: 0.5,
   escalaMax: 2,
   // parte da planta: é ajuste fino de quadra ou bairro, não de datum
@@ -97,9 +99,27 @@ function lerAjustes(v: unknown): { ok: true; ajustes: AjusteLocal[] } | { ok: fa
     const a = bruto as Partial<AjusteLocal> | null;
     const nomeParte = `parte ${i + 1}`;
     if (!a || typeof a.id !== "string" || !/^[a-z0-9-]{4,40}$/i.test(a.id)) return { ok: false, motivo: `${nomeParte} sem identificador válido` };
-    if (!Array.isArray(a.area) || a.area.length < 3 || a.area.length > LIMITES.verticesArea ||
-        !a.area.every((p) => Array.isArray(p) && fin(p[0]) && fin(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90)) {
+    if (ajustes.some(p => p.id === a.id)) return { ok: false, motivo: `${nomeParte}: identificador duplicado` };
+    if (!Array.isArray(a.area) || (a.areasExtras !== undefined && !Array.isArray(a.areasExtras))) {
+      return { ok: false, motivo: `${nomeParte}: perímetros inválidos` };
+    }
+    const aneis = [a.area, ...(a.areasExtras ?? [])];
+    if (aneis.length > 100 || aneis.some(anel => !Array.isArray(anel) || anel.length < 3 ||
+        anel.length > LIMITES.verticesArea || !anel.every(p => Array.isArray(p) && fin(p[0]) && fin(p[1]) &&
+          Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90)) || aneis.reduce((s, anel) => s + anel.length, 0) > 1_000) {
       return { ok: false, motivo: `${nomeParte}: a área precisa de 3 a ${LIMITES.verticesArea} pontos válidos` };
+    }
+    if (a.grupo !== undefined && (typeof a.grupo !== "string" || !/^[a-z0-9-]{4,40}$/i.test(a.grupo))) {
+      return { ok: false, motivo: `${nomeParte}: identificador do conjunto inválido` };
+    }
+    if (a.pivo !== undefined && (!Array.isArray(a.pivo) || a.pivo.length !== 2 ||
+        !a.pivo.every(fin) || Math.abs(a.pivo[0]) > 180 || Math.abs(a.pivo[1]) > 90)) {
+      return { ok: false, motivo: `${nomeParte}: centro do conjunto inválido` };
+    }
+    const m = a.encaixe;
+    if (m !== undefined && (!m || ![m.a, m.b, m.d, m.e, m.xoff, m.yoff].every(fin) ||
+        Math.max(...[m.a, m.b, m.d, m.e].map(Math.abs)) > 100 || Math.abs(m.xoff) > 36_000 || Math.abs(m.yoff) > 18_000 || !(m.a * m.e - m.b * m.d > 1e-10))) {
+      return { ok: false, motivo: `${nomeParte}: encaixe inválido` };
     }
     const t = a.t as Partial<Transform> | undefined;
     if (!t || !fin(t.offsetLesteM) || !fin(t.offsetNorteM) || !fin(t.rotacaoGraus)) return { ok: false, motivo: `${nomeParte} sem deslocamento válido` };
@@ -113,9 +133,13 @@ function lerAjustes(v: unknown): { ok: true; ajustes: AjusteLocal[] } | { ok: fa
     }
     ajustes.push({
       id: a.id,
+      ...(a.grupo ? { grupo: a.grupo } : {}),
+      ...(a.pivo ? { pivo: a.pivo } : {}),
+      ...(m ? { encaixe: { a: m.a, b: m.b, d: m.d, e: m.e, xoff: m.xoff, yoff: m.yoff } } : {}),
       ...(typeof a.nomeCad === "string" && a.nomeCad.trim() ? { nomeCad: a.nomeCad.trim().slice(0, 150) } : {}),
       nome: (typeof a.nome === "string" && a.nome.trim() ? a.nome.trim() : nomeParte).slice(0, 60),
       area: a.area.map((p) => [Number(p[0]), Number(p[1])] as [number, number]),
+      ...(a.areasExtras?.length ? { areasExtras: a.areasExtras.map(anel => anel.map(([x, y]) => [x, y] as [number, number])) } : {}),
       t: {
         offsetLesteM: Math.round(t.offsetLesteM! * 100) / 100,
         offsetNorteM: Math.round(t.offsetNorteM! * 100) / 100,
@@ -127,7 +151,7 @@ function lerAjustes(v: unknown): { ok: true; ajustes: AjusteLocal[] } | { ok: fa
   }
   for (let i = 0; i < ajustes.length; i++) {
     for (let j = i + 1; j < ajustes.length; j++) {
-      if (areasSeSobrepoem(ajustes[i].area, ajustes[j].area)) {
+      if (partesSobrepostas(ajustes[i], ajustes[j])) {
         return { ok: false, motivo: `as áreas de "${ajustes[i].nome}" e "${ajustes[j].nome}" se sobrepõem` };
       }
     }
@@ -135,11 +159,8 @@ function lerAjustes(v: unknown): { ok: true; ajustes: AjusteLocal[] } | { ok: fa
   return { ok: true, ajustes };
 }
 
+const CAMPOS_GLOBAIS = ["offset_leste_m", "offset_norte_m", "rotacao_graus", "escala"] as const;
 const vetor = (m: Matriz) => [m.a, m.b, m.d, m.e, m.xoff, m.yoff];
-const ehIdentidadeM = (m: Matriz) =>
-  Math.abs(m.a - 1) < 1e-12 && Math.abs(m.e - 1) < 1e-12 && Math.abs(m.b) < 1e-12 && Math.abs(m.d) < 1e-12 &&
-  Math.abs(m.xoff) < 1e-12 && Math.abs(m.yoff) < 1e-12;
-
 export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cartografia/[id]">) {
   const { id } = await ctx.params;
   // fora do matcher do proxy (arquivos grandes): a conferência de origem (CSRF) é aqui
@@ -261,26 +282,10 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   const excluidasDepois = (patch.linhas_excluidas as string[] | undefined) ?? excluidasAntes;
   const mudouExcluidas = [...excluidasAntes].sort().join(",") !== [...excluidasDepois].sort().join(",");
   const mudouGeometria = patch.edicoes_geometria !== undefined &&
-    JSON.stringify(patch.edicoes_geometria) !== JSON.stringify(antes.edicoes_geometria ?? []);
+    !isDeepStrictEqual(patch.edicoes_geometria, antes.edicoes_geometria ?? []);
   // planta sem arquivo público (enviada antes de 09/11/2026): gera agora, para
   // o mapa público deixar de depender da URL do original
   const semPublico = !antes.publico_path;
-  if ((mudouCamadas || mudouExcluidas || mudouGeometria || semPublico) && antes.tipo === "vector" && antes.tiles_path) {
-    try {
-      publico = await gerarPlantaPublica(
-        admin, { id, tiles_path: antes.tiles_path, publico_path: antes.publico_path },
-        (patch.layers_ocultos as string[] | undefined) ?? ((antes.layers_ocultos as string[] | null) ?? []),
-        excluidasDepois,
-        (patch.edicoes_geometria as EdicaoGeometria[] | undefined) ?? ((antes.edicoes_geometria as EdicaoGeometria[] | null) ?? []), patch
-      );
-    } catch (e) {
-      return falha(409, "planta_nao_publicada", "A calibração não foi publicada.", { motivo: e instanceof Error ? e.message : String(e) });
-    }
-  } else {
-    const { error } = await admin.from("cartography_layers").update(patch).eq("id", id);
-    if (error) return falhaBanco("calibracao_nao_gravou", error);
-  }
-
   // mexeu na posição da planta inteira ou nas camadas: os lotes clicáveis
   // precisam ser refeitos para continuar em cima das linhas que o usuário vê.
   // A tela manda todos os campos a cada salvamento, então a comparação é com o
@@ -288,32 +293,66 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   const difere = (novo: unknown, velho: unknown, tol: number) =>
     novo !== undefined && Math.abs(Number(novo) - Number(velho ?? 0)) > tol;
   const camadasAntes = [...((antes.layers_ocultos as string[] | null) ?? [])].sort().join("|");
-  const mexeuNaPlanta =
+  const mexeuNoGlobal =
     difere(patch.offset_leste_m, antes.offset_leste_m, 0.005) || difere(patch.offset_norte_m, antes.offset_norte_m, 0.005) ||
-    difere(patch.rotacao_graus, antes.rotacao_graus, 1e-5) || (patch.escala !== undefined && Math.abs(Number(patch.escala) - Number(antes.escala ?? 1)) > 1e-7) ||
-    (Array.isArray(patch.layers_ocultos) && [...(patch.layers_ocultos as string[])].sort().join("|") !== camadasAntes) ||
+    difere(patch.rotacao_graus, antes.rotacao_graus, 1e-5) || (patch.escala !== undefined && Math.abs(Number(patch.escala) - Number(antes.escala ?? 1)) > 1e-7);
+  const mudouTracado = (Array.isArray(patch.layers_ocultos) && [...(patch.layers_ocultos as string[])].sort().join("|") !== camadasAntes) ||
     // linha apagada ou corrigida muda as quadras: os lotes são refeitos
     mudouExcluidas || mudouGeometria;
 
   const ajustesAntes = ((antes.ajustes_locais as AjusteLocal[] | null) ?? []);
   const ajustesDepois = (patch.ajustes_locais as AjusteLocal[] | undefined) ?? ajustesAntes;
-  const mexeuNasPartes = JSON.stringify(ajustesAntes) !== JSON.stringify(ajustesDepois);
+  if (body.ajustes_base !== undefined && !isDeepStrictEqual(body.ajustes_base, ajustesAntes) && !isDeepStrictEqual(ajustesDepois, ajustesAntes)) {
+    return falha(409, "calibracao_concorrente", "Outra pessoa salvou as peças desde que você abriu a planta.", {
+      solucao: "Reabra o editor para usar o encaixe gravado."
+    });
+  }
+  const mexeuNasPartes = !isDeepStrictEqual(ajustesAntes, ajustesDepois);
+
+
+  const aplicarPartesNoBanco = antes.tipo === "vector" && !mudouTracado && (mexeuNoGlobal || mexeuNasPartes) && !!antes.lotes_total;
+  const transformAntes = Object.fromEntries(CAMPOS_GLOBAIS.map(k => [k, Number(antes[k] ?? (k === "escala" ? 1 : 0))]));
+  const transformDepois = Object.fromEntries(CAMPOS_GLOBAIS.map(k => [k, Number(patch[k] ?? transformAntes[k])]));
+  if (body.transform_base && CAMPOS_GLOBAIS.some(k => !Number.isFinite(body.transform_base[k]) || Math.abs(body.transform_base[k] - transformAntes[k]) > (k === "escala" ? 1e-6 : k === "rotacao_graus" ? 1e-4 : .01)) && !isDeepStrictEqual(transformDepois, transformAntes)) {
+    return falha(409, "calibracao_concorrente", "A posição desta planta mudou durante a edição.", { solucao: "Reabra o editor para usar a posição atual." });
+  }
+  const patchVisual = { ...patch };
+  if (aplicarPartesNoBanco) {
+    delete patchVisual.ajustes_locais;
+    for (const k of CAMPOS_GLOBAIS) delete patchVisual[k];
+  }
+  if ((mudouCamadas || mudouExcluidas || mudouGeometria || semPublico) && antes.tipo === "vector" && antes.tiles_path) {
+    try {
+      publico = await gerarPlantaPublica(
+        admin, { id, tiles_path: antes.tiles_path, publico_path: antes.publico_path },
+        (patch.layers_ocultos as string[] | undefined) ?? ((antes.layers_ocultos as string[] | null) ?? []),
+        excluidasDepois,
+        (patch.edicoes_geometria as EdicaoGeometria[] | undefined) ?? ((antes.edicoes_geometria as EdicaoGeometria[] | null) ?? []), patchVisual
+      );
+    } catch (e) {
+      return falha(409, "planta_nao_publicada", "A calibração não foi publicada.", { motivo: e instanceof Error ? e.message : String(e) });
+    }
+  } else if (Object.keys(patchVisual).length) {
+    const { error } = await admin.from("cartography_layers").update(patchVisual).eq("id", id);
+    if (error) return falhaBanco("calibracao_nao_gravou", error);
+  }
 
   let lotesMovidos: number | null = null;
-  let avisoLotes: string | null = null;
-  if (antes.tipo === "vector" && (mexeuNaPlanta || (mexeuNasPartes && !antes.lotes_total))) {
+
+  if (antes.tipo === "vector" && (mudouTracado || ((mexeuNoGlobal || mexeuNasPartes) && !antes.lotes_total))) {
     const { count } = await admin.from("jobs").select("id", { count: "exact", head: true })
       .eq("tipo", "gerar_lotes").eq("status", "pendente").contains("payload", { layer_id: id });
     if (!count) await admin.from("jobs").insert({ tipo: "gerar_lotes", payload: { layer_id: id } });
-  } else if (antes.tipo === "vector" && mexeuNasPartes) {
-    // só as partes mudaram: os lotes delas andam junto, no lugar, e mantêm a
+  } else if (aplicarPartesNoBanco) {
+    // A planta ou as peças mudaram de posição. Os lotes acompanham e mantêm a
     // numeração de quadra e lote (refazer a cidade apagaria a numeração)
     try {
-      lotesMovidos = await moverLotesDasPartes(admin, id, antes, ajustesAntes, ajustesDepois);
-      // os lotes andaram no lugar (mesmo id): os anúncios deles andam junto
-      if (lotesMovidos) await admin.rpc("fn_reencaixar_anuncios", { p_layer_id: id, p_user_id: a.userId });
+      lotesMovidos = await moverLotesDasPartes(admin, id, antes, ajustesAntes, ajustesDepois, a.userId, transformAntes, transformDepois);
     } catch (e) {
-      avisoLotes = e instanceof Error ? e.message : String(e);
+      return falha(409, "ajustes_nao_gravados", "As peças e os lotes mantiveram os encaixes anteriores.", {
+        motivo: e instanceof Error ? e.message : String(e),
+        solucao: "Confira a mensagem e recarregue a planta se outro operador tiver salvado antes."
+      });
     }
   }
 
@@ -327,14 +366,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
     publico: publico && { bytes: publico.bytes, linhas: publico.linhas, linhas_total: publico.linhasTotal },
     aviso_publico: null,
     lotes_movidos: lotesMovidos,
-    aviso_lotes: avisoLotes,
+    aviso_lotes: null,
   });
 }
 
 /**
- * Move os lotes clicáveis de cada parte que mudou: da posição gravada
- * (planta ∘ parte antiga) para a nova (planta ∘ parte nova), pelo banco
- * (fn_ajustar_lotes_parte). Depois carimba a assinatura e a data dos lotes,
+ * Move os lotes clicáveis de todas as peças em uma única transação.
+ * A função também grava as peças, a assinatura e a data dos lotes,
  * para o mapa pedir os tiles novos — mas só se os lotes estavam em dia; se já
  * estavam defasados, continuam marcados como defasados.
  */
@@ -344,6 +382,8 @@ async function moverLotesDasPartes(
   antes: Record<string, unknown>,
   velhos: AjusteLocal[],
   novos: AjusteLocal[],
+  autor: string,
+  transformAntes: Record<string, number>, transformDepois: Record<string, number>,
 ): Promise<number> {
   let centro = Array.isArray(antes.publico_centro) && antes.publico_centro.length === 2
     ? (antes.publico_centro as [number, number]) : null;
@@ -353,49 +393,33 @@ async function moverLotesDasPartes(
     if (!fc?.features) throw new Error("não consegui ler a planta para achar o centro da calibração");
     centro = centroDe(fc);
   }
-  const g = afim(centro, {
-    offsetLesteM: Number(antes.offset_leste_m ?? 0), offsetNorteM: Number(antes.offset_norte_m ?? 0),
-    rotacaoGraus: Number(antes.rotacao_graus ?? 0), escala: Number(antes.escala ?? 1) || 1,
+  const global = (v: Record<string, number>) => afim(centro, {
+    offsetLesteM: v.offset_leste_m, offsetNorteM: v.offset_norte_m, rotacaoGraus: v.rotacao_graus, escala: v.escala,
   });
-  const local = (a: AjusteLocal | undefined, area: [number, number][]) => afim(centroArea(area), a?.t ?? TRANSFORM_ZERO);
-
-  const porId = new Map<string, { velho?: AjusteLocal; novo?: AjusteLocal }>();
-  for (const a of velhos) porId.set(a.id, { velho: a });
-  for (const a of novos) porId.set(a.id, { ...porId.get(a.id), novo: a });
-
-  let total = 0;
-  for (const { velho, novo } of porId.values()) {
-    // mesmo id com contorno diferente: tira a parte velha e põe a nova
-    const passos = velho && novo && JSON.stringify(velho.area) !== JSON.stringify(novo.area)
-      ? [{ area: velho.area, de: velho, para: undefined }, { area: novo.area, de: undefined, para: novo }]
-      : [{ area: (novo ?? velho)!.area, de: velho, para: novo }];
-    for (const p of passos) {
-      const atual = compor(g, local(p.de, p.area));
-      const inv = inverter(atual);
-      const delta = compor(compor(g, local(p.para, p.area)), inv);
-      if (ehIdentidadeM(delta)) continue;
-      const { data, error } = await admin.rpc("fn_ajustar_lotes_parte", {
-        p_layer: id,
-        p_area: { type: "Polygon", coordinates: [[...p.area, p.area[0]]] },
-        p_inv: vetor(inv),
-        p_delta: vetor(delta),
-      });
-      if (error) throw new Error(`os lotes não acompanharam a parte (${error.message})`);
-      total += Number(data ?? 0);
-    }
-  }
-
+  const g = global(transformAntes), gNovo = global(transformDepois);
+  const descrever = (partes: AjusteLocal[], global: Matriz) => partes.map(parte => {
+    const [primeiro, ...extras] = aneisParte(parte);
+    const area = extras.length
+      ? { type: "MultiPolygon", coordinates: union([primeiro], ...extras.map(anel => [anel])) }
+      : { type: "Polygon", coordinates: [[...primeiro, primeiro[0]]] };
+    const posicao = compor(global, matrizParte(parte));
+    return { area, m: vetor(posicao), inv: vetor(inverter(posicao)) };
+  });
   const assinatura = String(antes.lotes_assinatura ?? "");
   const ed = assinaturaEdicoes((antes.edicoes_geometria ?? []) as EdicaoGeometria[]);
-  const sufixoVelho = assinaturaAjustes(velhos) + ed;
-  const emDia = sufixoVelho ? assinatura.endsWith(sufixoVelho) : !assinatura.includes(";aj:");
-  if (emDia && assinatura) {
-    const base = sufixoVelho ? assinatura.slice(0, -sufixoVelho.length) : assinatura;
-    await admin.from("cartography_layers")
-      .update({ lotes_assinatura: base + assinaturaAjustes(novos) + ed, lotes_gerados_em: new Date().toISOString() })
-      .eq("id", id);
-  }
-  return total;
+  const sufixo = assinaturaAjustes(velhos) + ed;
+  const emDia = assinatura && (sufixo ? assinatura.endsWith(sufixo) : !assinatura.includes(";aj:"));
+  const base = (sufixo ? assinatura.slice(0, -sufixo.length) : assinatura).split(";");
+  const globalEmDia = CAMPOS_GLOBAIS.every((k, i) => base[i] !== undefined && Number(base[i]) === transformAntes[k]);
+  CAMPOS_GLOBAIS.forEach((k, i) => { if (transformDepois[k] !== transformAntes[k]) base[i] = String(transformDepois[k]); });
+  const { data, error } = await admin.rpc("fn_cartografia_salvar_partes", {
+    p_layer: id, p_antes: antes.ajustes_locais ?? null, p_depois: novos, p_antigas: descrever(velhos, g), p_novas: descrever(novos, gNovo),
+    p_global: vetor(g), p_inv_global: vetor(inverter(g)), p_global_novo: vetor(gNovo),
+    p_transform_antes: transformAntes, p_transform_depois: transformDepois, p_assinatura: antes.lotes_assinatura,
+    p_nova_assinatura: emDia && globalEmDia ? base.join(";") + assinaturaAjustes(novos) + ed : antes.lotes_assinatura, p_autor: autor,
+  });
+  if (error) throw new Error(error.message);
+  return Number(data ?? 0);
 }
 
 export async function DELETE(_request: Request, ctx: RouteContext<"/api/admin/cartografia/[id]">) {

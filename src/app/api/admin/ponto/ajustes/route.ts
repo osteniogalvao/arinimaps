@@ -3,7 +3,6 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ator, temSetor } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 import { notificar } from "@/lib/notificacoes";
-import { concluirTarefaDoEvento } from "@/lib/central";
 
 /**
  * Ajustes de ponto: o colaborador pede (incluir marcação esquecida,
@@ -52,14 +51,10 @@ export async function PATCH(request: Request) {
   const { data: aj } = await admin.from("ponto_ajustes").select("*").eq("id", b.id).eq("status", "pendente").maybeSingle();
   if (!aj) return NextResponse.json({ error: "Ajuste não encontrado ou já decidido." }, { status: 404 });
   if (aj.user_id === a!.userId) return NextResponse.json({ error: "Ninguém decide o próprio ajuste." }, { status: 403 });
-  if (aprovar && aj.tipo === "incluir") {
-    const { error } = await admin.from("ponto_marcacoes").insert({ user_id: aj.user_id, marcado_em: aj.horario, origem: "ajuste", ajuste_id: aj.id });
-    if (error) return NextResponse.json({ error: "Não foi possível incluir a marcação." }, { status: 400 });
-  }
-  await admin.from("ponto_ajustes").update({
+  const decisao = await admin.from("ponto_ajustes").update({
     status: aprovar ? "aprovado" : "reprovado", decidido_por: a!.userId, decidido_em: new Date().toISOString(), resposta: resposta || null,
-  }).eq("id", aj.id);
-  await concluirTarefaDoEvento(`ponto_ajuste:${aj.id}`, a!.userId, aprovar ? "Ajuste aprovado" : "Ajuste recusado");
+  }).eq("id", aj.id).eq("status","pendente").select("id").maybeSingle();
+  if(decisao.error||!decisao.data)return NextResponse.json({error:"Não foi possível confirmar a decisão. Atualize o pedido."},{status:409});
   await logAudit({ user_id: a!.userId, acao: aprovar ? "ponto_ajuste_aprovado" : "ponto_ajuste_recusado", entidade: "ponto_ajustes", entidade_id: aj.id, dados_antes: aj });
   await notificar(aj.user_id, aprovar ? "info" : "atencao", aprovar ? "Seu ajuste de ponto foi aprovado" : "Seu ajuste de ponto foi recusado",
     resposta || null, "/admin/ponto");

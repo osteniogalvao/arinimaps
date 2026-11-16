@@ -90,6 +90,7 @@ export async function casarDemandas(propertyId: string): Promise<number> {
     // 2) uma tarefa por demanda, num insert só (o título leva o código da demanda, que é único)
     const tituloDe = (d: Demanda) => `Imóvel novo casa com demanda ${d.codigo}`;
     const { data: tarefas } = await admin.from("tasks").insert(novas.map((d) => ({
+      origem: "automatica", regra: "demanda_compativel", chave_evento: `demanda_compativel:${matchPorDemanda.get(d.id)}`,
       titulo: tituloDe(d),
       descricao:
         `${p.codigo} — ${p.titulo} (${formatBRL(p.valor)}) foi publicado e atende à demanda de ${d.cliente_nome}` +

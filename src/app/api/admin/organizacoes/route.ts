@@ -68,7 +68,7 @@ async function convidar(orgId: string, orgNome: string, email: string, papel: "a
     .insert({ org_id: orgId, email, papel_org: papel, status: "pendente", convidado_por: por }).select("id").single();
   if (error) return { erro: error.message };
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-  sendEmail(email, `Convite para ${orgNome} no Arini Imóveis Brasil`,
+  sendEmail(email, `Convite para ${orgNome} na ARINI`,
     `A Arini cadastrou ${orgNome} e convidou você${papel === "admin" ? " como administrador" : ""}.\n\n` +
     `Entre (ou crie a conta) com este e-mail em ${site}/entrar — o convite é aceito no login.`).catch(() => undefined);
   return { id: data.id as string };

@@ -10,7 +10,7 @@ import { ArrowRight, Info, Lock, LogIn } from "lucide-react";
  * os avisos que não podem faltar (fonte não consultada ≠ ausência de restrição).
  */
 export default function SecaoFontesOficiais({
-  url, corpo, descricao, logado, podeConsultar, acesso, cotaRestante, lista, pendentes, jaConsultou, alvo = "a área",
+  url, corpo, descricao, logado, podeConsultar, acesso, cotaRestante, lista, pendentes, jaConsultou, raioM, alvo = "a área",
 }: {
   url: string;
   corpo?: unknown;
@@ -22,6 +22,7 @@ export default function SecaoFontesOficiais({
   lista: FonteConsultada[];
   pendentes: string[];
   jaConsultou: boolean;
+  raioM: number;
   alvo?: string;
 }) {
   return (
@@ -43,12 +44,12 @@ export default function SecaoFontesOficiais({
             <Link href="/planos" className="btn-ouro inline-flex items-center gap-1.5 px-5 py-3 text-sm">Ver planos <ArrowRight className="size-4" /></Link>
           </div>
         ) : (
-          <BotaoConsultarArea url={url} corpo={corpo} jaConsultou={jaConsultou} planNome={acesso.planNome} cotaRestante={cotaRestante} />
+          <BotaoConsultarArea key={raioM} raioM={raioM} url={url} corpo={corpo} jaConsultou={jaConsultou} planNome={acesso.planNome} cotaRestante={cotaRestante} />
         )}
       </div>
 
       {jaConsultou
-        ? <FontesLista fontes={lista} alvo={alvo} />
+        ? <FontesLista fontes={lista} />
         : (
           <p className="cartao flex items-start gap-3 p-6 text-base leading-relaxed text-texto-2">
             <Info className="mt-1 size-5 shrink-0 text-verde" aria-hidden />

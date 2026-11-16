@@ -23,7 +23,7 @@ async function enviarEmail(para, assunto, texto) {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: process.env.RESEND_FROM ?? "Arini Imóveis Brasil <naoresponda@arinibrasil.com.br>",
+      from: process.env.RESEND_FROM ?? "ARINI <naoresponda@arinibrasil.com.br>",
       to: para, subject: assunto, text: texto,
     }),
   }).catch(() => null);
@@ -66,7 +66,7 @@ export async function monitorar(db) {
     console.error(`[monitor] ${nome} com problema: ${c.detalhe ?? "falhou"}`);
     const para = await destinatarios(db);
     const notificado = await enviarEmail(para,
-      `[Arini Imóveis Brasil] ${severidade === "alta" ? "FORA DO AR" : "Instável"}: ${nome}`,
+      `[ARINI] ${severidade === "alta" ? "FORA DO AR" : "Instável"}: ${nome}`,
       `O monitoramento encontrou um problema em "${nome}".\n\n${c.detalhe ?? ""}\n\n` +
       `Conferido em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}.\n` +
       `Detalhes: ${process.env.SITE_URL}/admin/seguranca`);

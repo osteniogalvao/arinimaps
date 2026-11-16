@@ -12,6 +12,7 @@ export type Ator = {
   role: string;
   ehArini: boolean;
   partnerId: string | null;
+  parceiroAtivo?: boolean;
   ownerId: string | null;
   /** setores da Matriz em que o membro da equipe atua (diretoria: todos) */
   setores: SetorId[];
@@ -63,7 +64,7 @@ export async function ator(): Promise<Ator | null> {
   if (await mfaPendente(supabase, equipe)) return null;
   const [{ data: partner }, { data: owner }, { data: planoPessoal }, daOrg] = await Promise.all([
     ["corretor","imobiliaria","engenheiro","franqueado","leiloeiro"].includes(profile.role)
-      ? admin.from("partners").select("id").eq("profile_id", user.id).eq("tipo",profile.role).maybeSingle() : Promise.resolve({ data:null }),
+      ? admin.from("partners").select("id,status").eq("profile_id", user.id).eq("tipo",profile.role).maybeSingle() : Promise.resolve({ data:null }),
     profile.role === "proprietario" ? admin.from("owners").select("id").eq("profile_id", user.id).maybeSingle() : Promise.resolve({ data:null }),
     profile.plan_id ? admin.from("plans").select("*").eq("id", profile.plan_id).maybeSingle() : Promise.resolve({ data: null }),
     // 5.9: plano da organização vale quando o pessoal é o padrão do nicho (docs/PLANOS.md §10)
@@ -79,25 +80,23 @@ export async function ator(): Promise<Ator | null> {
       ? setoresDe(profile.role, profile.setores as string[] | null)
       : [],
     partnerId: partner?.id ?? null,
+    parceiroAtivo: !!partner && ["aprovado","ativo"].includes(partner.status),
     ownerId: owner?.id ?? null,
     nicho: (profile.nicho as string | null) ?? null,
     acesso: await acessoComMatriz(profile.role, (plano as Plano | null) ?? null, profile.nicho as string | null, validoAte, profile.entrada_ativa, user.id),
   };
 }
 
-/** Pode operar esta oportunidade? Arini nos setores Comercial/Jurídico/Financeiro; parceiro A/B; proprietário quando encaminhada a ele. */
+/** Pode operar esta oportunidade? Arini nos setores Comercial/Jurídico/Financeiro; parceiro A/B; o proprietário acompanha só os indicadores do imóvel. */
 export async function podeOperarOportunidade(a: Ator, opportunityId: string) {
   // equipe: Comercial conduz; Jurídico e Financeiro atuam no contrato e na venda (docs/SEGURANCA.md §2.1)
   if (a.ehArini) return temSetor(a, "comercial", "juridico", "financeiro");
+  if (!a.partnerId || !a.parceiroAtivo) return false;
   const admin = supabaseAdmin();
   const { data: opp } = await admin
     .from("opportunities")
-    .select("responsavel_tipo, responsavel_partner_id, partner_comprador_id, property:properties(owner_id)")
+    .select("responsavel_tipo, responsavel_partner_id, partner_comprador_id")
     .eq("id", opportunityId)
     .single();
-  if (!opp) return false;
-  if (a.partnerId && [opp.responsavel_partner_id, opp.partner_comprador_id].includes(a.partnerId)) return true;
-  const prop = opp.property as unknown as { owner_id: string | null } | null;
-  if (a.ownerId && opp.responsavel_tipo === "proprietario" && prop?.owner_id === a.ownerId) return true;
-  return false;
+  return !!opp && ((opp.responsavel_tipo === "parceiro" && opp.responsavel_partner_id === a.partnerId) || opp.partner_comprador_id === a.partnerId);
 }

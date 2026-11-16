@@ -173,7 +173,8 @@ function interpretar(texto: string): ResultadoBusca {
 
 /** Formatos aceitos, para a ajuda da caixa de busca. */
 export const FORMATOS_BUSCA: { rotulo: string; exemplo: string }[] = [
-  { rotulo: "Imóvel, município ou lugar", exemplo: "Iturama" },
+  { rotulo: "Comparar parcelas no município", exemplo: "Iturama" },
+  { rotulo: "Nome de imóvel rural (SIGEF)", exemplo: "Fazenda Monte Alto" },
   { rotulo: "Rua, bairro, quadra ou lote", exemplo: "Rua Treze Iturama" },
   { rotulo: "Código do anúncio", exemplo: "AIB-000029" },
   { rotulo: "Código do CAR", exemplo: "MG-3134202-0A1B…" },

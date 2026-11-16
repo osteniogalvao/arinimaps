@@ -75,13 +75,11 @@ export async function marcarPrimeiroAtendimento(opportunityId: string, userId: s
 }
 
 /** Fecha a tarefa automática ligada a um evento (ex.: relatório da visita entregue). */
-export async function concluirTarefaDoEvento(chave: string, autor: string, evidencia: string) {
-  const admin = supabaseAdmin();
-  const { data } = await admin.from("tasks").select("id, status, setor")
-    .eq("chave_evento", chave).in("status", ["aberta", "andamento", "aguardando", "bloqueada"]).maybeSingle();
-  if (!data) return;
-  await admin.from("tasks").update({ status: "concluida", concluida_em: new Date().toISOString(), evidencia }).eq("id", data.id);
-  await eventoTarefa({ task_id: data.id, tipo: "status", autor, texto: `Concluída: ${evidencia}`, dados: { status: "concluida" } });
+export async function concluirTarefaDoEvento(chave: string, autor: string, evidencia: string, entidade: string, referencia: string) {
+  const {error}=await supabaseAdmin().rpc("central_concluir_evento",{
+    p_chave:chave,p_autor:autor,p_evidencia:evidencia,p_entidade:entidade,p_referencia:referencia,
+  });
+  if(error)console.error("Falha ao registrar o encerramento da tarefa automática",entidade,error.code);
 }
 
 /** Colunas que as listas de tarefas usam. As da 0065 só entram se existirem. */

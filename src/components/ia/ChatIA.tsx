@@ -295,7 +295,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
                 <div>
                   <p className="lp-display text-2xl text-verde">Oi, eu sou a Ari. Como posso ajudar?</p>
                   <p className="mt-1 text-texto-2 leading-relaxed">
-                    Pergunte sobre imóveis publicados, uma área do CAR ou como o Arini Imóveis Brasil funciona.
+                    Pergunte sobre imóveis publicados, uma área do CAR ou como o ARINI funciona.
                   </p>
                 </div>
                 <div className="grid gap-2">

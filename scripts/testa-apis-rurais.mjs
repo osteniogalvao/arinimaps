@@ -9,6 +9,7 @@
 // é trocado por um módulo vazio porque aqui não há React Server Components.
 import { readFileSync } from "node:fs";
 import { createJiti } from "jiti";
+import { bboxPolygon } from "@turf/turf";
 import { fileURLToPath } from "node:url";
 
 // a fonte car_ambiental lê o banco (car_temas): precisa das chaves do Supabase
@@ -23,7 +24,8 @@ const jiti = createJiti(import.meta.url, {
 const { ADAPTADORES } = await jiti.import(fileURLToPath(new URL("../src/lib/rural/adaptadores.ts", import.meta.url)));
 
 const [xmin, ymin, xmax, ymax] = (process.env.BBOX ?? "-50.6,-20.0,-49.8,-19.4").split(",").map(Number);
-const bbox = { xmin, ymin, xmax, ymax, lng: (xmin + xmax) / 2, lat: (ymin + ymax) / 2 };
+const bbox = { xmin, ymin, xmax, ymax, lng: (xmin + xmax) / 2, lat: (ymin + ymax) / 2,
+  geometria: bboxPolygon([xmin, ymin, xmax, ymax]).geometry };
 const filtro = process.argv.slice(2);
 const detalhar = process.env.DETALHE === "1";
 

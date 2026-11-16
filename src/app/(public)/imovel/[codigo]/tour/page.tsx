@@ -7,6 +7,8 @@ import { formatArea } from "@/lib/format";
 import Tour3D from "@/components/tour/Tour3D";
 import { currentUser } from "@/lib/supabase/server";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
+import { acessoDe } from "@/lib/planos-servidor";
+import { direitosDoTour } from "@/lib/map/acesso-tour";
 
 export const metadata: Metadata = { title: "Tour 3D" };
 
@@ -52,6 +54,7 @@ export default async function TourPage({ params, searchParams }: PageProps<"/imo
       municipio={tour.municipio}
       pois={tour.pois ?? []}
       record={record}
+      camadas={user && !record ? await direitosDoTour(await acessoDe(user.id), user.entradaAtiva, true) : null}
     />
   );
 }

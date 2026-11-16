@@ -43,7 +43,7 @@ export default async function NaoEncontrada() {
           </div>
         </div>
       </main>
-      <RodapeSite marca={texto(cfg, "nome_sistema", "Arini Imóveis Brasil")} contato={contato} />
+      <RodapeSite marca={texto(cfg, "nome_sistema", "ARINI")} contato={contato} />
     </div>
   );
 }

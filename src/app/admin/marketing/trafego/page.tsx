@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { formatBRL } from "@/lib/format";
 import { CabecalhoPagina, Etiqueta, Vazio } from "@/components/ui/Pagina";
-import { Secao } from "@/components/admin/Painel";
+import { Secao, TarefasDoSetor } from "@/components/admin/Painel";
 import { LISTA, LISTA_VAZIA, TABELA, TABELA_CAIXA, TBODY, TD, TH, THEAD, TR } from "@/components/admin/estilos";
 import { CANAIS_PUBLICACAO, PUBLICACAO_STATUS } from "@/lib/registros";
 
@@ -14,7 +14,7 @@ import { CANAIS_PUBLICACAO, PUBLICACAO_STATUS } from "@/lib/registros";
  * venda, com custo por lead.
  */
 export default async function Trafego() {
-  await exigirSetor("marketing", "diretoria");
+  const user = await exigirSetor("marketing_trafego");
   const admin = supabaseAdmin();
   const [{ data: campanhas, error }, { data: resultado }, { data: pubs }] = await Promise.all([
     admin.from("campanhas").select("*").order("created_at", { ascending: false }).limit(100),
@@ -75,6 +75,7 @@ export default async function Trafego() {
           {!pubs?.length && <p className={LISTA_VAZIA}>Nenhuma publicação ainda.</p>}
         </div>
       </Secao>
+      <TarefasDoSetor setor="marketing_trafego" souEu={user.id} />
     </div>
   );
 }

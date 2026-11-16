@@ -1,5 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { lerConfiguracoes, texto } from "@/lib/settings";
+import { limitarEmMemoria } from "@/lib/geo/limiteMemoria";
+import { ipDoPedido, respostaLimite } from "@/lib/seguranca/limite";
 
 /**
  * Feed XML para portais imobiliários (formato VRSync, aceito pelo Grupo ZAP,
@@ -13,8 +15,27 @@ const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g,
 
 const TIPO_VRSYNC: Record<string, string> = { rural: "Residential / Farm Ranch", urbano: "Residential / Land Lot" };
 
-export async function GET(request:Request) {
+const emCurso = new Map<string, Promise<string | null>>();
+
+export async function GET(request: Request) {
+  const limite = limitarEmMemoria(`feeds:${ipDoPedido(request)}`, 60, 60);
+  if (!limite.permitido) return respostaLimite(limite, "leitura do catálogo");
   const canal = new URL(request.url).searchParams.get("canal") === "site" ? "site" : "portais";
+  let leitura = emCurso.get(canal);
+  if (!leitura) {
+    leitura = gerarFeed(canal).finally(() => emCurso.delete(canal));
+    emCurso.set(canal, leitura);
+  }
+  const xml = await leitura;
+  if (xml === null) {
+    return new Response("Listagem de imóveis temporariamente indisponível.", {
+      status: 503, headers: { "Cache-Control": "no-store" },
+    });
+  }
+  return new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+}
+
+async function gerarFeed(canal: string) {
   const admin = supabaseAdmin();
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://arinibrasil.com.br";
   const midia = (p: string) => `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${p}`;
@@ -30,11 +51,7 @@ export async function GET(request:Request) {
       .limit(1, { referencedTable: "publicacoes" }).order("id").limit(200);
     if (ultimoId) consulta = consulta.gt("id", ultimoId);
     const { data: imoveis, error } = await consulta;
-    if (error || !imoveis) {
-      return new Response("Listagem de imóveis temporariamente indisponível.", {
-        status: 503, headers: { "Cache-Control": "no-store" },
-      });
-    }
+    if (error || !imoveis) return null;
     if (!imoveis.length) break;
     ultimoId = imoveis[imoveis.length - 1].id;
     for (const p of imoveis) {
@@ -72,10 +89,10 @@ ${fotos.map((f, i) => `      <Item medium="image" caption="${esc(p.codigo)}"${i 
     }
   }
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <ListingDataFeed xmlns="http://www.vivareal.com/schemas/1.0/VRSync" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Header>
-    <Provider>Arini Imóveis Brasil</Provider>
+    <Provider>ARINI</Provider>
     <Email>${esc(texto(cfg, "email_contato", ""))}</Email>
     <ContactName>Arini Negócios Imobiliários</ContactName>
     <PublishDate>${new Date().toISOString()}</PublishDate>
@@ -84,5 +101,4 @@ ${fotos.map((f, i) => `      <Item medium="image" caption="${esc(p.codigo)}"${i 
 ${listagens.join("\n")}
   </Listings>
 </ListingDataFeed>`;
-  return new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
 }

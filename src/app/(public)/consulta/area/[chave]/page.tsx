@@ -1,3 +1,6 @@
+import { raioConsulta } from "@/lib/rural/raios";
+import { tourDaArea } from "@/components/tour/tourDaArea";
+import RelatorioPersonalizado from "@/components/rural/RelatorioPersonalizado";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
@@ -31,7 +34,9 @@ type Area = {
  * a chave (`geo:<sha1>`) é a própria geometria — o link pode ser guardado e
  * reaberto, e quem desenhar a mesma área cai no mesmo resultado.
  */
-export default async function ConsultaAreaDesenhada({ params }: PageProps<"/consulta/area/[chave]">) {
+export default async function ConsultaAreaDesenhada({ params, searchParams }: PageProps<"/consulta/area/[chave]">) {
+  const raioM = raioConsulta((await searchParams).raio_m, 2000);
+  if (raioM === null) notFound();
   const bruta = decodeURIComponent((await params).chave);
   const chave = chaveDe(bruta);
   if (!/^geo:[0-9a-f]{40}$/.test(chave)) notFound();
@@ -40,10 +45,15 @@ export default async function ConsultaAreaDesenhada({ params }: PageProps<"/cons
   const { data } = await supabaseAdmin().rpc("fn_ler_area_propria", { p_chave: chave, p_user: user.id });
   const area = data as Area | null;
   if (!area?.geometry) notFound();
-  const consulta = await carregarConsultaArea(chave);
+  const consulta = await carregarConsultaArea(chave, { raioM });
 
   const tamanho = formatArea(Number(area.area_ha) * 10_000, Number(area.area_ha) >= 1 ? "rural" : "urbano");
+  const abrir = (await searchParams).tour === "1";
+  const tour = await tourDaArea(consulta, { abrir, geometria: area.geometry, caminho: "/consulta/area/" + chave.slice(4), raio: raioM, titulo: "Área desenhada", area: tamanho });
+  if (abrir) return tour;
   const municipio = area.municipio ?? "fora da região cadastrada";
+  const relatorio = "/api/consulta/area/" + chave.slice(4) + "/relatorio";
+  const relatorioCompleto = consulta.acesso.recursos.has("relatorio_territorial");
   const centro = `${area.lat.toFixed(5)}, ${area.lng.toFixed(5)}`;
   const desenhadaEm = new Date(area.created_at).toLocaleDateString("pt-BR");
   const dados: [string, string][] = [
@@ -72,6 +82,7 @@ export default async function ConsultaAreaDesenhada({ params }: PageProps<"/cons
             className="h-80 lg:h-full lg:min-h-80 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{tamanho}</p>
+            {tour}
             <dl className="divide-y divide-linha border-y border-linha">
               {dados.map(([r, v]) => (
                 <div key={r} className="flex items-baseline justify-between gap-4 py-3">
@@ -81,6 +92,11 @@ export default async function ConsultaAreaDesenhada({ params }: PageProps<"/cons
               ))}
             </dl>
             <div>
+              <div className="mb-4 flex flex-wrap gap-4 text-sm font-semibold text-verde underline">
+                <a href={relatorio + "?modelo=simples&raio_m=" + raioM}>Baixar PDF simples</a>
+                {relatorioCompleto && <a href={relatorio + "?modelo=completo&raio_m=" + raioM}>Baixar PDF completo</a>}
+              </div>
+              <RelatorioPersonalizado caminho={relatorio} raioM={raioM} completo={relatorioCompleto} desenho />
               <BotaoExportarSig nomeBase={`area-${tamanho.replace(/\s+/g, "")}-${chave.slice(4, 12)}`}
                 divisa={{
                   geometry: area.geometry, rotulo: "Área desenhada",
@@ -100,7 +116,7 @@ export default async function ConsultaAreaDesenhada({ params }: PageProps<"/cons
         <SecaoFontesOficiais
           url="/api/consulta/area"
           corpo={{ chave }}
-          descricao="Cruzamento da área desenhada (com 2 km ao redor) com CAR, mineração, terras indígenas, desmatamento, queimadas, unidades de conservação, água e energia. Vale para qualquer ponto do Brasil."
+          raioM={raioM} descricao="Consulte CAR, mineração, terras indígenas, desmatamento, queimadas, unidades de conservação, água e energia na área desenhada ou no entorno selecionado."
           logado={!!consulta.user} podeConsultar={consulta.podeConsultar} acesso={consulta.acesso}
           cotaRestante={consulta.cotaRestante} lista={consulta.lista} pendentes={consulta.pendentes}
           jaConsultou={consulta.jaConsultou} />

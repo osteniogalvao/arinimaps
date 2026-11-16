@@ -1,6 +1,8 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { processamentoLigado } from "@/lib/sentinel/copernicus";
+import { alcanceDaFonte } from "@/lib/rural/raios";
 import { imoveisDaVitrine } from "@/lib/imovel/vitrine";
 import { formatArea, formatBRL, STATUS_LABEL } from "@/lib/format";
 
@@ -41,7 +43,7 @@ export const FERRAMENTAS: Anthropic.Beta.BetaTool[] = [
   {
     name: "buscar_imoveis",
     description:
-      "Busca imóveis PUBLICADOS na vitrine pública do Arini Imóveis Brasil (mesma busca da página /imoveis). Use para pedidos como " +
+      "Busca imóveis PUBLICADOS na vitrine pública da ARINI (mesma busca da página /imoveis). Use para pedidos como " +
       "\"lotes de R$ 40 mil em Iturama\" ou \"fazendas acima de 100 ha em União de Minas\". Lote, casa, terreno na cidade = tipo urbano; " +
       "fazenda, sítio, chácara, área rural = tipo rural. Para valor aproximado (\"de R$ 40 mil\"), use uma faixa de cerca de ±20%. " +
       "Devolve no máximo 15 imóveis com código, título, município, valor, área e o link da ficha.",
@@ -323,8 +325,8 @@ async function consultarAreaCar(e: Record<string, unknown>): Promise<ResultadoFe
   const admin = supabaseAdmin();
   const [{ data: car }, { data: consultas }, { data: fontes }, { data: anuncio }] = await Promise.all([
     admin.rpc("fn_car_imovel", { p_cod: cod }),
-    admin.from("consultas_area").select("fonte_id, quantidade, incide, erro, consultado_em, resultado").eq("chave", `car:${cod}`),
-    admin.from("fontes_externas").select("id, nome, orgao, ativa"),
+    admin.from("consultas_area").select("fonte_id, quantidade, incide, erro, consultado_em, resultado").eq("chave", `car:${cod}`).eq("raio_m",2000),
+    admin.from("fontes_externas").select("id, nome, orgao, ativa, tipo"),
     admin.from("properties").select("codigo, titulo").eq("car_codigo", cod).in("status", ["publicado", "em_negociacao"]).limit(1).maybeSingle(),
   ]);
   const props = (car as { properties?: Record<string, unknown> } | null)?.properties;
@@ -332,8 +334,10 @@ async function consultarAreaCar(e: Record<string, unknown>): Promise<ResultadoFe
 
   const nomes = new Map((fontes ?? []).map((f) => [f.id, `${f.nome} (${f.orgao})`]));
   const link = `/consulta/car/${encodeURIComponent(cod)}`;
-  const cruzamento = (consultas ?? []).map((c) => ({
+  const permitidas = new Set((fontes ?? []).filter(f=>f.ativa && ["wfs","arcgis","importada","api"].includes(f.tipo) && (f.id!=="sentinel" || processamentoLigado())).map(f=>f.id));
+  const cruzamento = (consultas ?? []).filter(c=>permitidas.has(c.fonte_id)).map((c) => ({
     fonte: nomes.get(c.fonte_id) ?? c.fonte_id,
+    abrangencia: alcanceDaFonte(c.fonte_id, 2000),
     resultado: c.erro ? "fonte indisponível na consulta (não significa ausência de restrição)" : c.incide ? "há registros" : "nada encontrado",
     quantidade: c.quantidade,
     itens: ((c.resultado as { itens?: { titulo?: string; detalhe?: string }[] } | null)?.itens ?? []).slice(0, 4)
@@ -558,7 +562,8 @@ const EXECUTORES: Record<string, (e: Record<string, unknown>) => Promise<Resulta
 };
 
 /** Executa uma ferramenta. Nunca lança: falha vira resultado com ok=false. */
-export async function executarFerramenta(nome: string, entrada: unknown): Promise<ResultadoFerramenta> {
+export async function executarFerramenta(nome: string, entrada: unknown, contexto?: { titular?: string; consultaTerritorial?: boolean }): Promise<ResultadoFerramenta> {
+  if (["consultar_area_car","buscar_consultas_anteriores"].includes(nome) && !(contexto?.titular && contexto.consultaTerritorial)) return { ok:false, fontes:[], conteudo:json({erro:"O plano ativo da conta não permite consultar dados territoriais."}) };
   const fn = EXECUTORES[nome];
   if (!fn) return { ok: false, fontes: [], conteudo: json({ erro: `Ferramenta desconhecida: ${nome}` }) };
   if (!entrada || typeof entrada !== "object" || Array.isArray(entrada)) {

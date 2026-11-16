@@ -5,6 +5,8 @@ import { assinaturaWebhookOk, telefoneWhatsapp } from "@/lib/meta";
 import { confirmarMensagemWhatsapp, dataWhatsapp } from "@/lib/confirmacao-whatsapp";
 import { receberOptIn } from "@/lib/retomada-cadastro";
 import { notificar } from "@/lib/notificacoes";
+import { atenderPedidoConsulta, respostaConsultaWhatsapp } from "@/lib/rural/pedido-whatsapp";
+import { CorpoMuitoGrande, limitarFluxo } from "@/lib/seguranca/corpo-limitado";
 
 /**
  * Webhook do WhatsApp Business (Cloud API). GET: verificação da Meta. POST:
@@ -21,16 +23,28 @@ export async function GET(request: Request) {
 }
 
 type Valor = {
+  metadata?: {phone_number_id?: string};
   messages?: { id: string; from: string; timestamp?: string; type: string; text?: { body: string }; button?: { text: string }; interactive?: { button_reply?: { title: string } } }[];
   statuses?: { id: string; status: string; errors?: { title: string }[] }[];
   contacts?: { wa_id: string; profile?: { name?: string } }[];
 };
 
 export async function POST(request: Request) {
-  const corpo = await request.text();
-  if (!assinaturaWebhookOk(corpo, request.headers.get("x-hub-signature-256"))) {
-    return NextResponse.json({ error: "Assinatura inválida." }, { status: 401 });
+  const assinatura = request.headers.get("x-hub-signature-256");
+  const negado = () => NextResponse.json({ error: "Assinatura inválida." }, { status: 401 });
+  if (!process.env.WHATSAPP_APP_SECRET || !assinatura || !/^sha256=[0-9a-f]{64}$/.test(assinatura)) return negado();
+  const limite = 8 * 1024 * 1024;
+  const grande = () => NextResponse.json({ error: "O evento excedeu o limite de tamanho." }, { status: 413 });
+  if (Number(request.headers.get("content-length")) > limite) return grande();
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await new Response(request.body && limitarFluxo(request.body, limite)).arrayBuffer());
+  } catch (e) {
+    if (e instanceof CorpoMuitoGrande) return grande();
+    throw e;
   }
+  if (!assinaturaWebhookOk(bytes, assinatura)) return negado();
+  const corpo = new TextDecoder().decode(bytes);
   const body = JSON.parse(corpo || "{}") as { entry?: { changes?: { value?: Valor }[] }[] };
   const admin = supabaseAdmin();
   for (const entry of body.entry ?? []) {
@@ -50,6 +64,13 @@ export async function POST(request: Request) {
         if(await confirmarMensagemWhatsapp(m.from,texto,recebida))continue;
         const remetente=v.contacts?.find(c=>c.wa_id===m.from)?.profile?.name ?? "";
         if(await receberOptIn(m.from,texto,m.id,remetente)) continue;
+        const resposta = m.type === "text" && respostaConsultaWhatsapp(texto);
+        if (resposta && recebida && Date.now() - Date.parse(recebida) < 24 * 3600_000
+          && process.env.WHATSAPP_PHONE_ID && v.metadata?.phone_number_id === process.env.WHATSAPP_PHONE_ID) {
+          try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta); }
+          catch { return NextResponse.json({ok:false},{status:503}); }
+          continue;
+        }
         const final = m.from.slice(-8);
         // oportunidade aberta mais recente com telefone que termina igual
         const { data: leads } = await admin.from("leads").select("id, telefone").ilike("telefone", `%${final.slice(0, 4)}%${final.slice(4)}%`).limit(20);

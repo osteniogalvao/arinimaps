@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Bbox } from "@/lib/rural/adaptadores";
 import { executarConsultaArea } from "@/lib/geo/consultaArea";
 import { buscarPoisAoRedor } from "@/lib/overpass";
+import { raioConsulta } from "@/lib/rural/raios";
 
 export const maxDuration = 120;
 
@@ -13,19 +14,19 @@ export const maxDuration = 120;
  * processo minerário). Aproveita a chamada para atualizar o cache de pontos de
  * interesse ao redor do lote, que a página mostra com a distância.
  */
-const RAIO_LOTE_M = 500;
-
 export async function POST(request: Request, ctx: RouteContext<"/api/consulta/lote/[id]">) {
   const { id } = await ctx.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: "Lote inválido.", codigo: "lote_invalido" }, { status: 400 });
+  const raioM = raioConsulta(new URL(request.url).searchParams.get("raio_m"), 500);
+  if (raioM === null) return NextResponse.json({ error: "Raio de consulta inválido." }, { status: 400 });
 
   let centro: { lng: number; lat: number } | null = null;
   const resposta = await executarConsultaArea(request, {
     chave: `lote:${id}`,
-    raioM: RAIO_LOTE_M,
+    raioM,
     naoEncontrado: "Lote não encontrado. A planta pode ter sido atualizada — clique de novo no lote no mapa.",
     bbox: async () => {
-      const { data } = await supabaseAdmin().rpc("fn_lote_bbox", { p_id: id, p_buffer_m: RAIO_LOTE_M });
+      const { data } = await supabaseAdmin().rpc("fn_lote_bbox", { p_id: id, p_buffer_m: raioM });
       const b = (data as Bbox | null) ?? null;
       if (b) centro = { lng: b.lng, lat: b.lat };
       return b;

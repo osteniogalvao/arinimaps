@@ -89,8 +89,8 @@ export async function POST(request: Request) {
     if (error) return falha(500, "erro_banco", "Não foi possível registrar o convite.", { motivo: error.message });
 
     const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-    sendEmail(email, `Convite para ${org.nome} no Arini Imóveis Brasil`,
-      `${user.nome || "Um administrador"} convidou você para fazer parte de ${org.nome} no Arini Imóveis Brasil.\n\n` +
+    sendEmail(email, `Convite para ${org.nome} na ARINI`,
+      `${user.nome || "Um administrador"} convidou você para fazer parte de ${org.nome} na ARINI.\n\n` +
       `Se já tem conta com este e-mail, entre em ${site}/entrar — o convite é aceito no login (ou em ${site}/conta).\n` +
       `Se ainda não tem, crie a conta com este mesmo e-mail em ${site}/entrar.`).catch(() => undefined);
     await logAudit({ user_id: user.id, acao: "organizacao_convite", entidade: "organization_members", entidade_id: novo.id, dados_depois: { org_id: org.id, email, papel } });

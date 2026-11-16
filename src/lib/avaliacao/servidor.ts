@@ -28,9 +28,9 @@ export async function carregarContexto(propertyId: string, raioKm: number): Prom
 export async function incidenciasJaConsultadas(alvo: Alvo): Promise<{ incidencias: Incidencia[]; fontesInativas: string[] }> {
   const admin = supabaseAdmin();
   const [{ data: rurais }, { data: area }, { data: fontes }] = await Promise.all([
-    admin.from("consultas_rurais").select("fonte_id, incide, quantidade, erro, consultado_em, resultado").eq("property_id", alvo.id),
+    admin.from("consultas_rurais").select("fonte_id, incide, quantidade, erro, consultado_em, resultado").eq("property_id", alvo.id).eq("raio_m", 0),
     alvo.car_codigo
-      ? admin.from("consultas_area").select("fonte_id, incide, quantidade, erro, consultado_em, resultado").eq("chave", `car:${alvo.car_codigo}`)
+      ? admin.from("consultas_area").select("fonte_id, incide, quantidade, erro, consultado_em, resultado").eq("chave", `car:${alvo.car_codigo}`).eq("raio_m", 0)
       : Promise.resolve({ data: [] as never[] }),
     admin.from("fontes_externas").select("id, nome, ativa"),
   ]);

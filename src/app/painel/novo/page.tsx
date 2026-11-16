@@ -259,7 +259,7 @@ export default function NovoImovel() {
       setErro("Marque a localização do imóvel no mapa (desenho, ponto ou KML).");
       return;
     }
-    if (!ehParceiro && !prazoMeses) {
+    if (!emLeilao && !ehParceiro && !prazoMeses) {
       setErro("Escolha o prazo de exclusividade de 180 dias ou 12 meses.");
       return;
     }
@@ -271,8 +271,8 @@ export default function NovoImovel() {
       setErro("Envie a matrícula do imóvel (ou escritura/contrato registrado) — é o que comprova a propriedade.");
       return;
     }
-    if (ehParceiro && !emLeilao && !docs.autorizacao.length) {
-      setErro("Envie a autorização de venda assinada pelo proprietário.");
+    if ((ehParceiro || ehEquipe) && !emLeilao && !docs.autorizacao.length) {
+      setErro("Envie o Termo de Exclusividade assinado pelo proprietário.");
       return;
     }
     if (emLeilao && !leilao.praca1_data) {
@@ -671,7 +671,7 @@ export default function NovoImovel() {
         {([
           ...(emLeilao ? [["edital", "Edital ou ordem judicial", "Envie este documento ou o contrato com o comitente para autorizar o anúncio.", false] as const, ["autorizacao", "Contrato com o comitente", "Autorização para realizar o leilão extrajudicial deste imóvel.", false] as const] : []),
           ["matricula", "Matrícula atualizada do imóvel", "Ou escritura, contrato de compra e venda registrado, formal de partilha.", !ehEquipe && !emLeilao],
-          ...(ehParceiro && !emLeilao ? [["autorizacao", papel === "corretor" || papel === "imobiliaria" ? "Termo de Exclusividade assinado pelo proprietário" : "Autorização de venda assinada pelo proprietário", "Com prazo, preço e condições compatíveis com o anúncio.", true] as const] : []),
+          ...((ehParceiro || ehEquipe) && !emLeilao ? [["autorizacao", "Termo de Exclusividade assinado pelo proprietário", "Com prazo, preço e condições compatíveis com o anúncio.", true] as const] : []),
           ...(form.tipo === "rural" ? [["ccir_itr", "CCIR e/ou ITR", "Recomendado para imóvel rural — agiliza a análise.", false] as const] : []),
           ["outro", "Outros documentos", "Procuração, certidões, documento do cônjuge…", false],
         ] as const).map(([tipo, titulo, ajudaDoc, obrigatorio]) => (
@@ -687,12 +687,12 @@ export default function NovoImovel() {
       </Etapa>
 
       <Etapa id="condicao" numero={numero("condicao")} icone={Handshake} titulo="Condição de comercialização *">
-        {ehParceiro ? (
+        {ehParceiro || emLeilao ? (
           <p className="text-base leading-relaxed text-texto-2">
-            {ehLeiloeiro ? "O leilão segue o edital. A ARINI divulga o imóvel e encaminha os interessados."
+            {emLeilao ? "O leilão segue o edital. A ARINI divulga o imóvel e encaminha os interessados."
               : papel === "corretor" || papel === "imobiliaria"
                 ? "Ao captar este imóvel pela Rede, envie o Termo de Exclusividade assinado pelo proprietário. A ARINI atende os interessados e conduz a negociação."
-                : "Envie a autorização do titular que fundamenta este anúncio."}
+                : "Envie o Termo de Exclusividade assinado pelo titular deste imóvel."}
           </p>
         ) : (
           <fieldset>
@@ -754,8 +754,7 @@ export default function NovoImovel() {
 
         {ehEquipe ? (
           <p className="text-sm text-texto-2">
-            Cadastro feito pela equipe Arini: não há aceite eletrônico do proprietário. Anexe a
-            autorização assinada em Documentos, na análise do imóvel.
+            {emLeilao ? "O edital, a ordem judicial ou o contrato com o comitente será conferido pela Matriz." : "A Matriz conferirá o Termo de Exclusividade assinado pelo proprietário antes de aprovar a venda."}
           </p>
         ) : (
           <label className="flex items-start gap-3 rounded-xl bg-superficie-2 px-4 py-3.5 text-sm leading-relaxed text-texto-2">

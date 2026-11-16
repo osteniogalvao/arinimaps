@@ -8,6 +8,7 @@ import { falha, falhaBanco } from "@/lib/erros";
 import { caminhoPlantaPublica } from "@/lib/geo/plantaPublica";
 import { centroDe } from "@/lib/geo/deslocar";
 import { ErroRaster, lerRaster } from "@/lib/cartografia/rasterUpload";
+import { CorpoMuitoGrande, limitarFluxo } from "@/lib/seguranca/corpo-limitado";
 
 // Conversão de planta de cidade leva segundos, não milissegundos.
 export const maxDuration = 300;
@@ -93,8 +94,9 @@ export async function POST(request: Request) {
   if (ext === "dxf") {
     let convertido;
     try {
-      convertido = await converterDxf(request.body as ReadableStream<Uint8Array>, zona);
+      convertido = await converterDxf(limitarFluxo(request.body, LIMITE_MB * MB), zona);
     } catch (e) {
+      if (e instanceof CorpoMuitoGrande) return falha(413, "arquivo_grande", `A planta passa do limite de ${LIMITE_MB} MB.`);
       if (e instanceof ErroDxf) {
         return falha(400, "dxf_ilegivel", e.message, {
           motivo: e.motivo, solucao: e.solucao, detalhes: e.detalhes,

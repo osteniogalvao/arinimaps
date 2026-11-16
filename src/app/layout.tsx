@@ -37,8 +37,8 @@ export const metadata: Metadata = {
     images: [{ url: OG_IMAGEM_PADRAO, width: 1600, height: 900, alt: OG_NOME_SITE }],
   },
   title: {
-    default: "Arini Imóveis Brasil — imóveis pelo mapa",
-    template: "%s · Arini Imóveis Brasil",
+    default: "ARINI — imóveis pelo mapa",
+    template: "%s · ARINI",
   },
   // barra do navegador no celular no Verde Arini, a cor principal da marca
   other: { "theme-color": "#124431" },

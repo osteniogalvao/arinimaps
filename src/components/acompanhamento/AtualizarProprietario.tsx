@@ -22,7 +22,7 @@ export default function AtualizarProprietario({ propertyId, codigo, telefone, no
   const [msg, setMsg] = useState("");
 
   const primeiro = nome.trim().split(/\s+/)[0] || "";
-  const mensagem = `Olá${primeiro ? `, ${primeiro}` : ""}! Atualização do seu imóvel ${codigo} na Arini Imóveis Brasil: ${texto.trim() || "seguimos com o atendimento dos interessados."}`;
+  const mensagem = `Olá${primeiro ? `, ${primeiro}` : ""}! Atualização do seu imóvel ${codigo} na ARINI: ${texto.trim() || "seguimos com o atendimento dos interessados."}`;
   const whats = linkWhatsApp(telefone, mensagem);
 
   async function salvar(e: React.FormEvent) {

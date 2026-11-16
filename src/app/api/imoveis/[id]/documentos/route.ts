@@ -66,9 +66,10 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/imoveis/[id
     .select("id, tipo, storage_path, nome_arquivo, verificado, verificado_em, created_at, versao, substituido_por, substituido_em, enviado_por")
     .eq("property_id", id).order("created_at");
   const docs = (todos ?? []).filter((d) => !d.substituido_por);
+  const { data: imovel } = await admin.from("properties").select("modalidade").eq("id", id).maybeSingle();
   const out = [];
   for (const d of docs) {
-    out.push({ ...d, url: urlArquivo(d.storage_path) });
+    out.push({ ...d, conferir_exclusividade: d.tipo === "autorizacao" && imovel?.modalidade !== "leilao", url: urlArquivo(d.storage_path) });
   }
   let anteriores: Record<string, unknown>[] | undefined;
   if (comVersoes) {
@@ -107,24 +108,39 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/imoveis/[i
     return NextResponse.json({ error: "A conferência de documentos é dos setores de Operações e Jurídico." }, { status: 403 });
   }
 
-  const { documento_id, verificado } = await request.json().catch(() => ({}));
+  const { documento_id, verificado, assinada_em, prazo_meses } = await request.json().catch(() => ({}));
   if (!documento_id || typeof verificado !== "boolean") {
     return NextResponse.json({ error: "Informe documento_id e verificado." }, { status: 400 });
   }
   const admin = supabaseAdmin();
+  const [arquivo, imovel] = await Promise.all([
+    admin.from("property_documents").select("tipo").eq("id",documento_id).eq("property_id",id).is("substituido_por",null).maybeSingle(),
+    admin.from("properties").select("modalidade").eq("id",id).maybeSingle(),
+  ]);
+  if (arquivo.error || imovel.error) return NextResponse.json({ error:"Não foi possível conferir o imóvel." },{status:503});
+  if (!arquivo.data || !imovel.data) return NextResponse.json({ error:"Documento vigente não encontrado." },{status:404});
+  const termo = verificado && arquivo.data.tipo === "autorizacao" && imovel.data.modalidade !== "leilao";
+  const hoje = new Date().toLocaleDateString("sv-SE",{timeZone:"America/Sao_Paulo"});
+  if (termo && (typeof assinada_em !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(assinada_em) ||
+    !Number.isFinite(Date.parse(assinada_em)) || new Date(assinada_em).toISOString().slice(0,10)!==assinada_em ||
+    assinada_em>hoje || ![6,12].includes(prazo_meses))) {
+    return NextResponse.json({error:"Confira no termo exclusivo a data de assinatura e o prazo de 180 dias ou 12 meses."},{status:400});
+  }
   const { data: doc, error } = await admin.from("property_documents")
     .update({
+      exclusividade_assinada_em: termo ? assinada_em : null,
+      exclusividade_meses: termo ? prazo_meses : null,
       verificado,
       verificado_por: verificado ? a.userId : null,
       verificado_em: verificado ? new Date().toISOString() : null,
     })
-    .eq("id", documento_id).eq("property_id", id)
+    .eq("id", documento_id).eq("property_id", id).is("substituido_por",null)
     .select("id, tipo").single();
   if (error || !doc) return NextResponse.json({ error: "Documento não encontrado neste imóvel." }, { status: 404 });
 
   await logAudit({
     user_id: a.userId, acao: verificado ? "documento_conferido" : "documento_desconferido",
-    entidade: "property_documents", entidade_id: doc.id, property_id: id, dados_depois: { tipo: doc.tipo },
+    entidade: "property_documents", entidade_id: doc.id, property_id: id, dados_depois: { tipo: doc.tipo, ...(termo ? { assinada_em, prazo_meses } : {}) },
   });
   return NextResponse.json({ ok: true });
 }

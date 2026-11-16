@@ -63,5 +63,5 @@ export async function POST(request: Request) {
   await registrarEvento(request, "login_ok", { userId: data.user.id, email, detalhe: { mfa_pendente: precisaMfa } });
   // 5.9: convite pendente de organização para este e-mail vira vínculo (não atrasa o login)
   void vincularConvites(data.user.id, email);
-  return NextResponse.json({ ok: true, role: profile?.role ?? "comprador", escolherPerfil: !!profile && !profile.entrada_ativa && !["admin_central","analista_arini","franqueado"].includes(profile.role), mfa: precisaMfa });
+  return NextResponse.json({ ok: true, role: profile?.role ?? "comprador", entradaAtiva: profile?.entrada_ativa, escolherPerfil: !!profile && !profile.entrada_ativa && !["admin_central","analista_arini","franqueado"].includes(profile.role), mfa: precisaMfa });
 }

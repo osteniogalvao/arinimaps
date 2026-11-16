@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     };
     if (mensagens[acao]) {
       emailDoAnunciante(id).then((to) =>
-        sendEmail(to, `Arini Imóveis Brasil — imóvel ${antes.codigo}`, mensagens[acao])
+        sendEmail(to, `ARINI — imóvel ${antes.codigo}`, mensagens[acao])
       ).catch(() => undefined);
     }
 
@@ -198,26 +198,24 @@ export async function POST(request: Request) {
       const { data: antesProp } = await admin.from("properties").select(CAMPOS_REVISAO.join(", ")).eq("id", prop.id).single();
       const { error: upErro } = await admin.from("properties").update(patch).eq("id", prop.id);
       if (upErro) return NextResponse.json({ error: upErro.message }, { status: 400 });
-      await admin.from("property_revisions")
+      const { data: decidida, error: erroDecisao } = await admin.from("property_revisions")
         .update({ status: "aprovada", revisada_por: user.id, revisada_em: agora })
-        .eq("id", rev.id);
+        .eq("id", rev.id).eq("status","pendente").select("id").maybeSingle();
+      if (erroDecisao || !decidida) return NextResponse.json({error:"Não foi possível confirmar a revisão."},{status:409});
       await logAudit({
         user_id: user.id, acao: "revisao_aprovada", entidade: "property_revisions", entidade_id: rev.id,
         property_id: prop.id, dados_antes: antesProp ?? rev.dados_anteriores, dados_depois: { versao: rev.versao, ...patch },
       });
     } else {
-      await admin.from("property_revisions")
+      const { data: decidida, error: erroDecisao } = await admin.from("property_revisions")
         .update({ status: "rejeitada", motivo: motivo || null, revisada_por: user.id, revisada_em: agora })
-        .eq("id", rev.id);
+        .eq("id", rev.id).eq("status","pendente").select("id").maybeSingle();
+      if (erroDecisao || !decidida) return NextResponse.json({error:"Não foi possível confirmar a revisão."},{status:409});
       await logAudit({
         user_id: user.id, acao: "revisao_rejeitada", entidade: "property_revisions", entidade_id: rev.id,
         property_id: prop.id, dados_antes: { versao: rev.versao, dados }, dados_depois: { motivo },
       });
     }
-    // a tarefa de Operações criada na proposta se encerra junto
-    await admin.from("tasks").update({ status: "concluida", concluida_em: agora })
-      .eq("property_id", prop.id).eq("setor", "operacoes").in("status", ["aberta", "andamento"])
-      .ilike("titulo", "Alteração proposta — %");
 
     const resumo = Object.keys(dados)
       .map((c) => `${CAMPO_REVISAO_LABEL[c as keyof typeof CAMPO_REVISAO_LABEL] ?? c}: ${valorRevisao(c, dados[c])}`)
@@ -226,7 +224,7 @@ export async function POST(request: Request) {
       ? `Sua alteração foi aplicada ao anúncio ${prop.codigo} (${prop.titulo}).\n\n${resumo}\n\nVeja: ${process.env.NEXT_PUBLIC_SITE_URL}/imovel/${prop.codigo}`
       : `A Arini não aplicou a alteração proposta no anúncio ${prop.codigo}. Motivo: ${motivo || "entre em contato com a Arini"}.\n\nO anúncio continua publicado como estava.`;
     emailDoAnunciante(prop.id).then((to) =>
-      sendEmail(to, `Arini Imóveis Brasil — alteração do anúncio ${prop.codigo}`, texto)
+      sendEmail(to, `ARINI — alteração do anúncio ${prop.codigo}`, texto)
     ).catch(() => undefined);
 
     return NextResponse.json({ ok: true });

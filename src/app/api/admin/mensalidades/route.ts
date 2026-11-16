@@ -130,7 +130,7 @@ export async function POST(request: Request) {
         customer: customerId,
         value: Number(inv.valor),
         dueDate,
-        description: `Mensalidade Arini Imóveis Brasil — ${sub.property.codigo} ${sub.property.titulo}`.slice(0, 500),
+        description: `Mensalidade ARINI — ${sub.property.codigo} ${sub.property.titulo}`.slice(0, 500),
         externalReference: inv.id,
       });
       await admin.from("invoices").update({ gateway_id: cobranca!.id }).eq("id", inv.id);

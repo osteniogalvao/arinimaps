@@ -73,7 +73,7 @@ export async function PATCH(request: Request) {
     if (fim.error) return NextResponse.json({ error: "Encerramento iniciado. Repita para concluir o protocolo." }, { status: 503 });
     if (fim.data === true && b.avisar !== false) {
       const { data: p } = await admin.from("lgpd_requests").select("codigo,email,resposta").eq("id", b.id).single();
-      if (p) await sendEmail(p.email, `Resposta ao pedido ${p.codigo} — Arini Imóveis Brasil`, p.resposta).catch(() => undefined);
+      if (p) await sendEmail(p.email, `Resposta ao pedido ${p.codigo} — ARINI`, p.resposta).catch(() => undefined);
     }
     return NextResponse.json({ ok: true });
   }
@@ -101,7 +101,7 @@ export async function PATCH(request: Request) {
   if (!atualizado) return NextResponse.json({ error: "Este pedido já foi encerrado." }, { status: 409 });
 
   if (encerra && b.avisar !== false) {
-    sendEmail(antes.email, `Resposta ao pedido ${antes.codigo} — Arini Imóveis Brasil`, resposta!).catch(() => undefined);
+    sendEmail(antes.email, `Resposta ao pedido ${antes.codigo} — ARINI`, resposta!).catch(() => undefined);
   }
   await logAudit({
     user_id: a.userId, acao: "lgpd_" + b.status, entidade: "lgpd_requests", entidade_id: b.id,

@@ -6,6 +6,8 @@ import { registrarEventoImovel } from "@/lib/imovel/eventos";
 import { ator } from "@/lib/authz";
 import { consentimentoDaConta } from "@/lib/privacidade/consentimento";
 import { distribuirLead } from "@/lib/central";
+import { cookies } from "next/headers";
+import { ehUuid } from "@/lib/solicitacoes-planos-servidor";
 
 // Formulário público "Tenho interesse" → lead + oportunidade + auditoria + e-mail à Arini.
 export async function POST(request: Request) {
@@ -19,7 +21,8 @@ export async function POST(request: Request) {
   const { codigo, nome, telefone, email, mensagem, consentimento } = body ?? {};
   // campanha que trouxe o lead (Central de marketing): só as chaves UTM, curtas
   const utm: Record<string, string> = {};
-  if (await consentimentoDaConta(a.userId,"rastro") && body?.utm && typeof body.utm === "object") {
+  const aceitaRastro=await consentimentoDaConta(a.userId,"rastro");
+  if (aceitaRastro && body?.utm && typeof body.utm === "object") {
     for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]) {
       const v = (body.utm as Record<string, unknown>)[k];
       if (typeof v === "string" && v.trim()) utm[k] = v.trim().slice(0, 100);
@@ -55,6 +58,14 @@ export async function POST(request: Request) {
     p_email:email?.trim().slice(0,254)||null,p_mensagem:mensagem?.trim().slice(0,2000)||null,p_versao:assinatura("privacidade"),p_utm:utm,
   });
   if (error || !opp) return NextResponse.json({error:error?.code==="P0001" ? error.message : "Não foi possível registrar o interesse."},{status:409});
+  if(aceitaRastro && opp.id){
+    const prefs=await cookies(), visitante=prefs.get("arini_div_visita")?.value;
+    const link=utm.utm_source==="divulgadores"?utm.utm_content:prefs.get("arini_div_link")?.value;
+    if(ehUuid(link)&&ehUuid(visitante)){
+      const atribuicao=await admin.rpc("divulgacao_atribuir",{p_link:link,p_visitante:visitante,p_cliente:a.userId,p_opp:opp.id});
+      if(atribuicao.error) console.error("Falha ao registrar atribuição de divulgação",atribuicao.error.code);
+    }
+  }
   if (!opp.novo) return NextResponse.json({ok:true,oportunidade:opp.codigo});
   void registrarEventoImovel({propertyId:property.id,tipo:"interesse",userId:a.userId,request,detalhe:{codigo:property.codigo}});
   void registrarEventoImovel({propertyId:property.id,tipo:"lead",userId:a.userId,request,detalhe:{lead_id:opp.lead_id,opportunity:opp.codigo}});
@@ -71,7 +82,7 @@ export async function POST(request: Request) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "Arini Imóveis Brasil <leads@arinibrasil.com.br>",
+          from: "ARINI <leads@arinibrasil.com.br>",
           to: [process.env.ARINI_NOTIFY_EMAIL],
           subject: `Novo lead ${opp.codigo} — ${property.titulo}`,
           text: `Novo interesse no imóvel ${property.codigo} (${property.titulo}).\n\nNome: ${nome}\nTelefone: ${telefone || "-"}\nE-mail: ${email || "-"}\nMensagem: ${mensagem || "-"}\n\nAbra o painel: ${process.env.NEXT_PUBLIC_SITE_URL}/admin/leads`,

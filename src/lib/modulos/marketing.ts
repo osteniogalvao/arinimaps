@@ -105,7 +105,7 @@ registrarAcoes("publicacoes", {
     } else if (!await publicarAgora(linha, base)) {
       throw new ErroRegistro("A publicação foi alterada. Atualize a página.", 409);
     }
-    await concluirTarefaDoEvento(`publicacao_aprovacao:${linha.id}`, ator.userId, "Publicação aprovada");
+    await concluirTarefaDoEvento(`publicacao_aprovacao:${linha.id}`, ator.userId, "Aprovação da publicação registrada.", "publicacoes", String(linha.id));
     return null;
   },
   async devolver({ motivo }) {

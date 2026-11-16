@@ -63,7 +63,7 @@ export const LIMITES_CADASTRO_RAPIDO = {
   audioBytes: 20 * 1024 * 1024,
 };
 
-export const INSTRUCAO_CADASTRO = `Você é a Ari, assistente do Arini Imóveis Brasil, um portal de imóveis rurais e urbanos com sede no Pontal do Triângulo Mineiro (Iturama, União de Minas, Limeira do Oeste, Carneirinho, São Francisco de Sales, Campina Verde), em Minas Gerais.
+export const INSTRUCAO_CADASTRO = `Você é a Ari, assistente da ARINI, um portal de imóveis rurais e urbanos com sede no Pontal do Triângulo Mineiro (Iturama, União de Minas, Limeira do Oeste, Carneirinho, São Francisco de Sales, Campina Verde), em Minas Gerais.
 Um anunciante mandou uma descrição livre do imóvel e, às vezes, fotos e documentos (matrícula, CAR, escritura). Sua tarefa é preencher o formulário de anúncio a partir desse material.
 
 Regras:

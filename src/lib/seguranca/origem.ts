@@ -80,7 +80,7 @@ export function conferirOrigem(request: Request, pathname?: string): ResultadoOr
 export function respostaOrigemNegada(motivo: string) {
   return Response.json(
     {
-      error: "Pedido recusado: ele não partiu de uma página do Arini Imóveis Brasil.",
+      error: "Pedido recusado: ele não partiu de uma página da ARINI.",
       motivo,
       solucao: "Recarregue a página do sistema e tente de novo. Se usa uma extensão que altera pedidos, desative-a.",
       codigo: "origem_invalida",

@@ -62,12 +62,14 @@ export function centroGeometria(coords) {
  */
 export function seletorDeMatriz(centroPlanta, global, ajustes) {
   const g = afim(centroPlanta, global);
-  const partes = (ajustes ?? []).map((a) => ({
-    area: a.area,
-    m: compor(g, afim(centroArea(a.area), { dx: a.t.offsetLesteM, dy: a.t.offsetNorteM, rot: a.t.rotacaoGraus, esc: a.t.escala || 1 })),
-  }));
+  const partes = (ajustes ?? []).map(a => {
+    const areas = [a.area, ...(a.areasExtras ?? [])];
+    const centro = a.pivo ?? centroArea(areas.length > 1 ? areas.flat() : a.area);
+    const local = afim(centro, { dx: a.t.offsetLesteM, dy: a.t.offsetNorteM, rot: a.t.rotacaoGraus, esc: a.t.escala || 1 });
+    return { areas, m: compor(g, a.encaixe ? compor(local, a.encaixe) : local) };
+  });
   return (centro) => {
-    if (centro) for (const p of partes) if (pontoNaArea(centro, p.area)) return p.m;
+    if (centro) for (const p of partes) if (p.areas.some(anel => pontoNaArea(centro, anel))) return p.m;
     return g;
   };
 }
@@ -96,7 +98,11 @@ export function assinaturaAjustes(ajustes) {
   if (!ajustes?.length) return "";
   const r = (n) => Math.round(n * 1e4) / 1e4;
   const esc = (a) => (a.t.escala && Math.abs(a.t.escala - 1) > 1e-9 ? `,x${r(a.t.escala)}` : "");
-  return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}${esc(a)}`).join("|");
+  const base = a => {
+    const m = a.encaixe;
+    return m ? `,b${[m.a, m.b, m.d, m.e, m.xoff, m.yoff, ...(a.pivo ?? [])].join(",")}` : "";
+  };
+  return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}${esc(a)}${base(a)}`).join("|");
 }
 
 /** Espelho de assinaturaExclusoes (src/lib/geo/deslocar.ts): linhas apagadas na calibração. */

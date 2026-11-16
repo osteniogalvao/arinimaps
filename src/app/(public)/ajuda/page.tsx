@@ -13,7 +13,7 @@ import BotaoAri from "./BotaoAri";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Central de ajuda",
-  description: "Passo a passo de cada ferramenta do Arini Imóveis Brasil e respostas para as dúvidas mais comuns.",
+  description: "Passo a passo de cada ferramenta da ARINI e respostas para as dúvidas mais comuns.",
 };
 
 /**

@@ -15,6 +15,9 @@ import { ator } from "@/lib/authz";
 export default async function OportunidadeParceiro({ params }: PageProps<"/painel/oportunidades/[id]">) {
   const { id } = await params;
 
+  const a = await ator();
+  if (!a?.parceiroAtivo || !a.partnerId) notFound();
+
   // RLS decide o acesso: se a query autenticada não devolver, é 404
   const supabase = await supabaseServer();
   const { data: opp } = await supabase
@@ -40,8 +43,8 @@ export default async function OportunidadeParceiro({ params }: PageProps<"/paine
   const lead = detalhe?.lead as unknown as { nome: string; telefone: string | null; email: string | null; mensagem: string | null } | null;
   const prop = detalhe?.property as unknown as { codigo: string; titulo: string; valor: number | null; owner_id: string | null; partner_id: string | null } | null;
   // simulador (item 20): quem anuncia contrapropõe como vendedor; o parceiro do comprador propõe
-  const [a, anunciante] = await Promise.all([ator(), nomeAnunciante(prop?.owner_id ?? null, prop?.partner_id ?? null)]);
-  const ladoVendedor = !!a && ((!!a.ownerId && a.ownerId === prop?.owner_id) || (!!a.partnerId && a.partnerId === opp.responsavel_partner_id));
+  const anunciante = await nomeAnunciante(prop?.owner_id ?? null, prop?.partner_id ?? null);
+  const ladoVendedor = a.partnerId === opp.responsavel_partner_id;
   const rodadas = (propostas ?? []).flatMap((p) => {
     const simulacao = simulacaoDaRodada(p.parcelamento);
     return simulacao ? [{ id: p.id, numero_rodada: p.numero_rodada, autor_lado: p.autor_lado, status: p.status, valor: Number(p.valor), simulacao }] : [];

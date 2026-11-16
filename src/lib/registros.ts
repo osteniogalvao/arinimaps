@@ -133,7 +133,7 @@ export const RECURSOS: Recurso[] = [
       { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true },
       { nome: "setor", rotulo: "Setor", tipo: "select", lista: true, opcoes: [
         ["diretoria", "Diretoria"], ["operacoes", "Operações"], ["comercial", "Comercial"], ["financeiro", "Financeiro"],
-        ["juridico", "Jurídico"], ["marketing", "Marketing"], ["cartografia", "Cartografia"], ["suporte", "Suporte"], ["seguranca", "Segurança"]] },
+        ["juridico", "Jurídico"], ["marketing", "Marketing · Produção"], ["marketing_trafego", "Marketing · Tráfego"], ["cartografia", "Cartografia"], ["suporte", "Suporte"], ["seguranca", "Segurança"]] },
       { nome: "ativo", rotulo: "Ativo", tipo: "bool", padrao: true, lista: true },
     ],
   },
@@ -233,7 +233,7 @@ RECURSOS.push(
   {
     id: "campanhas", tabela: "campanhas", titulo: "Campanhas de tráfego", singular: "campanha", eyebrow: "Marketing",
     descricao: "Cada campanha paga com o seu utm_campaign. Os leads que chegam com esse código entram na conta dela em Tráfego e resultados.",
-    ler: ["marketing", "diretoria", "financeiro"], escrever: ["marketing", "diretoria"],
+    ler: ["marketing_trafego", "diretoria", "financeiro"], escrever: ["marketing_trafego", "diretoria"],
     tituloColuna: "nome", autorColuna: "criado_por", ordem: { coluna: "created_at" }, busca: ["nome", "utm_campaign"],
     campos: [
       { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true },

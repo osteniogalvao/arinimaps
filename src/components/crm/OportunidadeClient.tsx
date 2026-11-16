@@ -107,7 +107,7 @@ export default function OportunidadeClient(props: Props) {
               <select className={input} value={o.responsavel_tipo} disabled={ocupado}
                 onChange={(e) => chamar("PATCH", { acao: "encaminhar", responsavel_tipo: e.target.value, responsavel_partner_id: o.responsavel_partner_id, partner_comprador_id: o.partner_comprador_id })}>
                 <option value="arini">Arini atende</option>
-                <option value="proprietario">Proprietário atende</option>
+                {o.responsavel_tipo === "proprietario" && <option disabled value="proprietario">Atribuição anterior ao proprietário</option>}
                 <option value="parceiro">Parceiro atende</option>
               </select>
               <select className={input} value={o.responsavel_partner_id ?? ""} disabled={ocupado}

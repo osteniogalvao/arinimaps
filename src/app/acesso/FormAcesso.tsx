@@ -41,7 +41,7 @@ export default function FormAcesso() {
         </span>
         <h1 className="lp-display mt-5 text-3xl text-texto md:text-[2.25rem]">Acesso restrito</h1>
         <p className="mt-2 text-[15px] leading-relaxed text-texto-2">
-          O Arini Imóveis Brasil está em fase de testes. Digite a senha de acesso para continuar.
+          A ARINI está em fase de testes. Digite a senha de acesso para continuar.
         </p>
       </div>
       <input type="password" autoFocus required autoComplete="current-password"

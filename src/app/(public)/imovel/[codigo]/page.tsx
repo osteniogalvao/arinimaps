@@ -311,9 +311,9 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
               </Secao>
             )}
 
-            {!vendido && imovel.aceita_financiamento && (
+            {!vendido && (!leilao || imovel.aceita_financiamento) && (
               <Link href={`/imovel/${imovel.codigo}/financiamento`} className="lp-btn btn-verde w-full !py-3.5">
-                <Landmark /> Simular financiamento
+                <Landmark /> {imovel.aceita_financiamento ? "Simular financiamento" : "Estimar parcelas da compra"}
               </Link>
             )}
             {imovel.geometry && (
@@ -481,7 +481,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
                     area_ha: imovel.area_m2 ? Math.round(imovel.area_m2 / 100) / 100 : null,
                     perim_m: imovel.perimeter_m ? Math.round(imovel.perimeter_m) : null,
                     municipio: imovel.municipio ? `${imovel.municipio.nome}/${imovel.municipio.uf}` : null,
-                    fonte: "Arini Imóveis Brasil",
+                    fonte: "ARINI",
                   },
                 }}
                 carCodigo={(propId?.car_codigo as string | null) ?? null} />

@@ -113,6 +113,6 @@ ${l.alertas.length ? `<h2>Pontos de atenção</h2><ul>${l.alertas.map((a) => `<l
 <table class="grade"><tr><th>Ato</th><th>Data</th><th>Natureza</th><th>Resumo</th></tr>
 ${l.atos.map((a) => `<tr${a.cancelado_por ? ' class="cancelado"' : ""}><td>${esc(a.numero)}</td><td>${esc(a.data ?? "")}</td><td>${esc(a.natureza)}</td><td>${esc(a.resumo)}${a.cancelado_por ? ` (cancelado por ${esc(a.cancelado_por)})` : ""}</td></tr>`).join("")}
 </table>
-<p class="nota" style="margin-top:18pt">Resumo gerado por inteligência artificial pela Arini Maps. Pode conter erros de leitura, principalmente em certidões manuscritas ou digitalizadas com baixa qualidade. Não substitui a certidão nem a análise de advogado ou corretor.</p>
+<p class="nota" style="margin-top:18pt">Resumo gerado por inteligência artificial pela ARINI. Pode conter erros de leitura, principalmente em certidões manuscritas ou digitalizadas com baixa qualidade. Não substitui a certidão nem a análise de advogado ou corretor.</p>
 </body></html>`;
 }

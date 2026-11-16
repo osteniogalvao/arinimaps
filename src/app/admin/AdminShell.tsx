@@ -103,6 +103,7 @@ const ICONE_SETOR: Record<SetorId | "geral", LucideIcon> = {
   financeiro: Wallet,
   juridico: Scale,
   marketing: Megaphone,
+  marketing_trafego: Megaphone,
   cartografia: IconeMapa,
   suporte: Headset,
   seguranca: ShieldCheck,

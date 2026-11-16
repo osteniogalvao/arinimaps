@@ -1,3 +1,7 @@
+import { raioConsulta } from "@/lib/rural/raios";
+import { tourDaArea } from "@/components/tour/tourDaArea";
+import RelatorioPersonalizado from "@/components/rural/RelatorioPersonalizado";
+import { whatsappConfigurado } from "@/lib/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
@@ -50,7 +54,9 @@ type Car = {
  * cruzamento com as fontes oficiais. Os dados do CAR são públicos e aparecem
  * para qualquer visitante; o cruzamento exige conta e fica registrado.
  */
-export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[cod]">) {
+export default async function ConsultaCar({ params, searchParams }: PageProps<"/consulta/car/[cod]">) {
+  const raioM = raioConsulta((await searchParams).raio_m, 2000);
+  if (raioM === null) notFound();
   const cod = decodeURIComponent((await params).cod);
   const admin = supabaseAdmin();
   const [{ data: carRaw, error }, { data: anuncio }, consulta] = await Promise.all([
@@ -58,7 +64,7 @@ export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[
     admin.from("properties").select("codigo, titulo, status").eq("car_codigo", cod)
       .in("status", ["publicado", "em_negociacao"]).limit(1).maybeSingle(),
     // o próprio CAR fica fora da lista: ele já é o assunto da página
-    carregarConsultaArea(`car:${cod}`, { excluir: ["car"] }),
+    carregarConsultaArea(`car:${cod}`, { excluir: ["car"], raioM }),
   ]);
   const car = carRaw as Car | null;
   if (error) throw new Error("O cadastro rural está indisponível. Tente novamente em instantes.");
@@ -67,6 +73,9 @@ export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[
 
   const area = p.area_ha ? formatArea(Number(p.area_ha) * 10_000, "rural") : "—";
   const situacao = STATUS[p.status ?? ""] ?? p.status ?? "—";
+  const abrir = (await searchParams).tour === "1";
+  const tour = await tourDaArea(consulta, { abrir, geometria: car.geometry, caminho: "/consulta/car/" + encodeURIComponent(p.cod), raio: raioM, titulo: "Área do CAR", area, car:p.cod });
+  if (abrir) return tour;
   const atualizado = p.atualizado_sicar ? new Date(p.atualizado_sicar).toLocaleDateString("pt-BR") : "—";
   const dados = [
     ["Área declarada", area],
@@ -105,6 +114,7 @@ export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[
             className="h-80 lg:h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{area}</p>
+            {tour}
             <dl className="divide-y divide-linha border-y border-linha">
               {dados.map(([r, v]) => (
                 <div key={r} className="flex items-baseline justify-between gap-4 py-3">
@@ -125,9 +135,11 @@ export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[
                 }} />
             </div>
             <div className="border-t border-linha pt-4"><MatriculaSigef cod={p.cod} /></div>
+            <RelatorioPersonalizado caminho={"/api/consulta/car/" + encodeURIComponent(p.cod) + "/relatorio"} raioM={raioM} completo={!!consulta.user && consulta.acesso.recursos.has("relatorio_territorial")} />
+            {whatsappConfigurado() && <p className="text-sm text-texto-2">Para receber esta consulta pelo WhatsApp oficial da ARINI, envie <strong>CONSULTAR CAR {p.cod}</strong>.</p>}
             <div className="flex flex-wrap gap-2 border-t border-linha pt-4">
               {(["simples", ...(consulta.user && consulta.acesso.recursos.has("relatorio_territorial") ? ["completo"] : [])]).map(modelo => {
-                const href = `/api/consulta/car/${encodeURIComponent(p.cod)}/relatorio?modelo=${modelo}`;
+                const href = `/api/consulta/car/${encodeURIComponent(p.cod)}/relatorio?modelo=${modelo}&raio_m=${raioM}`;
                 return <div key={modelo} className="flex items-center gap-3 rounded-xl border border-linha px-4 py-2 text-sm">
                   <strong>Modelo {modelo}</strong>
                   <a className="text-verde underline" href={href+"&visualizar=1"} target="_blank" rel="noreferrer" aria-label={`Ver PDF ${modelo}`}>Ver PDF</a>
@@ -150,7 +162,7 @@ export default async function ConsultaCar({ params }: PageProps<"/consulta/car/[
 
         <SecaoFontesOficiais
           url={`/api/consulta/car/${encodeURIComponent(p.cod)}`}
-          descricao="Cruzamento da área (com 2 km ao redor) com mineração, terras indígenas, desmatamento, queimadas, unidades de conservação, água e energia. Cada resultado mostra o órgão e a data."
+          raioM={raioM} descricao="Consulte mineração, terras indígenas, desmatamento, queimadas, unidades de conservação, água e energia no perímetro ou no entorno selecionado. Cada resultado mostra o órgão e a data."
           logado={!!consulta.user} podeConsultar={consulta.podeConsultar} acesso={consulta.acesso}
           cotaRestante={consulta.cotaRestante} lista={consulta.lista} pendentes={consulta.pendentes}
           jaConsultou={consulta.jaConsultou} />

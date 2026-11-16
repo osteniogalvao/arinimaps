@@ -20,7 +20,7 @@ import type { FonteConsultada } from "@/components/rural/FontesLista";
  *   lote:<id>    lote urbano da planta da cidade (roadmap 2.10)
  *   geo:<sha1>   área desenhada pelo usuário em qualquer ponto do Brasil (5.6)
  *
- * Cada alvo só sabe dizer QUAL é o retângulo; todo o resto é igual e mora aqui:
+ * Cada alvo fornece o polígono de consulta e o seu envelope:
  * conta obrigatória, plano (`consulta_area`) com cota mensal, limite por
  * usuário, registro em `consultas_area_log` (quem, o quê, quando, IP) e cache
  * por fonte em `consultas_area` (só refaz o que venceu ou falhou).
@@ -28,6 +28,11 @@ import type { FonteConsultada } from "@/components/rural/FontesLista";
 
 /** Resultado em cache vale por 7 dias: as bases oficiais não mudam de hora em hora. */
 export const VALIDADE_CONSULTA_MS = 7 * 86_400_000;
+
+/** O mesmo desenho feito por duas contas preserva o mesmo link, mas cada uma tem a sua consulta. */
+export function chaveCacheConsulta(chave: string, titular: string) {
+  return chave.startsWith("geo:") ? "geo:" + createHash("sha256").update(titular + "/" + chave).digest("hex") : chave;
+}
 
 export type AlvoConsulta = {
   chave: string;
@@ -92,8 +97,9 @@ export async function executarConsultaArea(request: Request, alvo: AlvoConsulta)
   // perguntada de novo — o mesmo imóvel/área aberto por várias pessoas no mesmo
   // dia custa aos órgãos uma consulta só
   const admin = supabaseAdmin();
+  const chaveCache = chaveCacheConsulta(alvo.chave, user.id);
   const { data: emCache } = await admin.from("consultas_area")
-    .select("fonte_id, erro, consultado_em, quantidade, incide, resultado").eq("chave", alvo.chave).eq("raio_m", alvo.raioM);
+    .select("fonte_id, erro, consultado_em, quantidade, incide, resultado").eq("chave", chaveCache).eq("raio_m", alvo.raioM);
   const frescas = new Set(
     (emCache ?? [])
       .filter((c) => !c.erro && Date.now() - new Date(c.consultado_em).getTime() < VALIDADE_CONSULTA_MS)
@@ -141,7 +147,7 @@ export async function executarConsultaArea(request: Request, alvo: AlvoConsulta)
       // fonte que caiu agora não apaga a resposta válida de antes (ver linhaParaGravar)
       const linha = linhaParaGravar(r, anteriores.get(r.fonte_id) as LinhaConsulta | undefined);
       await admin.from("consultas_area").upsert({
-        chave: alvo.chave, fonte_id: r.fonte_id, raio_m: alvo.raioM, ...linha,
+        chave: chaveCache, fonte_id: r.fonte_id, raio_m: alvo.raioM, ...linha,
       }, { onConflict: "chave,fonte_id,raio_m" });
     }
     return respostaConsulta(alvo.chave, resultados, frescas.size);
@@ -164,7 +170,7 @@ function respostaConsulta(chave: string, resultados: ResultadoFonte[], doCache: 
  * O que a página de uma consulta precisa mostrar: fontes (com o resultado em
  * cache, se houver), quem está olhando e o que o plano dele permite.
  */
-export async function carregarConsultaArea(chave: string, opcoes: { excluir?: string[]; relatorio?: boolean } = {}) {
+export async function carregarConsultaArea(chave: string, opcoes: { excluir?: string[]; relatorio?: boolean; raioM: number }) {
   const admin = supabaseAdmin();
   const [{ data: fontes }, user, { userId, acesso }] = await Promise.all([
     admin.from("fontes_externas").select("id, nome, orgao, prioridade, ativa, tipo, classificacao, situacao, ficha").order("prioridade"),
@@ -175,7 +181,8 @@ export async function carregarConsultaArea(chave: string, opcoes: { excluir?: st
   const podeConsultar = acesso.recursos.has("consulta_area");
   const podeLerResultados = opcoes.relatorio ? acesso.recursos.has("relatorio_territorial") : podeConsultar;
   const consultas = user && podeLerResultados
-    ? (await admin.from("consultas_area").select("fonte_id, quantidade, raio_m, erro, consultado_em, resultado").eq("chave", chave)).data
+    ? (await admin.from("consultas_area").select("fonte_id, quantidade, raio_m, erro, consultado_em, resultado")
+      .eq("chave", chaveCacheConsulta(chave, user.id)).eq("raio_m", opcoes.raioM)).data
     : [];
   const limiteMes = acesso.cotas.consultas_area_mes;
   const cotaRestante = podeConsultar && userId && limiteMes != null && !acesso.equipe

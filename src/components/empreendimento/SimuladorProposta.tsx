@@ -328,7 +328,7 @@ export default function SimuladorProposta(props: Props) {
       <div ref={docRef} hidden>
         <div className="doc">
           <header className="cab">
-            <span className="marca"><MarcaArini titulo="Arini Imóveis Brasil" /></span>
+            <span className="marca"><MarcaArini titulo="ARINI" /></span>
             {props.anunciante && <span className="anunciante"><small>Empreendedor</small><strong>{props.anunciante}</strong></span>}
           </header>
           <h1>Proposta de compra</h1>
@@ -357,7 +357,7 @@ export default function SimuladorProposta(props: Props) {
             </table>
           )}
           <p className="rodape">
-            Simulação emitida em {dataBR(hoje)} pela plataforma Arini Imóveis Brasil. Valores estimados: a correção por índice
+            Simulação emitida em {dataBR(hoje)} pela plataforma ARINI. Valores estimados: a correção por índice
             usa a taxa informada e pode variar. Esta proposta só vale depois de aprovada pelo empreendedor e formalizada em contrato.
           </p>
           <div className="assin"><span>Proponente</span><span>Empreendedor</span></div>

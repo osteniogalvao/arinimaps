@@ -27,7 +27,7 @@ export function emailHtml(assunto: string, texto: string): string {
 <tr><td style="padding:22px 32px 6px 32px;font-size:20px;line-height:1.25;font-weight:700;color:#124431;text-transform:uppercase;letter-spacing:0.02em;">${esc(assunto)}</td></tr>
 <tr><td style="padding:8px 32px 28px 32px;font-size:15px;line-height:1.65;color:#0E2A20;">${corpo}</td></tr>
 <tr><td style="background:#0A2219;border-radius:0 0 15px 15px;padding:18px 32px;font-size:11px;line-height:1.5;color:#B3C3B8;letter-spacing:0.04em;">
-<span style="color:#D9BD6F;">&#9679;</span>&nbsp; Arini Imóveis Brasil · Inteligência territorial &nbsp;·&nbsp; <a href="${site}" style="color:#F2F2EC;text-decoration:none;">${site.replace(/^https?:\/\//, "")}</a>
+<span style="color:#D9BD6F;">&#9679;</span>&nbsp; ARINI · Inteligência territorial &nbsp;·&nbsp; <a href="${site}" style="color:#F2F2EC;text-decoration:none;">${site.replace(/^https?:\/\//, "")}</a>
 </td></tr>
 </table></td></tr></table></body></html>`;
 }
@@ -45,7 +45,7 @@ export async function enviarEmailComStatus(to: string | null | undefined, subjec
       },
       signal: AbortSignal.timeout(12_000),
       body: JSON.stringify({
-        from: process.env.RESEND_FROM ?? "Arini Imóveis Brasil <naoresponda@arinibrasil.com.br>",
+        from: process.env.RESEND_FROM ?? "ARINI <naoresponda@arinibrasil.com.br>",
         to: [to],
         subject,
         text,

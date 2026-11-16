@@ -36,7 +36,7 @@ test("download privado exige titular, perfil e registro exato antes da assinatur
   });
   const gateway=carregar("lib/seguranca/documentos",{"@/lib/supabase/admin":{supabaseAdmin:()=>db},
     "@/lib/imovel/verificacao":{cofreAprovado:async (u,id)=>u===dono && id===imovel},
-    "@/lib/authz":{},"./limite":{},"@/lib/cofre":cofre});
+    "@/lib/authz":{temSetor:(a,...setores)=>!!a?.ehArini&&setores.some(s=>a.setores?.includes(s))},"./limite":{},"@/lib/cofre":cofre});
   assert.equal(await gateway.resolverArquivo({...tit,userId:outro},caminho),null);
   assert.equal(await gateway.resolverArquivo({...tit,role:"admin_central"},caminho),null);
   assert.equal(lidos,0);

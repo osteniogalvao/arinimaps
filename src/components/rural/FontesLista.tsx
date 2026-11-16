@@ -17,6 +17,7 @@ import { LinhaOrigem, SeloClassificacao, SeloSituacao, type OrigemItem } from ".
 import { Etiqueta } from "@/components/ui/Pagina";
 import { CircleCheck, CircleDashed, Database, TriangleAlert } from "lucide-react";
 import { detalhesRegistro } from "@/lib/rural/detalhes";
+import { alcanceDaFonte } from "@/lib/rural/raios";
 
 export type ItemFonte = {
   titulo: string; detalhe?: string;
@@ -37,7 +38,7 @@ export type FonteConsultada = {
   } | null;
 };
 
-export default function FontesLista({ fontes, alvo = "a área" }: { fontes: FonteConsultada[]; alvo?: string }) {
+export default function FontesLista({ fontes }: { fontes: FonteConsultada[] }) {
   return (
     <div className="grid gap-4">
       {fontes.map((f) => {
@@ -121,7 +122,7 @@ export default function FontesLista({ fontes, alvo = "a área" }: { fontes: Font
                   consultadoEm={c.consultado_em} atualizacao={f.atualizacao} />
                 {!c.erro && (
                   <p className="text-[11px] text-texto-2">
-                    {c.raio_m ? `Raio de ${c.raio_m / 1000} km ao redor de ${alvo}` : `Sobre ${alvo}`}
+                    {alcanceDaFonte(f.id, c.raio_m)}
                   </p>
                 )}
               </div>

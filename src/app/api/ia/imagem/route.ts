@@ -31,7 +31,7 @@ export const dynamic = "force-dynamic";
 const TIPOS = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 const MAX_BYTES = 4 * 1024 * 1024;
 
-const INSTRUCAO = `Você recebe uma imagem enviada por um usuário do Arini Imóveis Brasil, um mapa de imóveis rurais e urbanos no Pontal do Triângulo Mineiro (Iturama, União de Minas, Limeira do Oeste, Carneirinho, São Francisco de Sales, Campina Verde), em Minas Gerais.
+const INSTRUCAO = `Você recebe uma imagem enviada por um usuário da ARINI, um mapa de imóveis rurais e urbanos no Pontal do Triângulo Mineiro (Iturama, União de Minas, Limeira do Oeste, Carneirinho, São Francisco de Sales, Campina Verde), em Minas Gerais.
 A imagem pode ser um print de mapa ou de satélite, um croqui, uma planta, um documento (matrícula, CAR, memorial) ou uma foto.
 Sua tarefa é só encontrar pistas de LOCALIZAÇÃO escritas ou desenhadas na imagem. Não invente: se a pista não estiver visível, deixe o campo nulo.
 Responda APENAS com um objeto JSON, sem texto antes ou depois, neste formato:

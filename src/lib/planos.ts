@@ -21,7 +21,7 @@ import { podeAnunciar } from "./perfis";
 
 export type RecursoId =
   | "mapa" | "ficha_basica" | "interesse" | "camada_car" | "camada_lotes" | "ferramenta_medir"
-  | "solicitacao_cartografica" | "calculadora_insumos"
+  | "solicitacao_cartografica" | "calculadora_insumos" | "comparador_insumos"
   | "camadas_oficiais" | "consulta_area" | "relatorio_territorial" | "ferramenta_kml" | "ferramenta_exportar"
   | "historico_imovel" | "pre_avaliacao" | "chat_ia" | "monitoramento_territorial"
   | "anunciar" | "painel_parceiro" | "oportunidades" | "crm_privado" | "crm_setorial"
@@ -38,6 +38,7 @@ export type Recurso = {
 
 export const RECURSOS: Recurso[] = [
   { id: "monitoramento_territorial", nome: "Monitoramento territorial", descricao: "Acompanhar ocorrências de fontes públicas nas áreas autorizadas da conta.", grupo: "profissional" },
+  { id: "comparador_insumos", nome: "Comparador de insumos", descricao: "Registrar itens de NF-e e comparar preços por produto e unidade.", grupo: "ferramentas" },
   { id: "calculadora_insumos", nome: "Calculadora de insumos", descricao: "Calcular quantidades e custos por área em hectares ou alqueires.", grupo: "ferramentas" },
   // consulta básica
   { id: "mapa", nome: "Mapa e imóveis publicados", descricao: "Navegar no mapa regional e ver os anúncios aprovados.", grupo: "consulta" },
@@ -89,7 +90,7 @@ export const COTAS: { id: string; nome: string; ajuda: string }[] = [
 
 export type NichoId =
   | "consulta" | "comprador_investidor" | "proprietario" | "produtor_rural" | "corretor_imobiliaria"
-  | "leiloeiro" | "engenheiro" | "empresa_holding" | "ente_publico" | "franqueado" | "correspondente_bancario";
+  | "leiloeiro" | "engenheiro" | "empresa_holding" | "ente_publico" | "franqueado" | "correspondente_bancario" | "divulgador";
 
 export type Nicho = {
   id: NichoId;
@@ -116,6 +117,7 @@ export const NICHOS: Nicho[] = [
   { id: "ente_publico", nome: "Prefeitura / ente público", descricao: "Gestão urbana e parcerias.", papeis: ["consulta"], escolhivel: false, reservado: true },
   { id: "correspondente_bancario", nome: "Correspondente bancário", descricao: "Candidatura à vaga de atendimento de um banco na região.", papeis: ["consulta"], escolhivel: true },
   { id: "franqueado", nome: "Franqueado", descricao: "Opera o território de uma franquia da Arini.", papeis: ["franqueado"], escolhivel: false },
+  { id: "divulgador", nome: "Divulgador", descricao: "Participa do piloto de divulgação de imóveis da ARINI.", papeis: ["consulta"], escolhivel: false },
 ];
 
 export const NICHO_IDS = NICHOS.map((n) => n.id);
@@ -165,6 +167,7 @@ export const PERSONAS_PLANOS: PersonaPlano[] = [
   { id: "empresa", nome: "Sou empresa ou incorporadora", chamada: "Consulte as opções para a equipe e os empreendimentos.", nichos: ["empresa_holding"], icone: "predio" },
   { id: "anunciar", nome: "Quero vender meu imóvel", chamada: "Anuncie seu imóvel e acompanhe a venda no painel do proprietário.", nichos: ["proprietario"], papel: "proprietario", icone: "casa" },
   { id: "correspondente", nome: "Sou correspondente bancário", chamada: "Consulte as vagas por banco e região e acompanhe os financiamentos.", nichos: ["correspondente_bancario"], papel: "consulta", icone: "governo" },
+  { id: "divulgador", nome: "Sou divulgador", chamada: "Inscreva-se para divulgar imóveis autorizados pela ARINI.", nichos: ["divulgador"], icone: "casa" },
 ];
 
 // URLs de planos compartilhadas antes da separação das personas.
@@ -225,6 +228,9 @@ export const ACESSO_VISITANTE: Acesso = {
 /** Monta o acesso a partir do papel e do plano carregado do banco. */
 export function montarAcesso(role: string | null | undefined, plano: Plano | null, nicho: string | null, validoAte: string | null): Acesso {
   const equipe = !!role && PAPEIS_EQUIPE_IDS.includes(role);
+  if (!equipe && nicho === "divulgador") {
+    return { ...ACESSO_VISITANTE, nicho, recursos: new Set(["mapa", "ficha_basica", "camada_car", "camada_lotes", "camadas_oficiais", "ferramenta_medir"]) };
+  }
   const disponiveis = RECURSOS.filter((recurso) => {
     if (recurso.id === "monitoramento_territorial") return nicho === "proprietario" || nicho === "produtor_rural";
     if (recurso.reservado) return false;

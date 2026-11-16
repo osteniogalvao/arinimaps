@@ -181,6 +181,6 @@ ${tabela}
 <p style="margin-top:28pt">______________________, ${hoje}.</p>
 <p style="margin-top:36pt">_____________________________________<br>Responsável técnico<br>CREA/CFT nº ______________ &nbsp; ART/TRT nº ______________</p>
 
-<p class="nota" style="margin-top:24pt">Rascunho gerado pela Arini Maps a partir da divisa disponível na plataforma. Confira em campo e com os documentos do imóvel. Para registro em cartório ou certificação no SIGEF, o memorial precisa ser revisado e assinado por profissional habilitado, com os confrontantes preenchidos.</p>
+<p class="nota" style="margin-top:24pt">Rascunho gerado pela ARINI a partir da divisa disponível na plataforma. Confira em campo e com os documentos do imóvel. Para registro em cartório ou certificação no SIGEF, o memorial precisa ser revisado e assinado por profissional habilitado, com os confrontantes preenchidos.</p>
 </body></html>`;
 }

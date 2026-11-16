@@ -79,11 +79,11 @@ export async function POST(request: Request) {
   // proprietário vende só com exclusividade (revisão do Carlos, 29/10: saiu a
   // autorização sem exclusividade) e aceita o termo.
   // A equipe Arini cadastra sem aceite eletrônico (contrato assinado vai em Documentos)
-  // e ainda pode registrar uma autorização simples.
+  // e Operações confere a exclusividade assinada antes da aprovação.
   const equipe = conta.ehArini;
   const condicao: "autorizacao" | "exclusividade" | "parceiro" = partner_id
     ? "parceiro"
-    : equipe && dados.condicao !== "exclusividade" ? "autorizacao" : "exclusividade";
+    : equipe && dados.modalidade === "leilao" ? "autorizacao" : "exclusividade";
   const meses = condicao === "exclusividade" && (dados.prazo_exclusividade_meses === 6 || dados.prazo_exclusividade_meses === 12)
     ? dados.prazo_exclusividade_meses as 6 | 12 : null;
   if (condicao === "exclusividade" && !meses) {
@@ -159,9 +159,9 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  if (partner_id && modalidade === "venda" && !docs.some((d) => d.tipo === "autorizacao")) {
+  if ((partner_id || equipe) && modalidade === "venda" && !docs.some((d) => d.tipo === "autorizacao")) {
     return NextResponse.json(
-      { error: "Imóvel de parceiro: envie a autorização assinada pelo proprietário. Para a Rede de Corretores, anexe o Termo de Exclusividade." },
+      { error: "Envie o Termo de Exclusividade assinado pelo proprietário para esta venda." },
       { status: 400 }
     );
   }
@@ -178,7 +178,8 @@ export async function POST(request: Request) {
     fotosOk.push(c.arquivo);
   }
   const docsOk: { tipo: string; nome: string; arquivo: ArquivoConferido }[] = [];
-  for (const { tipo, arquivo } of docs.slice(0, 30)) {
+  if (docs.length > 30) return NextResponse.json({ error: "Envie no máximo 30 documentos por cadastro." }, { status: 400 });
+  for (const { tipo, arquivo } of docs) {
     const c = await conferirArquivo(arquivo, ACEITA.documento, 25 * 1024 * 1024);
     if (!c.ok) return NextResponse.json({ error: c.erro }, { status: 400 });
     docsOk.push({ tipo, nome: arquivo.name, arquivo: c.arquivo });
@@ -468,6 +469,7 @@ export async function POST(request: Request) {
 
   // documentos de comprovação → bucket PRIVADO (docs), conferidos pela Arini
   const docsFalharam: string[] = [];
+  const tiposSalvos = new Set<string>();
   const arquivosPrivados = selfiePath ? [selfiePath] : [];
   for (const { tipo, nome, arquivo } of docsOk) {
     const path = `imoveis/${property.id}/${tipo}-${crypto.randomUUID()}.${arquivo.ext}`;
@@ -479,8 +481,11 @@ export async function POST(request: Request) {
       property_id: property.id, tipo, storage_path: path, nome_arquivo: nome,
     });
     if (docErro) docsFalharam.push(nome);
+    else tiposSalvos.add(tipo);
   }
-  if (!equipe && docsFalharam.length === docsOk.length) {
+  if ((modalidade === "venda" && ((!equipe && !tiposSalvos.has("matricula")) ||
+      ((equipe || partner_id) && !tiposSalvos.has("autorizacao")))) ||
+      (!equipe && modalidade === "leilao" && !tiposSalvos.has("autorizacao") && !tiposSalvos.has("edital"))) {
     // nenhum documento subiu: sem comprovação o imóvel não pode ir para análise
     await admin.from("properties").delete().eq("id", property.id);
     await Promise.all([

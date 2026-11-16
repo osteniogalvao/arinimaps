@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { assinatura, linkTermo } from "@/lib/juridico/versoes";
 import Link from "next/link";
-type Entrada = {id:string;nome:string;chamada:string;nicho:string};
+type Entrada = {id:string;nome:string;chamada:string;nicho:string;acaoPiloto?:string};
 
 export default function Escolha({atual,nicho,anteriores,entradas}:{atual:string|null;nicho:string|null;anteriores:string[];entradas:Entrada[]}) {
   const [selecionado,setSelecionado] = useState("");
@@ -21,7 +21,9 @@ export default function Escolha({atual,nicho,anteriores,entradas}:{atual:string|
     } catch (e) {setErro(e instanceof Error?e.message:"Tente novamente.");setEnviando(false);}
   }
   return <><div className="grid gap-3 sm:grid-cols-2">
-    {entradas.map(x=>["instituicao","empresa"].includes(x.id) && x.nicho!==nicho && !anteriores.includes(x.nicho)
+    {entradas.map(x=>x.id==="divulgador"
+      ? <Link key={x.id} href="/divulgador" className="rounded-xl border border-linha bg-superficie p-4"><b>{x.nome}</b><span className="block text-sm text-texto-2">{x.acaoPiloto}</span></Link>
+      : ["instituicao","empresa"].includes(x.id) && x.nicho!==nicho && !anteriores.includes(x.nicho)
       ? <Link key={x.id} href={"/planos?perfil="+x.id} className="rounded-xl border border-linha bg-superficie p-4"><b>{x.nome}</b><span className="block text-sm text-texto-2">Solicitar acesso institucional</span></Link>
       : <button type="button" key={x.id} aria-pressed={x.id===selecionado} onClick={()=>{setSelecionado(x.id);setErro("");setAceite(false);}}
         className={"rounded-xl border border-linha p-4 text-left "+(selecionado===x.id?"bg-[#124431] text-white":"bg-superficie")}>

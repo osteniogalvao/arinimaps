@@ -21,6 +21,7 @@ import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
 import { PainelCamadas, Legenda, VIDRO, BotaoFechar, type GrupoCamadas } from "@/components/map/UiMapa";
 import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
+import CompararParcelasRurais from "@/components/map/CompararParcelasRurais";
 import BuscaUrbana from "@/components/map/BuscaUrbana";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
@@ -548,6 +549,7 @@ export default function MapaRegional({
   // busca por imagem (Revisão do Carlos, 29/10)
   const buscaImagem = painelMapa === "imagem";
   const buscaInputRef = useRef<HTMLInputElement>(null);
+  const buscaNomeRuralRef = useRef<HTMLButtonElement>(null);
   const buscaUrbanaRef = useRef<HTMLButtonElement>(null);
   const [avisoPlano, setAvisoPlano] = useState("");
   const imagemAnoRef = useRef<string | null>(null);
@@ -1470,6 +1472,7 @@ export default function MapaRegional({
     else if (b.tipo === "sigef") escolherSugestao(() => void abrirSigef(b.campo, b.valor));
     else if (municipioSugerido) escolherSugestao(irParaMunicipio);
     else if (municipiosBrasil[0] && norm(municipiosBrasil[0].nome).includes(norm(busca.trim()))) { const cod = municipiosBrasil[0].cod; escolherSugestao(() => void irParaMunicipioIbge(cod)); }
+    else if (/^(?:fazenda|sitio|chacara|gleba|estancia|rancho)\b/.test(norm(busca))) buscaNomeRuralRef.current?.click();
     else buscaUrbanaRef.current?.click();
   };
 
@@ -1559,7 +1562,7 @@ export default function MapaRegional({
         "absolute lg:relative z-20 h-full bg-superficie border-r border-linha transition-all duration-300 flex flex-col " +
         (painelAberto ? "w-[85%] sm:w-[320px]" : "w-0 overflow-hidden")
       }>
-        <div className="p-4 space-y-3 border-b border-linha">
+        <div className="max-h-[78dvh] overflow-y-auto p-4 space-y-3 border-b border-linha">
           <form role="search" className="relative" onSubmit={(e) => { e.preventDefault(); confirmarBusca(); }}>
             <input ref={buscaInputRef} data-tour="busca" value={busca} onChange={(e) => { setBusca(e.target.value); setBuscaAviso(""); }}
               aria-label="Buscar imóvel, rua, bairro, quadra, lote, município, CAR ou coordenada"
@@ -1647,6 +1650,10 @@ export default function MapaRegional({
             <BuscaUrbana botao={buscaUrbanaRef} key={busca.trim()} termo={busca.trim()} centro={() => mapRef.current?.getCenter()}
               abrir={(lng,lat) => escolherSugestao(() => irParaPonto(lat,lng), true)} />
           )}
+          <CompararParcelasRurais mapa={mapaPronto} botao={buscaNomeRuralRef} verMapa={() => setPainelAberto(false)}
+            termo={buscaLida.tipo === "texto" ? busca.trim() : ""}
+            municipios={buscaLida.tipo === "texto" && busca.trim().length >= 3 ?
+              municipiosBrasil.filter(m=>norm(m.nome).includes(norm(busca.trim()))).slice(0,3) : []} />
           {buscaAviso && <p className="text-xs text-texto-2" aria-live="polite">{buscaAviso}</p>}
 
           <div className="flex gap-1.5 flex-wrap">

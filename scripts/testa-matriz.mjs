@@ -88,10 +88,12 @@ try {
   await p.screenshot({ path: ".capturas/matriz.png", fullPage: true });
 
   // ---------- tarefa ----------
-  const t1 = await api(p, "/api/admin/tarefas", { setor: "juridico", titulo: "TESTE — revisar termo de parceria", prioridade: "alta", prazo: "2026-10-15" });
+  const t1 = await api(p, "/api/admin/tarefas", { setor: "juridico", titulo: "TESTE — revisar termo de parceria", criterio_conclusao: "Anexar a revisão do termo", prioridade: "alta", prazo: "2026-10-15" });
   ok("cria tarefa no Jurídico", t1.status === 200, t1.corpo);
   if (t1.json?.id) criados.tarefas.push(t1.json.id);
-  const t2 = await api(p, "/api/admin/tarefas", { id: t1.json?.id, status: "concluida" }, "PATCH");
+  const semProva = await api(p, "/api/admin/tarefas", { id: t1.json?.id, status: "concluida" }, "PATCH");
+  ok("recusa conclusão sem evidência", semProva.status === 400, semProva.corpo);
+  const t2 = await api(p, "/api/admin/tarefas", { id: t1.json?.id, status: "concluida", evidencia: "Versão revisada e conferida pela Matriz." }, "PATCH");
   ok("conclui a tarefa", t2.status === 200, t2.corpo);
 
   // ---------- suporte ----------
@@ -139,7 +141,7 @@ try {
   ok("Financeiro devolve para a Matriz", q.url().includes("sem_acesso=financeiro"), q.url());
   const fq = await q.evaluate(async () => (await fetch("/api/admin/financeiro/exportar")).status);
   ok("rota do Financeiro recusa (403)", fq === 403, String(fq));
-  const tq = await api(q, "/api/admin/tarefas", { setor: "juridico", titulo: "não deveria entrar" });
+  const tq = await api(q, "/api/admin/tarefas", { setor: "juridico", titulo: "não deveria entrar", criterio_conclusao: "Confirmar restrição" });
   ok("não cria tarefa em setor alheio (403)", tq.status === 403, tq.corpo);
   await q.goto(`${BASE}/admin`, { waitUntil: "networkidle2" });
   const menu = await q.evaluate(() => [...new Set([...document.querySelectorAll("aside button[aria-expanded] > span.flex-1")].map((e) => e.textContent.trim()))]);

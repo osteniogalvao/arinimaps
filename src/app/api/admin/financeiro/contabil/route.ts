@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { lerEmLotes } from "@/lib/supabase/lotes";
 import { ator, temSetor } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
+import { textoCsv } from "@/lib/seguranca/csv";
 
 /**
  * Arquivo do contador: lançamentos do período em CSV (ponto e vírgula, vírgula
@@ -25,14 +26,13 @@ export async function GET(request: Request) {
     .gte("data", de).lte("data", ate).order("data").order("id").range(inicio, fim), { maximo: Infinity });
   if (error) return NextResponse.json({ error: "Não foi possível ler todos os lançamentos do período." }, { status: 503 });
 
-  const cel = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const linhas = [["Data", "Histórico", "Conta", "Nome da conta", "Centro de custo", "Natureza", "Valor", "Origem", "Estornado"].join(";")];
   for (const l of data) {
     const conta = l.conta as unknown as { codigo: string; nome: string } | null;
     const centro = l.centro as unknown as { nome: string } | null;
     linhas.push([
-      new Date(l.data + "T12:00:00").toLocaleDateString("pt-BR"), cel(l.historico), conta?.codigo ?? "", cel(conta?.nome), cel(centro?.nome),
-      l.natureza === "entrada" ? "Entrada" : "Saída", Number(l.valor).toFixed(2).replace(".", ","), l.origem, l.estornado ? "Sim" : "Não",
+      new Date(l.data + "T12:00:00").toLocaleDateString("pt-BR"), textoCsv(l.historico), textoCsv(conta?.codigo), textoCsv(conta?.nome), textoCsv(centro?.nome),
+      l.natureza === "entrada" ? "Entrada" : "Saída", Number(l.valor).toFixed(2).replace(".", ","), textoCsv(l.origem), l.estornado ? "Sim" : "Não",
     ].join(";"));
   }
   await logAudit({ user_id: a!.userId, acao: "contabil_exportado", entidade: "lancamentos_contabeis", dados_depois: { de, ate, linhas: data.length } });

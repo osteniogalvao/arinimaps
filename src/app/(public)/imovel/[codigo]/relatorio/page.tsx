@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, formatArea, plural } from "@/lib/format";
 import { lerConfiguracoes, texto } from "@/lib/settings";
+import { alcanceDaFonte } from "@/lib/rural/raios";
 import BotoesRelatorio from "./BotoesRelatorio";
 import EscolhaSecoes, { type OpcaoSecao } from "./EscolhaSecoes";
 import { currentUser } from "@/lib/supabase/server";
@@ -206,7 +207,7 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
         {c && !c.erro && (
           <p className="mt-3 text-[11px] text-texto-2 print:text-gray-500">
             Consultado em {new Date(c.consultado_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
-            {c.raio_m ? ` · raio de ${c.raio_m / 1000} km ao redor do imóvel` : " · sobre o imóvel"}
+            {` · ${alcanceDaFonte(f.id, c.raio_m)}`}
           </p>
         )}
       </div>
@@ -241,7 +242,7 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
           <MarcaArini variante="radar" titulo=""
             className="absolute right-0 top-0 w-9 print:w-7" />
           <p className="lp-eyebrow !text-[0.7rem] print:!text-[9px]">
-            {texto(cfg, "nome_sistema", "Arini Imóveis Brasil")} · {imovel.codigo}
+            {texto(cfg, "nome_sistema", "ARINI")} · {imovel.codigo}
           </p>
           <h1 className="lp-display mt-4 max-w-[90%] text-5xl text-verde md:text-[5rem] print:mt-2 print:text-5xl print:text-black">
             Relatório territorial
@@ -430,7 +431,7 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
             <p>
               <strong className="text-texto print:text-black">Origem dos dados.</strong> As incidências vêm dos
               órgãos citados, consultadas na data indicada em cada bloco. Área, perímetro e distâncias são
-              cálculos do {texto(cfg, "nome_sistema", "Arini Imóveis Brasil")} sobre a geometria cadastrada do imóvel.
+              cálculos do {texto(cfg, "nome_sistema", "ARINI")} sobre a geometria cadastrada do imóvel.
             </p>
             {escolha && (
               <p>Versão básica: as seções não escolhidas foram deixadas de fora a pedido de quem gerou o relatório.</p>

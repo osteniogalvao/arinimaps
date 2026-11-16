@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ator, temSetor } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
+import { textoCsv } from "@/lib/seguranca/csv";
 import { JORNADA_PADRAO, horaSP, minutosEmHoras, montarEspelho, type Jornada, type Marcacao } from "@/lib/ponto";
 
 /**
@@ -27,7 +28,6 @@ export async function GET(request: Request) {
       .gte("marcado_em", inicio.toISOString()).lt("marcado_em", fim.toISOString()).order("marcado_em"),
     admin.from("ponto_ajustes").select("tipo, marcacao_id, data").eq("user_id", alvo).eq("status", "aprovado"),
   ]);
-  const cel = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   let linhas: string[];
   if (u.searchParams.get("formato") === "marcacoes") {
     linhas = ["NSR;Data;Hora;Origem;Hash", ...((marcacoes ?? []) as Marcacao[]).map((m) =>
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     const desc = new Set((ajustes ?? []).filter((x) => x.tipo === "desconsiderar").map((x) => String(x.marcacao_id)));
     const abonos = new Set((ajustes ?? []).filter((x) => x.tipo === "abono").map((x) => String(x.data)));
     const dias = montarEspelho(mes, (marcacoes ?? []) as Marcacao[], (jornada as Jornada | null) ?? JORNADA_PADRAO, desc, abonos).reverse();
-    linhas = [`Espelho de ponto;${cel(perfil?.nome)};${mes}`, "Dia;Marcações;Trabalhado;Previsto;Saldo;Observação"];
+    linhas = [`Espelho de ponto;${textoCsv(perfil?.nome)};${mes}`, "Dia;Marcações;Trabalhado;Previsto;Saldo;Observação"];
     for (const d of dias) {
       linhas.push([new Date(`${d.data}T12:00:00`).toLocaleDateString("pt-BR"), d.marcacoes.map((m) => horaSP(m.marcado_em)).join(" "),
         minutosEmHoras(d.trabalhado), minutosEmHoras(d.previsto), minutosEmHoras(d.saldo),

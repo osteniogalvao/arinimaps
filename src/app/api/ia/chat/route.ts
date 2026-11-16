@@ -145,7 +145,7 @@ export async function POST(request: Request) {
   // ---------- sem streaming
   if (new URL(request.url).searchParams.get("stream") === "0") {
     try {
-      const r = await responder({ historico, pergunta, modelo, consultaTerritorial, podeRegistrarLacuna: guardar, signal: request.signal });
+      const r = await responder({ historico, pergunta, modelo, titular:userId, consultaTerritorial, podeRegistrarLacuna: guardar, signal: request.signal });
       await gravar(r, null);
       return NextResponse.json({ conversaId, texto: r.texto, fontes: r.fontes, restante });
     } catch (e) {
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
       enviar({ tipo: "inicio", conversaId, restante });
       try {
         const r = await responder({
-          historico, pergunta, modelo, consultaTerritorial, podeRegistrarLacuna: guardar, signal: request.signal,
+          historico, pergunta, modelo, titular:userId, consultaTerritorial, podeRegistrarLacuna: guardar, signal: request.signal,
           aoEvento: (e: EventoAssistente) => enviar(e),
         });
         await gravar(r, null);
