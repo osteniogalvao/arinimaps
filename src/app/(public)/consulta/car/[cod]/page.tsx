@@ -19,6 +19,7 @@ import bbox from "@turf/bbox";
 import EnviarWhatsApp from "@/components/compartilhar/EnviarWhatsApp";
 import BotaoExportarSig from "@/components/compartilhar/BotaoExportarSig";
 import { OG_IMAGEM_PADRAO, OG_NOME_SITE } from "@/lib/compartilhar";
+import { formatarHa, quadroAmbiental, type LinhaQuadro } from "@/lib/geo/ambienteCar";
 
 export const dynamic = "force-dynamic";
 /** Prévia do link (WhatsApp): área e município do CAR. Só lê as propriedades, sem a divisa. */
@@ -79,6 +80,21 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
   const tour = await tourDaArea(consulta, { abrir, geometria: car.geometry, caminho: "/consulta/car/" + encodeURIComponent(p.cod), raio: raioM, titulo: "Área do CAR", area, car:p.cod });
   if (abrir) return tour;
   const atualizado = p.atualizado_sicar ? new Date(p.atualizado_sicar).toLocaleDateString("pt-BR") : "—";
+  // 17/11 (áudio do Carlos, 11h49): a ficha mostra quanto é APP e reserva, em hectares
+  let ambiente: LinhaQuadro[] = [];
+  if (consulta.acesso.recursos.has("camadas_oficiais")) {
+    const { data: amb } = await admin.rpc("fn_ambiente_por_car", { p_cod: p.cod });
+    ambiente = quadroAmbiental((amb?.features ?? []) as GeoJSON.Feature[], p.area_ha != null ? Number(p.area_ha) : null);
+  }
+  const destaque = (tema: string) => ambiente.find((l) => l.tema === tema);
+  const pct = (l?: LinhaQuadro) => (l?.pct != null ? ` · ${l.pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%` : "");
+  const numeros = [
+    { rotulo: "Área declarada", valor: area, extra: "", cor: "#34DB1E" },
+    ...(["app", "reserva_legal", "vegetacao_nativa"] as const).flatMap((t) => {
+      const l = destaque(t);
+      return l ? [{ rotulo: l.nome, valor: formatarHa(l.ha), extra: pct(l).replace(" · ", ""), cor: l.cor }] : [];
+    }),
+  ];
   const dados = [
     ["Área declarada", area],
     ["Município", p.municipio ?? "—"],
@@ -112,10 +128,18 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
         <Secao eyebrow="02 · Cadastro no mapa" titulo="Dados do cadastro">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           <MiniMapa geometry={car.geometry} status="publicado"
-            carAmbiental={consulta.acesso.recursos.has("camadas_oficiais") ? p.cod : undefined}
+            carAmbiental={consulta.acesso.recursos.has("camadas_oficiais") ? p.cod : undefined} areaHa={p.area_ha != null ? Number(p.area_ha) : null}
             className="h-80 lg:h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{area}</p>
+            {numeros.length > 1 && <div className="grid grid-cols-2 gap-2">
+              {numeros.slice(1).map((n) => (
+                <div key={n.rotulo} className="rounded-xl border border-linha bg-superficie-2/50 px-3 py-2.5" style={{ borderLeft: `4px solid ${n.cor}` }}>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-texto-2">{n.rotulo}</p>
+                  <p className="mt-0.5 text-lg font-bold leading-tight text-texto">{n.valor}{n.extra && <span className="ml-1.5 text-xs font-semibold text-texto-2">{n.extra}</span>}</p>
+                </div>
+              ))}
+            </div>}
             {tour}
             <dl className="divide-y divide-linha border-y border-linha">
               {dados.map(([r, v]) => (

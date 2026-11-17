@@ -5,8 +5,8 @@ import { perfilDaArea } from "@/lib/relatorio/territorio";
 import { fontesPublicasCar } from "@/lib/relatorio/fontes-car";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 import { carregarConsultaArea } from "@/lib/geo/consultaArea";
-import { pdfDaArea, type SecaoPdf } from "@/lib/relatorio/pdf-area";
-import { TEMAS_CAR, type TemaCar } from "@/lib/geo/temasCar";
+import { pdfDaArea, type CamadaPdf, type SecaoPdf } from "@/lib/relatorio/pdf-area";
+import { CORES_AMBIENTE, NOME_CURTO, formatarHa, quadroAmbiental, type TemaAmbiente } from "@/lib/geo/ambienteCar";
 import { acessoAtual } from "@/lib/planos-servidor";
 
 const tipos: Record<string,string> = { IRU: "Imóvel rural", AST: "Assentamento", PCT: "Povos e comunidades tradicionais" };
@@ -43,6 +43,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
   const p = data.properties;
   const hectares = Number(p.area_ha);
   const secoes: SecaoPdf[] = [];
+  const camadas: CamadaPdf[] = [];
   if (escolhidas.has("cadastro")) secoes.push({ titulo:"Dados do Cadastro Ambiental Rural", linhas:[
     "Município: " + (p.municipio ?? "Não informado") + (p.cod_ibge ? " · IBGE " + p.cod_ibge : ""),
     "Tipo de imóvel: " + (tipos[p.tipo ?? ""] ?? p.tipo ?? "Não informado"),
@@ -58,13 +59,18 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
       escolhidas.has("fontes") ? carregarConsultaArea("car:" + cod, { excluir: ["car"], relatorio: true, raioM }) : null,
       escolhidas.has("ambiente") ? db.rpc("fn_ambiente_por_car", { p_cod: cod }) : null,
     ]);
-    const contagem = new Map<string,number>();
-    for (const f of ambiente?.data?.features ?? []) {
-      const tema = f.properties?.tema;
-      if (typeof tema !== "string") continue;
-      if (tema !== "area_imovel") contagem.set(tema, (contagem.get(tema) ?? 0) + 1);
-    }
-    if (ambiente) secoes.push({titulo:"Ambiente no perímetro cadastrado", linhas:ambiente.error ? ["Base ambiental indisponível na emissão."] : contagem.size ? Array.from(contagem, ([k,v]) => (k === "nascente" ? "Nascentes aproximadas (FBDS)" : TEMAS_CAR[k as TemaCar] ?? k) + ": " + v.toLocaleString("pt-BR") + (v === 1 ? " feição mapeada." : " feições mapeadas.")) : ["Sem feições na cobertura ambiental disponível para este perímetro."]});
+    // 17/11 (áudio do Carlos, 11h49): hectares de APP, reserva etc., não só a contagem
+    const feicoes = (ambiente?.data?.features ?? []) as GeoJSON.Feature[];
+    const quadro = quadroAmbiental(feicoes, Number.isFinite(hectares) ? hectares : null);
+    camadas.push(...feicoes.filter((f) => f.geometry && f.properties?.tema !== "area_imovel" && f.properties?.tema !== "nascente"
+      && (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"))
+      .map((f) => { const t = f.properties!.tema as TemaAmbiente; return { nome: NOME_CURTO[t] ?? t, cor: CORES_AMBIENTE[t] ?? "#FFFFFF", geometria: f.geometry }; }));
+    if (ambiente) secoes.push({titulo:"Ambiente no perímetro cadastrado", linhas:ambiente.error ? ["Base ambiental indisponível na emissão."] : quadro.length ? [
+      // "APP · 12,5% · 30 ha" vira barra colorida no PDF (mesmo desenho do uso do solo)
+      ...quadro.map((l) => l.tema === "nascente" ? "Nascentes aproximadas (FBDS): " + l.feicoes.toLocaleString("pt-BR") + (l.feicoes === 1 ? " ponto." : " pontos.")
+        : l.pct != null ? `${l.nome} · ${l.pct.toLocaleString("pt-BR",{maximumFractionDigits:1})}% · ${formatarHa(l.ha)}` : `${l.nome}: ${formatarHa(l.ha)}`),
+      "Áreas somadas das feições declaradas no SICAR dentro da divisa; temas podem se sobrepor.",
+    ] : ["Sem feições na cobertura ambiental disponível para este perímetro."]});
     secoes.push(...await perfil);
     if (consulta) {
       const fontes = await fontesPublicasCar(cod, raioM, consulta.lista);
@@ -75,6 +81,6 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
   } else secoes.push(...await perfil);
   secoes.push({ titulo:"Sobre os dados", linhas:["O CAR é autodeclarado. Esta consulta é informativa e não substitui certidão, matrícula ou vistoria. A ausência de registro na base não confirma ausência de restrição no terreno."] });
   const titulo = opcoes.personalizado ? "Relatório territorial personalizado" : "Relatório territorial " + modelo;
-  const bytes = await pdfDaArea(titulo, cod, secoes, escolhidas.has("mapa") ? data.geometry : null);
+  const bytes = await pdfDaArea(titulo, cod, secoes, escolhidas.has("mapa") ? data.geometry : null, "car", camadas);
   return new Response(new Uint8Array(bytes).buffer, {headers:{"Content-Type":"application/pdf","Content-Disposition":`${disposicao}; filename="ARINI-${cod}-${modelo}.pdf"`,"Cache-Control":"private, no-store"}});
 }

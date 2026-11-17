@@ -77,6 +77,9 @@ const TEMAS: [RegExp, string][] = [
 const corDoTema = (titulo: string) => hex(TEMAS.find(([r]) => r.test(titulo))?.[1] ?? "#124431");
 /** Cores das classes do ESA WorldCover, para as barras do uso do solo. */
 const CORES_USO: [RegExp, string][] = [
+  // camadas ambientais do CAR (tons um pouco mais escuros que no mapa, para o papel)
+  [/^APP\b|preservação permanente/i, "#00B8D4"], [/reserva legal/i, "#00C853"], [/vegetação nativa|vegetacao nativa/i, "#9CCC00"],
+  [/consolidada/i, "#FF9100"], [/uso restrito/i, "#AA00FF"], [/hidrografia/i, "#2979FF"], [/pousio/i, "#FFB300"], [/servidão|servidao/i, "#FF1744"],
   [/arbórea|arborea/i, "#1B7F3A"], [/arbust/i, "#C9A227"], [/herbácea|herbacea/i, "#9CCB5A"], [/lavoura/i, "#D46BD6"],
   [/construída|construida/i, "#D32F2F"], [/solo exposto/i, "#9E9E9E"], [/água|agua/i, "#1E88E5"], [/úmida|umida/i, "#26A69A"],
   [/mangue/i, "#00A86B"],
@@ -110,7 +113,10 @@ function redondo(v: number) {
   return (m >= 5 ? 5 : m >= 2 ? 2 : 1) * p;
 }
 
-async function desenharDivisa(doc: PDFDocument, pagina: PDFPage, geo: GeoJSON.Geometry, topo: number, privada: boolean, negrito: PDFFont) {
+/** Camada desenhada sobre o satélite do PDF (APP, reserva...), com a cor do mapa. */
+export type CamadaPdf = { nome: string; cor: string; geometria: GeoJSON.Geometry };
+
+async function desenharDivisa(doc: PDFDocument, pagina: PDFPage, geo: GeoJSON.Geometry, topo: number, privada: boolean, negrito: PDFFont, camadas: CamadaPdf[] = []) {
   const aneis = geo.type === "Polygon" ? geo.coordinates : geo.type === "MultiPolygon" ? geo.coordinates.flat() : [];
   let oeste=Infinity,sul=Infinity,leste=-Infinity,norte=-Infinity;
   for (const anel of aneis) for (const [lng,lat] of anel) {
@@ -137,6 +143,12 @@ async function desenharDivisa(doc: PDFDocument, pagina: PDFPage, geo: GeoJSON.Ge
     if (pontos.length>=3) partes.push(pontos.join(" ")+" Z");
   }
   if (!partes.length) return false;
+  /** Mesma projeção da divisa, para as camadas ambientais. */
+  const caminhoDe = (g: GeoJSON.Geometry) => {
+    const rs = g.type === "Polygon" ? g.coordinates : g.type === "MultiPolygon" ? g.coordinates.flat() : [];
+    return rs.filter((r) => r.length >= 4).map((r) => r.map(([lng,lat],i) =>
+      (i ? "L" : "M")+(x0+(lng-oeste)*correcao*escala).toFixed(2)+" "+(y0+(norte-lat)*escala).toFixed(2)).join(" ")+" Z").join(" ");
+  };
   pagina.drawRectangle({x:margem,y:topo-h,width:w,height:h,color:rgb(.95,.97,.95)});
   let imagem: "esri" | "esa" | "nasa" | null = null;
   // O raster usa exatamente a mesma transformação da divisa. WMS 1.3
@@ -168,6 +180,10 @@ async function desenharDivisa(doc: PDFDocument, pagina: PDFPage, geo: GeoJSON.Ge
       break;
     } catch { /* Tenta a próxima fonte; a divisa também pode ser impressa sozinha. */ }
   }
+  for (const c of camadas) {
+    const d = caminhoDe(c.geometria);
+    if (d) pagina.drawSvgPath(d,{x:margem,y:topo,color:hex(c.cor),opacity:imagem ? .42 : .6,borderColor:hex(c.cor),borderWidth:1.1});
+  }
   const caminho = partes.join(" ");
   // halo escuro por baixo e traço verde por cima: lê no satélite claro e no escuro
   if (imagem) pagina.drawSvgPath(caminho,{x:margem,y:topo,borderColor:rgb(.02,.08,.04),borderWidth:4.6,borderOpacity:.55});
@@ -193,7 +209,7 @@ async function desenharDivisa(doc: PDFDocument, pagina: PDFPage, geo: GeoJSON.Ge
 }
 const ALTURA_MAPA = 205;
 
-export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf[], geometria?: GeoJSON.Geometry|null, tipo: "car" | "desenho" = "car") {
+export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf[], geometria?: GeoJSON.Geometry|null, tipo: "car" | "desenho" = "car", camadas: CamadaPdf[] = []) {
   const doc = await PDFDocument.create();
   doc.setTitle(titulo + " · " + codigo); doc.setAuthor("ARINI"); doc.setLanguage("pt-BR");
   const fonte = await doc.embedFont(StandardFonts.Helvetica), negrito = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -262,13 +278,22 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
   paragrafo("Emitido em "+emitido+" (Brasília).",{size:9.5,cor:cinza});
 
   // ---- mapa
-  const mapa = geometria && await desenharDivisa(doc,pagina,geometria,y-6,tipo === "desenho",negrito);
+  const mapa = geometria && await desenharDivisa(doc,pagina,geometria,y-6,tipo === "desenho",negrito,camadas);
   if (mapa) {
     y -= ALTURA_MAPA + 20;
     // legenda curta embaixo do mapa
     pagina.drawRectangle({x:margem,y:y+1,width:14,height:7,color:tom(DIVISA,.75),borderColor:DIVISA,borderWidth:1.6});
     pagina.drawText(seguro((tipo === "car" ? "Divisa declarada no CAR" : "Área aproximada desenhada pelo titular") + " · norte para cima"),
       {x:margem+20,y:y+1.5,font:negrito,size:8.5,color:verde});
+    // legenda das camadas ambientais desenhadas no mapa
+    let xl = margem+30+negrito.widthOfTextAtSize(seguro((tipo === "car" ? "Divisa declarada no CAR" : "Área aproximada desenhada pelo titular") + " · norte para cima"),8.5);
+    for (const nome of [...new Set(camadas.map((c) => c.nome))]) {
+      const cor = hex(camadas.find((c) => c.nome === nome)!.cor), t = seguro(nome), lt = fonte.widthOfTextAtSize(t,8)+20;
+      if (xl + lt > margem+util) { y -= 12; xl = margem; }
+      pagina.drawRectangle({x:xl,y:y+1,width:10,height:7,color:cor,opacity:.75,borderColor:cor,borderWidth:.8});
+      pagina.drawText(t,{x:xl+14,y:y+1.5,font:fonte,size:8,color:tinta});
+      xl += lt + 6;
+    }
     y -= 13;
     const credito = mapa.imagem === "esri" ? "Imagem de satélite: Esri World Imagery (Wayback "+SATELITE_RELEASE+"), Maxar e colaboradores da comunidade GIS. Divisa sobreposta pela ARINI."
       : mapa.imagem === "esa" ? "Imagem histórica de referência: mosaico Sentinel-2 de 2021 em cor natural, 10 m. © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium. CC BY 4.0."
