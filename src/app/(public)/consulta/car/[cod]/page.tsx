@@ -1,9 +1,8 @@
 import { raioConsulta } from "@/lib/rural/raios";
 import { tourDaArea } from "@/components/tour/tourDaArea";
-import RelatorioPersonalizado from "@/components/rural/RelatorioPersonalizado";
+import GeradorRelatorio from "@/components/rural/GeradorRelatorio";
 import { whatsappConfigurado } from "@/lib/meta";
 import { notFound } from "next/navigation";
-import { Download, Eye, FileText } from "lucide-react";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
 import MiniMapa from "@/components/map/MiniMapa";
@@ -138,26 +137,17 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
                 }} />
             </div>
             <div className="border-t border-linha pt-4"><MatriculaSigef cod={p.cod} /></div>
-            <RelatorioPersonalizado caminho={"/api/consulta/car/" + encodeURIComponent(p.cod) + "/relatorio"} raioM={raioM} completo />
             {whatsappConfigurado() && <p className="text-sm text-texto-2">Para receber esta consulta pelo WhatsApp oficial da ARINI, envie <strong>CONSULTAR CAR {p.cod}</strong>.</p>}
-            <div className="flex flex-wrap gap-2 border-t border-linha pt-4">
-              {(["simples", "completo"]).map(modelo => {
-                const href = `/api/consulta/car/${encodeURIComponent(p.cod)}/relatorio?modelo=${modelo}&raio_m=${raioM}`;
-                // 17/11: os links viraram botões de verdade (pedido "botões sem vida")
-                return <div key={modelo} className="flex flex-1 basis-60 items-center gap-3 rounded-2xl border border-verde/30 bg-verde/5 px-4 py-3 text-sm">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-verde/12 text-verde"><FileText className="size-[18px]" aria-hidden /></span>
-                  <span className="mr-auto leading-tight"><strong className="block">Relatório {modelo}</strong><span className="text-xs text-texto-2">PDF com a marca ARINI</span></span>
-                  <a className="btn-contorno inline-flex items-center gap-1.5 px-3.5 py-2 text-xs" href={href+"&visualizar=1"} target="_blank" rel="noreferrer" aria-label={`Ver PDF ${modelo}`}><Eye className="size-3.5" aria-hidden /> Ver</a>
-                  <a className="btn-verde inline-flex items-center gap-1.5 px-3.5 py-2 text-xs" href={href} aria-label={`Baixar PDF ${modelo}`}><Download className="size-3.5" aria-hidden /> Baixar</a>
-                </div>;
-              })}
-            </div>
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-4">
               Dados públicos do SICAR, copiados em{" "}
               {p.importado_em ? new Date(p.importado_em).toLocaleDateString("pt-BR") : "—"}. O CAR é
               autodeclarado: não comprova propriedade nem substitui a matrícula.
             </p>
           </div>
+        </div>
+        <div className="mt-6">
+          <GeradorRelatorio caminho={"/api/consulta/car/" + encodeURIComponent(p.cod) + "/relatorio"} raioM={raioM}
+            completo={consulta.acesso.recursos.has("relatorio_territorial")} nomeArquivo={p.cod} />
         </div>
         </Secao>
 
