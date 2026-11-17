@@ -853,7 +853,9 @@ export default function MapaRegional({
         estiloDeRuasRef.current = null;
         // satélite fica acima da base vetorial e abaixo das camadas de dados
         map.addSource("satelite", SATELITE);
-        map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" } });
+        // 17/11/2026 (item 14 do Carlos): satélite um pouco mais saturado e contrastado, menos "lavado"
+        map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" },
+          paint: { "raster-saturation": 0.18, "raster-contrast": 0.08 } });
         map.addSource("mosaico-anual", MOSAICO_MENOS_NUVENS);
         map.addLayer({ id: "mosaico-anual", type: "raster", source: "mosaico-anual", layout: { visibility: "none" } });
         for (const detalhe of DETALHES_SATELITE) {

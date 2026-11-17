@@ -1,12 +1,58 @@
 import { imagemDaFonte } from "./imagem-fonte";
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
+import sharp from "sharp";
+import { SATELITE_RELEASE, urlTileHistorico } from "@/lib/map/config";
+import { MARCA_CAMINHOS, MARCA_VIEWBOX } from "./marca-pdf";
+
+/**
+ * Imagem de satélite de alta resolução para o PDF (17/11/2026, item 13.1 do
+ * Carlos: "imagens cartográficas reais"). Usa o mesmo mosaico Esri do mapa
+ * (release fixo do Wayback, sem nuvem), montando os tiles com o sharp e
+ * recortando exatamente a janela pedida. Devolve JPEG ou lança erro.
+ */
+async function mosaicoEsri(janela: number[], largura: number, altura: number, privada: boolean) {
+  const [sul, oeste, norte, leste] = janela;
+  const merc = (lng: number, lat: number, z: number) => {
+    const n = 256 * 2 ** z, s = Math.sin(Math.max(-85, Math.min(85, lat)) * Math.PI / 180);
+    return [(lng + 180) / 360 * n, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n];
+  };
+  let z = 17;
+  for (; z > 3; z--) {
+    const [x0, y0] = merc(oeste, norte, z), [x1, y1] = merc(leste, sul, z);
+    const tiles = (Math.floor(x1 / 256) - Math.floor(x0 / 256) + 1) * (Math.floor(y1 / 256) - Math.floor(y0 / 256) + 1);
+    if (x1 - x0 <= largura * 1.5 && tiles <= 30) break;
+  }
+  const [px0, py0] = merc(oeste, norte, z), [px1, py1] = merc(leste, sul, z);
+  const tx0 = Math.floor(px0 / 256), ty0 = Math.floor(py0 / 256), tx1 = Math.floor(px1 / 256), ty1 = Math.floor(py1 / 256);
+  const pedidos: Promise<{ input: Buffer; left: number; top: number }>[] = [];
+  for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++) {
+    pedidos.push(imagemDaFonte(urlTileHistorico(z, tx, ty, SATELITE_RELEASE), "image/", privada)
+      .then((input) => ({ input, left: (tx - tx0) * 256, top: (ty - ty0) * 256 })));
+  }
+  const pecas = await Promise.all(pedidos);
+  const mosaico = await sharp({ create: { width: (tx1 - tx0 + 1) * 256, height: (ty1 - ty0 + 1) * 256, channels: 3, background: "#22301f" } })
+    .composite(pecas).png().toBuffer();
+  const left = Math.max(0, Math.round(px0 - tx0 * 256)), top = Math.max(0, Math.round(py0 - ty0 * 256));
+  return sharp(mosaico)
+    .extract({ left, top, width: Math.max(1, Math.round(px1 - px0)), height: Math.max(1, Math.round(py1 - py0)) })
+    .resize(largura, altura, { fit: "fill" })
+    .modulate({ saturation: 1.12 }).sharpen()
+    .jpeg({ quality: 84 }).toBuffer();
+}
+
+/** Assinatura ARINI desenhada em vetor (sem depender de imagem externa). */
+function desenharMarca(pagina: PDFPage, x: number, topo: number, alturaPt: number) {
+  const escala = alturaPt / MARCA_VIEWBOX.altura;
+  for (const { d, cor } of MARCA_CAMINHOS) pagina.drawSvgPath(d, { x, y: topo, scale: escala, color: hex(cor), borderWidth: 0 });
+  return MARCA_VIEWBOX.largura * escala;
+}
 
 export type SecaoPdf = { titulo: string; linhas: string[]; serie?: (number|null)[] };
 const verde = rgb(.07,.27,.20), tinta = rgb(.12,.18,.16), cinza = rgb(.30,.37,.34);
 // 17/11/2026: o Carlos achou o PDF pálido. Faixa verde ARINI no topo, fio
 // dourado e cada seção com a cor do seu tema (água azul, desmatamento
 // vermelho, energia âmbar...), mais um selo do resultado da consulta.
-const profundo = rgb(.04,.13,.10), ouro = rgb(.85,.74,.44), offwhite = rgb(.95,.95,.93);
+const profundo = rgb(.04,.13,.10), ouro = rgb(.85,.74,.44);
 const hex = (h: string) => rgb(parseInt(h.slice(1,3),16)/255, parseInt(h.slice(3,5),16)/255, parseInt(h.slice(5,7),16)/255);
 const TEMAS: [RegExp, string][] = [
   [/cadastro ambiental|car\b/i, "#E07B00"],
@@ -56,7 +102,7 @@ async function desenharDivisa(doc: PDFDocument, pagina: PDFPage, geo: GeoJSON.Ge
   }
   if (!partes.length) return false;
   pagina.drawRectangle({x:margem,y:topo-h,width:w,height:h,color:rgb(.95,.97,.95),borderColor:rgb(.81,.87,.83),borderWidth:.6});
-  let imagem: "esa" | "nasa" | null = null;
+  let imagem: "esri" | "esa" | "nasa" | null = null;
   // O raster usa exatamente a mesma transformação da divisa. WMS 1.3
   // com EPSG:4326 recebe a janela na ordem latitude,longitude.
   const janela = [norte-(h-y0)/escala, oeste-x0/(correcao*escala), norte+y0/escala, oeste+(w-x0)/(correcao*escala)];
@@ -68,7 +114,11 @@ async function desenharDivisa(doc: PDFDocument, pagina: PDFPage, geo: GeoJSON.Ge
     {id:"esa",url:"https://titiler.terrascope.be/wms",camada:"esa-worldcover-s2rgbnir-10m-2021-v2_tcc"},
     {id:"nasa",url:"https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi",camada:"BlueMarble_ShadedRelief_Bathymetry"},
   ] as const;
-  for (const fonte of fontes) {
+  try {
+    pagina.drawImage(await doc.embedJpg(await mosaicoEsri(janela, w*3, h*3, privada)),{x:margem,y:topo-h,width:w,height:h});
+    imagem = "esri";
+  } catch { /* segue para o Sentinel-2 de 10 m */ }
+  for (const fonte of imagem ? [] : fontes) {
     if (fonte.id === "esa") parametros.set("TIME", "2021-01-01");
     else {
       if (janela[2] - janela[0] < .05) continue; // o mosaico de 500 m só serve a uma vista regional
@@ -103,8 +153,7 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
       p.drawRectangle({x:i*largura/24,y:756,width:largura/24+1,height:altura-756,
         color:rgb(verde.red+(profundo.red-verde.red)*i/23, verde.green+(profundo.green-verde.green)*i/23, verde.blue+(profundo.blue-verde.blue)*i/23)});
     p.drawRectangle({x:0,y:753,width:largura,height:3,color:ouro});
-    p.drawText("ARINI",{x:margem,y:796,font:negrito,size:20,color:offwhite});
-    p.drawCircle({x:margem+70,y:803,size:3,color:ouro});
+    desenharMarca(p, margem, 822, 30);
     const rotulo="CONSULTA TERRITORIAL";
     p.drawText(rotulo,{x:largura-margem-negrito.widthOfTextAtSize(rotulo,9),y:800,font:negrito,size:9,color:ouro});
     p.drawText((tipo === "car" ? "CAR  " : "ÁREA DESENHADA  ")+seguro(codigo),{x:margem,y:772,font:fonte,size:9,color:rgb(.80,.86,.82)});
@@ -147,7 +196,9 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
   if (mapa) {
     y-=167;
     pagina.drawText((tipo === "car" ? "Divisa declarada no CAR." : "Área aproximada desenhada pelo titular.") + " Norte para cima.",{x:margem,y,font:fonte,size:9,color:cinza});y-=16;
-    if (mapa.imagem === "esa") {
+    if (mapa.imagem === "esri") {
+      linha("Imagem de satélite: Esri World Imagery (Wayback "+SATELITE_RELEASE+"), Maxar e colaboradores da comunidade GIS. Divisa sobreposta pela ARINI.");
+    } else if (mapa.imagem === "esa") {
       linha("Imagem histórica de referência: mosaico Sentinel-2 de 2021 em cor natural, resolução de 10 m. Divisa sobreposta pela ARINI.");
       linha("© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium. CC BY 4.0.");
     } else if (mapa.imagem === "nasa") {
