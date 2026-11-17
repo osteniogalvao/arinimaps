@@ -86,6 +86,7 @@ export const COTAS: { id: string; nome: string; ajuda: string }[] = [
   { id: "imoveis_ativos", nome: "Imóveis ativos", ajuda: "Anúncios em análise ou publicados ao mesmo tempo." },
   { id: "creditos_ari_mes", nome: "Créditos mensais da Ari", ajuda: "Franquia mensal da conta ou compartilhada pela organização." },
   { id: "mensagens_ia_mes", nome: "Mensagens ao assistente de IA por mês", ajuda: "Perguntas enviadas ao assistente por conta, no mês corrente." },
+  { id: "armazenamento_mb", nome: "Espaço de arquivos em MB", ajuda: "Fotos, vídeos e documentos da conta e dos seus imóveis. Conta sem plano usa o padrão de Configurações." },
 ];
 
 export type NichoId =

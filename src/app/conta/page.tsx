@@ -7,6 +7,7 @@ import { normalizar } from "@/lib/preferencias";
 import { TIPO_ORG_LABEL, PAPEL_ORG_LABEL, type TipoOrg } from "@/lib/organizacoes";
 import { convitesPendentes, organizacaoDoUsuario } from "@/lib/organizacoes-servidor";
 import { acessoDe } from "@/lib/planos-servidor";
+import { armazenamentoDaConta } from "@/lib/armazenamento";
 import { ShieldCheck, Users, BadgeCheck, LifeBuoy, ChevronRight } from "lucide-react";
 import { CabecalhoPagina, Secao } from "@/components/ui/Pagina";
 import TopoConta from "@/components/painel/TopoConta";
@@ -34,6 +35,8 @@ export default async function MinhaConta() {
     supabaseAdmin().from("matriz_entregas").select("comunicado",{count:"exact",head:true}).eq("titular",user.id).is("lido_em",null),
   ]);
 
+  const espaco = daEquipe ? null : await armazenamentoDaConta(user.id, acesso).catch(() => null);
+  const mb = (b: number) => (b / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
   const mais = [
     { href:"/conta/termos",rotulo:"Termos e contratos aceitos",texto:"Versões, cópias dos contratos de imóveis e renovação",icone:ShieldCheck },
     {href:"/conta/comunicados",rotulo:"Comunicados da Matriz",texto:avisos.count ? `${avisos.count} aviso(s) por ler` : "Avisos de manutenção, planos e atualizações",icone:LifeBuoy},
@@ -63,6 +66,7 @@ export default async function MinhaConta() {
           subtitulo={<>
             {user.email} · plano <strong className="font-semibold text-texto">{acesso.planNome ?? "—"}</strong>
             {vinculo && ` · ${vinculo.org.nome}`}
+            {espaco?.usadoBytes != null && <> · arquivos: {mb(espaco.usadoBytes)} MB{espaco.limiteMb ? ` de ${espaco.limiteMb.toLocaleString("pt-BR")} MB` : ""}</>}
           </>}
         />
 
