@@ -1,5 +1,8 @@
 import { imagemDaFonte } from "./imagem-fonte";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { LineCapStyle, PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { createHash } from "node:crypto";
+import turfArea from "@turf/area";
+import { ICONES_PDF, type IconePdf } from "./icones-pdf";
 import sharp from "sharp";
 import { SATELITE_RELEASE, urlTileHistorico } from "@/lib/map/config";
 import { MARCA_CAMINHOS, MARCA_VIEWBOX } from "./marca-pdf";
@@ -75,6 +78,48 @@ const TEMAS: [RegExp, string][] = [
   [/bioma|uso e cobertura|vegeta|ambiente|perímetro|perimetro|conserva/i, "#2E7D32"],
 ];
 const corDoTema = (titulo: string) => hex(TEMAS.find(([r]) => r.test(titulo))?.[1] ?? "#124431");
+/** Ícone de cada tema (ordem importa: queimada antes de desmatamento). */
+const ICONE_TEMA: [RegExp, IconePdf][] = [
+  [/^sobre/i, "info"], [/consultas às fontes|consultas as fontes|cobertura complementar/i, "busca"],
+  [/área desenhada|area desenhada/i, "perimetro"], [/cadastro ambiental|dados do cadastro/i, "cadastro"],
+  [/ambiente no per/i, "escudo"], [/matrícula|matricula|sigef|parcela|snci|incra/i, "matricula"],
+  [/uso e cobertura/i, "broto"], [/precipita|chuva|clima/i, "chuva"], [/queimad|foco/i, "fogo"],
+  [/desmat|prodes|deter/i, "machado"], [/embarg/i, "proibido"], [/indígena|indigena|quilomb|assentamento/i, "pessoas"],
+  [/miner|anm/i, "picareta"], [/energia|aneel|transmiss/i, "raio"], [/rodovi|dnit|estrada/i, "estrada"],
+  [/água|agua|represa|hidro|outorga|ana\b/i, "agua"], [/conserva|bioma|vegeta/i, "folha"], [/solo|aptid/i, "broto"],
+  [/car\b/i, "arvores"],
+];
+const iconeDoTema = (titulo: string): IconePdf => ICONE_TEMA.find(([r]) => r.test(titulo))?.[1] ?? "camadas";
+/** Desenha um ícone de traço (24×24) com o canto superior esquerdo em (x, topo). */
+function icone(p: PDFPage, nome: IconePdf, x: number, topo: number, tam: number, cor: Cor, traco = 2) {
+  p.drawSvgPath(ICONES_PDF[nome], { x, y: topo, scale: tam/24, borderColor: cor, borderWidth: traco, borderLineCap: LineCapStyle.Round });
+}
+/** Ícone dentro de um círculo cheio (selo). */
+function selo(p: PDFPage, nome: IconePdf, cx: number, cy: number, raio: number, fundo: Cor, cor: Cor) {
+  p.drawCircle({ x: cx, y: cy, size: raio, color: fundo });
+  const t = raio*1.15;
+  icone(p, nome, cx - t/2, cy + t/2, t, cor, 2.1);
+}
+/** Graus decimais em graus, minutos e segundos (hemisfério pela letra). */
+function gms(v: number, eixo: "lat" | "lng") {
+  const a = Math.abs(v), g = Math.floor(a), m = Math.floor((a-g)*60), sg = ((a-g)*60-m)*60;
+  return `${g}°${String(m).padStart(2,"0")}'${sg.toFixed(1).padStart(4,"0")}"${eixo === "lat" ? (v < 0 ? "S" : "N") : (v < 0 ? "O" : "L")}`;
+}
+/** Perímetro aproximado (km) dos anéis externos, por haversine. */
+function perimetroKm(g: GeoJSON.Geometry) {
+  const polis = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+  let km = 0;
+  for (const poli of polis) {
+    const anel = poli[0] ?? [];
+    for (let i = 1; i < anel.length; i++) {
+      const [a1, b1] = anel[i-1], [a2, b2] = anel[i];
+      const r = Math.PI/180, dLat = (b2-b1)*r, dLng = (a2-a1)*r;
+      const h = Math.sin(dLat/2)**2 + Math.cos(b1*r)*Math.cos(b2*r)*Math.sin(dLng/2)**2;
+      km += 2*6371*Math.asin(Math.sqrt(h));
+    }
+  }
+  return km;
+}
 /** Cores das classes do ESA WorldCover, para as barras do uso do solo. */
 const CORES_USO: [RegExp, string][] = [
   // camadas ambientais do CAR (tons um pouco mais escuros que no mapa, para o papel)
@@ -277,6 +322,36 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
   pagina.drawRectangle({x:margem,y,width:40,height:2.5,color:ouro});y-=16;
   paragrafo("Emitido em "+emitido+" (Brasília).",{size:9.5,cor:cinza});
 
+  // ---- resumo em destaque: os números que o comprador procura primeiro
+  const procurar = (re: RegExp) => { for (const sc of secoes) for (const l of sc.linhas) { const m = re.exec(l); if (m) return m; } return null; };
+  const area = procurar(/^(?:Área declarada|Área aproximada): (.+)$/);
+  const municipio = procurar(/^Município: ([^·]+)/);
+  const app = procurar(/^APP · ([\d.,]+)% · (.+)$/), reserva = procurar(/^Reserva legal · ([\d.,]+)% · (.+)$/);
+  const situacoes = secoes.map(situacaoDa).filter((x): x is NonNullable<typeof x> => !!x);
+  const resumo: { icone: IconePdf; rotulo: string; valor: string; extra?: string; cor: Cor }[] = [
+    ...(area ? [{ icone: "area" as const, rotulo: "Área", valor: area[1].replace(/\s*·.*$/, ""), cor: hex("#1F9A12") }] : []),
+    ...(municipio ? [{ icone: "local" as const, rotulo: "Município", valor: municipio[1].trim(), cor: verde }] : []),
+    ...(app ? [{ icone: "agua" as const, rotulo: "APP", valor: app[2], extra: app[1]+"%", cor: hex("#00A5C0") }] : []),
+    ...(reserva ? [{ icone: "escudo" as const, rotulo: "Reserva legal", valor: reserva[2], extra: reserva[1]+"%", cor: hex("#00A844") }] : []),
+    ...(situacoes.length >= 2 ? [{ icone: "busca" as const, rotulo: "Fontes com registro", valor: `${situacoes.filter((x) => x.n > 0).length} de ${situacoes.length}`, cor: hex("#D84315") }] : []),
+  ].slice(0, 4);
+  if (resumo.length >= 2) {
+    y -= 4;
+    const gap = 8, lc = (util - gap*(resumo.length-1))/resumo.length, hc = 46;
+    resumo.forEach((r, i) => {
+      const x = margem + i*(lc+gap);
+      pagina.drawRectangle({x,y:y-hc,width:lc,height:hc,color:tom(r.cor,.92),borderColor:tom(r.cor,.65),borderWidth:.6});
+      selo(pagina, r.icone, x+17, y-hc/2, 10.5, r.cor, branco);
+      pagina.drawText(seguro(r.rotulo).toUpperCase(),{x:x+33,y:y-17,font:negrito,size:6.8,color:escurecer(r.cor)});
+      let v = seguro(r.valor), tam = 12;
+      while (tam > 8 && negrito.widthOfTextAtSize(v,tam) > lc-40) tam -= .5;
+      while (v.length > 3 && negrito.widthOfTextAtSize(v,tam) > lc-40) v = v.slice(0,-2);
+      pagina.drawText(v,{x:x+33,y:y-32,font:negrito,size:tam,color:tinta});
+      if (r.extra) pagina.drawText(seguro(r.extra+" do imóvel"),{x:x+33,y:y-41,font:fonte,size:6.8,color:cinza});
+    });
+    y -= hc + 6;
+  }
+
   // ---- mapa
   const mapa = geometria && await desenharDivisa(doc,pagina,geometria,y-6,tipo === "desenho",negrito,camadas);
   if (mapa) {
@@ -322,8 +397,9 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
       pagina.drawRectangle({x,y,width:lc,height:hc,color:tom(cs,.9),borderColor:tom(cs,.6),borderWidth:.6});
       pagina.drawRectangle({x,y,width:4,height:hc,color:cs});
       let nome = seguro(c.titulo);
-      while (nome.length > 3 && negrito.widthOfTextAtSize(nome,8) > lc-16) nome = nome.slice(0,-2);
+      while (nome.length > 3 && negrito.widthOfTextAtSize(nome,8) > lc-36) nome = nome.slice(0,-2);
       if (nome !== seguro(c.titulo)) nome = nome.trimEnd() + "...";
+      icone(pagina, iconeDoTema(c.titulo), x+lc-20, y+hc-6, 13, cs, 2);
       pagina.drawText(nome,{x:x+10,y:y+hc-14,font:negrito,size:8,color:escurecer(cs)});
       pagina.drawText(seguro(textoSituacao(c)),{x:x+10,y:y+9,font:c.n > 0 ? negrito : fonte,size:11.5,color:tinta});
     });
@@ -332,6 +408,7 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
 
   // ---- seções
   const notas = secoes.filter((s) => /^sobre /i.test(s.titulo));
+  const secoesExtras: SecaoPdf[] = [];
   for (const secao of secoes) {
     if (notas.includes(secao)) continue;
     const cor = corDoTema(secao.titulo);
@@ -349,8 +426,9 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
       pagina.drawText(selo,{x:margem+util-larguraSelo+2,y:y+1.5,font:negrito,size:7.5,color:branco});
     }
     const [nome, orgao] = seguro(secao.titulo).split(" · ");
-    pagina.drawText(nome,{x:margem+14,y:y,font:negrito,size:12.5,color:escurecer(cor)});
-    if (orgao) pagina.drawText(orgao,{x:margem+20+negrito.widthOfTextAtSize(nome,12.5),y:y+.5,font:fonte,size:9.5,color:cinza});
+    selo(pagina, iconeDoTema(secao.titulo), margem+22, y+4.5, 9, cor, branco);
+    pagina.drawText(nome,{x:margem+38,y:y,font:negrito,size:12.5,color:escurecer(cor)});
+    if (orgao) pagina.drawText(orgao,{x:margem+44+negrito.widthOfTextAtSize(nome,12.5),y:y+.5,font:fonte,size:9.5,color:cinza});
     y -= 26;
 
     const linhas = secao.linhas;
@@ -428,6 +506,46 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
     }
   }
 
+  // ---- localização e geometria, calculadas da própria divisa
+  if (geometria && (geometria.type === "Polygon" || geometria.type === "MultiPolygon")) {
+    const aneis = geometria.type === "Polygon" ? geometria.coordinates : geometria.coordinates.flat();
+    let o=Infinity,su=Infinity,l=-Infinity,no=-Infinity, sx=0, sy=0, nv=0;
+    for (const anel of aneis) for (const [lng,lat] of anel) { o=Math.min(o,lng);l=Math.max(l,lng);su=Math.min(su,lat);no=Math.max(no,lat);sx+=lng;sy+=lat;nv++; }
+    if (nv && Number.isFinite(o)) {
+      const cx = sx/nv, cy = sy/nv;
+      const ha = turfArea({type:"Feature",geometry:geometria,properties:{}})/10_000;
+      const larguraKm = (l-o)*111.32*Math.cos(cy*Math.PI/180), alturaKm = (no-su)*110.57;
+      const fmt = (v: number, d = 2) => v.toLocaleString("pt-BR",{maximumFractionDigits:d});
+      secoesExtras.push({ titulo: "Localização e geometria", linhas: [
+        `Ponto central: ${fmt(cy,5)}, ${fmt(cx,5)}`,
+        `Em graus: ${gms(cy,"lat")} ${gms(cx,"lng")}`,
+        `Área calculada da divisa: ${fmt(ha, ha < 10 ? 2 : 1)} ha`,
+        `Perímetro: ${fmt(perimetroKm(geometria))} km`,
+        `Extensão: ${fmt(larguraKm)} km (L-O) × ${fmt(alturaKm)} km (N-S)`,
+        `Vértices na divisa: ${nv.toLocaleString("pt-BR")}`,
+      ]});
+    }
+  }
+  for (const secao of secoesExtras) {
+    const cor = verde;
+    garantir(25 + 40);
+    y -= 14;
+    pagina.drawRectangle({x:margem,y:y-8,width:util,height:25,color:tom(cor,.9)});
+    pagina.drawRectangle({x:margem,y:y-8,width:5,height:25,color:cor});
+    selo(pagina, "bussola", margem+22, y+4.5, 9, cor, branco);
+    pagina.drawText(seguro(secao.titulo),{x:margem+38,y,font:negrito,size:12.5,color:cor});
+    y -= 26;
+    let zebra = false;
+    for (const lnh of secao.linhas) {
+      const m = ROTULO.exec(lnh)!;
+      garantir(21);
+      if (zebra) pagina.drawRectangle({x:margem,y:y-8,width:util,height:21,color:rgb(.96,.97,.96)});
+      pagina.drawText(seguro(m[1]).toUpperCase(),{x:margem+8,y:y-1,font:negrito,size:7.5,color:verde});
+      pagina.drawText(seguro(m[2]),{x:margem+util*.42,y:y-1,font:negrito,size:10,color:tinta});
+      y -= 21; zebra = !zebra;
+    }
+  }
+
   // ---- notas finais em caixa cinza
   for (const nota of notas) {
     const texto = nota.linhas.join(" ");
@@ -441,6 +559,17 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
     for (const l of linhasNota) { pagina.drawText(l,{x:margem+14,y,font:fonte,size:8.5,color:cinza}); y -= 11.5; }
     y -= 6;
   }
+
+  // ---- selo de verificação: código do conteúdo desta emissão
+  const codigoVerificacao = createHash("sha256").update(JSON.stringify([titulo, codigo, emitido, secoes])).digest("hex").slice(0, 16).toUpperCase().match(/.{4}/g)!.join("-");
+  garantir(62);
+  y -= 16;
+  pagina.drawRectangle({x:margem,y:y-40,width:util,height:46,color:tom(verde,.93),borderColor:tom(verde,.6),borderWidth:.7});
+  selo(pagina, "verificado", margem+22, y-17, 11, verde, branco);
+  pagina.drawText("Emissão ARINI",{x:margem+42,y:y-10,font:negrito,size:10,color:verde});
+  pagina.drawText(seguro(`Código de verificação ${codigoVerificacao} · emitido em ${emitido}`),{x:margem+42,y:y-23,font:fonte,size:8.5,color:tinta});
+  pagina.drawText(seguro("Dados de fontes públicas na data de cada consulta. Guarde este código para conferir a emissão com a ARINI."),{x:margem+42,y:y-34,font:fonte,size:7.5,color:cinza});
+  y -= 50;
 
   const paginas=doc.getPages();
   paginas.forEach((p,i)=>{
