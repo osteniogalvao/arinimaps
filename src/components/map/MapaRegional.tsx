@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
-import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, ResumoCamadas, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
+import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, ResumoCamadas, ALTURA_FAIXA, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
 import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
 import CompararParcelasRurais from "@/components/map/CompararParcelasRurais";
 import BuscaUrbana from "@/components/map/BuscaUrbana";
@@ -1779,9 +1779,10 @@ export default function MapaRegional({
       </button>
 
       {/* ---------- mapa ---------- */}
-      <div ref={areaMapaRef} className="relative flex-1 min-w-0">
+      <div ref={areaMapaRef} className={`relative flex-1 min-w-0 ${CAMADAS_OFICIAIS.some((c) => camadasAtivas.has(c.id)) ? ALTURA_FAIXA : ""}`}>
         {/* inline: o CSS do maplibre força position:relative na classe e colapsaria a altura */}
-        <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+        <div ref={containerRef} style={{ position: "absolute", inset: "0 0 var(--faixa, 0px) 0" }} />
+        <ResumoCamadas ativas={camadasAtivas} estado={estadoCamadas} />
 
         {/* Barra do mapa (QA 09/11): antes era uma fila só com rolagem lateral e, em
             1366 px ou no celular, "Não encontrei meu imóvel", Satélite/Mapa e Camadas
@@ -1837,7 +1838,7 @@ export default function MapaRegional({
         )}
 
         {avisoCarga && (
-          <div role="status" className={`absolute bottom-12 left-3 right-14 sm:right-auto z-20 flex items-center gap-3 px-3 py-2 text-sm ${VIDRO}`}>
+          <div role="status" className={`absolute bottom-[calc(3rem+var(--faixa,0px))] left-3 right-14 sm:right-auto z-20 flex items-center gap-3 px-3 py-2 text-sm ${VIDRO}`}>
             {avisoCarga}
             <BotaoFechar onClick={() => setAvisoCarga("")} />
           </div>
@@ -1976,7 +1977,6 @@ export default function MapaRegional({
           recolhida={!!(painelMapa || carSel || loteSel || varios || pontoLivre || noPonto.length || selecionado)}
           mapa={mapaPronto}
           pedidoRecorte={pedidoRecorte} onDelimitar={salvarArea}
-          resumo={<ResumoCamadas ativas={camadasAtivas} estado={estadoCamadas} />}
           recursos={recursos}
           logado={logado}
           onDesenhando={aoDesenhar}

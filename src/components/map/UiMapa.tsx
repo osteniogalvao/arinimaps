@@ -191,14 +191,14 @@ export function Legenda({ car, corUrbana, extras = [], relevo = [] }: {
   if (!aberta) {
     return (
       <button type="button" onClick={() => setAberta(true)} aria-expanded={false}
-        className="absolute bottom-24 sm:bottom-36 lg:bottom-32 left-10 inline-flex items-center gap-1.5 rounded-full border border-linha bg-superficie/85 px-3 py-1.5 text-[11px] font-semibold text-texto-2 shadow-[0_6px_18px_-12px_rgb(0_0_0/0.8)] backdrop-blur-md transition hover:text-texto">
+        className="absolute bottom-24 sm:bottom-[calc(9rem+var(--faixa,0px))] lg:bottom-[calc(8rem+var(--faixa,0px))] left-10 inline-flex items-center gap-1.5 rounded-full border border-linha bg-superficie/85 px-3 py-1.5 text-[11px] font-semibold text-texto-2 shadow-[0_6px_18px_-12px_rgb(0_0_0/0.8)] backdrop-blur-md transition hover:text-texto">
         <ListIcon className="size-3 text-ouro" /> Legenda
       </button>
     );
   }
   return (
     // 17/11/2026 (item 16 do Carlos): legenda discreta, vidro mais leve, letra menor
-    <div className="absolute bottom-24 sm:bottom-36 lg:bottom-32 left-10 max-h-[45%] sm:max-h-[55%] w-52 overflow-y-auto rounded-xl border border-linha bg-superficie/85 px-3 py-2 text-[11px] leading-tight space-y-1 shadow-[0_10px_24px_-16px_rgb(0_0_0/0.8)] backdrop-blur-md">
+    <div className="absolute bottom-24 sm:bottom-[calc(9rem+var(--faixa,0px))] lg:bottom-[calc(8rem+var(--faixa,0px))] left-10 max-h-[45%] sm:max-h-[55%] w-52 overflow-y-auto rounded-xl border border-linha bg-superficie/85 px-3 py-2 text-[11px] leading-tight space-y-1 shadow-[0_10px_24px_-16px_rgb(0_0_0/0.8)] backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-texto-2">Legenda</p>
         <button type="button" onClick={() => setAberta(false)} aria-expanded aria-label="Recolher legenda" title="Recolher legenda"
@@ -427,30 +427,35 @@ const UNIDADE: Partial<Record<CamadaOficialId, string>> = {
 };
 
 /**
- * Faixa de resumo (17/11/2026, referência do Dados Fazenda): um cartão por
+ * Faixa de resumo (17/11/2026, referência do Dados Fazenda): uma coluna por
  * camada oficial ligada, com a contagem do que está na tela. Só lê o estado
  * que as camadas já calculam; não faz pedido nenhum.
+ * Desde 17/11 (pedido do Stenio) é uma faixa branca presa no rodapé, de ponta
+ * a ponta, com a altura em --faixa: o mapa e os botões de baixo sobem por ela.
  */
+export const ALTURA_FAIXA = "sm:[--faixa:3.5rem]";
+
 export function ResumoCamadas({ ativas, estado }: {
   ativas: ReadonlySet<CamadaOficialId>; estado: Partial<Record<CamadaOficialId, EstadoCamada>>;
 }) {
   const ligadas = CAMADAS_OFICIAIS.filter((c) => ativas.has(c.id));
   if (!ligadas.length) return null;
   return (
-    <div role="status" aria-label="Resumo das camadas na tela" className="hidden sm:flex gap-2 overflow-x-auto pb-0.5">
+    <div role="status" aria-label="Resumo das camadas na tela"
+      className="absolute inset-x-0 bottom-0 z-20 hidden h-[var(--faixa)] sm:flex items-stretch overflow-x-auto border-t border-neutral-200 bg-white text-neutral-800 shadow-[0_-6px_18px_-12px_rgb(0_0_0/0.5)]">
       {ligadas.map((c) => {
         const e = estado[c.id];
         return (
           <div key={c.id} title={`${c.nome} · ${c.orgao}`}
-            className="min-w-[8.5rem] shrink-0 rounded-xl border border-linha bg-superficie/95 px-3 py-2 shadow-[0_6px_18px_-12px_rgb(0_0_0/0.8)] backdrop-blur-md">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-texto-2">
+            className="flex min-w-[10rem] shrink-0 flex-col justify-center border-r border-neutral-200 px-4 last:border-r-0">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
               <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ background: c.cor }} />
               <span className="truncate">{c.nome.replace(/ \(.*\)$/, "")}</span>
             </p>
-            <p className="mt-0.5 text-sm text-texto">
-              {e?.carregando ? <LoaderCircle className="inline size-3.5 animate-spin text-texto-2" aria-label="Carregando" />
-                : e?.aviso ? <span className="text-[11px] text-texto-2">{e.aviso.startsWith("Aproxime") ? "Aproxime o mapa" : "Sem resposta"}</span>
-                : <><strong className="tabular-nums">{(e?.total ?? 0).toLocaleString("pt-BR")}</strong> <span className="text-xs text-texto-2">{UNIDADE[c.id] ?? "itens"} na tela</span></>}
+            <p className="mt-0.5 text-sm">
+              {e?.carregando ? <LoaderCircle className="inline size-3.5 animate-spin text-neutral-400" aria-label="Carregando" />
+                : e?.aviso ? <span className="text-[11px] text-neutral-500" title={e.aviso}>{e.aviso.startsWith("Aproxime") ? "Aproxime o mapa" : "Sem resposta"}</span>
+                : <><strong className="tabular-nums">{(e?.total ?? 0).toLocaleString("pt-BR")}</strong> <span className="text-xs text-neutral-500">{UNIDADE[c.id] ?? "itens"} na tela</span></>}
             </p>
           </div>
         );
