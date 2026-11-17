@@ -13,6 +13,7 @@ const FONTES = {
   ibama_embargos: ["IBAMA · embargos", "https://pamgia.ibama.gov.br/server/rest/services/SISCOM/publico/MapServer/3"],
   prodes_cerrado: ["INPE · desmatamento no Cerrado", "https://terrabrasilis.dpi.inpe.br/"],
   sigef: ["INCRA · parcelas certificadas", "https://geoportal.incra.gov.br/catalogue/#/dataset/1"],
+  inmet_avisos: ["INMET · avisos meteorológicos (tempestade, chuva forte, ventania, geada, onda de calor)", "https://alertas2.inmet.gov.br/"],
 } as const;
 type Fonte = keyof typeof FONTES;
 type Area = {id:string;nome:string;hectares:number;ativo:boolean;vinculo:boolean;habilitada:boolean;leituras:{
@@ -66,7 +67,8 @@ async function desativar(form:FormData) {
   revalidatePath(pagina); redirect(pagina+"?aviso="+(error?"falha":"fim"));
 }
 const labels:Record<string,string> = {data_hora_gmt:"Detecção (GMT)",satelite:"Satélite",id_foco_bdq:"Foco",year:"Ano PRODES",area_km:"Área (km²)",
-  num_tad:"Termo",serie_tad:"Série",dat_embargo:"Data do embargo",sit_desmatamento:"Situação",parcela_codigo:"Parcela",status:"Situação",data_aprovacao:"Aprovação"};
+  num_tad:"Termo",serie_tad:"Série",dat_embargo:"Data do embargo",sit_desmatamento:"Situação",parcela_codigo:"Parcela",status:"Situação",data_aprovacao:"Aprovação",
+  evento:"Evento",severidade:"Severidade",cor:"Nível",inicio:"Início",fim:"Fim"};
 function valor(k:string,v:unknown) {return k==="dat_embargo" && typeof v==="number" ? new Date(v).toLocaleDateString("pt-BR",{timeZone:"UTC"}) : String(v);}
 
 export default async function Monitoramento({searchParams}:{searchParams:Promise<{p?:string;aviso?:string}>}) {
@@ -87,6 +89,7 @@ export default async function Monitoramento({searchParams}:{searchParams:Promise
         {painel.areas.map(a=><div key={a.id} className="cartao space-y-2 p-4"><h3 className="font-semibold">{a.nome}</h3>
           <p>{Number(a.hectares).toLocaleString("pt-BR")} ha · {a.ativo ? !a.vinculo ? "Suspenso até nova confirmação da divisa e do vínculo" : a.habilitada?"Ativo":"Suspenso pelo plano ou pela cota" : "Encerrado"}</p>
           {a.leituras.map(l=><p key={l.fonte} className="text-sm">{FONTES[l.fonte][0]} · {l.falhou?"Fonte indisponível na última tentativa. ":""}{l.lida_em?"Última leitura em "+data(l.lida_em):"Aguardando a primeira leitura"}</p>)}
+          <a href={`/api/conta/monitoramento/${a.id}/relatorio`} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold underline">Relatório do mês (PDF)</a>
           {a.ativo && <form action={desativar}><input type="hidden" name="id" value={a.id}/><button className="btn-contorno px-3 py-1">Desativar monitoramento</button></form>}
         </div>)}
       </Secao>

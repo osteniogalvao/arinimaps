@@ -17,7 +17,7 @@ type Props = {
 type Formato = "kml" | "kmz" | "geojson" | "shp" | "dxf" | "memorial";
 
 const BOTAO_PADRAO =
-  "flex w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-linha-forte py-3 text-sm font-bold text-texto transition hover:border-verde hover:text-verde";
+  "btn-verde flex w-full items-center justify-center gap-2 py-3 text-sm font-bold";
 const ITEM = "flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-texto transition hover:bg-superficie-2";
 
 const nomeArquivo = (s: string) => s.normalize("NFD").replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");

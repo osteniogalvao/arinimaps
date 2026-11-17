@@ -1,6 +1,6 @@
 import { raioConsulta } from "@/lib/rural/raios";
 import { tourDaArea } from "@/components/tour/tourDaArea";
-import RelatorioPersonalizado from "@/components/rural/RelatorioPersonalizado";
+import GeradorRelatorio from "@/components/rural/GeradorRelatorio";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
@@ -92,11 +92,6 @@ export default async function ConsultaAreaDesenhada({ params, searchParams }: Pa
               ))}
             </dl>
             <div>
-              <div className="mb-4 flex flex-wrap gap-4 text-sm font-semibold text-verde underline">
-                <a href={relatorio + "?modelo=simples&raio_m=" + raioM}>Baixar PDF simples</a>
-                {relatorioCompleto && <a href={relatorio + "?modelo=completo&raio_m=" + raioM}>Baixar PDF completo</a>}
-              </div>
-              <RelatorioPersonalizado caminho={relatorio} raioM={raioM} completo={relatorioCompleto} desenho />
               <BotaoExportarSig nomeBase={`area-${tamanho.replace(/\s+/g, "")}-${chave.slice(4, 12)}`}
                 divisa={{
                   geometry: area.geometry, rotulo: "Área desenhada",
@@ -108,6 +103,9 @@ export default async function ConsultaAreaDesenhada({ params, searchParams }: Pa
               do CAR ou da matrícula.
             </p>
           </div>
+        </div>
+        <div className="mt-6">
+          <GeradorRelatorio caminho={relatorio} raioM={raioM} completo={relatorioCompleto} desenho nomeArquivo={"area-" + chave.slice(4, 16)} />
         </div>
         </Secao>
 

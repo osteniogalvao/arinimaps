@@ -16,6 +16,7 @@ import { inteligenciaMercado } from "./jobs/inteligenciaMercado.mjs";
 import { otimizarVideo } from "./jobs/otimizarVideo.mjs";
 import { monitorar } from "./jobs/monitorar.mjs";
 import { verificarAreas } from "./jobs/monitorarAreas.mjs";
+import { avisarRelatoriosMensais } from "./jobs/relatorioMensalAreas.mjs";
 import { lembretesProprietario } from "./jobs/lembretesProprietario.mjs";
 import { agendarGlebasSicor, atualizarGlebasSicor } from "./jobs/glebasSicor.mjs";
 import { coletarCotacoes } from "./jobs/cotacoes.mjs";
@@ -278,6 +279,10 @@ if (!process.env.WORKER_UMA_VEZ) {
   setInterval(agendarSicor, 6 * 3_600_000);
   setInterval(verificarInterrompidos, 5 * 60_000);
   setInterval(() => void monitorar(db).catch((e) => console.error("[monitor]", e.message)), 5 * 60_000);
+  // relatório mensal da área monitorada: confere de hora em hora; só age no dia 1º
+  const relatorioMensal = () => void avisarRelatoriosMensais(db).catch((e) => console.error("[relatório mensal]", e.message));
+  relatorioMensal();
+  setInterval(relatorioMensal, 3_600_000);
   setTimeout(() => void monitorar(db).catch((e) => console.error("[monitor]", e.message)), 30_000);
 }
 await Promise.all([verificarInterrompidos(), agendarPois(), agendarVerificacaoFontes(), agendarRotinas(), agendarLembretes(), agendarCotacoes()]);

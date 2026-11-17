@@ -9,12 +9,16 @@
  * busca). Antes a faixa inteira era um link só, e quem queria ver o boi gordo
  * caía na série em destaque (vídeo do Carlos, 10/11/2026: "aqui a pessoa não
  * tem como clicar (...) eu quero o clicável, que abra uma aba própria").
+ *
+ * 17/11: além da variação do dia, cada item mostra a de 30 dias e uma
+ * minilinha dos últimos fechamentos; no fim, o atalho para receber as
+ * cotações pelo WhatsApp (atendimento automático, comando COTAÇÕES).
  */
 
 import Link from "next/link";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, MessageCircle, Minus } from "lucide-react";
 import {
-  type CotacaoAtual, formatarValor, formatarVariacao, rotuloFaixa, sentido,
+  type CotacaoFaixa, formatarValor, formatarVariacao, rotuloFaixa, sentido,
 } from "@/lib/mercado/formato";
 
 // cores fixas: a faixa é sempre escura (Verde Profundo), nos dois temas
@@ -33,7 +37,22 @@ function Variacao({ v }: { v: number | null }) {
   );
 }
 
-function Lista({ itens, oculta = false }: { itens: CotacaoAtual[]; oculta?: boolean }) {
+const TRACO = { alta: "#7FC29F", baixa: "#FF8F80", estavel: "rgba(255,255,255,.45)" } as const;
+
+/** Minilinha dos últimos fechamentos, na cor do sentido do período. */
+function Linha({ valores }: { valores: number[] }) {
+  if (valores.length < 3) return null;
+  const min = Math.min(...valores), max = Math.max(...valores), faixa = max - min || 1;
+  const pts = valores.map((v, i) => `${((i / (valores.length - 1)) * 40).toFixed(1)},${(13 - ((v - min) / faixa) * 12).toFixed(1)}`).join(" ");
+  const s = sentido((valores[valores.length - 1] / valores[0] - 1) * 100);
+  return (
+    <svg viewBox="0 0 40 14" className="hidden h-3.5 w-10 self-center sm:block" aria-hidden>
+      <polyline points={pts} fill="none" stroke={TRACO[s]} strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Lista({ itens, oculta = false }: { itens: CotacaoFaixa[]; oculta?: boolean }) {
   return (
     <ul className="flex shrink-0 items-center" aria-hidden={oculta || undefined}>
       {itens.map((c) => (
@@ -52,6 +71,12 @@ function Lista({ itens, oculta = false }: { itens: CotacaoAtual[]; oculta?: bool
             </span>
             <span className="text-xs text-white/50">{c.unidade.startsWith("R$/") ? c.unidade.slice(2) : c.unidade === "pontos" ? "pts" : c.unidade}</span>
             <Variacao v={c.variacao} />
+            <Linha valores={c.linha} />
+            {c.variacao30 != null && (
+              <span className="text-xs tabular-nums text-white/55">
+                30d <span className={COR[sentido(c.variacao30)]}>{formatarVariacao(c.variacao30)}</span>
+              </span>
+            )}
           </Link>
           <span className="mx-1 h-3 w-px self-center bg-white/15" aria-hidden />
         </li>
@@ -60,9 +85,10 @@ function Lista({ itens, oculta = false }: { itens: CotacaoAtual[]; oculta?: bool
   );
 }
 
-export default function FaixaCotacoes({ itens }: { itens: CotacaoAtual[] }) {
+export default function FaixaCotacoes({ itens, whatsapp }: { itens: CotacaoFaixa[]; whatsapp?: string }) {
   // ~6 s por item: dá para ler sem pressa
-  const duracao = `${Math.max(28, itens.length * 6)}s`;
+  const duracao = `${Math.max(28, itens.length * 7)}s`;
+  const wa = whatsapp?.replace(/\D/g, "");
   return (
     <div className="lp-marquee-grupo group lp-container flex h-10 items-center gap-4 text-[13px] text-white/85 md:text-sm">
       <Link
@@ -81,6 +107,19 @@ export default function FaixaCotacoes({ itens }: { itens: CotacaoAtual[] }) {
           <Lista itens={itens} oculta />
         </div>
       </div>
+      {wa && (
+        <a
+          href={`https://wa.me/${wa}?text=${encodeURIComponent("COTAÇÕES")}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Receba as cotações do dia no WhatsApp, com resposta automática"
+          className="flex shrink-0 items-center gap-1.5 rounded-md text-[#7FC29F] outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-[#D9BD6F]"
+        >
+          <MessageCircle className="size-3.5" aria-hidden />
+          <span className="hidden lg:inline">No WhatsApp</span>
+          <span className="sr-only lg:hidden">Receber as cotações no WhatsApp</span>
+        </a>
+      )}
       <Link
         href="/mercado"
         className="group/todas flex shrink-0 items-center gap-1.5 rounded-md text-white/60 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-[#D9BD6F]"
