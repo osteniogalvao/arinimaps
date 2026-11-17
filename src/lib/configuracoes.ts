@@ -58,7 +58,7 @@ export const GRUPOS: Grupo[] = [
     campos: [
       { chave: "hero_eyebrow", rotulo: "Linha de topo", tipo: "texto", padrao: "Pontal do Triângulo Mineiro",
         ajuda: "Texto pequeno acima do título principal." },
-      { chave: "hero_titulo", rotulo: "Título principal", tipo: "texto", padrao: "Seu próximo negócio imobiliário,",
+      { chave: "hero_titulo", rotulo: "Título principal", tipo: "texto", padrao: "Seu próximo negócio imobiliário",
         ajuda: "Primeira parte do título (fica em branco)." },
       { chave: "hero_destaque", rotulo: "Destaque do título", tipo: "texto", padrao: "começa no mapa.",
         ajuda: "Segunda parte, exibida em dourado." },
