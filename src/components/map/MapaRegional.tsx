@@ -1937,7 +1937,8 @@ export default function MapaRegional({
         </>}
         <MarcadorDaUrl map={mapaPronto} />
         {pronto && !camadasAbertas && (
-          <FiltrosRapidos onCatalogo={() => { setPainelMapa("camadas"); setAvisoPlano(""); }}
+          <FiltrosRapidos onDelimitar={() => { setPainelMapa(null); setPedidoRecorte(n => n + 1); }}
+            areas={areasCamadas.length} onAreas={() => { if (!areaId) setAreaId(areasCamadas[0].id); setPainelMapa("camadas"); setAvisoPlano(""); }}
             car={carAtivo} avisoCar={carAviso} alternarCar={() => {
               carEscolhido.current = true;
               setCarAtivo(!carAtivo);
