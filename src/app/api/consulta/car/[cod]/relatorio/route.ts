@@ -7,6 +7,7 @@ import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 import { carregarConsultaArea } from "@/lib/geo/consultaArea";
 import { pdfDaArea, type SecaoPdf } from "@/lib/relatorio/pdf-area";
 import { TEMAS_CAR, type TemaCar } from "@/lib/geo/temasCar";
+import { acessoAtual } from "@/lib/planos-servidor";
 
 const tipos: Record<string,string> = { IRU: "Imóvel rural", AST: "Assentamento", PCT: "Povos e comunidades tradicionais" };
 const situacoes: Record<string,string> = { AT: "Ativo", PE: "Pendente", SU: "Suspenso", CA: "Cancelado" };
@@ -18,6 +19,23 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
   if (bloqueio) return bloqueio;
   const cod = (await ctx.params).cod.toUpperCase();
   if (!/^[A-Z]{2}-\d{7}-[0-9A-F.-]{20,45}$/i.test(cod)) return Response.json({ error: "Código CAR inválido." }, { status: 400 });
+  // 17/11/2026: o modelo completo (fontes oficiais, ambiente e clima) é do plano
+  // com relatório territorial, como no relatório da área desenhada. O simples
+  // continua público (dados do próprio CAR). Clique no link vai para entrar ou
+  // para os planos; chamada de API recebe o erro em JSON.
+  if (modelo === "completo") {
+    const { userId, acesso } = await acessoAtual();
+    if (!acesso.recursos.has("relatorio_territorial")) {
+      const navegador = request.headers.get("accept")?.includes("text/html");
+      const volta = "/consulta/car/" + encodeURIComponent(cod);
+      if (navegador) {
+        return Response.redirect(new URL(userId ? "/planos?recurso=relatorio_territorial" : "/entrar?volta=" + encodeURIComponent(volta), request.url), 303);
+      }
+      return userId
+        ? Response.json({ error: "Seu plano não inclui o relatório completo." }, { status: 403 })
+        : Response.json({ error: "Entre para baixar o relatório completo." }, { status: 401 });
+    }
+  }
   const db = supabaseAdmin();
   const {data, error} = await consultarCar(cod);
   if (error) return Response.json({ error:"A consulta está indisponível." }, {status:503});
