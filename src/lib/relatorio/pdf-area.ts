@@ -154,6 +154,43 @@ export async function pdfDaArea(titulo: string, codigo: string, secoes: SecaoPdf
       linha("Imagem histórica regional: NASA Earth Observatory, MODIS Blue Marble, agosto de 2004, 500 m/pixel, via NASA GIBS.");
     } else linha("Imagem de satélite indisponível na emissão. A figura apresenta somente o perímetro.");
   }
+  // 17/11/2026 (pedido 13.1 do Carlos, estrutura dos PDFs do Dados Fazenda):
+  // painel de situação logo após o mapa, um cartão por fonte consultada, com
+  // a mesma regra do selo de cada seção. Só aparece quando há fontes.
+  const situacao = (secao: SecaoPdf) => {
+    const achados = secao.linhas.join(" ").match(/registros encontrados: (\d+)/i);
+    const indisponivel = secao.linhas.some((l) => /indispon/i.test(l));
+    if (!achados && !indisponivel) return null;
+    const n = Number(achados?.[1] ?? 0);
+    return { titulo: secao.titulo.split(" · ")[0], n, indisponivel: indisponivel && !achados, cor: corDoTema(secao.titulo) };
+  };
+  const cartoes = secoes.map(situacao).filter((c): c is NonNullable<ReturnType<typeof situacao>> => !!c);
+  if (cartoes.length >= 2) {
+    const comRegistro = cartoes.filter((c) => c.n > 0).length, fora = cartoes.filter((c) => c.indisponivel).length;
+    if (y < 200) quebra();
+    y -= 8;
+    pagina.drawText("Painel da consulta",{x:margem,y,font:negrito,size:14,color:verde});
+    y -= 16;
+    pagina.drawText(seguro(`${cartoes.length} fontes · ${comRegistro} com registros na área · ${cartoes.length - comRegistro - fora} sem ocorrência · ${fora} indisponíveis`),
+      {x:margem,y,font:fonte,size:9,color:cinza});
+    y -= 12;
+    const colunas = 3, gap = 8, lc = (util - gap*(colunas-1))/colunas, hc = 38;
+    cartoes.forEach((c, i) => {
+      const col = i % colunas;
+      if (col === 0) { if (y - hc < 60) quebra(); y -= hc + (i ? gap : 0); }
+      const x = margem + col*(lc + gap);
+      const corStatus = c.indisponivel ? rgb(.55,.55,.55) : c.n > 0 ? c.cor : rgb(.18,.56,.34);
+      pagina.drawRectangle({x,y,width:lc,height:hc,color:tom(corStatus,.9),borderColor:tom(corStatus,.6),borderWidth:.6});
+      pagina.drawRectangle({x,y,width:4,height:hc,color:corStatus});
+      let nome = seguro(c.titulo);
+      while (nome.length > 3 && negrito.widthOfTextAtSize(nome,8) > lc-16) nome = nome.slice(0,-2);
+      if (nome !== seguro(c.titulo)) nome = nome.trimEnd() + "...";
+      pagina.drawText(nome,{x:x+10,y:y+hc-14,font:negrito,size:8,color:escurecer(corStatus)});
+      const status = c.indisponivel ? "Fonte indisponível" : c.n > 0 ? `${c.n.toLocaleString("pt-BR")} ${c.n === 1 ? "registro" : "registros"}` : "Nada encontrado";
+      pagina.drawText(seguro(status),{x:x+10,y:y+8,font:c.n > 0 ? negrito : fonte,size:11,color:tinta});
+    });
+    y -= 14;
+  }
   for(const secao of secoes) {
     if(y<136) quebra();
     y-=10;
