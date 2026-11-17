@@ -9,7 +9,9 @@
  * e unidades de conservação são grandes e aparecem já na visão regional.
  */
 export type CamadaOficialId =
-  | "snci" | "credito_rural" | "outorgas_federais" | "sigef" | "ibama_embargos" | "anm" | "funai" | "ucs" | "quilombolas" | "prodes_cerrado" | "inpe_queimadas" | "ibge_biomas";
+  | "snci" | "credito_rural" | "outorgas_federais" | "sigef" | "ibama_embargos" | "anm" | "funai" | "ucs" | "quilombolas" | "prodes_cerrado" | "inpe_queimadas" | "ibge_biomas"
+  | "aneel_transmissao" | "aneel_hidreletricas" | "aneel_termeletricas" | "aneel_solar" | "iphan_sitios" | "ana_rios"
+  | "prodes_biomas" | "assentamentos" | "ucs_brasil" | "ibama_autos" | "florestas_publicas" | "aerodromos" | "ana_pivos" | "barragens";
 
 export type CamadaOficial = {
   id: CamadaOficialId;
@@ -20,6 +22,10 @@ export type CamadaOficial = {
   zoomMin: number;
   /** focos de calor são pontos; o resto, polígonos */
   ponto?: boolean;
+  /** rede de linhas (transmissão, rios): traço clicável, sem preenchimento; pontos da mesma fonte viram círculos */
+  linha?: boolean;
+  /** fonte de geometria variável (achada pelo nome do serviço): desenha polígono, linha e ponto */
+  misto?: boolean;
   /** o que essa camada significa para quem negocia terra */
   ajuda: string;
   /** cor por valor de `nome` (biomas); sem isto, tudo em `cor` */
@@ -75,6 +81,39 @@ export const CAMADAS_OFICIAIS: CamadaOficial[] = [
     ajuda: "Bioma pelo limite oficial do IBGE: define o percentual de reserva legal e as regras de supressão." },
   { id: "anm", nome: "Processos minerários", orgao: "ANM", grupo: "Infraestrutura", cor: "#E6E6E6", zoomMin: 9,
     ajuda: "Pedido ou direito de pesquisa e lavra mineral sobre a área." },
+  // 17/11/2026: camadas que o Dados Fazenda oferece no plano Pro e cuja fonte
+  // pública já respondia na consulta de área (src/lib/rural/adaptadores.ts).
+  { id: "aneel_transmissao", nome: "Linhas de energia e subestações", orgao: "ANEEL/ONS", grupo: "Infraestrutura", cor: "#FFD54F", zoomMin: 9, linha: true,
+    ajuda: "Linha de transmissão gera faixa de servidão: restringe construção e plantio alto sob os cabos." },
+  { id: "aneel_hidreletricas", nome: "Hidrelétricas (UHE, PCH, CGH)", orgao: "ANEEL", grupo: "Infraestrutura", cor: "#40C4FF", zoomMin: 7, ponto: true,
+    ajuda: "Usinas hidrelétricas e pequenas centrais. Perto do reservatório pode haver APP e área desapropriada." },
+  { id: "aneel_termeletricas", nome: "Termelétricas", orgao: "ANEEL", grupo: "Infraestrutura", cor: "#FF7043", zoomMin: 7, ponto: true,
+    ajuda: "Usinas térmicas, inclusive as de bagaço de cana das usinas de açúcar e etanol." },
+  { id: "aneel_solar", nome: "Usinas solares", orgao: "ANEEL", grupo: "Infraestrutura", cor: "#FFEA00", zoomMin: 7, ponto: true,
+    ajuda: "Usinas fotovoltaicas outorgadas: indicam arrendamento de terra para energia na região." },
+  { id: "ana_rios", nome: "Rios e cursos d'água (ANA)", orgao: "ANA", grupo: "Ambiental", cor: "#29B6F6", zoomMin: 11, linha: true,
+    ajuda: "Base hidrográfica oficial da ANA. Margens de rio são APP pelo Código Florestal." },
+  { id: "iphan_sitios", nome: "Sítios arqueológicos e bens tombados", orgao: "IPHAN", grupo: "Fundiário", cor: "#D7A86E", zoomMin: 9, ponto: true,
+    ajuda: "Bem cultural cadastrado no IPHAN: obra ou supressão no local exige autorização prévia." },
+  // 17/11/2026, segundo lote. O serviço de cada uma é achado pelo nome na pasta
+  // do órgão (src/lib/geo/camadasMapa.ts): se o órgão renomear, a camada avisa
+  // que não respondeu, e o resto do mapa segue igual.
+  { id: "prodes_biomas", nome: "Desmatamento (PRODES outros biomas)", orgao: "INPE", grupo: "Ambiental", cor: "#B2FF59", zoomMin: 12,
+    ajuda: "PRODES da Amazônia Legal, Mata Atlântica, Caatinga, Pampa e Pantanal: supressão detectada por satélite, por ano." },
+  { id: "assentamentos", nome: "Assentamentos", orgao: "INCRA", grupo: "Fundiário", cor: "#26A69A", zoomMin: 8, misto: true,
+    ajuda: "Projeto de assentamento da reforma agrária: lote não pode ser vendido antes da titulação." },
+  { id: "ucs_brasil", nome: "Unidades de conservação (Brasil)", orgao: "ICMBio/MMA", grupo: "Ambiental", cor: "#00C853", zoomMin: 7, misto: true,
+    ajuda: "UCs federais, estaduais e municipais de todo o país. A de proteção integral impede o uso; a de uso sustentável impõe regras." },
+  { id: "ibama_autos", nome: "Autos de infração", orgao: "IBAMA", grupo: "Ambiental", cor: "#FF4081", zoomMin: 10, misto: true,
+    ajuda: "Autuação ambiental registrada no local. Vale checar se gerou embargo ou débito." },
+  { id: "florestas_publicas", nome: "Florestas públicas", orgao: "SFB", grupo: "Fundiário", cor: "#2E7D32", zoomMin: 8, misto: true,
+    ajuda: "Cadastro Nacional de Florestas Públicas: terra pública ou destinada não pode ser vendida como particular." },
+  { id: "aerodromos", nome: "Aeródromos", orgao: "ANAC", grupo: "Infraestrutura", cor: "#B0BEC5", zoomMin: 7, misto: true,
+    ajuda: "Pistas públicas e privadas. Perto delas há limite de altura de construção e de aplicação aérea." },
+  { id: "ana_pivos", nome: "Pivôs de irrigação", orgao: "ANA/Embrapa", grupo: "Infraestrutura", cor: "#00E5FF", zoomMin: 10, misto: true,
+    ajuda: "Pivôs centrais mapeados por satélite: sinal de agricultura irrigada e de outorga de água." },
+  { id: "barragens", nome: "Barragens e reservatórios", orgao: "ANA/ANEEL", grupo: "Infraestrutura", cor: "#448AFF", zoomMin: 9, misto: true,
+    ajuda: "Barragens do SNISB e reservatórios de usinas: há APP no entorno e risco a jusante." },
 ];
 
 export const camadaOficialPorId = (id: string) => CAMADAS_OFICIAIS.find((c) => c.id === id);
@@ -109,5 +148,26 @@ export function descreverFeicao(id: CamadaOficialId, p: Record<string, unknown>)
       return { titulo: `Desmatamento ${s(p.ano)}`, detalhe: junta(ha(p.area_ha), "PRODES Cerrado") };
     case "ibge_biomas":
       return { titulo: s(p.nome) || "Bioma", detalhe: "Limite oficial do IBGE (1:250.000)" };
+    case "aneel_transmissao":
+      return { titulo: `${s(p.tipo) || "Linha de transmissão"}${s(p.nome) ? ` — ${s(p.nome)}` : ""}`, detalhe: junta(s(p.tensao) && `${s(p.tensao)} kV`, s(p.agente), s(p.situacao)) };
+    case "aneel_hidreletricas":
+    case "aneel_termeletricas":
+    case "aneel_solar":
+      return { titulo: `${s(p.tipo) || "Usina"}${s(p.nome) ? ` — ${s(p.nome)}` : ""}`,
+        detalhe: junta(Number(p.potencia_kw) > 0 ? `${(Number(p.potencia_kw) / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MW` : "", s(p.situacao), s(p.agente)) };
+    case "iphan_sitios":
+      return { titulo: s(p.nome) || "Bem cultural cadastrado", detalhe: junta(s(p.tipo), s(p.classificacao), s(p.codigo) && `IPHAN ${s(p.codigo)}`) };
+    case "ana_rios":
+      return { titulo: s(p.nome) || "Curso d'água sem nome cadastrado", detalhe: "Base hidrográfica da ANA" };
+    case "prodes_biomas":
+      return { titulo: `Desmatamento ${s(p.ano)}`, detalhe: junta(ha(p.area_ha), s(p.bioma) && `PRODES ${s(p.bioma)}`) };
+    case "assentamentos":
+    case "ucs_brasil":
+    case "ibama_autos":
+    case "florestas_publicas":
+    case "aerodromos":
+    case "ana_pivos":
+    case "barragens":
+      return { titulo: s(p.nome) || camadaOficialPorId(id)!.nome, detalhe: junta(s(p.detalhe), ha(p.area_ha)) };
   }
 }

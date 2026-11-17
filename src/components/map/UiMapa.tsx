@@ -286,7 +286,11 @@ export const SITUACOES_CAR = [
 ] as const;
 export type SituacaoCar = (typeof SITUACOES_CAR)[number]["id"];
 
-const AMBIENTAL: CamadaOficialId[] = ["ucs", "prodes_cerrado", "ibama_embargos", "inpe_queimadas", "outorgas_federais", "quilombolas", "anm", "ibge_biomas"];
+const AMBIENTAL: CamadaOficialId[] = ["ucs", "ucs_brasil", "prodes_cerrado", "prodes_biomas", "ibama_embargos", "ibama_autos", "inpe_queimadas",
+  "outorgas_federais", "ana_rios", "quilombolas", "assentamentos", "florestas_publicas", "iphan_sitios", "anm", "ibge_biomas"];
+// 17/11: energia (ANEEL) ganha pílula própria, como no Dados Fazenda
+const ENERGIA: CamadaOficialId[] = ["aneel_transmissao", "aneel_hidreletricas", "aneel_termeletricas", "aneel_solar", "barragens", "ana_pivos", "aerodromos"];
+const COR_ENERGIA = "#FFD54F";
 const AMBIENTAL_PADRAO: CamadaOficialId[] = ["ucs", "prodes_cerrado", "ibama_embargos"];
 const COR_AMBIENTAL = "#E91E63";
 
@@ -338,7 +342,7 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
   onAlternar: (id: CamadaOficialId) => void;
 }) {
   const [aberto, setAberto] = useState(true);
-  const [lista, setLista] = useState<"car" | "ambiental" | null>(null);
+  const [lista, setLista] = useState<"car" | "ambiental" | "energia" | null>(null);
   const def = (id: CamadaOficialId) => CAMADAS_OFICIAIS.find((c) => c.id === id)!;
   const simples = (id: CamadaOficialId, rotulo: string) => {
     const d = def(id); const e = estado[id];
@@ -347,6 +351,13 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
       carregando={e?.carregando} aviso={!!e?.aviso} onClick={() => onAlternar(id)} />;
   };
   const ambientaisLigadas = AMBIENTAL.filter((id) => ativas.has(id));
+  const energiaLigadas = ENERGIA.filter((id) => ativas.has(id));
+  const itemDaLista = (id: CamadaOficialId) => {
+    const d = def(id); const e = estado[id];
+    return <ItemFiltro key={id} cor={d.cores ? "linear-gradient(135deg,#2E9E5B,#C9B23B,#4FA3C7)" : d.cor} nome={d.nome.replace(/ \(.*\)$/, "")} ponto={d.ponto}
+      ligada={ativas.has(id)} alternar={() => onAlternar(id)}
+      detalhe={ativas.has(id) && e?.carregando ? <LoaderCircle className="size-3 animate-spin text-texto-2" aria-label="Carregando" /> : undefined} />;
+  };
   const caixa = "w-64 rounded-2xl border border-linha bg-superficie/97 p-3 shadow-[0_14px_32px_-18px_rgb(0_0_0/0.8)] backdrop-blur-md";
   return (
     <div role="group" aria-label="Filtros rápidos de camadas"
@@ -382,18 +393,68 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
         {lista === "ambiental" && (
           <div className={caixa}>
             <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Ambiental</p>
-            {AMBIENTAL.map((id) => {
-              const d = def(id); const e = estado[id];
-              return <ItemFiltro key={id} cor={d.cores ? "linear-gradient(135deg,#2E9E5B,#C9B23B,#4FA3C7)" : d.cor} nome={d.nome.replace(/ \(.*\)$/, "")} ponto={d.ponto}
-                ligada={ativas.has(id)} alternar={() => onAlternar(id)}
-                detalhe={ativas.has(id) && e?.carregando ? <LoaderCircle className="size-3 animate-spin text-texto-2" aria-label="Carregando" /> : undefined} />;
-            })}
+            {AMBIENTAL.map(itemDaLista)}
             {ambientaisLigadas.some((id) => estado[id]?.aviso) && (
               <p className="pt-1 text-[11px] leading-snug text-alerta">Algumas camadas só aparecem com o mapa mais aproximado.</p>
             )}
           </div>
         )}
+        <Pilula cor={COR_ENERGIA} ligada={energiaLigadas.length > 0}
+          rotulo={energiaLigadas.length ? `Energia · ${energiaLigadas.length}` : "Energia"}
+          titulo="Linhas de transmissão, usinas, barragens, pivôs e aeródromos"
+          carregando={energiaLigadas.some((id) => estado[id]?.carregando)}
+          onClick={() => (energiaLigadas.length ? energiaLigadas : ENERGIA).forEach(onAlternar)}
+          aberto={lista === "energia"} onAbrir={() => setLista(lista === "energia" ? null : "energia")} />
+        {lista === "energia" && (
+          <div className={caixa}>
+            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Energia e infraestrutura</p>
+            {ENERGIA.map(itemDaLista)}
+          </div>
+        )}
       </>}
+    </div>
+  );
+}
+
+/** Unidade da contagem de cada camada na faixa de resumo. */
+const UNIDADE: Partial<Record<CamadaOficialId, string>> = {
+  sigef: "parcelas", snci: "imóveis", credito_rural: "glebas", outorgas_federais: "outorgas", funai: "terras",
+  quilombolas: "territórios", ibama_embargos: "embargos", ucs: "unidades", prodes_cerrado: "polígonos",
+  inpe_queimadas: "focos", ibge_biomas: "biomas", anm: "processos", aneel_transmissao: "trechos",
+  aneel_hidreletricas: "usinas", aneel_termeletricas: "usinas", aneel_solar: "usinas", ana_rios: "trechos", iphan_sitios: "bens",
+  prodes_biomas: "polígonos", assentamentos: "assentamentos", ucs_brasil: "unidades", ibama_autos: "autos", florestas_publicas: "florestas",
+  aerodromos: "pistas", ana_pivos: "pivôs", barragens: "barragens",
+};
+
+/**
+ * Faixa de resumo (17/11/2026, referência do Dados Fazenda): um cartão por
+ * camada oficial ligada, com a contagem do que está na tela. Só lê o estado
+ * que as camadas já calculam; não faz pedido nenhum.
+ */
+export function ResumoCamadas({ ativas, estado }: {
+  ativas: ReadonlySet<CamadaOficialId>; estado: Partial<Record<CamadaOficialId, EstadoCamada>>;
+}) {
+  const ligadas = CAMADAS_OFICIAIS.filter((c) => ativas.has(c.id));
+  if (!ligadas.length) return null;
+  return (
+    <div role="status" aria-label="Resumo das camadas na tela" className="hidden sm:flex gap-2 overflow-x-auto pb-0.5">
+      {ligadas.map((c) => {
+        const e = estado[c.id];
+        return (
+          <div key={c.id} title={`${c.nome} · ${c.orgao}`}
+            className="min-w-[8.5rem] shrink-0 rounded-xl border border-linha bg-superficie/95 px-3 py-2 shadow-[0_6px_18px_-12px_rgb(0_0_0/0.8)] backdrop-blur-md">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-texto-2">
+              <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ background: c.cor }} />
+              <span className="truncate">{c.nome.replace(/ \(.*\)$/, "")}</span>
+            </p>
+            <p className="mt-0.5 text-sm text-texto">
+              {e?.carregando ? <LoaderCircle className="inline size-3.5 animate-spin text-texto-2" aria-label="Carregando" />
+                : e?.aviso ? <span className="text-[11px] text-texto-2">{e.aviso.startsWith("Aproxime") ? "Aproxime o mapa" : "Sem resposta"}</span>
+                : <><strong className="tabular-nums">{(e?.total ?? 0).toLocaleString("pt-BR")}</strong> <span className="text-xs text-texto-2">{UNIDADE[c.id] ?? "itens"} na tela</span></>}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }
