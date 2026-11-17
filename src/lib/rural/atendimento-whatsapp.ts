@@ -24,7 +24,11 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 export type PedidoAtendimento =
   | { tipo: "menu" }
   | { tipo: "cotacao"; termo: string | null }
-  | { tipo: "local"; lat: number; lng: number };
+  | { tipo: "local"; lat: number; lng: number }
+  | { tipo: "car"; cod: string };
+
+/** Resposta do atendimento: texto e, quando o plano permite, o PDF do relatório. */
+export type RespostaAtendimento = { texto: string; documento?: { link: string; nome: string; legenda: string } };
 
 type Mensagem = { type: string; text?: { body: string }; location?: { latitude?: number; longitude?: number } };
 
@@ -40,6 +44,11 @@ export function pedidoAtendimento(m: Mensagem): PedidoAtendimento | null {
   }
   if (m.type !== "text" || !m.text?.body) return null;
   const t = semAcento(m.text.body).replace(/[.!?]+$/g, "").replace(/\s+/g, " ").trim();
+  const car = /^(?:consultar|consulta|relatorio|laudo)(?:\s+(?:do|de))?\s+car\s*[:#]?\s+([a-z]{2}-\d{7}-[\da-f.]{32,39})$/.exec(t);
+  if (car) {
+    const cod = car[1].toUpperCase().replace(/\./g, "");
+    if (/^[A-Z]{2}-\d{7}-[A-F0-9]{32}$/.test(cod)) return { tipo: "car", cod };
+  }
   if (/^(menu|ajuda|arini|atendimento|opcoes)$/.test(t)) return { tipo: "menu" };
   if (/^(boi|boi gordo|arroba|arroba do boi)$/.test(t)) return { tipo: "cotacao", termo: "boi gordo" };
   const cot = /^(?:cotacao|cotacoes)(?:\s+(?:do|da|de|dos|das))?(?:\s+(.{2,40}))?$/.exec(t);
@@ -97,8 +106,8 @@ function textoMenu(conta: Conta | null) {
     "O que você pode pedir por aqui:",
     "• BOI: cotação do boi gordo",
     "• COTAÇÃO MILHO (ou SOJA, DÓLAR...): outras cotações",
-    "• Envie a sua LOCALIZAÇÃO (clipe › Localização) para ver o imóvel do CAR naquele ponto",
-    "• CONSULTAR CAR seguido do código do imóvel",
+    "• Envie a sua LOCALIZAÇÃO (clipe › Localização) para receber o imóvel do CAR naquele ponto e o relatório em PDF",
+    "• CONSULTAR CAR seguido do código do imóvel, para receber o relatório em PDF",
   ];
   const a = conta?.acesso;
   if (a?.recursos.has("relatorio_territorial")) linhas.push("", "Seu plano inclui o relatório territorial completo com as fontes oficiais.");
@@ -178,48 +187,68 @@ async function carNoPonto(lat: number, lng: number): Promise<ImovelCar | null> {
   return features[0]?.properties ?? null;
 }
 
-async function textoLocal(lat: number, lng: number, conta: Conta | null) {
+async function imovelPorCodigo(cod: string): Promise<ImovelCar | null> {
+  const { data, error } = await supabaseAdmin().rpc("fn_car_imovel", { p_cod: cod });
+  if (error) throw Error("Falha ao consultar o CAR.");
+  const p = (data as { properties?: ImovelCar } | null)?.properties;
+  return p ? { ...p, cod } : null;
+}
+
+/**
+ * Item 13.1 das "novas implementações" (17/11): quem pede pelo WhatsApp recebe
+ * direto o PDF que o plano libera, sem pedir à empresa. Relatório completo para
+ * planos com relatório territorial; simples para os demais.
+ */
+function respostaImovel(imovel: ImovelCar | null, conta: Conta | null, origem: "ponto" | "codigo"): RespostaAtendimento {
   const site = urlDoSite();
-  const imovel = await carNoPonto(lat, lng);
   if (!imovel) {
-    return [
-      "Não encontrei imóvel rural do CAR neste ponto.",
+    return { texto: [
+      origem === "ponto" ? "Não encontrei imóvel rural do CAR neste ponto." : "Não encontrei este código na base do CAR.",
       `Abra o mapa da ARINI para conferir a área ou informar um imóvel ausente: ${site}/mapa`,
       RODAPE,
-    ].join("\n");
+    ].join("\n") };
   }
   const area = imovel.area_ha == null ? null : `${formatarValor(Number(imovel.area_ha), 2)} ha`;
+  const a = conta?.acesso;
+  const completo = !!a?.recursos.has("relatorio_territorial");
   const linhas = [
-    "Imóvel do CAR neste ponto:",
+    origem === "ponto" ? "Imóvel do CAR neste ponto:" : "Imóvel do CAR:",
     `• Código: ${imovel.cod}`,
     imovel.municipio ? `• Município: ${imovel.municipio}` : null,
     area ? `• Área declarada: ${area}` : null,
     imovel.condicao ? `• Situação: ${imovel.condicao}` : null,
     "",
-    `Ficha e PDF: ${site}/consulta/car/${imovel.cod}`,
+    completo
+      ? `Segue o relatório territorial completo do seu plano (${a?.planNome ?? "ARINI"}), com as fontes oficiais.`
+      : "Segue o relatório simples da área.",
+    `Ficha, mapa e relatório personalizado: ${site}/consulta/car/${imovel.cod}`,
   ].filter((l): l is string => l !== null);
-  const a = conta?.acesso;
-  if (a?.recursos.has("relatorio_territorial")) {
-    linhas.push("Seu plano inclui o relatório territorial completo: entre na conta pelo link e baixe o relatório com todas as fontes oficiais.");
-  } else if (a?.recursos.has("consulta_area")) {
-    linhas.push("Seu plano inclui a consulta desta área nas fontes oficiais (IBAMA, ICMBio, INPE, ANM, SIGEF...), dentro da cota do mês.");
-  } else if (conta) {
-    linhas.push(`O relatório territorial com as fontes oficiais não está no seu plano (${a?.planNome ?? "Gratuito"}). Veja os planos: ${site}/planos`);
-  } else {
-    linhas.push(`Para receber o relatório do seu plano por aqui, confirme este WhatsApp na sua conta: ${site}/conta`);
+  if (!completo) {
+    if (a?.recursos.has("consulta_area")) linhas.push("Seu plano inclui a consulta desta área nas fontes oficiais (IBAMA, ICMBio, INPE, ANM, SIGEF...), dentro da cota do mês.");
+    else if (conta) linhas.push(`O relatório completo não está no seu plano (${a?.planNome ?? "Gratuito"}). Veja os planos: ${site}/planos`);
+    else linhas.push(`Para receber o relatório do seu plano por aqui, confirme este WhatsApp na sua conta: ${site}/conta`);
   }
-  return linhas.join("\n");
+  const modelo = completo ? "completo" : "simples";
+  return {
+    texto: linhas.join("\n"),
+    documento: {
+      link: `${site}/api/consulta/car/${encodeURIComponent(imovel.cod)}/relatorio?modelo=${modelo}`,
+      nome: `ARINI-${imovel.cod}-${modelo}.pdf`,
+      legenda: `Relatório territorial ${modelo} · ${imovel.cod}`,
+    },
+  };
 }
 
-/** Texto da resposta. Nunca lança: uma falha vira um aviso para tentar de novo. */
-export async function respostaAtendimento(pedido: PedidoAtendimento, numero: string, linhaCotacoes = false) {
+/** Resposta ao pedido. Nunca lança: uma falha vira um aviso para tentar de novo. */
+export async function respostaAtendimento(pedido: PedidoAtendimento, numero: string, linhaCotacoes = false): Promise<RespostaAtendimento> {
   try {
-    if (linhaCotacoes) return await textoCotacao(pedido.tipo === "cotacao" ? pedido.termo : null, true);
-    if (pedido.tipo === "cotacao") return await textoCotacao(pedido.termo);
+    if (linhaCotacoes) return { texto: await textoCotacao(pedido.tipo === "cotacao" ? pedido.termo : null, true) };
+    if (pedido.tipo === "cotacao") return { texto: await textoCotacao(pedido.termo) };
     const conta = await contaDoNumero(numero).catch(() => null);
-    if (pedido.tipo === "menu") return textoMenu(conta);
-    return await textoLocal(pedido.lat, pedido.lng, conta);
+    if (pedido.tipo === "menu") return { texto: textoMenu(conta) };
+    if (pedido.tipo === "car") return respostaImovel(await imovelPorCodigo(pedido.cod), conta, "codigo");
+    return respostaImovel(await carNoPonto(pedido.lat, pedido.lng), conta, "ponto");
   } catch {
-    return `Não consegui responder agora. Tente de novo em alguns minutos ou use o site: ${urlDoSite()}\n${RODAPE}`;
+    return { texto: `Não consegui responder agora. Tente de novo em alguns minutos ou use o site: ${urlDoSite()}\n${RODAPE}` };
   }
 }

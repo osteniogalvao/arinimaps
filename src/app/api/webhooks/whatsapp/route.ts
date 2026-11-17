@@ -74,9 +74,10 @@ export async function POST(request: Request) {
         const pedidoCar = !linhaCotacoes && m.type === "text" && respostaConsultaWhatsapp(texto);
         const dentroDaJanela = !!recebida && Date.now() - Date.parse(recebida) < 24 * 3600_000
           && (linhaCotacoes || (!!process.env.WHATSAPP_PHONE_ID && phoneId === process.env.WHATSAPP_PHONE_ID));
-        const resposta = dentroDaJanela && (pedidoCar || (pedido && await respostaAtendimento(pedido, m.from, linhaCotacoes)));
+        const atendimento = dentroDaJanela && pedido ? await respostaAtendimento(pedido, m.from, linhaCotacoes) : null;
+        const resposta = dentroDaJanela && (atendimento?.texto || pedidoCar);
         if (resposta && recebida) {
-          try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta, m.type === "location" ? "location" : "text", phoneId); }
+          try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta, m.type === "location" ? "location" : "text", phoneId, atendimento?.documento); }
           catch { return NextResponse.json({ok:false},{status:503}); }
           continue;
         }
