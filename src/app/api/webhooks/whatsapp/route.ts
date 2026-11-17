@@ -6,6 +6,7 @@ import { confirmarMensagemWhatsapp, dataWhatsapp } from "@/lib/confirmacao-whats
 import { receberOptIn } from "@/lib/retomada-cadastro";
 import { notificar } from "@/lib/notificacoes";
 import { atenderPedidoConsulta, respostaConsultaWhatsapp } from "@/lib/rural/pedido-whatsapp";
+import { pedidoAtendimento, respostaAtendimento } from "@/lib/rural/atendimento-whatsapp";
 import { CorpoMuitoGrande, limitarFluxo } from "@/lib/seguranca/corpo-limitado";
 
 /**
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
 type Valor = {
   metadata?: {phone_number_id?: string};
-  messages?: { id: string; from: string; timestamp?: string; type: string; text?: { body: string }; button?: { text: string }; interactive?: { button_reply?: { title: string } } }[];
+  messages?: { id: string; from: string; timestamp?: string; type: string; text?: { body: string }; button?: { text: string }; interactive?: { button_reply?: { title: string } }; location?: { latitude?: number; longitude?: number } }[];
   statuses?: { id: string; status: string; errors?: { title: string }[] }[];
   contacts?: { wa_id: string; profile?: { name?: string } }[];
 };
@@ -59,15 +60,20 @@ export async function POST(request: Request) {
         if(gravadas.some(r=>r.error))return NextResponse.json({error:"Falha ao registrar a entrega."},{status:503});
       }
       for (const m of v.messages ?? []) {
-        const texto = m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? `[${m.type}]`;
+        const texto = m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title
+          ?? (m.type === "location" && m.location ? `[localização ${m.location.latitude},${m.location.longitude}]` : `[${m.type}]`);
         const recebida=dataWhatsapp(m.timestamp);
         if(await confirmarMensagemWhatsapp(m.from,texto,recebida))continue;
         const remetente=v.contacts?.find(c=>c.wa_id===m.from)?.profile?.name ?? "";
         if(await receberOptIn(m.from,texto,m.id,remetente)) continue;
-        const resposta = m.type === "text" && respostaConsultaWhatsapp(texto);
-        if (resposta && recebida && Date.now() - Date.parse(recebida) < 24 * 3600_000
-          && process.env.WHATSAPP_PHONE_ID && v.metadata?.phone_number_id === process.env.WHATSAPP_PHONE_ID) {
-          try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta); }
+        // autosserviço: CONSULTAR CAR, MENU, BOI, COTAÇÃO e localização (atendimento estilo Dados Fazenda, 16/11)
+        const pedido = pedidoAtendimento(m);
+        const pedidoCar = m.type === "text" && respostaConsultaWhatsapp(texto);
+        const dentroDaJanela = !!recebida && Date.now() - Date.parse(recebida) < 24 * 3600_000
+          && !!process.env.WHATSAPP_PHONE_ID && v.metadata?.phone_number_id === process.env.WHATSAPP_PHONE_ID;
+        const resposta = dentroDaJanela && (pedidoCar || (pedido && await respostaAtendimento(pedido, m.from)));
+        if (resposta && recebida) {
+          try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta, m.type === "location" ? "location" : "text"); }
           catch { return NextResponse.json({ok:false},{status:503}); }
           continue;
         }

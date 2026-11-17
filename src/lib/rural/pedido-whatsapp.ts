@@ -14,11 +14,11 @@ export function respostaConsultaWhatsapp(texto: string): string | null {
   return "Escolha a área no mapa da ARINI ou envie CONSULTAR CAR seguido do código completo do imóvel. " + urlDoSite() + "/mapa";
 }
 
-export async function atenderPedidoConsulta(id: string, telefone: string, texto: string, recebida: string, resposta: string) {
+export async function atenderPedidoConsulta(id: string, telefone: string, texto: string, recebida: string, resposta: string, tipo = "text") {
   const db = supabaseAdmin();
   // Uma reserva por mensagem assinada da Meta. Reentregas não disparam nova resposta.
   const {error: reserva} = await db.from("whatsapp_mensagens").insert({
-    wa_id:id, telefone, recebida_em:recebida, direcao:"entrada", tipo:"text", texto, status:"consulta_em_envio",
+    wa_id:id, telefone, recebida_em:recebida, direcao:"entrada", tipo, texto, status:"consulta_em_envio",
   });
   if (reserva && reserva.code !== "23505") throw Error("Falha ao registrar o pedido territorial.");
   if (!reserva) {
