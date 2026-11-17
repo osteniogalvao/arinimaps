@@ -1,95 +1,89 @@
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { ETAPAS, ETAPA_LABEL } from "@/lib/funil";
-import { formatBRL } from "@/lib/format";
+import { ETAPAS } from "@/lib/funil";
 import { exigirSetor } from "@/lib/setores-servidor";
-import { Building2, UserRound } from "lucide-react";
 import { CabecalhoPagina } from "@/components/ui/Pagina";
+import { CAMPO_COMPACTO, aba } from "@/components/admin/estilos";
+import { equipeAtiva } from "@/components/admin/Painel";
+import FunilQuadro, { type CartaoFunil } from "@/components/crm-comercial/FunilQuadro";
+import { TEMPERATURAS, TEMPERATURA_LABEL, type Temperatura } from "@/lib/crm-comercial";
 
 /**
  * Teto do quadro: as N oportunidades mais recentes. O PostgREST cortaria em
  * 1000 sem avisar; aqui o corte é explícito e a página diz quantas ficaram de
- * fora (a busca por código fica em Oportunidades).
+ * fora (a busca por código fica em Leads).
  */
 const MAX_CARDS = 500;
+const UUID = /^[0-9a-f-]{36}$/i;
 
-export default async function AdminFunil() {
-  await exigirSetor("comercial");
-  const { data: recentes, count } = await supabaseAdmin()
-    .from("oportunidades_oficiais")
-    .select(`
-      id, codigo, etapa, responsavel_tipo, created_at,
-      lead:leads(nome),
-      property:properties(codigo, titulo, valor),
-      partner:partners!opportunities_responsavel_partner_id_fkey(razao_social)
-    `, { count: "exact" })
-    .order("created_at", { ascending: false }).limit(MAX_CARDS);
-  // no quadro a mais antiga fica no topo da coluna
-  const opps = [...(recentes ?? [])].reverse();
-
-  const colunas = [...ETAPAS, "perdido"] as string[];
-  const porEtapa = new Map<string, NonNullable<typeof opps>>(colunas.map((e) => [e, []]));
-  for (const o of opps ?? []) porEtapa.get(o.etapa)?.push(o);
+export default async function AdminFunil({ searchParams }: PageProps<"/admin/funil">) {
+  const user = await exigirSetor("comercial");
+  const sp = await searchParams;
+  const quem = typeof sp.corretor === "string" && (UUID.test(sp.corretor) || sp.corretor === "eu") ? (sp.corretor === "eu" ? user.id : sp.corretor) : "";
+  const temperatura = TEMPERATURAS.includes(sp.temperatura as Temperatura) ? (sp.temperatura as string) : "";
+  const verPerdidos = sp.perdidos === "1";
+  const BASE = `id, codigo, etapa, responsavel_tipo, created_at,
+      lead:leads(nome), property:properties(codigo, titulo, valor),
+      partner:partners!opportunities_responsavel_partner_id_fkey(razao_social)`;
+  const admin = supabaseAdmin();
+  const consulta = (campos: string, filtros: boolean) => {
+    let q = admin.from("oportunidades_oficiais").select(campos, { count: "exact" }).order("created_at", { ascending: false }).limit(MAX_CARDS);
+    if (!verPerdidos) q = q.neq("etapa", "perdido");
+    if (filtros && quem) q = q.eq("responsavel_user_id", quem);
+    if (filtros && temperatura) q = q.eq("temperatura", temperatura);
+    return q;
+  };
+  const [r1, equipe] = await Promise.all([consulta(`${BASE}, responsavel_user_id, temperatura, proxima_acao_em`, true), equipeAtiva()]);
+  const semCrm = !!r1.error;
+  const r = semCrm ? await consulta(BASE, false) : r1;
+  const nome = new Map(equipe.map((m) => [m.user_id, m.nome]));
+  type Bruto = {
+    id: string; codigo: string; etapa: string; responsavel_tipo: string; lead: { nome: string } | null;
+    property: { titulo: string; valor: number | null } | null; partner: { razao_social: string } | null;
+    responsavel_user_id?: string | null; temperatura?: string | null; proxima_acao_em?: string | null;
+  };
+  const brutos = [...((r.data ?? []) as unknown as Bruto[])].reverse(); // a mais antiga no topo da coluna
+  const cartoes: CartaoFunil[] = brutos.map((o) => ({
+    id: o.id, codigo: o.codigo, etapa: o.etapa, cliente: o.lead?.nome ?? "—", imovel: o.property?.titulo ?? "",
+    valor: o.property?.valor ?? null, temperatura: o.temperatura ?? null, proximaAcaoEm: o.proxima_acao_em ?? null,
+    responsavel: o.responsavel_user_id ? nome.get(o.responsavel_user_id) ?? "Arini"
+      : o.responsavel_tipo === "arini" ? "Arini" : o.responsavel_tipo === "proprietario" ? "Proprietário" : o.partner?.razao_social ?? "Parceiro",
+  }));
+  const colunas = [...ETAPAS, ...(verPerdidos ? ["perdido"] : [])] as string[];
+  const qs = (extra: Record<string, string>) => {
+    const u = new URLSearchParams(Object.entries({ corretor: typeof sp.corretor === "string" ? sp.corretor : "", temperatura, perdidos: verPerdidos ? "1" : "", ...extra }).filter(([, v]) => v));
+    return `/admin/funil${u.size ? `?${u}` : ""}`;
+  };
 
   return (
     <div className="space-y-6">
       <CabecalhoPagina eyebrow="Comercial" titulo="Funil comercial"
-        subtitulo="Clique no card para abrir a oportunidade completa (timeline, visitas, propostas, contrato, venda)." />
-      {count != null && count > opps.length && (
+        subtitulo="Arraste o card para mudar a etapa. Clique para abrir a oportunidade completa (linha do tempo, visitas, propostas, contrato, venda)." />
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href={qs({ corretor: "" })} className={aba(!quem)}>Toda a equipe</Link>
+        <Link href={qs({ corretor: "eu" })} className={aba(quem === user.id)}>Meu funil</Link>
+        <Link href={qs({ perdidos: verPerdidos ? "" : "1" })} className={aba(verPerdidos)}>Mostrar perdidos</Link>
+        {!semCrm && (
+          <form action="/admin/funil" className="ml-auto flex flex-wrap items-center gap-2">
+            {verPerdidos && <input type="hidden" name="perdidos" value="1" />}
+            <select name="corretor" defaultValue={quem} className={CAMPO_COMPACTO} aria-label="Corretor">
+              <option value="">Todos os corretores</option>
+              {equipe.map((m) => <option key={m.user_id} value={m.user_id}>{m.nome}</option>)}
+            </select>
+            <select name="temperatura" defaultValue={temperatura} className={CAMPO_COMPACTO} aria-label="Temperatura">
+              <option value="">Qualquer temperatura</option>
+              {TEMPERATURAS.map((t) => <option key={t} value={t}>{TEMPERATURA_LABEL[t]}</option>)}
+            </select>
+            <button className="lp-btn lp-btn-verde !px-4 !py-2 text-sm">Filtrar</button>
+          </form>
+        )}
+      </div>
+      {r.count != null && r.count > cartoes.length && (
         <p className="rounded-xl border border-alerta/40 bg-alerta/10 px-4 py-3 text-sm text-texto">
-          Mostrando as {opps.length} oportunidades mais recentes de {count}. As contagens das colunas valem para as que estão na tela.
+          Mostrando as {cartoes.length} oportunidades mais recentes de {r.count}. As contagens das colunas valem para as que estão na tela.
         </p>
       )}
-      <div className="-mx-5 flex gap-4 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8">
-        {colunas.map((etapa) => {
-          const cards = porEtapa.get(etapa) ?? [];
-          if (etapa === "perdido" && !cards.length) return null;
-          const perdido = etapa === "perdido";
-          const ganho = etapa === "fechado" || etapa === "pos_venda";
-          const total = cards.reduce((s, o) => s + Number((o.property as unknown as { valor: number | null } | null)?.valor ?? 0), 0);
-          return (
-            <div key={etapa} className="flex w-[17rem] shrink-0 flex-col rounded-2xl border border-linha bg-superficie-2/50">
-              <div className={"rounded-t-2xl border-t-4 px-4 pt-3 pb-3 " + (perdido ? "border-t-critico" : ganho ? "border-t-verde" : "border-t-ouro")}>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-texto">{ETAPA_LABEL[etapa]}</p>
-                  <span className={"grid min-w-7 h-6 place-items-center rounded-md px-1.5 text-xs font-bold tabular-nums " +
-                    (perdido ? "bg-critico/14 text-critico" : ganho ? "bg-verde/14 text-verde" : "bg-superficie text-texto-2 border border-linha")}>
-                    {cards.length}
-                  </span>
-                </div>
-                {total > 0 && <p className="mt-1 text-xs text-texto-2 tabular-nums">{formatBRL(total)}</p>}
-              </div>
-              <div className="flex-1 space-y-2.5 px-2.5 pb-2.5 min-h-24">
-                {cards.map((o) => {
-                  const lead = o.lead as unknown as { nome: string } | null;
-                  const prop = o.property as unknown as { codigo: string; titulo: string; valor: number | null } | null;
-                  const partner = o.partner as unknown as { razao_social: string } | null;
-                  return (
-                    <Link key={o.id} href={`/admin/oportunidades/${o.id}`}
-                      className="block rounded-xl border border-linha bg-superficie p-3.5 shadow-[0_1px_2px_var(--sombra-botao)] transition-colors hover:border-verde/60">
-                      <p className="font-mono text-[10px] text-texto-2 tabular-nums">{o.codigo}</p>
-                      <p className="mt-1 font-semibold leading-snug text-texto">{lead?.nome ?? "—"}</p>
-                      <p className="mt-1 flex items-start gap-1.5 text-sm leading-snug text-texto-2">
-                        <Building2 className="mt-0.5 size-3.5 shrink-0" /><span className="line-clamp-2">{prop?.titulo}</span>
-                      </p>
-                      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-linha pt-2.5">
-                        <span className="text-sm font-bold text-verde tabular-nums">{formatBRL(prop?.valor ?? null)}</span>
-                        <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-texto-2">
-                          <UserRound className="size-3 shrink-0" />
-                          <span className="truncate">
-                            {o.responsavel_tipo === "arini" ? "Arini" : o.responsavel_tipo === "proprietario" ? "Proprietário" : partner?.razao_social ?? "Parceiro"}
-                          </span>
-                        </span>
-                      </div>
-                    </Link>
-                  );
-                })}
-                {!cards.length && <p className="px-2 py-6 text-center text-xs text-texto-2">Nenhuma oportunidade</p>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <FunilQuadro colunas={colunas} cartoes={cartoes} />
     </div>
   );
 }

@@ -68,7 +68,7 @@ jobs:
       - name: Testar assinaturas, cartão e emissão fiscal com dados sintéticos
         env:
           ARINI_TESTE_CARTEIRA_DB: postgresql://postgres:teste-local@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres
-        run: node --test --test-concurrency=1 scripts/testa-assinaturas-planos.mjs scripts/testa-financeiro.mjs scripts/testa-nfse-assinaturas.mjs scripts/testa-privacidade-publicacao.mjs scripts/testa-divulgadores.mjs scripts/testa-tarefas-automaticas.mjs
+        run: node --test --test-concurrency=1 scripts/testa-assinaturas-planos.mjs scripts/testa-financeiro.mjs scripts/testa-nfse-assinaturas.mjs scripts/testa-privacidade-publicacao.mjs scripts/testa-divulgadores.mjs scripts/testa-tarefas-automaticas.mjs scripts/testa-crm-comercial.mjs
 
       - name: Lint
         run: npm run lint
