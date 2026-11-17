@@ -334,7 +334,9 @@ function ItemFiltro({ cor, nome, ligada, alternar, ponto, detalhe }: { cor: stri
   );
 }
 
-export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar }: {
+export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar, onCatalogo }: {
+  /** 17/11 (pedido do Stenio): o botão "Camadas e Dados" fica no alto desta coluna, no computador */
+  onCatalogo?: () => void;
   car: boolean; alternarCar: () => void; avisoCar?: string;
   situacoes: ReadonlySet<SituacaoCar>; alternarSituacao: (id: SituacaoCar) => void;
   ativas: ReadonlySet<CamadaOficialId>;
@@ -362,6 +364,12 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
   return (
     <div role="group" aria-label="Filtros rápidos de camadas"
       className="absolute top-[var(--abaixo-chips,4rem)] right-14 z-10 hidden max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto sm:flex flex-col items-end gap-1.5 p-0.5">
+      {onCatalogo && (
+        <button type="button" onClick={onCatalogo} aria-controls="catalogo-camadas" aria-expanded={false} data-tour="camadas"
+          className="chip inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-xs font-medium shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md">
+          <Layers className="size-3.5" /> Camadas e Dados
+        </button>
+      )}
       <button type="button" onClick={() => setAberto(!aberto)} aria-expanded={aberto}
         className="inline-flex items-center gap-1 rounded-full bg-superficie/95 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2 shadow-[0_6px_18px_-10px_rgb(0_0_0/0.8)] ring-1 ring-linha backdrop-blur-md transition hover:text-texto">
         <Layers className="size-3" /> Filtros

@@ -1812,7 +1812,7 @@ export default function MapaRegional({
           </button>
           <button onClick={() => { setPainelMapa(camadasAbertas ? null : "camadas"); setAvisoPlano(""); }}
             aria-controls="catalogo-camadas" aria-expanded={camadasAbertas} data-ativo={camadasAbertas}
-            className={chipBase} data-tour="camadas">
+            className={`${chipBase} sm:hidden`} data-tour="camadas">
             <Layers className="size-3.5" /> Camadas e Dados
           </button>
           <button onClick={() => { setPainelMapa(null); setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
@@ -1937,7 +1937,8 @@ export default function MapaRegional({
         </>}
         <MarcadorDaUrl map={mapaPronto} />
         {pronto && !camadasAbertas && (
-          <FiltrosRapidos car={carAtivo} avisoCar={carAviso} alternarCar={() => {
+          <FiltrosRapidos onCatalogo={() => { setPainelMapa("camadas"); setAvisoPlano(""); }}
+            car={carAtivo} avisoCar={carAviso} alternarCar={() => {
               carEscolhido.current = true;
               setCarAtivo(!carAtivo);
               void salvarPrefs({ camada_car: !carAtivo });
