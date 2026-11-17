@@ -5,12 +5,14 @@
  * MapaRegional para o componente do mapa cuidar só de mapa.
  */
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useState, type CSSProperties, type ReactNode } from "react";
 import {
+  Banknote, Church, Croissant, Shield, Trees, Utensils,
   ChevronDown, Crop, List as ListIcon, Fuel, GraduationCap, Hospital, Landmark, Layers, LoaderCircle, MapPin, Pill, Route, ShoppingCart, Trash2, X,
   type LucideIcon,
 } from "lucide-react";
 import { STATUS_LABEL } from "@/lib/format";
+import { visualPoi } from "@/lib/geo/poiVisual";
 import { CAMADAS_OFICIAIS, CORES_RURAIS, type CamadaOficial, type CamadaOficialId } from "@/lib/map/camadasOficiais";
 import { STATUS_MAPA, RADAR_ANEL } from "./statusMapa";
 import type { EstadoCamada } from "./camadasOficiaisMapa";
@@ -39,12 +41,25 @@ export function BotaoFechar({ onClick, rotulo = "Fechar" }: { onClick: () => voi
 const ICONES_POI: Record<string, LucideIcon> = {
   combustivel: Fuel, farmacia: Pill, supermercado: ShoppingCart, hospital: Hospital,
   escola: GraduationCap, centro: Landmark, acesso_rodovia: Route,
+  banco: Banknote, igreja: Church, restaurante: Utensils, parque: Trees, padaria: Croissant, policia: Shield,
 };
 
 /** Ícone do ponto de referência (substitui os emojis de CATEGORIA_POI_ICONE). */
 export function IconePoi({ categoria, className = "size-4" }: { categoria: string; className?: string }) {
   const Icone = ICONES_POI[categoria] ?? MapPin;
   return <Icone aria-hidden className={className} />;
+}
+
+/**
+ * Selo colorido da categoria (mesma cor e ícone do pino no mapa): bolinha na
+ * cor da categoria com o ícone branco. Usado nas listas do entorno.
+ */
+export function SeloPoi({ categoria, tamanho = "size-9", icone = "size-4" }: { categoria: string; tamanho?: string; icone?: string }) {
+  return (
+    <span aria-hidden className={`poi-selo ${tamanho}`} style={{ "--poi-cor": visualPoi(categoria).cor } as CSSProperties}>
+      <IconePoi categoria={categoria} className={icone} />
+    </span>
+  );
 }
 
 /** Interruptor das linhas do painel de camadas. */

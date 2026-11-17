@@ -5,7 +5,8 @@ import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
 import MiniMapa from "@/components/map/MiniMapa";
 import SecaoFontesOficiais from "@/components/map/SecaoFontesOficiais";
-import { IconePoi } from "@/components/map/UiMapa";
+import { SeloPoi } from "@/components/map/UiMapa";
+import type { PoiNoMapa } from "@/lib/map/pinosPoi";
 import { BotaoLink, CabecalhoPagina, Conteudo, PilulaPonto, Secao } from "@/components/ui/Pagina";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { carregarConsultaArea } from "@/lib/geo/consultaArea";
@@ -92,7 +93,7 @@ export default async function ConsultaLote({ params, searchParams }: PageProps<"
       <Conteudo className="py-12 md:py-16 space-y-12 md:space-y-16">
         <Secao eyebrow="02 · Lote no mapa" titulo="Dados da planta">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <MiniMapa geometry={lote.geometry} status="publicado" raioM={raioM}
+          <MiniMapa geometry={lote.geometry} status="publicado" raioM={raioM} pois={pois as PoiNoMapa[]}
             className="h-80 lg:h-full lg:min-h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{m2(p.area_m2)} m²</p>
@@ -125,9 +126,7 @@ export default async function ConsultaLote({ params, searchParams }: PageProps<"
               {pois.map((poi, i) => (
                 <div key={i} className="flex items-center justify-between gap-3 border-b border-linha px-3 py-3.5 last:border-b-0">
                   <span className="flex min-w-0 items-center gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-full border border-linha-forte text-verde">
-                      <IconePoi categoria={poi.categoria} className="size-4" />
-                    </span>
+                    <SeloPoi categoria={poi.categoria} />
                     <span className="min-w-0">
                       <span className="block truncate font-medium text-texto">
                         {nomePoi(poi.nome) ?? CATEGORIA_POI_LABEL[poi.categoria] ?? poi.categoria}

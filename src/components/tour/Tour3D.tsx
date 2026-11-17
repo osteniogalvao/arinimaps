@@ -15,6 +15,7 @@ import { buffer } from "@turf/turf";
 import { RotateCcw } from "lucide-react";
 import type { Map as MLMap, ErrorEvent as MLErrorEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
+import { adicionarPinosPoi } from "@/lib/map/pinosPoi";
 import { SATELITE } from "@/lib/map/config";
 import type { CamadasTour } from "@/lib/map/acesso-tour";
 import CamadasDoTour from "./CamadasDoTour";
@@ -61,9 +62,6 @@ function esperarMapa(map: MLMap, tetoMs: number) {
     map.on("idle", fim);
   });
 }
-
-const distancia = (m: number) =>
-  m >= 1000 ? `${(m / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} km` : `${Math.round(m)} m`;
 
 function buildKeyframes(d: TourData, ritmo = 1, zoomArea?: number): { keys: Key[]; orbit: { start: number; end: number; base: Cam } } {
   const c = d.centroid;
@@ -127,20 +125,6 @@ function camAt(t: number, keys: Key[], orbit: { start: number; end: number; base
     bearing: lerp(prev.cam.bearing, next.cam.bearing, k),
   };
 }
-
-const CATEGORIA_NOME: Record<string, string> = {
-  combustivel: "Posto", farmacia: "Farmácia", supermercado: "Supermercado", hospital: "Hospital",
-  escola: "Escola", centro: "Centro", acesso_rodovia: "Acesso à rodovia",
-};
-
-/* Marcador da etiqueta do tour: ponto colorido por categoria, em vez de emoji
-   (que muda de desenho em cada sistema e sai diferente no vídeo gravado). */
-const CATEGORIA_COR: Record<string, string> = {
-  combustivel: "#FFE299", farmacia: "#FFE299", supermercado: "#7CC4FF", hospital: "#FF8A80",
-  escola: "#B18CFF", centro: "#FFFFFF", acesso_rodovia: "#FFB74D",
-};
-const ponto = (cor: string) =>
-  `<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${cor};margin-right:5px;vertical-align:1px"></i>`;
 
 export default function Tour3D(dados: TourData) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -230,38 +214,10 @@ export default function Tour3D(dados: TourData) {
           map.addLayer({ id: "imovel-ponto", type: "circle", source: "imovel", paint: { "circle-color": "#D9BD6F", "circle-radius": 10, "circle-stroke-color": "#fff", "circle-stroke-width": 3 } });
         }
 
-        if (dados.pois.length) {
-          map.addSource("pois", {
-            type: "geojson",
-            data: {
-              type: "FeatureCollection",
-              features: dados.pois.map((p) => ({
-                type: "Feature",
-                geometry: { type: "Point", coordinates: [p.lng, p.lat] },
-                properties: { rotulo: (p.nome ? p.nome.split(";").map((s) => s.trim()).join(" / ") : null) ?? CATEGORIA_NOME[p.categoria] ?? p.categoria },
-              })),
-            },
-          });
-          map.addLayer({
-            id: "pois-pontos", type: "circle", source: "pois",
-            paint: { "circle-color": "#ffffff", "circle-radius": 5, "circle-stroke-color": "#0E4D36", "circle-stroke-width": 2 },
-          });
-        }
-
-        // Pontos de referência com nome e distância, como etiquetas sobre o
-        // mapa. São elementos HTML (não camada de texto do MapLibre) porque
-        // assim independem de fonte remota e aparecem iguais no vídeo.
-        const etiquetados = [...dados.pois]
-          .sort((a, b) => Number(b.destaque) - Number(a.destaque) || a.distancia_m - b.distancia_m)
-          .slice(0, 8);
-        for (const p of etiquetados) {
-          const el = document.createElement("div");
-          el.className = "tour-etiqueta";
-          el.innerHTML =
-            `<b>${ponto(CATEGORIA_COR[p.categoria] ?? "#FFFFFF")}${((p.nome ? p.nome.split(";").map((s) => s.trim()).join(" / ") : null) ?? CATEGORIA_NOME[p.categoria] ?? p.categoria).replace(/[<>&]/g, "")}</b>` +
-            `<span>${distancia(p.distancia_m)}</span>`;
-          new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, -8] }).setLngLat([p.lng, p.lat]).addTo(map);
-        }
+        // Pontos do entorno como pinos coloridos com ícone (pedido do Stenio,
+        // 17/11/2026: "ícones bonitos, com vida"). Os 8 mais relevantes
+        // (destaques, depois os mais perto) ficam com nome e distância fixos.
+        if (dados.pois.length) void adicionarPinosPoi(map, dados.pois, { fixos: 8 });
         if (dados.municipio?.sede_lng != null && dados.municipio.sede_lat != null) {
           const el = document.createElement("div");
           el.className = "tour-etiqueta tour-etiqueta-cidade";

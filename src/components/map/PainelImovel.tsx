@@ -11,7 +11,9 @@ import { useEffect, useState } from "react";
 import { formatArea } from "@/lib/format";
 import { CATEGORIA_POI_LABEL, formatDistancia, nomePoi, type PoiDistancia } from "@/lib/geo/distancia";
 import { Box, ChevronRight, Navigation, Radar } from "lucide-react";
-import { BotaoFechar, IconePoi } from "@/components/map/UiMapa";
+import { BotaoFechar, SeloPoi } from "@/components/map/UiMapa";
+import type { Map as MLMap } from "maplibre-gl";
+import { adicionarPinosPoi, type PoiNoMapa } from "@/lib/map/pinosPoi";
 
 export type ImovelSelecionado = {
   id: string;
@@ -36,9 +38,11 @@ function mediaUrl(path: string) {
 }
 
 export default function PainelImovel({
-  imovel, raio, onRaio, onFechar,
+  imovel, raio, onRaio, onFechar, mapa,
 }: {
   imovel: ImovelSelecionado;
+  /** mapa principal: recebe os pinos do entorno enquanto o painel está aberto */
+  mapa?: MLMap | null;
   raio: number;
   onRaio: (r: number) => void;
   onFechar: () => void;
@@ -63,6 +67,15 @@ export default function PainelImovel({
       .then((d) => setPoisDe({ codigo, pois: d?.pois ?? [], em: d?.atualizado_em ?? null }))
       .catch(() => setPoisDe({ codigo, pois: [], em: null }));
   }, [imovel.codigo]);
+
+  // pinos coloridos do entorno no mapa (17/11/2026), saem ao fechar ou trocar de imóvel
+  useEffect(() => {
+    if (!mapa || !pois?.length) return;
+    let tirar: (() => void) | null = null;
+    let vivo = true;
+    adicionarPinosPoi(mapa, pois as PoiNoMapa[]).then((f) => { if (vivo) tirar = f; else f(); }).catch(() => undefined);
+    return () => { vivo = false; tirar?.(); };
+  }, [mapa, pois]);
 
   useEffect(() => {
     const id = imovel.id;
@@ -196,9 +209,7 @@ export default function PainelImovel({
               {pois.slice(0, 8).map((p, i) => (
                 <li key={i} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                   <span className="flex min-w-0 items-center gap-2.5">
-                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-superficie-2 text-texto-2">
-                      <IconePoi categoria={p.categoria} className="size-3.5" />
-                    </span>
+                    <SeloPoi categoria={p.categoria} tamanho="size-7" icone="size-3.5" />
                     <span className="truncate text-texto">{nomePoi(p.nome) ?? CATEGORIA_POI_LABEL[p.categoria] ?? p.categoria}</span>
                   </span>
                   <span className="font-semibold tabular-nums text-texto shrink-0">{formatDistancia(p.distancia_m)}</span>

@@ -4,6 +4,9 @@ import { clausulasDestacadas, prazoExclusividade } from "@/lib/juridico/versoes"
 import { validarDocumento } from "@/lib/br/documentos";
 import { cpfDoPerfil } from "@/lib/seguranca/cripto";
 import { NextResponse } from "next/server";
+import { pointOnFeature } from "@turf/turf";
+import { listarMunicipiosAtendidos, municipioAtendidoNoPonto } from "@/lib/geo/municipiosAtendidos";
+import { ibgeDoCar, listaDeMunicipios, type MunicipioAtendido } from "@/lib/geo/atendimento";
 import { ator, temSetor } from "@/lib/authz";
 import { conferirRecurso, registrarTentativa, respostaNegacao } from "@/lib/planos-servidor";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -248,6 +251,15 @@ export async function POST(request: Request) {
   } else if (geometria?.fonte === "car" || geometria?.fonte === "lote") {
     // "car" sem código não tem como ser conferido: vale como desenho comum
     geometriaFinal = { ...geometria, fonte: "desenho" };
+  }
+
+  // Áudio do Carlos (17/11/2026, 19h09): o anúncio só vale nos municípios
+  // que a Arini atende (Central > Cartografia > Regiões). O CAR nacional
+  // segue no mapa para consulta, mas "Esta área é minha" fora deles não
+  // vira anúncio. A equipe da Central não passa por esta trava.
+  if (!equipe) {
+    const fora = await foraDosMunicipiosAtendidos(geometriaFinal, carCodigo, dados.municipality_id);
+    if (fora) return NextResponse.json({ error: fora, codigo: "municipio_nao_atendido" }, { status: 400 });
   }
 
   // tour virtual 360 / vídeo imersivo (item 9): só links dos domínios aceitos
@@ -612,3 +624,37 @@ const camposDoLote = (l: LoteRef | null) => l ? {
   lote_id: l.id, lote_municipality_id: l.municipality_id,
   lote_quadra: l.quadra ?? null, lote_numero: l.numero ?? null, lote_area_m2: l.area_m2,
 } : {};
+
+/**
+ * Mensagem de erro quando a área fica fora dos municípios atendidos, ou null.
+ * Confere o município pelo código do CAR (quando há) e pelo ponto da divisa;
+ * o município escolhido no formulário também precisa estar na lista.
+ * Se a lista não carregar, não bloqueia (a Central confere antes de publicar).
+ */
+async function foraDosMunicipiosAtendidos(
+  geometriaFinal: { geometry?: GeoJSON.Geometry } | GeoJSON.Geometry | null,
+  carCodigo: string | null,
+  municipalityId: unknown,
+): Promise<string | null> {
+  let lista: MunicipioAtendido[];
+  try {
+    lista = await listarMunicipiosAtendidos();
+  } catch (e) {
+    console.error("municípios atendidos indisponíveis:", e);
+    return null;
+  }
+  if (!lista.length) return null;
+  const aviso = `Por enquanto a Arini anuncia só em ${listaDeMunicipios(lista)}. Esta área fica fora desses municípios. Quando a Arini chegar à sua região, o anúncio fica liberado.`;
+  if (municipalityId && !lista.some((m) => m.id === String(municipalityId))) return aviso;
+  const ibge = carCodigo ? ibgeDoCar(carCodigo) : null;
+  if (ibge) return lista.some((m) => String(m.codigo_ibge) === ibge) ? null : aviso;
+  const g = (geometriaFinal && "geometry" in geometriaFinal ? geometriaFinal.geometry : geometriaFinal) as GeoJSON.Geometry | null;
+  if (!g || !("coordinates" in g)) return null;
+  try {
+    const [lng, lat] = pointOnFeature({ type: "Feature", geometry: g, properties: {} }).geometry.coordinates;
+    return (await municipioAtendidoNoPonto(lng, lat, lista)) ? null : aviso;
+  } catch (e) {
+    console.error("município do ponto não conferido:", e);
+    return null;
+  }
+}

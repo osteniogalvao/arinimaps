@@ -8,6 +8,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { lerCarPendente, limparCarPendente } from "@/lib/map/carPendente";
+import { useMunicipiosAtendidos } from "@/lib/map/useMunicipiosAtendidos";
+import { listaDeMunicipios, municipioAtendidoDoCar } from "@/lib/geo/atendimento";
 import type { GeometriaEscolhida } from "@/components/map/DesenhoMapa";
 import { ehEquipe as papelEhEquipe, ehParceiro as papelEhParceiro } from "@/lib/perfis";
 import { enviarVideo, VIDEO_ACEITA, VIDEO_MAX_MB } from "@/lib/midia/enviarVideo";
@@ -50,6 +52,8 @@ export default function NovoImovel() {
   const [geometria, setGeometria] = useState<GeometriaEscolhida | null>(null);
   const [fotos, setFotos] = useState<File[]>([]);
   const [erro, setErro] = useState("");
+  // áudio do Carlos (17/11, 19h09): anúncio só nos municípios atendidos
+  const atendidos = useMunicipiosAtendidos();
   const [enviando, setEnviando] = useState(false);
   const [form, setForm] = useState({
     tipo: "rural", titulo: "", descricao: "", valor: "", area_declarada: "",
@@ -565,6 +569,12 @@ export default function NovoImovel() {
               {car.municipio && <> · {car.municipio}</>}
               {car.area_ha != null && <> · {Number(car.area_ha).toLocaleString("pt-BR")} ha declarados no CAR</>}
             </span>
+          </p>
+        )}
+        {car && !ehEquipe && atendidos && !municipioAtendidoDoCar(atendidos, car) && (
+          <p role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+            Por enquanto a Arini anuncia só em {listaDeMunicipios(atendidos)}. Esta área do CAR fica fora desses
+            municípios, então o anúncio não pode ser enviado. <Link href="/expansao" className="font-semibold underline">Quero a Arini na minha região</Link>
           </p>
         )}
         {lote && (

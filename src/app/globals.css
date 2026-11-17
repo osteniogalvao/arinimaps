@@ -415,6 +415,79 @@ button:disabled,
 .tour-etiqueta span { font-size: 10px; color: #FFE299; }
 .tour-etiqueta-cidade { background: rgba(217, 189, 111, 0.94); color: #124431; border-color: transparent; }
 
+/* ---------- pinos do entorno (src/lib/map/pinosPoi.ts) ----------
+   Bolinha na cor da categoria com ícone branco, entrada com quique em
+   cascata, halo que pulsa devagar e etiqueta com nome e distância. As cores
+   são fixas: o pino fica sempre sobre o satélite. */
+@keyframes poi-entra {
+  0% { opacity: 0; transform: translateY(-14px) scale(0.4); }
+  60% { opacity: 1; transform: translateY(2px) scale(1.08); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes poi-halo {
+  0% { transform: scale(0.9); opacity: 0.55; }
+  70%, 100% { transform: scale(2.3); opacity: 0; }
+}
+@keyframes poi-flutua {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.poi-pino {
+  position: relative; display: grid; justify-items: center;
+  width: 34px; height: 42px; cursor: pointer; outline: none;
+  animation: poi-entra 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) var(--poi-atraso, 0ms) both;
+}
+.poi-pino-bola {
+  position: relative; z-index: 1; display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--poi-cor) 55%, #fff) 0%, var(--poi-cor) 58%, color-mix(in srgb, var(--poi-cor) 78%, #000) 100%);
+  border: 2.5px solid #fff;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  animation: poi-flutua 3.2s ease-in-out var(--poi-fase, 0s) infinite;
+}
+/* ponta do pino */
+.poi-pino::after {
+  content: ""; position: absolute; bottom: 3px; left: 50%;
+  width: 11px; height: 11px; margin-left: -5.5px; transform: rotate(45deg);
+  background: var(--poi-cor); border-right: 2.5px solid #fff; border-bottom: 2.5px solid #fff;
+  border-radius: 0 0 3px 0;
+}
+.poi-pino-halo {
+  position: absolute; top: 0; left: 1px; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--poi-cor); pointer-events: none;
+  animation: poi-halo 2.4s ease-out var(--poi-fase, 0s) infinite;
+}
+.poi-pino-etiqueta {
+  position: absolute; bottom: calc(100% + 4px); left: 50%; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 4px 9px; border-radius: 9px; white-space: nowrap; pointer-events: none;
+  background: rgba(10, 34, 25, 0.9); color: #F2F2EC;
+  border: 1px solid rgba(255, 255, 255, 0.18); border-top: 2px solid var(--poi-cor);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  font-size: 11px; line-height: 1.25;
+  opacity: 0; transform: translate(-50%, 4px); transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.poi-pino-etiqueta b { font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.poi-pino-etiqueta span { font-size: 10px; color: #FFE299; }
+.poi-pino:hover, .poi-pino:focus-visible, .poi-pino-aberto { z-index: 5; }
+.poi-pino:hover .poi-pino-bola, .poi-pino:focus-visible .poi-pino-bola, .poi-pino-aberto .poi-pino-bola {
+  transform: scale(1.14); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45), 0 0 0 4px color-mix(in srgb, var(--poi-cor) 35%, transparent);
+}
+.poi-pino:hover .poi-pino-etiqueta, .poi-pino:focus-visible .poi-pino-etiqueta,
+.poi-pino-aberto .poi-pino-etiqueta, .poi-pino-fixo .poi-pino-etiqueta { opacity: 1; transform: translate(-50%, 0); }
+/* selo da categoria nas listas do entorno (mesma cor do pino) */
+.poi-selo {
+  display: grid; place-items: center; flex-shrink: 0; border-radius: 9999px; color: #fff;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--poi-cor) 55%, #fff) 0%, var(--poi-cor) 60%);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--poi-cor) 40%, transparent);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+@media (prefers-reduced-motion: reduce) {
+  .poi-pino, .poi-pino-bola, .poi-pino-halo { animation: none; }
+  .poi-pino-halo { display: none; }
+}
+
 /* ---------- vitrine de consultas (home) ---------- */
 /* espera animada no lugar do satélite: a faixa nunca fica preta enquanto o
    mapa baixa (cores fixas do tema escuro — a faixa é sempre o satélite) */

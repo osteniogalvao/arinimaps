@@ -1,13 +1,20 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-const CATEGORIAS: { categoria: string; seletor: string }[] = [
+const CATEGORIAS: { categoria: string; seletor: string; extra?: boolean }[] = [
   { categoria: "combustivel", seletor: '"amenity"="fuel"' },
   { categoria: "farmacia", seletor: '"amenity"="pharmacy"' },
   { categoria: "supermercado", seletor: '"shop"="supermarket"' },
   { categoria: "hospital", seletor: '"amenity"~"hospital|clinic"' },
   { categoria: "escola", seletor: '"amenity"="school"' },
   { categoria: "acesso_rodovia", seletor: '"highway"~"motorway|trunk|primary"' },
+  // 17/11/2026 (Stenio): mais do que existe em volta do lote, cada um com o seu ícone
+  { categoria: "banco", seletor: '"amenity"="bank"', extra: true },
+  { categoria: "igreja", seletor: '"amenity"="place_of_worship"', extra: true },
+  { categoria: "restaurante", seletor: '"amenity"~"^(restaurant|cafe|fast_food)$"', extra: true },
+  { categoria: "padaria", seletor: '"shop"="bakery"', extra: true },
+  { categoria: "policia", seletor: '"amenity"="police"', extra: true },
+  { categoria: "parque", seletor: '"leisure"~"^(park|playground)$"', extra: true },
 ];
 
 type OsmEl = {
@@ -25,10 +32,13 @@ type OsmEl = {
  */
 export async function buscarPoisAoRedor(lng: number, lat: number, raio: number, municipalityId?: string | null): Promise<number> {
   const admin = supabaseAdmin();
-  const blocos = CATEGORIAS
+  // dois grupos com limite próprio: o comércio do dia a dia (restaurantes,
+  // igrejas...) é numeroso e não pode empurrar escolas e hospitais para fora
+  const blocos = (extra: boolean) => CATEGORIAS
+    .filter((c) => !!c.extra === extra)
     .map((c) => `nwr[${c.seletor}](around:${raio},${lat},${lng});`)
     .join("\n");
-  const query = `[out:json][timeout:20];(${blocos});out center 120;`;
+  const query = `[out:json][timeout:20];(${blocos(false)});out center 150;(${blocos(true)});out center 150;`;
 
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
@@ -55,6 +65,12 @@ export async function buscarPoisAoRedor(lng: number, lat: number, raio: number, 
       tags.shop === "supermarket" ? "supermercado" :
       tags.amenity === "hospital" || tags.amenity === "clinic" ? "hospital" :
       tags.amenity === "school" ? "escola" :
+      tags.amenity === "bank" ? "banco" :
+      tags.amenity === "place_of_worship" ? "igreja" :
+      ["restaurant", "cafe", "fast_food"].includes(tags.amenity ?? "") ? "restaurante" :
+      tags.shop === "bakery" ? "padaria" :
+      tags.amenity === "police" ? "policia" :
+      tags.leisure === "park" || tags.leisure === "playground" ? "parque" :
       tags.highway ? "acesso_rodovia" : null;
     if (!categoria) continue;
     rows.push({
