@@ -93,6 +93,8 @@ type Camada = {
  * primeira vista (pedido: "cores cartográficas distintas para urbano e rural").
  */
 const COR_RURAL = CORES_RURAIS.car;
+/** Contorno da área do CAR clicada (print do Carlos de 17/11: verde na malha, amarelo na seleção). */
+const COR_SELECAO_CAR = "#FFD400";
 /** Situação do CAR nos tiles (`status` do SICAR e `condicao`) agrupada como no subfiltro. */
 const CONDICAO_CAR = ["downcase", ["coalesce", ["get", "condicao"], ""]];
 const CATEGORIA_CAR = ["case",
@@ -1011,7 +1013,9 @@ export default function MapaRegional({
           id: "car-fill", type: "fill", source: "car", "source-layer": "car", minzoom: CAR_ZOOM_MIN,
           paint: {
             "fill-color": COR_RURAL,
-            "fill-opacity": ["case", ["boolean", ["feature-state", "selecionado"], false], 0.32, ["boolean", ["feature-state", "hover"], false], 0.2, 0.07] as never,
+            // 17/11 (áudio do Carlos, 11h08): a área clicada fica limpa por dentro,
+            // só com o contorno da cor de seleção (camada car-selecao)
+            "fill-opacity": ["case", ["boolean", ["feature-state", "selecionado"], false], 0, ["boolean", ["feature-state", "hover"], false], 0.2, 0.07] as never,
           },
         });
         // o traço afina conforme afasta: de longe a malha vira textura, de perto vira divisa
@@ -1022,6 +1026,15 @@ export default function MapaRegional({
             // 17/11: mais grosso e opaco (pedido do Carlos: linhas visíveis como no Geomart)
             "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 10, 1, 12, 1.6, 15, 2.6] as never,
             "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.7, 10, 0.9, 12, 1] as never,
+          },
+        });
+        // contorno da área selecionada: amarelo de seleção, grosso, com o interior limpo
+        map.addLayer({
+          id: "car-selecao", type: "line", source: "car", "source-layer": "car", minzoom: CAR_ZOOM_MIN,
+          paint: {
+            "line-color": COR_SELECAO_CAR,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 7, 2, 12, 3, 15, 4] as never,
+            "line-opacity": ["case", ["boolean", ["feature-state", "selecionado"], false], 1, 0] as never,
           },
         });
 
@@ -1350,13 +1363,13 @@ export default function MapaRegional({
     // de longe) continua sempre visível.
     const filtro = situacoesCar.size === SITUACOES_CAR.length ? null
       : ["in", CATEGORIA_CAR, ["literal", [...situacoesCar, "outros"]]];
-    for (const id of ["car-fill", "car-linha"]) map.setFilter(id, filtro as never);
+    for (const id of ["car-fill", "car-linha", "car-selecao"]) map.setFilter(id, filtro as never);
   }, [pronto, situacoesCar]);
   useEffect(() => {
     carAtivoRef.current = carVisivel;
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("car-fill")) return;
-    for (const id of ["car-fill", "car-linha"]) map.setLayoutProperty(id, "visibility", carAtivo ? "visible" : "none");
+    for (const id of ["car-fill", "car-linha", "car-selecao"]) map.setLayoutProperty(id, "visibility", carAtivo ? "visible" : "none");
     if (carVisivel) { conferirZoomCar(); garantirCarSobDemanda(); }
     else { setCarSel(null); setCarAviso(""); }
   }, [carAtivo, carVisivel, pronto, conferirZoomCar, garantirCarSobDemanda]);
