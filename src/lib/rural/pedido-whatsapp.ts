@@ -14,7 +14,7 @@ export function respostaConsultaWhatsapp(texto: string): string | null {
   return "Escolha a área no mapa da ARINI ou envie CONSULTAR CAR seguido do código completo do imóvel. " + urlDoSite() + "/mapa";
 }
 
-export async function atenderPedidoConsulta(id: string, telefone: string, texto: string, recebida: string, resposta: string, tipo = "text") {
+export async function atenderPedidoConsulta(id: string, telefone: string, texto: string, recebida: string, resposta: string, tipo = "text", phoneId?: string) {
   const db = supabaseAdmin();
   // Uma reserva por mensagem assinada da Meta. Reentregas não disparam nova resposta.
   const {error: reserva} = await db.from("whatsapp_mensagens").insert({
@@ -22,7 +22,7 @@ export async function atenderPedidoConsulta(id: string, telefone: string, texto:
   });
   if (reserva && reserva.code !== "23505") throw Error("Falha ao registrar o pedido territorial.");
   if (!reserva) {
-    const waId = await enviarWhatsapp(telefone,resposta).catch(() => "");
+    const waId = await enviarWhatsapp(telefone,resposta,phoneId).catch(() => "");
     if (waId) {
       const saida = await db.from("whatsapp_mensagens").upsert({wa_id:waId,telefone,direcao:"saida",tipo:"text",texto:resposta}, {onConflict:"wa_id",ignoreDuplicates:true});
       if (saida.error) throw Error("Falha ao registrar a resposta territorial.");

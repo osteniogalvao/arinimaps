@@ -6,7 +6,7 @@ import { confirmarMensagemWhatsapp, dataWhatsapp } from "@/lib/confirmacao-whats
 import { receberOptIn } from "@/lib/retomada-cadastro";
 import { notificar } from "@/lib/notificacoes";
 import { atenderPedidoConsulta, respostaConsultaWhatsapp } from "@/lib/rural/pedido-whatsapp";
-import { pedidoAtendimento, respostaAtendimento } from "@/lib/rural/atendimento-whatsapp";
+import { pedidoAtendimento, pedidoLinhaCotacoes, respostaAtendimento } from "@/lib/rural/atendimento-whatsapp";
 import { CorpoMuitoGrande, limitarFluxo } from "@/lib/seguranca/corpo-limitado";
 
 /**
@@ -67,13 +67,16 @@ export async function POST(request: Request) {
         const remetente=v.contacts?.find(c=>c.wa_id===m.from)?.profile?.name ?? "";
         if(await receberOptIn(m.from,texto,m.id,remetente)) continue;
         // autosserviço: CONSULTAR CAR, MENU, BOI, COTAÇÃO e localização (atendimento estilo Dados Fazenda, 16/11)
-        const pedido = pedidoAtendimento(m);
-        const pedidoCar = m.type === "text" && respostaConsultaWhatsapp(texto);
+        // número só de cotações (WHATSAPP_COTACOES_PHONE_ID): toda mensagem recebe cotação, sem conta
+        const phoneId = v.metadata?.phone_number_id;
+        const linhaCotacoes = !!process.env.WHATSAPP_COTACOES_PHONE_ID && phoneId === process.env.WHATSAPP_COTACOES_PHONE_ID;
+        const pedido = linhaCotacoes ? pedidoLinhaCotacoes(m) : pedidoAtendimento(m);
+        const pedidoCar = !linhaCotacoes && m.type === "text" && respostaConsultaWhatsapp(texto);
         const dentroDaJanela = !!recebida && Date.now() - Date.parse(recebida) < 24 * 3600_000
-          && !!process.env.WHATSAPP_PHONE_ID && v.metadata?.phone_number_id === process.env.WHATSAPP_PHONE_ID;
-        const resposta = dentroDaJanela && (pedidoCar || (pedido && await respostaAtendimento(pedido, m.from)));
+          && (linhaCotacoes || (!!process.env.WHATSAPP_PHONE_ID && phoneId === process.env.WHATSAPP_PHONE_ID));
+        const resposta = dentroDaJanela && (pedidoCar || (pedido && await respostaAtendimento(pedido, m.from, linhaCotacoes)));
         if (resposta && recebida) {
-          try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta, m.type === "location" ? "location" : "text"); }
+          try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta, m.type === "location" ? "location" : "text", phoneId); }
           catch { return NextResponse.json({ok:false},{status:503}); }
           continue;
         }

@@ -4,8 +4,8 @@ import type { Feature, MultiPolygon, Polygon } from "geojson";
 import { urlDoSite } from "@/lib/compartilhar";
 import { canalDoTitular } from "@/lib/confirmacao-whatsapp";
 import { garantirCarJanela } from "@/lib/geo/carSobDemanda";
-import { catalogoCotacoes } from "@/lib/mercado/cotacoes";
-import { formatarData, formatarValor, formatarVariacao, localDaSerie, PRODUTOS, type CotacaoAtual } from "@/lib/mercado/formato";
+import { catalogoCotacoes, historicoCotacao } from "@/lib/mercado/cotacoes";
+import { estatisticas, formatarData, formatarValor, formatarVariacao, localDaSerie, PRODUTOS, recortar, type CotacaoAtual } from "@/lib/mercado/formato";
 import { telefoneWhatsapp } from "@/lib/meta";
 import { acessoDe } from "@/lib/planos-servidor";
 import type { Acesso } from "@/lib/planos";
@@ -45,6 +45,20 @@ export function pedidoAtendimento(m: Mensagem): PedidoAtendimento | null {
   const cot = /^(?:cotacao|cotacoes)(?:\s+(?:do|da|de|dos|das))?(?:\s+(.{2,40}))?$/.exec(t);
   if (cot) return { tipo: "cotacao", termo: cot[1]?.trim() || null };
   return null;
+}
+
+/**
+ * Número só de cotações (áudio do Carlos, 16/11 23h40): gratuito, sem conta.
+ * Qualquer texto vira busca de cotação; saudação, MENU ou mídia mostram os destaques.
+ */
+export function pedidoLinhaCotacoes(m: Mensagem): PedidoAtendimento {
+  const geral: PedidoAtendimento = { tipo: "cotacao", termo: null };
+  if (m.type !== "text" || !m.text?.body) return geral;
+  const pedido = pedidoAtendimento(m);
+  if (pedido?.tipo === "cotacao") return pedido;
+  const t = semAcento(m.text.body).replace(/[.!?]+$/g, "").replace(/\s+/g, " ").trim();
+  if (!t || t.length > 40 || /^(menu|ajuda|oi|ola|bom dia|boa tarde|boa noite|cotacao|cotacoes|inicio)\b/.test(t)) return geral;
+  return { tipo: "cotacao", termo: t };
 }
 
 type Conta = { titular: string; nome: string; acesso: Acesso };
@@ -93,29 +107,57 @@ function textoMenu(conta: Conta | null) {
   return linhas.join("\n");
 }
 
-function linhaCotacao(s: CotacaoAtual) {
+async function linhaCotacao(s: CotacaoAtual, comPeriodos: boolean) {
   const lugar = localDaSerie(s);
-  const variacao = s.variacao == null ? "" : ` (${formatarVariacao(s.variacao)})`;
-  return `• ${s.nome}${lugar && !s.nome.includes(lugar) ? " " + lugar : ""}: ${formatarValor(s.valor, s.casas)} ${s.unidade}${variacao}, ${formatarData(s.data)}. Fonte: ${s.fonte}`;
+  const partes = [`• ${s.nome}${lugar && !s.nome.includes(lugar) ? " " + lugar : ""}: ${formatarValor(s.valor, s.casas)} ${s.unidade}, ${formatarData(s.data)}`];
+  const periodos: string[] = [];
+  if (s.variacao != null) periodos.push(`dia ${formatarVariacao(s.variacao)}`);
+  if (comPeriodos) {
+    const historico = await historicoCotacao(s.id);
+    for (const [rotulo, dias] of [["7 dias", 7], ["30 dias", 30]] as const) {
+      const e = estatisticas(recortar(historico, dias));
+      if (e && e.n > 1) periodos.push(`${rotulo} ${formatarVariacao(e.variacao)}`);
+    }
+  }
+  if (periodos.length) partes.push(`  (${periodos.join(" · ")})`);
+  partes.push(`  Fonte: ${s.fonte}`);
+  return partes.join("\n");
 }
 
-async function textoCotacao(termo: string | null) {
+function produtosDisponiveis(series: CotacaoAtual[]) {
+  const nomes = [...new Set(series.map((s) => PRODUTOS[s.produto] ?? s.produto))].slice(0, 12);
+  return nomes.length ? `Envie o nome do produto para ver as praças: ${nomes.join(", ")}.` : "";
+}
+
+async function textoCotacao(termo: string | null, linhaDedicada = false) {
   const site = urlDoSite();
   const series = await catalogoCotacoes();
   if (!series.length) return `As cotações estão indisponíveis agora. Veja em ${site}/mercado`;
-  let escolhidas: CotacaoAtual[];
-  if (!termo) {
-    escolhidas = series.filter((s) => s.destaque).slice(0, 8);
-  } else {
+  let escolhidas: CotacaoAtual[] = [];
+  if (termo) {
     const t = semAcento(termo);
     const produto = Object.entries(PRODUTOS).find(([slug, nome]) => semAcento(nome) === t || slug === t.replace(/\s+/g, "-"))?.[0];
-    escolhidas = series.filter((s) => (produto ? s.produto === produto : semAcento(`${s.nome} ${s.descricao ?? ""}`).includes(t)));
+    const palavras = t.split(" ").filter((w) => w.length > 2 && !["do", "da", "de", "em"].includes(w));
+    escolhidas = series.filter((s) => {
+      if (produto) return s.produto === produto;
+      const alvo = semAcento(`${PRODUTOS[s.produto] ?? ""} ${s.nome} ${s.descricao ?? ""} ${s.praca ?? ""} ${s.uf ?? ""}`);
+      return palavras.length > 0 && palavras.every((w) => alvo.includes(w));
+    });
     // indicadores nacionais primeiro, depois as praças
     escolhidas.sort((a, b) => Number(!!a.praca) - Number(!!b.praca) || a.ordem - b.ordem);
     escolhidas = escolhidas.slice(0, 6);
   }
-  if (!escolhidas.length) return `Não encontrei cotação para "${termo}". Veja todas em ${site}/mercado\n${RODAPE}`;
-  return [`Cotações ARINI${termo ? ": " + termo : ""}`, ...escolhidas.map(linhaCotacao), "", `Histórico e outras praças: ${site}/mercado`].join("\n");
+  const achou = escolhidas.length > 0;
+  if (!achou && termo && !linhaDedicada) return `Não encontrei cotação para "${termo}". Veja todas em ${site}/mercado\n${RODAPE}`;
+  if (!achou) escolhidas = series.filter((s) => s.destaque).slice(0, 8);
+  const linhas = await Promise.all(escolhidas.map((s) => linhaCotacao(s, achou)));
+  return [
+    !achou && termo ? `Não encontrei cotação para "${termo}". Estes são os destaques de hoje:` : `Cotações ARINI${achou ? ": " + termo : ""}`,
+    ...linhas,
+    "",
+    linhaDedicada ? produtosDisponiveis(series) : "",
+    `Gráficos, histórico e outras praças: ${site}/mercado`,
+  ].filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== "")).join("\n");
 }
 
 type ImovelCar = { cod: string; area_ha: number | null; condicao: string | null; status: string | null; tipo: string | null; municipio: string | null };
@@ -170,11 +212,12 @@ async function textoLocal(lat: number, lng: number, conta: Conta | null) {
 }
 
 /** Texto da resposta. Nunca lança: uma falha vira um aviso para tentar de novo. */
-export async function respostaAtendimento(pedido: PedidoAtendimento, numero: string) {
+export async function respostaAtendimento(pedido: PedidoAtendimento, numero: string, linhaCotacoes = false) {
   try {
+    if (linhaCotacoes) return await textoCotacao(pedido.tipo === "cotacao" ? pedido.termo : null, true);
+    if (pedido.tipo === "cotacao") return await textoCotacao(pedido.termo);
     const conta = await contaDoNumero(numero).catch(() => null);
     if (pedido.tipo === "menu") return textoMenu(conta);
-    if (pedido.tipo === "cotacao") return await textoCotacao(pedido.termo);
     return await textoLocal(pedido.lat, pedido.lng, conta);
   } catch {
     return `Não consegui responder agora. Tente de novo em alguns minutos ou use o site: ${urlDoSite()}\n${RODAPE}`;

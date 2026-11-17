@@ -101,9 +101,9 @@ export function telefoneWhatsapp(t: string | null | undefined) {
 }
 
 /** WhatsApp: mensagem de texto (dentro das 24 h depois da última mensagem do cliente). */
-export async function enviarWhatsapp(telefone: string, texto: string) {
-  if (!whatsappConfigurado()) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
-  const r = await fetch(`${GRAPH}/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+export async function enviarWhatsapp(telefone: string, texto: string, phoneId = process.env.WHATSAPP_PHONE_ID) {
+  if (!whatsappConfigurado() || !phoneId) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
+  const r = await fetch(`${GRAPH}/${phoneId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", to: telefone, type: "text", text: { body: texto.slice(0, 4000) } }),
