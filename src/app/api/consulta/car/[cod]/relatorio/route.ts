@@ -8,6 +8,7 @@ import { carregarConsultaArea } from "@/lib/geo/consultaArea";
 import { pdfDaArea, type SecaoPdf } from "@/lib/relatorio/pdf-area";
 import { TEMAS_CAR, type TemaCar } from "@/lib/geo/temasCar";
 import { acessoAtual } from "@/lib/planos-servidor";
+import { linkWhatsappValido } from "@/lib/relatorio/link-whatsapp";
 
 const tipos: Record<string,string> = { IRU: "Imóvel rural", AST: "Assentamento", PCT: "Povos e comunidades tradicionais" };
 const situacoes: Record<string,string> = { AT: "Ativo", PE: "Pendente", SU: "Suspenso", CA: "Cancelado" };
@@ -23,7 +24,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
   // com relatório territorial, como no relatório da área desenhada. O simples
   // continua público (dados do próprio CAR). Clique no link vai para entrar ou
   // para os planos; chamada de API recebe o erro em JSON.
-  if (modelo === "completo") {
+  // O link que o atendimento do WhatsApp manda vem assinado (o plano já foi conferido).
+  if (modelo === "completo" && !linkWhatsappValido(new URL(request.url), cod, modelo)) {
     const { userId, acesso } = await acessoAtual();
     if (!acesso.recursos.has("relatorio_territorial")) {
       const navegador = request.headers.get("accept")?.includes("text/html");

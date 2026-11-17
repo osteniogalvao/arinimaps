@@ -1,10 +1,10 @@
 import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA } from "@/lib/planos-catalogo";
 import { ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
-import { numeroDaApiWhatsapp, telefoneWhatsapp, whatsappConfigurado } from "@/lib/meta";
+import { numeroDaApiWhatsapp, segredoWhatsapp, telefoneWhatsapp, whatsappConfigurado } from "@/lib/meta";
 import { textoOptIn } from "@/lib/retomada-cadastro";
 
 export function GET() {
-  return Response.json({ disponivel: whatsappConfigurado() && !!process.env.WHATSAPP_APP_SECRET });
+  return Response.json({ disponivel: whatsappConfigurado() && !!segredoWhatsapp() });
 }
 export async function POST(req: Request) {
   const limite = await limitar("retomada-cadastro:" + ipDoPedido(req), 8, 600);
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     CATALOGO_POR_ENTRADA[b.perfil] !== plano.personaId
   )
     return Response.json({ error: "Informe o número e confirme a autorização." }, { status: 400 });
-  const numero = process.env.WHATSAPP_APP_SECRET && (await numeroDaApiWhatsapp().catch(() => null));
+  const numero = segredoWhatsapp() && (await numeroDaApiWhatsapp().catch(() => null));
   if (!numero) return Response.json({ error: "O WhatsApp está indisponível." }, { status: 503 });
   return Response.json(
     { link: "https://wa.me/" + numero + "?text=" + encodeURIComponent(textoOptIn(tel, plano.id, b.perfil)) },

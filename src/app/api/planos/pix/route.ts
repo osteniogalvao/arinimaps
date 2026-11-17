@@ -8,6 +8,8 @@ import {
   MetaErro,
   modeloWhatsappAprovado,
   subirImagemWhatsapp,
+  provedorWhatsapp,
+  segredoWhatsapp,
   whatsappConfigurado,
 } from "@/lib/meta";
 import { consentimentoDaConta } from "@/lib/privacidade/consentimento";
@@ -24,7 +26,7 @@ type Entrega = {
 async function entregaDoTitular(id: string): Promise<Entrega> {
   if (
     !whatsappConfigurado() ||
-    !process.env.WHATSAPP_APP_SECRET ||
+    !segredoWhatsapp() ||
     !(await consentimentoDaConta(id, "whatsapp_assinatura"))
   )
     return { tipo: "indisponivel" };
@@ -32,9 +34,14 @@ async function entregaDoTitular(id: string): Promise<Entrega> {
   if (!canal?.verificado) return { tipo: "confirmar" };
   if (Date.parse(canal.janela_ate ?? "") > Date.now() + 30000)
     return { tipo: "livre", numero: canal.telefone };
-  const pix = await modeloWhatsappAprovado(process.env.WHATSAPP_PIX_TEMPLATE_ID, 2, true).catch(() => null);
+  // A Evolution não tem modelo aprovado nem janela de 24 h: o Pix vai como imagem com o texto da ARINI.
+  if (provedorWhatsapp() === "evolution") {
+    const texto = await modeloWhatsappAprovado("1", 2, true, "pix");
+    if (texto) return { tipo: "modelo", numero: canal.telefone, modelo: texto };
+  }
+  const pix = await modeloWhatsappAprovado(process.env.WHATSAPP_PIX_TEMPLATE_ID, 2, true, "pix").catch(() => null);
   if (pix) return { tipo: "modelo", numero: canal.telefone, modelo: pix };
-  const link = await modeloWhatsappAprovado(process.env.WHATSAPP_FATURA_LINK_TEMPLATE_ID, 1).catch(
+  const link = await modeloWhatsappAprovado(process.env.WHATSAPP_FATURA_LINK_TEMPLATE_ID, 1, false, "fatura").catch(
     () => null,
   );
   return link ? { tipo: "link", numero: canal.telefone, modelo: link } : { tipo: "confirmar" };

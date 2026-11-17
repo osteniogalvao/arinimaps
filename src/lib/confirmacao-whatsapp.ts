@@ -1,12 +1,12 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { telefoneWhatsapp } from "@/lib/meta";
+import { segredoWhatsapp, telefoneWhatsapp } from "@/lib/meta";
 
 const prefixo = "Confirmo que este é o WhatsApp da minha conta ARINI. Código ";
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 function assinatura(numero: string, token: string) {
-  return createHmac("sha256", process.env.WHATSAPP_APP_SECRET!)
+  return createHmac("sha256", segredoWhatsapp()!)
     .update("confirmacao-v1|" + numero + "|" + token)
     .digest("hex")
     .slice(0, 32);
@@ -27,7 +27,7 @@ export async function confirmarMensagemWhatsapp(numero: string, texto: string, r
   if (
     !tel ||
     !recebido ||
-    !process.env.WHATSAPP_APP_SECRET ||
+    !segredoWhatsapp() ||
     partes.length !== 4 ||
     !uuid.test(partes[0]) ||
     !uuid.test(partes[1]) ||

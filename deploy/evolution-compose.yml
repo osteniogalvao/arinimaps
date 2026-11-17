@@ -1,0 +1,56 @@
+# Evolution API (WhatsApp da ARINI) para o Dokploy da VPS.
+# Dokploy › projeto Arini Imóveis Brasil › Create Service › Compose › cole este arquivo.
+# Em Environment, preencha EVOLUTION_DOMINIO, EVOLUTION_API_KEY e EVOLUTION_DB_SENHA.
+# Em Domains, aponte EVOLUTION_DOMINIO para o serviço "evolution", porta 8080, com HTTPS.
+# Passo a passo completo: docs/WHATSAPP-EVOLUTION.md
+services:
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    restart: unless-stopped
+    depends_on: [evolution-db, evolution-redis]
+    environment:
+      SERVER_URL: https://${EVOLUTION_DOMINIO}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
+      DEL_INSTANCE: "false"
+      LANGUAGE: pt-BR
+      CONFIG_SESSION_PHONE_CLIENT: ARINI
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${EVOLUTION_DB_SENHA}@evolution-db:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: arini
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://evolution-redis:6379/6
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      CACHE_LOCAL_ENABLED: "false"
+      WEBHOOK_GLOBAL_ENABLED: "false"
+      QRCODE_LIMIT: "30"
+      LOG_LEVEL: ERROR,WARN
+    volumes:
+      - evolution_instances:/evolution/instances
+  evolution-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${EVOLUTION_DB_SENHA}
+      POSTGRES_DB: evolution
+    volumes:
+      - evolution_db:/var/lib/postgresql/data
+  evolution-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - evolution_redis:/data
+volumes:
+  evolution_instances:
+  evolution_db:
+  evolution_redis:

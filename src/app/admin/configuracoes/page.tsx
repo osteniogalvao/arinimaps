@@ -5,6 +5,7 @@ import ConfiguracoesForm from "./ConfiguracoesForm";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { CabecalhoPagina, Etiqueta, Secao } from "@/components/ui/Pagina";
 import { CheckCircle2, CircleDashed, Plug } from "lucide-react";
+import { provedorWhatsapp } from "@/lib/meta";
 
 export default async function AdminConfiguracoes() {
   await exigirSetor("diretoria");
@@ -22,6 +23,8 @@ export default async function AdminConfiguracoes() {
       dica: "Habilita “Cobrar via Asaas” nas faturas." },
     { nome: "Esri ArcGIS (satélite licenciado)", ligado: !!process.env.NEXT_PUBLIC_ARCGIS_KEY,
       dica: "Sem isso, o satélite usa a fonte de demonstração, sem licença comercial." },
+    { nome: "WhatsApp (" + (provedorWhatsapp() === "meta" ? "Meta Cloud API" : "Evolution API") + ")", ligado: provedorWhatsapp() !== null,
+      dica: "Sem isso, o CRM não conversa pelo WhatsApp e o atendimento automático fica desligado. Conexão em Central › WhatsApp › Conexão do número." },
     { nome: "Anthropic (assistente de IA)", ligado: !!process.env.ANTHROPIC_API_KEY,
       dica: "Sem isso, o assistente aparece como “em configuração” e a rota responde 503." },
   ];
