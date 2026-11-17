@@ -144,6 +144,8 @@ export default function Tour3D(dados: TourData) {
   const [mapaPronto, setMapaPronto] = useState<MLMap | null>(null);
   const velocidade = useRef(1);
   const controlar = useRef<(reiniciar: boolean) => void>(() => {});
+  const pausar = useRef<() => void>(() => {});
+  const [relevo, setRelevo] = useState(1.4);
   const [esperandoTiles, setEsperandoTiles] = useState(false);
   const [ambienteCar, setAmbienteCar] = useState(false);
   const [fase, setFase] = useState<"carregando" | "tocando" | "pausado" | "fim">("carregando");
@@ -266,6 +268,16 @@ export default function Tour3D(dados: TourData) {
         seek(orbit.start);
         await esperarMapa(map, 12_000);
         if (cancelado) return;
+        // Pré-carrega cada parada do roteiro (PDF do Carlos, 17/11/2026: "alguns
+        // elementos não estão sendo carregados a tempo durante a apresentação").
+        // Os tiles ficam no cache do navegador e o sobrevoo não chega antes deles.
+        const paradas = keys.filter((k) => k.t > orbit.start);
+        for (let i = 0; i < paradas.length; i++) {
+          setEtapa(`Carregando o percurso (${i + 1} de ${paradas.length})…`);
+          seek(paradas[i].t);
+          await esperarMapa(map, 5_000);
+          if (cancelado) return;
+        }
         setEtapa("Preparando o sobrevoo…");
         seek(0);
         await esperarMapa(map, 8_000);
@@ -283,7 +295,7 @@ export default function Tour3D(dados: TourData) {
           if (agora >= verificarEm) {
             verificarEm = agora + 400;
             if (map.areTilesLoaded()) aguardarAte = 0;
-            else if (!aguardarAte || agora > aguardarAte + 5000) aguardarAte = agora + 2500;
+            else if (!aguardarAte || agora > aguardarAte + 5000) aguardarAte = agora + 6000;
             const esperar = agora < aguardarAte;
             if (esperar !== aguardando) { aguardando = esperar; setEsperandoTiles(esperar); }
           }
@@ -306,6 +318,7 @@ export default function Tour3D(dados: TourData) {
           if (faseRef.current !== "tocando") return;
           faseRef.current = "pausado"; setFase("pausado");
         };
+        pausar.current = parar;
         map.on("mousedown", parar);
         map.on("touchstart", parar);
         map.on("wheel", parar);
@@ -338,8 +351,14 @@ export default function Tour3D(dados: TourData) {
             <p className="mt-1 text-xs text-[#B3C3B8]">{dados.areaLabel}{dados.municipio ? ` · ${dados.municipio.nome}` : ""}</p>
             <label className="mt-3 block text-sm">Velocidade <select className="ml-1 rounded bg-[#123b2a] px-1" defaultValue={1}
               onChange={e => { velocidade.current = Number(e.target.value); }}>
-              {[0.5, 1, 1.5, 2].map(v => <option key={v} value={v}>{v.toLocaleString("pt-BR")}×</option>)}
+              {[0.25, 0.5, 0.75, 1, 1.5, 2, 3].map(v => <option key={v} value={v}>{v.toLocaleString("pt-BR")}×</option>)}
             </select></label>
+            {/* quanto o relevo sobe na imersão 3D (17/11/2026) */}
+            <label className="mt-2 flex items-center gap-2 text-sm">Relevo
+              <input type="range" min={0} max={3} step={0.1} value={relevo} className="w-28 accent-[#D9BD6F]"
+                onChange={e => { const v = Number(e.target.value); setRelevo(v); mapRef.current?.setTerrain(v > 0 ? { source: "dem", exaggeration: v } : null); }} />
+              <span className="tabular-nums text-xs">{relevo.toLocaleString("pt-BR")}×</span>
+            </label>
             {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
               && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
               && <CamadasDoTour mapa={mapaPronto} geometria={dados.geometry} permitidas={dados.camadas} />}
@@ -372,9 +391,15 @@ export default function Tour3D(dados: TourData) {
             </div>
           )}
           {fase === "tocando" && (
-            <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[#F2F2EC] text-xs bg-[#0A2219]/85 rounded-full px-4 py-1.5">
-              {esperandoTiles ? "Aguardando as imagens do mapa…" : "Toque no mapa para explorar livremente"}
-            </p>
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2">
+              <button onClick={() => pausar.current()}
+                className="rounded-full border-[1.5px] border-[#F2F2EC]/80 bg-[#0A2219]/85 px-4 py-1.5 text-xs font-semibold text-[#F2F2EC] hover:bg-[#F2F2EC] hover:text-[#124431]">
+                Pausar
+              </button>
+              <p className="text-[#F2F2EC] text-xs bg-[#0A2219]/85 rounded-full px-4 py-1.5">
+                {esperandoTiles ? "Aguardando as imagens do mapa…" : "Toque no mapa para explorar livremente"}
+              </p>
+            </div>
           )}
         </>
       )}
