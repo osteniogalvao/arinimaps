@@ -12,14 +12,17 @@ type Props = {
   status: string;
   className?: string;
   carAmbiental?: string;
+  /** área do imóvel (ha), base do % no quadro ambiental */
+  areaHa?: number | null;
 };
 
 /** Mapa satélite com a geometria do imóvel destacada (página do imóvel e admin). */
-export default function MiniMapa({ geometry, status, className, carAmbiental }: Props) {
+export default function MiniMapa({ geometry, status, className, carAmbiental, areaHa }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const [mapaCar, setMapaCar] = useState<MLMap | null>(null);
-  const [ambiental, setAmbiental] = useState(false);
+  // 17/11 (áudio do Carlos, 11h49): APP, reserva e as demais camadas já abrem à mostra
+  const [ambiental, setAmbiental] = useState(!!carAmbiental);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -100,8 +103,8 @@ export default function MiniMapa({ geometry, status, className, carAmbiental }: 
   return <div className="space-y-3">{mapa}
     <button className="btn-contorno px-4 py-2 text-sm disabled:opacity-60" type="button" disabled={!mapaCar}
       onClick={() => setAmbiental(v => !v)} aria-expanded={ambiental}>
-      {ambiental ? "Fechar mapa ambiental" : "Ver camadas ambientais do imóvel"}
+      {ambiental ? "Ocultar camadas ambientais" : "Mostrar APP, reserva e camadas ambientais"}
     </button>
-    {ambiental && mapaCar && <AmbienteCar key={carAmbiental} mapa={mapaCar} cod={carAmbiental} />}
+    {ambiental && mapaCar && <AmbienteCar key={carAmbiental} mapa={mapaCar} cod={carAmbiental} quadro areaHa={areaHa} />}
   </div>;
 }
