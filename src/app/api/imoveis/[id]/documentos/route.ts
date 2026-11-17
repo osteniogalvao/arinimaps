@@ -5,6 +5,7 @@ import { ator, temSetor } from "@/lib/authz";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
 import { ACEITA, conferirArquivo } from "@/lib/seguranca/arquivos";
+import { recusaPorArmazenamento } from "@/lib/armazenamento";
 
 async function podeEditarImovel(a: NonNullable<Awaited<ReturnType<typeof ator>>>, propertyId: string) {
   // equipe: os setores que tratam documentos (o mesmo mapa de /api/arquivos)
@@ -32,6 +33,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
   const conferido = await conferirArquivo(arquivo, ACEITA.documento, 25 * 1024 * 1024);
   if (!conferido.ok) return NextResponse.json({ error: conferido.erro }, { status: 400 });
 
+  if (!a!.ehArini) {
+    const cota = await recusaPorArmazenamento(a!.userId, a!.acesso, conferido.arquivo.bytes.byteLength);
+    if (cota) return NextResponse.json({ error: cota }, { status: 413 });
+  }
   const admin = supabaseAdmin();
   const path = `imoveis/${id}/${tipo}-${crypto.randomUUID()}.${conferido.arquivo.ext}`;
   const { error: upError } = await admin.storage.from("docs")

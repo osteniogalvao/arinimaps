@@ -4,6 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { ator, temSetor, type Ator } from "@/lib/authz";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
+import { recusaPorArmazenamento } from "@/lib/armazenamento";
 
 /**
  * Vídeos do imóvel enviados pelo anunciante.
@@ -55,6 +56,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
     return NextResponse.json({ error: `Cada imóvel aceita até ${MAX_VIDEOS} vídeos. Remova um para enviar outro.` }, { status: 400 });
   }
 
+  if (!a.ehArini) {
+    const cota = await recusaPorArmazenamento(a.userId, a.acesso, tamanho);
+    if (cota) return NextResponse.json({ error: cota }, { status: 413 });
+  }
   const path = `properties/${id}/video-${crypto.randomUUID()}.${ext}`;
   const { data, error } = await admin.storage.from("media").createSignedUploadUrl(path);
   if (error || !data) return NextResponse.json({ error: error?.message ?? "Armazenamento indisponível." }, { status: 502 });

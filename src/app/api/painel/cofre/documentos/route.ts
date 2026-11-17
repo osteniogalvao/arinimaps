@@ -7,6 +7,8 @@ import { ACEITA, conferirArquivo } from "@/lib/seguranca/arquivos";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { recusaPorArmazenamento } from "@/lib/armazenamento";
+import { acessoDe } from "@/lib/planos-servidor";
 
 async function buscarImovel(req: Request) {
   const a = await ator();
@@ -57,6 +59,8 @@ export async function POST(req: Request) {
   finally { leitor.releaseLock(); }
   const conferido = await conferirArquivo(new File(partes,nome),ACEITA.documento,MAX_BYTES);
   if (!conferido.ok) return falha(400,"arquivo",conferido.erro);
+  const cota = await recusaPorArmazenamento(escopo.titular, await acessoDe(escopo.titular), tamanho);
+  if (cota) return falha(413, "armazenamento", cota);
   const id = crypto.randomUUID();
   const path = `cofre/${escopo.titular}/${escopo.id}/${id}.${conferido.arquivo.ext}`;
   const storage = escopo.db.storage.from("docs");

@@ -199,6 +199,8 @@ export const GRUPOS: Grupo[] = [
       { chave: "ari_pacote_cortesia", rotulo: "Créditos de cortesia por pacote", tipo: "numero", padrao: 500, min: 0, max: 100000, somenteDiretoria: true },
       { chave: "ari_validade_meses", rotulo: "Validade do pacote em meses", tipo: "numero", padrao: 12, min: 1, max: 120, somenteDiretoria: true },
       { chave: "ari_limite_creditos_dia", rotulo: "Limite diário de créditos por conta", tipo: "numero", padrao: 200, min: 1, max: 100000, somenteDiretoria: true },
+      { chave: "armazenamento_padrao_mb", rotulo: "Espaço de arquivos da conta sem plano", tipo: "numero", padrao: 500, min: 0, max: 1000000, sufixo: "MB", somenteDiretoria: true,
+        ajuda: "Fotos, vídeos e documentos. Cada plano pode ter a própria cota em Planos; 0 = sem limite." },
       { chave: "ari_custo_chat", rotulo: "Créditos por conversa", tipo: "numero", padrao: 1, min: 1, max: 10000, somenteDiretoria: true },
       { chave: "ari_custo_imagem", rotulo: "Créditos por busca por imagem", tipo: "numero", padrao: 1, min: 1, max: 10000, somenteDiretoria: true },
       { chave: "ari_custo_matricula", rotulo: "Créditos por leitura de matrícula", tipo: "numero", padrao: 10, min: 1, max: 10000, somenteDiretoria: true },

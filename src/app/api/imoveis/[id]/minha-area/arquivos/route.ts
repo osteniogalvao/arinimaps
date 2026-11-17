@@ -8,6 +8,7 @@ import { conferirArquivo, type TipoReal } from "@/lib/seguranca/arquivos";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
 import { ehAnuncianteDoImovel } from "@/lib/acompanhamento/servidor";
 import { areaPrivadaLiberada } from "@/lib/imovel/verificacao";
+import { recusaPorArmazenamento } from "@/lib/armazenamento";
 
 /**
  * Arquivos de projeto da Minha área (item 29): PDF, imagem, DWG/DXF, KML/KMZ,
@@ -52,6 +53,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
   const conferido = await conferirArquivo(arquivo, ACEITA_PROJETO, MAX_BYTES);
   if (!conferido.ok) return falha(400, "arquivo_invalido", conferido.erro, { solucao: "Envie PDF, imagem, DWG, DXF, KML ou KMZ de até 25 MB." });
 
+  const cota = a.ehArini ? null : await recusaPorArmazenamento(a.userId, a.acesso, conferido.arquivo.bytes.byteLength);
+  if (cota) return falha(413, "armazenamento", cota);
   const path = `imoveis/${id}/minha-area/${crypto.randomUUID()}.${conferido.arquivo.ext}`;
   const { error: upErro } = await admin.storage.from("docs")
     .upload(path, conferido.arquivo.bytes, { contentType: conferido.arquivo.contentType });
