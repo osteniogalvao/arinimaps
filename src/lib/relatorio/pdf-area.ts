@@ -55,7 +55,7 @@ const verde = rgb(.07,.27,.20), tinta = rgb(.12,.18,.16), cinza = rgb(.30,.37,.3
 const profundo = rgb(.04,.13,.10), ouro = rgb(.85,.74,.44);
 const hex = (h: string) => rgb(parseInt(h.slice(1,3),16)/255, parseInt(h.slice(3,5),16)/255, parseInt(h.slice(5,7),16)/255);
 const TEMAS: [RegExp, string][] = [
-  [/cadastro ambiental|car\b/i, "#E07B00"],
+  [/cadastro ambiental|car\b/i, "#1F9A12"],
   [/precipita|chuva/i, "#1E88E5"],
   [/água|agua|represa|hidro|outorga/i, "#0288D1"],
   [/desmat|prodes|queimad|foco/i, "#D84315"],
