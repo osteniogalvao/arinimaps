@@ -11,6 +11,8 @@ import { BotaoLink, CabecalhoPagina, Conteudo, PilulaPonto, Secao } from "@/comp
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { carregarConsultaArea } from "@/lib/geo/consultaArea";
 import { consultarCar } from "@/lib/geo/car";
+import { listarMunicipiosAtendidos } from "@/lib/geo/municipiosAtendidos";
+import { municipioAtendidoDoCar } from "@/lib/geo/atendimento";
 import { formatArea } from "@/lib/format";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
 import DocumentosOficiaisCar from "@/components/rural/DocumentosOficiaisCar";
@@ -63,17 +65,20 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
   if (raioM === null) notFound();
   const cod = decodeURIComponent((await params).cod);
   const admin = supabaseAdmin();
-  const [{ data: carRaw, error }, { data: anuncio }, consulta] = await Promise.all([
+  const [{ data: carRaw, error }, { data: anuncio }, consulta, atendidos] = await Promise.all([
     consultarCar(cod),
     admin.from("properties").select("codigo, titulo, status").eq("car_codigo", cod)
       .in("status", ["publicado", "em_negociacao"]).limit(1).maybeSingle(),
     // o próprio CAR fica fora da lista: ele já é o assunto da página
     carregarConsultaArea(`car:${cod}`, { excluir: ["car"], raioM }),
+    // áudio do Carlos (17/11, 19h09): o anúncio só abre nos municípios atendidos
+    listarMunicipiosAtendidos().catch(() => null),
   ]);
   const car = carRaw as Car | null;
   if (error) throw new Error("O cadastro rural está indisponível. Tente novamente em instantes.");
   if (!car?.geometry) notFound();
   const p = car.properties;
+  const foraDaArea = !!atendidos?.length && !municipioAtendidoDoCar(atendidos, p);
 
   const area = p.area_ha ? formatArea(Number(p.area_ha) * 10_000, "rural") : "—";
   const situacao = STATUS[p.status ?? ""] ?? p.status ?? "—";
@@ -115,6 +120,8 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
         subtitulo="Cadastro Ambiental Rural · consulta de área"
         acoes={anuncio ? (
           <BotaoLink href={`/imovel/${anuncio.codigo}`}>Esta área está à venda — ver o anúncio</BotaoLink>
+        ) : foraDaArea ? (
+          <BotaoLink href="/expansao">Anúncio ainda não disponível neste município · quero a Arini aqui</BotaoLink>
         ) : (
           <BotaoLink href={`/painel/novo?car=${encodeURIComponent(p.cod)}`} variante="ouro">Esta área é minha — anunciar</BotaoLink>
         )}

@@ -8,19 +8,16 @@ import BotoesRelatorio from "./BotoesRelatorio";
 import EscolhaSecoes, { type OpcaoSecao } from "./EscolhaSecoes";
 import { currentUser } from "@/lib/supabase/server";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
-import { formatDistancia, formatPerimetro, nomePoi, poisOrdenados } from "@/lib/geo/distancia";
+import { CATEGORIA_POI_LABEL, formatDistancia, formatPerimetro, nomePoi, poisOrdenados } from "@/lib/geo/distancia";
 import { detalhesRegistro } from "@/lib/rural/detalhes";
 import { SECOES, escreverSecoes, lerSecoes, secaoDaFonte, type SecaoId } from "@/lib/relatorio/secoes";
 import { OG_IMAGEM_PADRAO, OG_NOME_SITE } from "@/lib/compartilhar";
 import MarcaArini from "@/components/marca/MarcaArini";
 import MiniMapa from "@/components/map/MiniMapa";
+import { SeloPoi } from "@/components/map/UiMapa";
 import PainelAvaliacao from "@/components/avaliacao/PainelAvaliacao";
 import { Etiqueta } from "@/components/ui/Pagina";
 
-const CATEGORIA_LABEL: Record<string, string> = {
-  combustivel: "Posto de combustível", farmacia: "Farmácia", supermercado: "Supermercado",
-  hospital: "Hospital", escola: "Escola", centro: "Centro da cidade", acesso_rodovia: "Acesso à rodovia",
-};
 
 type Item = { titulo: string; detalhe?: string; extra?: Record<string, string | number | null> };
 type Fonte = {
@@ -97,7 +94,7 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
   const tipo = imovel.tipo as "urbano" | "rural";
   const municipio = imovel.municipality as unknown as { nome: string; uf: string } | null;
   const fontes = ((relatorio as { fontes?: Fonte[] } | null)?.fontes ?? []);
-  const pois = poisOrdenados((tour as { pois?: { nome: string | null; categoria: string; distancia_m: number }[] } | null)?.pois ?? []);
+  const pois = poisOrdenados((tour as { pois?: { nome: string | null; categoria: string; distancia_m: number; lng: number; lat: number }[] } | null)?.pois ?? []);
   const consultadoEm = fontes.map((f) => f.consulta?.consultado_em).filter(Boolean).sort().at(-1);
   const caracteristicas = (imovel.caracteristicas ?? {}) as Record<string, unknown>;
   const benfeitorias = (caracteristicas.benfeitorias as string[] | undefined) ?? [];
@@ -292,7 +289,7 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
               </p>
             )}
             {publico?.geometry && (
-              <MiniMapa geometry={publico.geometry} status={imovel.status}
+              <MiniMapa geometry={publico.geometry} status={imovel.status} pois={pois.slice(0, 12)}
                 className="mt-5 h-72 w-full overflow-hidden rounded-[20px] border border-linha break-inside-avoid md:h-96 print:h-72 print:rounded-none print:border-gray-300" />
             )}
 
@@ -302,7 +299,10 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
                 <dl className={cartaoTabela}>
                   {pois.slice(0, 12).map((p, i) => (
                     <div key={i} className={linha + " !py-3 text-[15px] print:text-sm"}>
-                      <dt className="min-w-0 text-texto print:text-black">{nomePoi(p.nome) ?? CATEGORIA_LABEL[p.categoria] ?? p.categoria}</dt>
+                      <dt className="flex min-w-0 items-center gap-2.5 text-texto print:text-black">
+                        <SeloPoi categoria={p.categoria} tamanho="size-7" icone="size-3.5" />
+                        <span className="min-w-0 truncate">{nomePoi(p.nome) ?? CATEGORIA_POI_LABEL[p.categoria] ?? p.categoria}</span>
+                      </dt>
                       <dd className="lp-display shrink-0 text-xl tabular-nums text-verde print:text-base print:text-gray-800">
                         {formatDistancia(p.distancia_m)}
                       </dd>

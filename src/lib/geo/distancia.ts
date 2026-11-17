@@ -3,15 +3,16 @@
  * imóvel e à consulta do lote. Pode ser importado no cliente e no servidor.
  */
 
+import { VISUAL_POI } from "./poiVisual";
 /** Rótulo de cada categoria de ponto de interesse (OpenStreetMap + IBGE). */
-export const CATEGORIA_POI_LABEL: Record<string, string> = {
-  combustivel: "Posto de combustível", farmacia: "Farmácia", supermercado: "Supermercado",
-  hospital: "Hospital ou clínica", escola: "Escola", centro: "Centro da cidade", acesso_rodovia: "Acesso à rodovia",
-};
+export const CATEGORIA_POI_LABEL: Record<string, string> = Object.fromEntries(
+  Object.entries(VISUAL_POI).map(([k, v]) => [k, v.rotulo]),
+);
 
 /** Ícone curto por categoria, para listas compactas. */
 export const CATEGORIA_POI_ICONE: Record<string, string> = {
   combustivel: "⛽", farmacia: "✚", supermercado: "🛒", hospital: "🏥", escola: "🎓", centro: "🏛", acesso_rodovia: "🛣",
+  banco: "🏦", igreja: "⛪", restaurante: "🍽", parque: "🌳", padaria: "🥖", policia: "🛡",
 };
 
 /**

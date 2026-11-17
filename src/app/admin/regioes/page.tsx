@@ -53,7 +53,8 @@ export default async function AdminRegioes() {
           </Cartao>
         </Secao>
 
-        <Secao eyebrow="Malha do IBGE" titulo="Municípios no mapa">
+        <Secao eyebrow="Malha do IBGE" titulo="Municípios no mapa"
+          subtitulo="O anúncio (“Esta área é minha”) só abre nestes municípios. Na expansão, adicione o município aqui e ele fica liberado.">
           <Cartao className="space-y-5">
             <AdicionarMunicipio />
             <div className="-mx-6 -mb-6 overflow-x-auto border-t border-linha">

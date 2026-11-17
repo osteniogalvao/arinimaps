@@ -7,9 +7,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowLeft, ArrowRight, Bath, BedDouble, Building, CalendarDays, Car, Check, ChevronRight, Cross, DoorOpen,
-  ExternalLink, FileText, Fuel, Gavel, GraduationCap, Hospital, Landmark, MapPin, Navigation, Rotate3d,
-  Route, Ruler, ShieldCheck, ShoppingCart, Sprout,
+  ArrowLeft, ArrowRight, Bath, BedDouble, Building, CalendarDays, Car, Check, ChevronRight, DoorOpen,
+  ExternalLink, FileText, Gavel, Landmark, MapPin, Navigation, Rotate3d,
+  Ruler, ShieldCheck, Sprout,
 } from "lucide-react";
 import Moldura from "@/components/shell/Moldura";
 import { Conteudo, Etiqueta, PilulaPonto, Secao } from "@/components/ui/Pagina";
@@ -17,6 +17,7 @@ import MarcaArini from "@/components/marca/MarcaArini";
 import IndicadoresMunicipio from "@/components/rural/IndicadoresMunicipio";
 import { currentUser } from "@/lib/supabase/server";
 import MiniMapa from "@/components/map/MiniMapa";
+import { SeloPoi } from "@/components/map/UiMapa";
 import InteresseForm from "@/components/InteresseForm";
 import BotaoCompartilhar from "@/components/BotaoCompartilhar";
 import BotaoExportarSig from "@/components/compartilhar/BotaoExportarSig";
@@ -108,12 +109,6 @@ function fichaTecnica(
   return itens;
 }
 
-/** Ícone por categoria de ponto de interesse (os rótulos vêm de lib/geo/distancia). */
-const POI_ICONE: Record<string, LucideIcon> = {
-  combustivel: Fuel, farmacia: Cross, supermercado: ShoppingCart, hospital: Hospital,
-  escola: GraduationCap, centro: Landmark, acesso_rodovia: Route,
-};
-
 export default async function PaginaImovel({ params, searchParams }: PageProps<"/imovel/[codigo]">) {
   const { codigo } = await params;
   // código do nome antigo (ARINI-MAP-000002) → o mesmo imóvel no padrão novo
@@ -172,7 +167,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
     propId ? admin.from("espelho_config").select("pre_lancamento").eq("empreendimento_id",propId.id).maybeSingle() : {data:null},
   ]);
 
-  const pois = poisOrdenados((tourData as { pois?: { nome: string | null; categoria: string; distancia_m: number }[] } | null)?.pois ?? [])
+  const pois = poisOrdenados((tourData as { pois?: { nome: string | null; categoria: string; distancia_m: number; lng: number; lat: number }[] } | null)?.pois ?? [])
     .slice(0, 10);
   const centroid = (tourData as { centroid?: { lng: number; lat: number } } | null)?.centroid;
   const whatsapp = (typeof whats?.valor === "string" ? whats.valor : null)
@@ -319,7 +314,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
             )}
             {imovel.geometry && (
               <Secao eyebrow="03 · Divisa no mapa" titulo="Localização e área">
-                <MiniMapa geometry={imovel.geometry} status={imovel.status}
+                <MiniMapa geometry={imovel.geometry} status={imovel.status} pois={pois}
                   className="h-80 w-full overflow-hidden rounded-[20px] border border-linha md:h-[26rem]" />
                 <dl className="cartao divide-y divide-linha !p-0 text-[15px]">
                   <div className="flex items-center justify-between gap-4 px-5 py-3.5">
@@ -372,12 +367,9 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
                 subtitulo="Distâncias em linha reta, do centro do imóvel. Fonte: OpenStreetMap, atualizada periodicamente.">
                 <div className="cartao grid gap-x-8 !p-2 sm:grid-cols-2 md:!p-3">
                   {pois.map((p, i) => {
-                    const Icone = POI_ICONE[p.categoria] ?? MapPin;
                     return (
                       <div key={i} className="flex items-center gap-3.5 border-b border-linha px-3 py-3.5 last:border-b-0">
-                        <span className="grid size-9 shrink-0 place-items-center rounded-full border border-linha-forte text-verde">
-                          <Icone className="size-4" />
-                        </span>
+                        <SeloPoi categoria={p.categoria} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[15px] font-semibold text-texto">
                             {nomePoi(p.nome) ?? CATEGORIA_POI_LABEL[p.categoria] ?? p.categoria}

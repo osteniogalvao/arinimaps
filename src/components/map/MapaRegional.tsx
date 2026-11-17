@@ -13,6 +13,8 @@ import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpeci
 import { DETALHES_SATELITE, camadaDeDetalhe } from "@/lib/map/ortofotos";
 import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, MOSAICO_MENOS_NUVENS, SATELITE, ZOOM_INICIAL_REGIONAL } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
+import { useMunicipiosAtendidos } from "@/lib/map/useMunicipiosAtendidos";
+import { listaDeMunicipios, municipioAtendidoDoCar } from "@/lib/geo/atendimento";
 import { formatBRL, formatArea } from "@/lib/format";
 import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeoJSON, TRANSFORM_ZERO, type Transform, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
 import Link from "next/link";
@@ -170,6 +172,9 @@ function CartaoOficiais({ itens, ponto, onFechar }: {
 function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [] }: { car: CarProps; mapa: MLMap | null; podeAmbiente: boolean; onFechar: () => void; oficiais?: FeicaoNoPonto[] }) {
   const area = Number(car.area_ha);
   const [detalhes, setDetalhes] = useState(false);
+  // áudio do Carlos (17/11, 19h09): anúncio só nos municípios que a Arini atende
+  const atendidos = useMunicipiosAtendidos();
+  const foraDaArea = !!atendidos && !municipioAtendidoDoCar(atendidos, car);
   const [aba, setAba] = useState<"ambiental" | "fontes" | "sigef">(oficiais.length ? "fontes" : "sigef");
   const linha = "flex items-baseline justify-between gap-3 py-1.5";
   return (
@@ -192,10 +197,20 @@ function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [] }: { car: 
         </div>
       </dl>
       <div className="space-y-2">
-        <Link href={`/painel/novo?car=${encodeURIComponent(car.cod)}`} onClick={() => guardarCarPendente(car.cod)}
-          className="btn-ouro flex w-full items-center justify-center gap-1.5 py-2.5 text-sm">
-          Esta área é minha · anunciar <ArrowRight className="size-4" />
-        </Link>
+        {foraDaArea ? (
+          <div className="rounded-xl border border-ouro/50 bg-ouro/10 px-3 py-2.5 text-xs leading-relaxed text-texto">
+            <p className="font-semibold">Anúncio ainda não disponível{car.municipio ? ` em ${car.municipio}` : " neste município"}.</p>
+            <p className="mt-1 text-texto-2">Hoje a Arini anuncia em {listaDeMunicipios(atendidos!)}. A consulta desta área continua liberada.</p>
+            <Link href="/expansao" className="mt-1.5 inline-flex items-center gap-1 font-semibold text-verde hover:underline">
+              Quero a Arini na minha região <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+        ) : (
+          <Link href={`/painel/novo?car=${encodeURIComponent(car.cod)}`} onClick={() => guardarCarPendente(car.cod)}
+            className="btn-ouro flex w-full items-center justify-center gap-1.5 py-2.5 text-sm">
+            Esta área é minha · anunciar <ArrowRight className="size-4" />
+          </Link>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <Link href={`/painel/cofre?car=${encodeURIComponent(car.cod)}`} className="btn-contorno flex items-center justify-center py-2 text-sm">Vincular área</Link>
           <Link href={`/consulta/car/${encodeURIComponent(car.cod)}`} className="btn-contorno flex items-center justify-center gap-1.5 py-2 text-sm">
@@ -2085,6 +2100,7 @@ export default function MapaRegional({
       {selecionado && (
         <PainelImovel
           imovel={selecionado}
+          mapa={mapaPronto}
           raio={raio}
           onRaio={setRaio}
           onFechar={() => setSelecionado(null)}

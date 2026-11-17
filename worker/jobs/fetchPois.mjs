@@ -8,6 +8,13 @@ const CATEGORIAS = [
   { categoria: "hospital", seletor: '"amenity"~"hospital|clinic"' },
   { categoria: "escola", seletor: '"amenity"="school"' },
   { categoria: "acesso_rodovia", seletor: '"highway"~"motorway|trunk|primary"' },
+  // 17/11/2026 (Stenio): mais do que existe em volta do lote, cada um com o seu ícone
+  { categoria: "banco", seletor: '"amenity"="bank"', extra: true },
+  { categoria: "igreja", seletor: '"amenity"="place_of_worship"', extra: true },
+  { categoria: "restaurante", seletor: '"amenity"~"^(restaurant|cafe|fast_food)$"', extra: true },
+  { categoria: "padaria", seletor: '"shop"="bakery"', extra: true },
+  { categoria: "policia", seletor: '"amenity"="police"', extra: true },
+  { categoria: "parque", seletor: '"leisure"~"^(park|playground)$"', extra: true },
 ];
 
 /*
@@ -75,8 +82,11 @@ export async function fetchPois(payload, db) {
     [prop.tipo === "rural" ? "poi_raio_rural_m" : "poi_raio_urbano_m"]);
   const raio = Number(cfg?.valor ?? 10000);
 
-  const blocos = CATEGORIAS.map((c) => `nwr[${c.seletor}](around:${raio},${prop.lat},${prop.lng});`).join("");
-  const json = await consultarOverpass(`[out:json][timeout:25];(${blocos});out center 120;`);
+  // dois grupos com limite próprio (mesma regra de src/lib/overpass.ts): o
+  // comércio do dia a dia não empurra escolas e hospitais para fora
+  const blocos = (extra) => CATEGORIAS.filter((c) => !!c.extra === extra)
+    .map((c) => `nwr[${c.seletor}](around:${raio},${prop.lat},${prop.lng});`).join("");
+  const json = await consultarOverpass(`[out:json][timeout:25];(${blocos(false)});out center 150;(${blocos(true)});out center 150;`);
 
   // um INSERT só para todos os POIs (unnest), em vez de um por POI. Dedup por
   // osm_id antes: o mesmo id duas vezes no lote quebraria o ON CONFLICT
@@ -93,6 +103,12 @@ export async function fetchPois(payload, db) {
       tags.shop === "supermarket" ? "supermercado" :
       tags.amenity === "hospital" || tags.amenity === "clinic" ? "hospital" :
       tags.amenity === "school" ? "escola" :
+      tags.amenity === "bank" ? "banco" :
+      tags.amenity === "place_of_worship" ? "igreja" :
+      ["restaurant", "cafe", "fast_food"].includes(tags.amenity ?? "") ? "restaurante" :
+      tags.shop === "bakery" ? "padaria" :
+      tags.amenity === "police" ? "policia" :
+      tags.leisure === "park" || tags.leisure === "playground" ? "parque" :
       tags.highway ? "acesso_rodovia" : null;
     if (!categoria) continue;
     porOsm.set(`${el.type}/${el.id}`, { categoria, nome: tags.name ?? null, lng, lat });

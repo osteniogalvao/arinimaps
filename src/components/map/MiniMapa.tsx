@@ -8,6 +8,9 @@ import type { Map as MLMap } from "maplibre-gl";
 import { estiloSatelite } from "@/lib/map/ortofotos";
 import { RADAR_ANEL, STATUS_MAPA } from "./statusMapa";
 import { carregarMaplibre } from "@/lib/map/maplibre";
+import { adicionarPinosPoi, type PoiNoMapa } from "@/lib/map/pinosPoi";
+import { visualPoi } from "@/lib/geo/poiVisual";
+import { SeloPoi } from "./UiMapa";
 
 type Props = {
   geometry: GeoJSON.Geometry;
@@ -18,13 +21,16 @@ type Props = {
   areaHa?: number | null;
   /** raio da pesquisa (m): anel tracejado em volta da área, como no Tour 3D */
   raioM?: number;
+  /** pontos do entorno com coordenadas: viram pinos coloridos com ícone */
+  pois?: PoiNoMapa[];
 };
 
 /** Mapa satélite com a geometria do imóvel destacada (página do imóvel e admin). */
-export default function MiniMapa({ geometry, status, className, carAmbiental, areaHa, raioM = 0 }: Props) {
+export default function MiniMapa({ geometry, status, className, carAmbiental, areaHa, raioM = 0, pois }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const [mapaCar, setMapaCar] = useState<MLMap | null>(null);
+  const [carregado, setCarregado] = useState<MLMap | null>(null);
   // 17/11 (áudio do Carlos, 11h49): APP, reserva e as demais camadas já abrem à mostra
   const [ambiental, setAmbiental] = useState(!!carAmbiental);
 
@@ -50,6 +56,7 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
       map.on("load", () => {
+        setCarregado(map);
         const cor = STATUS_MAPA[status] ?? STATUS_MAPA.publicado;
         map.addSource("imovel", { type: "geojson", data: { type: "Feature", geometry, properties: {} } });
         if (geometry.type === "Point") {
@@ -95,8 +102,18 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
       cancelado = true;
       mapa?.remove();
       mapRef.current = null;
+      setCarregado(null);
     };
   }, [geometry, status, carAmbiental, raioM]);
+
+  // pinos do entorno (17/11/2026): os 4 mais perto já com nome à mostra
+  useEffect(() => {
+    if (!carregado || !pois?.length) return;
+    let tirar: (() => void) | null = null;
+    let vivo = true;
+    adicionarPinosPoi(carregado, pois, { fixos: 4 }).then((f) => { if (vivo) tirar = f; else f(); }).catch(() => undefined);
+    return () => { vivo = false; tirar?.(); };
+  }, [carregado, pois]);
 
   useEffect(() => {
     if (!mapaCar || mapaCar !== mapRef.current) return;
@@ -110,7 +127,22 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
     return () => { mapaCar.off("load", atualizar); };
   }, [mapaCar, ambiental]);
 
-  const mapa = <div ref={containerRef} className={className ?? "h-80 w-full rounded-2xl overflow-hidden border border-linha"} />;
+  const categorias = [...new Set((pois ?? []).map((p) => p.categoria))];
+  const mapa = (
+    <div className="relative h-full">
+      <div ref={containerRef} className={className ?? "h-80 w-full rounded-2xl overflow-hidden border border-linha"} />
+      {categorias.length > 0 && (
+        <ul aria-label="Legenda do entorno" className="pointer-events-none absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] flex-wrap gap-1">
+          {categorias.map((c) => (
+            <li key={c} className="flex items-center gap-1.5 rounded-full bg-[rgba(10,34,25,0.82)] py-0.5 pl-0.5 pr-2 text-[10.5px] font-medium text-[#F2F2EC] shadow">
+              <SeloPoi categoria={c} tamanho="size-4" icone="size-2.5" />
+              {visualPoi(c).rotulo}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
   if (!carAmbiental) return mapa;
   return <div className="space-y-3">{mapa}
     <button className="btn-contorno px-4 py-2 text-sm disabled:opacity-60" type="button" disabled={!mapaCar}
