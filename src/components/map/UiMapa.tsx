@@ -7,7 +7,7 @@
 
 import { Fragment, useState, type ReactNode } from "react";
 import {
-  ChevronDown, List as ListIcon, Fuel, GraduationCap, Hospital, Landmark, Layers, LoaderCircle, MapPin, Pill, Route, ShoppingCart, Trash2, X,
+  ChevronDown, Crop, List as ListIcon, Fuel, GraduationCap, Hospital, Landmark, Layers, LoaderCircle, MapPin, Pill, Route, ShoppingCart, Trash2, X,
   type LucideIcon,
 } from "lucide-react";
 import { STATUS_LABEL } from "@/lib/format";
@@ -347,12 +347,14 @@ function ItemFiltro({ cor, nome, ligada, alternar, ponto, detalhe }: { cor: stri
   );
 }
 
-export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar, onCatalogo,
+export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar, onDelimitar, areas = 0, onAreas,
   planta, corUrbana, alternarPlanta, relevoAtivas, estadoRelevo, onAlternarRelevo }: {
   planta: boolean; corUrbana: string; alternarPlanta: () => void;
   relevoAtivas: ReadonlySet<RelevoId>; estadoRelevo: EstadoRelevo; onAlternarRelevo: (id: RelevoId) => void;
-  /** 17/11 (pedido do Stenio): o botão "Camadas e Dados" fica no alto desta coluna, no computador */
-  onCatalogo?: () => void;
+  /** 17/11 (pedido do Stenio): sem o botão "Camadas e Dados" no computador; a
+   *  delimitação de área (que abre o painel com as camadas da área) fica aqui */
+  onDelimitar?: () => void;
+  areas?: number; onAreas?: () => void;
   car: boolean; alternarCar: () => void; avisoCar?: string;
   situacoes: ReadonlySet<SituacaoCar>; alternarSituacao: (id: SituacaoCar) => void;
   ativas: ReadonlySet<CamadaOficialId>;
@@ -408,12 +410,18 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
   };
   const caixa = "w-64 rounded-2xl border border-linha bg-superficie/97 p-3 shadow-[0_14px_32px_-18px_rgb(0_0_0/0.8)] backdrop-blur-md";
   return (
-    <div role="group" aria-label="Filtros rápidos de camadas"
+    <div role="group" aria-label="Filtros rápidos de camadas" data-tour="camadas"
       className="absolute top-[var(--abaixo-chips,4rem)] right-14 z-10 hidden max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto sm:flex flex-col items-end gap-1.5 p-0.5">
-      {onCatalogo && (
-        <button type="button" onClick={onCatalogo} aria-controls="catalogo-camadas" aria-expanded={false} data-tour="camadas"
+      {onDelimitar && (
+        <button type="button" onClick={onDelimitar} title="Desenhe uma área no mapa e escolha as camadas só para ela"
           className="chip inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-xs font-medium shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md">
-          <Layers className="size-3.5" /> Camadas e Dados
+          <Crop className="size-3.5" /> Delimitar área
+        </button>
+      )}
+      {areas > 0 && onAreas && (
+        <button type="button" onClick={onAreas} aria-controls="catalogo-camadas" title="Camadas das áreas que você delimitou"
+          className="chip inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-xs font-medium shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md">
+          <Layers className="size-3.5" /> Áreas delimitadas · {areas}
         </button>
       )}
       <button type="button" onClick={() => setAberto(!aberto)} aria-expanded={aberto}
