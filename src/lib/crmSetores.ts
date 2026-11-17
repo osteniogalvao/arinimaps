@@ -13,7 +13,25 @@ export type ItemCrm = {
   id: string; codigo: string; pipeline_id: string; etapa_id: string | null; titulo: string; descricao: string | null;
   responsavel: string | null; dados: Record<string, unknown>; prazo_etapa: string | null; entrou_etapa_em: string;
   status: "aberto" | "concluido" | "cancelado"; created_at: string;
+  /** migration 0148 */
+  prioridade?: Prioridade; prazo_final?: string | null; etiquetas?: string[];
 };
+
+export const PRIORIDADES = ["baixa", "normal", "alta", "urgente"] as const;
+export type Prioridade = (typeof PRIORIDADES)[number];
+export const PRIORIDADE_CRM_LABEL: Record<Prioridade, string> = { baixa: "Baixa", normal: "Normal", alta: "Alta", urgente: "Urgente" };
+
+/** Extras do item (0148) vindos do formulário; null quando nada veio. */
+export function extrasDoItem(b: Record<string, unknown>) {
+  const mud: Record<string, unknown> = {};
+  if (PRIORIDADES.includes(b.prioridade as Prioridade)) mud.prioridade = b.prioridade;
+  if (b.prazo_final !== undefined) mud.prazo_final = typeof b.prazo_final === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.prazo_final) ? b.prazo_final : null;
+  if (b.etiquetas !== undefined) {
+    const lista = Array.isArray(b.etiquetas) ? b.etiquetas : typeof b.etiquetas === "string" ? b.etiquetas.split(",") : [];
+    mud.etiquetas = [...new Set(lista.filter((x): x is string => typeof x === "string").map((x) => x.trim().toLowerCase().slice(0, 30)).filter(Boolean))].slice(0, 12);
+  }
+  return Object.keys(mud).length ? mud : null;
+}
 
 export const TIPOS_CAMPO: [CampoCrm["tipo"], string][] = [
   ["texto", "Texto curto"], ["textarea", "Texto longo"], ["numero", "Número"], ["dinheiro", "Valor (R$)"],
