@@ -20,6 +20,7 @@ export type AreaCamadas = {
   id: string; nome: string; geometria: GeoJSON.Polygon; camadas: ReadonlySet<CamadaOficialId>; car: boolean; relevo: Set<RelevoId>;
 };
 
+const LIMITE_ACUMULADO = 30_000;
 const VAZIO: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 const fonte = (id: string) => `of-${id}`;
 const camadasDe = (id: string) => [`of-${id}-fill`, `of-${id}-linha`, `of-${id}-ponto`, `of-${id}-traco`];
@@ -46,6 +47,13 @@ export class GerenciadorCamadasOficiais {
   private ativas = new Map<CamadaOficialId, GeoJSON.Polygon[] | null>();
   private pedidos = new Map<CamadaOficialId, AbortController>();
   private estado: Partial<Record<CamadaOficialId, EstadoCamada>> = {};
+  /**
+   * 17/11/2026 (Stenio: "as coisas demarcadas somem com diminuição do zoom
+   * muito cedo"). No mapa inteiro, o que já foi carregado fica na tela: ao
+   * afastar abaixo do zoom mínimo a camada para de PEDIR, mas não apaga o que
+   * já mostrou, e ao arrastar as janelas se somam em vez de se substituírem.
+   */
+  private acumulado = new Map<CamadaOficialId, Map<string, GeoJSON.Feature>>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private aoMover = () => this.agendar();
 
@@ -66,6 +74,7 @@ export class GerenciadorCamadasOficiais {
       if (recortes?.length === 0) {
         if (antes === undefined) continue;
         this.ativas.delete(id);
+        this.acumulado.delete(id);
         this.pedidos.get(id)?.abort();
         this.visivel(id, false);
         delete this.estado[id];
@@ -74,6 +83,7 @@ export class GerenciadorCamadasOficiais {
       }
       if (antes === recortes || (antes && recortes && antes.length === recortes.length && antes.every((a, i) => a === recortes[i]))) continue;
       this.ativas.set(id, recortes);
+      this.acumulado.delete(id);
       this.criar(id);
       const linha = `of-${id}-linha`;
       if (this.map.getLayer(linha)) this.map.setFilter(linha, recortes ? ["==", ["geometry-type"], "LineString"] : null);
@@ -176,6 +186,19 @@ export class GerenciadorCamadasOficiais {
     }, antes);
   }
 
+  /** Junta a janela nova ao que a camada já mostra (sem repetir feição). */
+  private somar(id: CamadaOficialId, novo: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+    let guardado = this.acumulado.get(id);
+    // teto de memória: passou disso, recomeça só com a janela atual
+    if (!guardado || guardado.size + novo.features.length > LIMITE_ACUMULADO) guardado = new Map();
+    for (const f of novo.features) {
+      const chave = f.properties?.id != null ? `id:${f.properties.id}` : JSON.stringify(f.geometry).slice(0, 200) + JSON.stringify(f.properties);
+      guardado.set(chave, f);
+    }
+    this.acumulado.set(id, guardado);
+    return { type: "FeatureCollection", features: [...guardado.values()] };
+  }
+
   private visivel(id: CamadaOficialId, sim: boolean) {
     for (const l of camadasDe(id)) if (this.map.getLayer(l)) this.map.setLayoutProperty(l, "visibility", sim ? "visible" : "none");
   }
@@ -191,8 +214,11 @@ export class GerenciadorCamadasOficiais {
     const fonteAtual = () => this.map.getSource(fonte(id)) as GeoJSONSource | undefined;
     if (!this.areaFixa && this.map.getZoom() < def.zoomMin) {
       this.pedidos.get(id)?.abort();
-      fonteAtual()?.setData(VAZIO);
-      this.definir(id, { carregando: false, total: 0, aviso: "Aproxime o mapa para ver esta camada." });
+      const ja = this.ativas.get(id) === null ? this.acumulado.get(id)?.size ?? 0 : 0;
+      if (!ja) fonteAtual()?.setData(VAZIO);
+      this.definir(id, ja
+        ? { carregando: false, aviso: "Aproxime o mapa para carregar mais desta camada." }
+        : { carregando: false, total: 0, aviso: "Aproxime o mapa para ver esta camada." });
       return;
     }
     this.pedidos.get(id)?.abort();
@@ -225,7 +251,7 @@ export class GerenciadorCamadasOficiais {
         this.definir(id, { carregando: false, aviso: j?.error ?? "O órgão não respondeu agora." });
         return;
       }
-      const exibidas = recortes ? await recortarEmWorker(j, recortes, ctrl.signal, !def.semContorno && !def.ponto && !def.linha) : j;
+      const exibidas = recortes ? await recortarEmWorker(j, recortes, ctrl.signal, !def.semContorno && !def.ponto && !def.linha) : this.somar(id, j);
       if (ctrl.signal.aborted) return;
       fonteAtual()?.setData(exibidas);
       this.definir(id, {

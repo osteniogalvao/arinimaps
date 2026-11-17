@@ -24,7 +24,9 @@ type Feicao = { type: "Feature"; geometry: GeoJSON.Geometry; properties: Record<
 type Env = { xmin: number; ymin: number; xmax: number; ymax: number };
 
 const UA = "AriniImoveisBrasil/1.0 (contato@arinibrasil.com.br)";
-const MAX_CELULAS = 16;
+// 17/11/2026: 16 → 36 para SIGEF/SNCI/crédito rural (células z12) responderem
+// no z11 numa tela de notebook (~20–30 células). Célula já vista vem do cache.
+const MAX_CELULAS = 36;
 
 type Def = {
   /** zoom da grade de células: camada de polígonos grandes usa célula grande */

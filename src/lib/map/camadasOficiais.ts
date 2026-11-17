@@ -7,6 +7,8 @@
  * `zoomMin` é onde a camada passa a ser pedida: SIGEF e desmatamento são
  * milhares de polígonos pequenos, só fazem sentido de perto; terras indígenas
  * e unidades de conservação são grandes e aparecem já na visão regional.
+ * 17/11/2026: SIGEF, SNCI e crédito rural passaram do z12 para o z11, e o
+ * que já foi carregado continua na tela ao afastar (camadasOficiaisMapa.ts).
  */
 export type CamadaOficialId =
   | "snci" | "credito_rural" | "outorgas_federais" | "sigef" | "ibama_embargos" | "anm" | "funai" | "ucs" | "quilombolas" | "prodes_cerrado" | "inpe_queimadas" | "ibge_biomas"
@@ -61,11 +63,11 @@ export const CORES_RURAIS = {
 } as const;
 
 export const CAMADAS_OFICIAIS: CamadaOficial[] = [
-  { id: "sigef", nome: "Parcelas certificadas (SIGEF)", orgao: "INCRA", grupo: "Fundiário", cor: CORES_RURAIS.sigef, zoomMin: 12,
+  { id: "sigef", nome: "Parcelas certificadas (SIGEF)", orgao: "INCRA", grupo: "Fundiário", cor: CORES_RURAIS.sigef, zoomMin: 11,
     ajuda: "Imóveis com georreferenciamento certificado pelo INCRA." },
-  { id: "snci", nome: "Imóveis certificados (SNCI)", orgao: "INCRA", grupo: "Fundiário", cor: CORES_RURAIS.snci, zoomMin: 12,
+  { id: "snci", nome: "Imóveis certificados (SNCI)", orgao: "INCRA", grupo: "Fundiário", cor: CORES_RURAIS.snci, zoomMin: 11,
     ajuda: "Certificações históricas anteriores ao SIGEF. Fonte nacional do INCRA e base estadual do IAT no interior do Paraná." },
-  { id: "credito_rural", nome: "Crédito rural (SICOR)", orgao: "Banco Central", grupo: "Fundiário", cor: CORES_RURAIS.credito_rural, zoomMin: 12,
+  { id: "credito_rural", nome: "Crédito rural (SICOR)", orgao: "Banco Central", grupo: "Fundiário", cor: CORES_RURAIS.credito_rural, zoomMin: 11,
     ajuda: "Glebas nas edições anuais do SICOR importadas para Iturama e municípios vizinhos. Cada polígono informa o ano e a data da carga." },
   { id: "outorgas_federais", nome: "Outorgas federais", orgao: "ANA", grupo: "Ambiental", cor: CORES_RURAIS.outorgas_federais, zoomMin: 9, ponto: true,
     ajuda: "Outorgas federais de uso de águas superficiais. Consulte a vigência no detalhe de cada ponto." },
