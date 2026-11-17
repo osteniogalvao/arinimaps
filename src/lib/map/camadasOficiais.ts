@@ -34,14 +34,19 @@ export const CORES_BIOMAS: Record<string, string> = {
   "Mata Atlântica": "#5BC08A", "Pampa": "#A7C957", "Pantanal": "#4FA3C7",
 };
 
-/** Cores da cartografia ARINI, compartilhadas pela busca, pelo desenho e pela legenda. */
+/**
+ * Cores da cartografia ARINI, compartilhadas pela busca, pelo desenho e pela legenda.
+ * 17/11/2026: o Carlos achou o mapa pálido. As malhas passaram a cores puras e
+ * saturadas, que se destacam sobre o satélite (referência de estilo: Geomart):
+ * SIGEF vermelho, SNCI azul, CAR laranja ARINI, crédito rural amarelo.
+ */
 export const CORES_RURAIS = {
-  sigef: "#5BC0EB",
-  snci: "#B6A7DA",
-  car: "#FF9D3D",
-  credito_rural: "#8BC34A",
-  funai: "#E4572E",
-  outorgas_federais: "#4FA8E0",
+  sigef: "#FF2A2A",
+  snci: "#2F6BFF",
+  car: "#FF9800",
+  credito_rural: "#FFE11A",
+  funai: "#B44DFF",
+  outorgas_federais: "#00D9FF",
 } as const;
 
 export const CAMADAS_OFICIAIS: CamadaOficial[] = [
@@ -55,20 +60,20 @@ export const CAMADAS_OFICIAIS: CamadaOficial[] = [
     ajuda: "Outorgas federais de uso de águas superficiais. Consulte a vigência no detalhe de cada ponto." },
   { id: "funai", nome: "Terras indígenas", orgao: "FUNAI", grupo: "Fundiário", cor: CORES_RURAIS.funai, zoomMin: 7,
     ajuda: "Área indígena: compra e venda vedadas." },
-  { id: "quilombolas", nome: "Territórios quilombolas", orgao: "INCRA", grupo: "Fundiário", cor: "#F3A712", zoomMin: 7,
+  { id: "quilombolas", nome: "Territórios quilombolas", orgao: "INCRA", grupo: "Fundiário", cor: "#FF8FAB", zoomMin: 7,
     ajuda: "Território em reconhecimento ou titulado." },
-  { id: "ibama_embargos", nome: "Áreas embargadas", orgao: "IBAMA", grupo: "Ambiental", cor: "#FF4D6D", zoomMin: 9,
+  { id: "ibama_embargos", nome: "Áreas embargadas", orgao: "IBAMA", grupo: "Ambiental", cor: "#FF1493", zoomMin: 9,
     ajuda: "Embargo ambiental: a área não pode ser usada até a regularização." },
-  { id: "ucs", nome: "Unidades de conservação (Cerrado)", orgao: "MMA/INPE", grupo: "Ambiental", cor: "#3FCF7F", zoomMin: 7,
+  { id: "ucs", nome: "Unidades de conservação (Cerrado)", orgao: "MMA/INPE", grupo: "Ambiental", cor: "#22E07A", zoomMin: 7,
     ajuda: "Uso restrito conforme a categoria da unidade." },
-  { id: "prodes_cerrado", nome: "Desmatamento (PRODES Cerrado)", orgao: "INPE", grupo: "Ambiental", cor: "#C77DFF", zoomMin: 12,
+  { id: "prodes_cerrado", nome: "Desmatamento (PRODES Cerrado)", orgao: "INPE", grupo: "Ambiental", cor: "#C6FF00", zoomMin: 12,
     ajuda: "Supressão de vegetação detectada por satélite, por ano." },
-  { id: "inpe_queimadas", nome: "Focos de queimada (12 meses)", orgao: "INPE", grupo: "Ambiental", cor: "#FF7B00", zoomMin: 9, ponto: true,
+  { id: "inpe_queimadas", nome: "Focos de queimada (12 meses)", orgao: "INPE", grupo: "Ambiental", cor: "#FF3D00", zoomMin: 9, ponto: true,
     ajuda: "Focos de calor detectados por satélite no último ano." },
   { id: "ibge_biomas", nome: "Biomas (limite oficial)", orgao: "IBGE", grupo: "Ambiental", cor: "#C9B23B", zoomMin: 5,
     cores: CORES_BIOMAS, semContorno: true,
     ajuda: "Bioma pelo limite oficial do IBGE: define o percentual de reserva legal e as regras de supressão." },
-  { id: "anm", nome: "Processos minerários", orgao: "ANM", grupo: "Infraestrutura", cor: "#B8B8B8", zoomMin: 9,
+  { id: "anm", nome: "Processos minerários", orgao: "ANM", grupo: "Infraestrutura", cor: "#E6E6E6", zoomMin: 9,
     ajuda: "Pedido ou direito de pesquisa e lavra mineral sobre a área." },
 ];
 

@@ -127,9 +127,9 @@ export default function AppShell({
   return (
     <div className={`${cheia ? "h-dvh overflow-hidden" : "min-h-screen"} bg-fundo flex`}>
       {/* ---------- sidebar (desktop) ---------- */}
-      <aside className={`lp-escuro lp-malha-escura hidden lg:flex w-64 shrink-0 flex-col ${cheia ? "overflow-y-auto" : ""}`}>
+      <aside className={`lateral-app lp-escuro lp-malha-escura hidden lg:flex w-64 shrink-0 flex-col ${cheia ? "overflow-y-auto" : ""}`}>
         <Link href="/" aria-label="ARINI — início" className="flex h-[4.5rem] items-center border-b border-linha-forte/60 px-6">
-          <Logo negativa />
+          <Logo />
         </Link>
 
         <nav aria-label="Principal" className="space-y-1 px-3 pt-5">

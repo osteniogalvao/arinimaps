@@ -26,7 +26,7 @@ export function exibirCarNasAreas(map: MLMap, areas: GeoJSON.Polygon[], aoFalhar
         source: "car-areas",
         type: "fill",
         minzoom: 7,
-        paint: { "fill-color": CORES_RURAIS.car, "fill-opacity": 0.04 },
+        paint: { "fill-color": CORES_RURAIS.car, "fill-opacity": 0.07 },
       },
       antes,
     );
@@ -39,7 +39,7 @@ export function exibirCarNasAreas(map: MLMap, areas: GeoJSON.Polygon[], aoFalhar
         filter: ["==", ["geometry-type"], "LineString"],
         paint: {
           "line-color": CORES_RURAIS.car,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.25, 10, 0.5, 12, 0.9, 15, 1.6],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 10, 1, 12, 1.6, 15, 2.6],
         },
       },
       antes,
