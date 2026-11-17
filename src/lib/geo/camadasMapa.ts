@@ -159,7 +159,7 @@ async function usinasSigel(env: Env, camadas: { servico: string; id: number; tip
  * em memória, para não listar a pasta a cada célula.
  */
 type Alvo = { pasta: string; servico: RegExp; camada?: RegExp } | { servicoUrl: string; camada?: RegExp };
-const achados = new Map<string, { em: number; url?: string; id?: number; erro?: string }>();
+const achados = new Map<string, { em: number; url?: string; id?: number; camada?: string; erro?: string }>();
 
 async function descobrir(chave: string, alvos: Alvo[]): Promise<{ url: string; id: number }> {
   const guardado = achados.get(chave);
@@ -215,6 +215,74 @@ async function arcgisAchado(chave: string, alvos: Alvo[], env: Env, max = 2000) 
     ...propsGenericas(f.properties),
   })] : []);
 }
+
+/**
+ * O mesmo para GeoServer (WFS): a camada é achada pelo nome ou pelo título no
+ * GetCapabilities. Vários servidores do governo rodam GeoServer (IBGE, Embrapa,
+ * INPE); o documento pode ter megabytes, por isso o resultado fica em memória.
+ */
+async function descobrirWfs(chave: string, alvos: { base: string; nome: RegExp }[]): Promise<{ base: string; camada: string }> {
+  const guardado = achados.get(chave);
+  if (guardado && Date.now() - guardado.em < (guardado.url ? 12 : 0.5) * 3_600_000) {
+    if (guardado.url) return { base: guardado.url, camada: guardado.camada! };
+    throw new Error(guardado.erro);
+  }
+  for (const alvo of alvos) {
+    try {
+      const xml = await (await pedir(`${alvo.base}?service=WFS&version=1.0.0&request=GetCapabilities`, "application/xml")).text();
+      for (const bloco of xml.split(/<(?:wfs:)?FeatureType>/).slice(1)) {
+        const nome = bloco.match(/<(?:wfs:)?Name>([^<]+)</)?.[1]?.trim();
+        const titulo = bloco.match(/<(?:wfs:)?Title>([^<]+)</)?.[1]?.trim() ?? "";
+        if (nome && (alvo.nome.test(nome) || alvo.nome.test(titulo))) {
+          achados.set(chave, { em: Date.now(), url: alvo.base, camada: nome });
+          return { base: alvo.base, camada: nome };
+        }
+      }
+    } catch (e) {
+      console.error(`camada ${chave}: GetCapabilities falhou:`, e instanceof Error ? e.message : e);
+    }
+  }
+  const erro = "a camada não foi encontrada no servidor do órgão";
+  achados.set(chave, { em: Date.now(), erro });
+  throw new Error(erro);
+}
+
+async function wfsAchado(chave: string, alvos: { base: string; nome: RegExp }[], env: Env, max = 1000) {
+  const { base, camada } = await descobrirWfs(chave, alvos);
+  return (await wfs(base, camada, env, max)).flatMap((f) => f.geometry ? [feicao(f.geometry, {
+    id: `${chave}-${s(campo(f.properties, "id", "fid", "gid", "objectid")) ?? JSON.stringify(f.geometry).slice(0, 60)}`,
+    ...propsGenericas(f.properties),
+  })] : []);
+}
+
+/** Pontos do OpenStreetMap (Overpass) na célula: frigoríficos, silos, usinas. */
+async function overpass(env: Env, seletores: string[], rotulo: (t: Record<string, string>) => string) {
+  const bbox = `${env.ymin},${env.xmin},${env.ymax},${env.xmax}`;
+  const q = `[out:json][timeout:25];(${seletores.map((sel) => `nwr${sel}(${bbox});`).join("")});out center 500;`;
+  const r = await buscarFonte("https://overpass-api.de/api/interpreter", {
+    method: "POST", body: "data=" + encodeURIComponent(q),
+    headers: { "User-Agent": UA, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!r.ok) throw new Error(`Overpass HTTP ${r.status}`);
+  const j = await r.json() as { elements?: { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] };
+  return (j.elements ?? []).flatMap((el) => {
+    const lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
+    if (lat == null || lon == null) return [];
+    const t = el.tags ?? {};
+    return [feicao({ type: "Point", coordinates: [lon, lat] }, {
+      id: `osm-${el.type}-${el.id}`,
+      nome: s(t.name ?? t.operator ?? t.brand),
+      detalhe: [rotulo(t), s(t["addr:city"])].filter(Boolean).join(" · ") || null,
+      area_ha: null,
+    })];
+  });
+}
+
+const IBGE = "https://geoservicos.ibge.gov.br/geoserver/ows";
+const EMBRAPA = "https://geoinfo.dados.embrapa.br/geoserver/ows";
+const INPE_QUEIMADAS = "https://data.inpe.br/queimadas/geoserver/ows";
+const ICMBIO = "https://geoservicos.icmbio.gov.br/geoserver/ows";
 
 const PAMGIA = "https://pamgia.ibama.gov.br/server/rest/services/BasesSincronizadas";
 const SNIRH = "https://www.snirh.gov.br/arcgis/rest/services/DADOSABERTOS";
@@ -466,6 +534,62 @@ const DEFS: Record<CamadaOficialId, Def> = {
       if (listas.every((l) => l.status === "rejected")) throw (listas[0] as PromiseRejectedResult).reason;
       return listas.flatMap((l) => (l.status === "fulfilled" ? l.value : []));
     },
+  },
+  solos: {
+    zCelula: 8, validadeDias: 180, tolerancia: 0.0005,
+    buscar: (env) => wfsAchado("solos", [{ base: IBGE, nome: /pedolog|solos?_|_solos?/i }, { base: EMBRAPA, nome: /pedolog|classes?.de.solo|mapa.de.solos/i }], env, 500),
+  },
+  solos_textura: {
+    zCelula: 8, validadeDias: 180, tolerancia: 0.0005,
+    buscar: (env) => wfsAchado("solos_textura", [{ base: EMBRAPA, nome: /textur|granulom|argila/i }, { base: IBGE, nome: /textur/i }], env, 500),
+  },
+  aptidao_agricola: {
+    zCelula: 8, validadeDias: 180, tolerancia: 0.0005,
+    buscar: (env) => wfsAchado("aptidao_agricola", [{ base: EMBRAPA, nome: /aptid/i }, { base: IBGE, nome: /aptid|potencial.agr/i }], env, 500),
+  },
+  climas: {
+    zCelula: 5, validadeDias: 365, tolerancia: 0.002,
+    buscar: (env) => wfsAchado("climas", [{ base: IBGE, nome: /clima/i }], env, 300),
+  },
+  faixa_fronteira: {
+    zCelula: 5, validadeDias: 365, tolerancia: 0.002,
+    buscar: (env) => wfsAchado("faixa_fronteira", [{ base: IBGE, nome: /fronteira/i }], env, 50),
+  },
+  area_queimada: {
+    zCelula: 10, validadeDias: 7, tolerancia: 0.0002,
+    buscar: (env) => wfsAchado("area_queimada", [{ base: INPE_QUEIMADAS, nome: /aq1km|area.?queimad|cicatriz/i },
+      { base: "https://terrabrasilis.dpi.inpe.br/geoserver/ows", nome: /burn|queimad/i }], env, 2000),
+  },
+  icmbio_embargos: {
+    zCelula: 9, validadeDias: 7, tolerancia: 0.0001,
+    buscar: async (env) => {
+      try { return await wfsAchado("icmbio_embargos", [{ base: ICMBIO, nome: /embarg/i }], env); }
+      catch { return arcgisAchado("icmbio_embargos_arcgis", [{ pasta: PAMGIA, servico: /icmbio.*embarg|embarg.*icmbio/i }], env); }
+    },
+  },
+  sinaflor: {
+    zCelula: 10, validadeDias: 7, tolerancia: 0.0001,
+    buscar: (env) => arcgisAchado("sinaflor", [{ pasta: PAMGIA, servico: /sinaflor|supress|asv/i },
+      { servicoUrl: "https://pamgia.ibama.gov.br/server/rest/services/SISCOM/publico/MapServer", camada: /sinaflor|supress|asv/i }], env),
+  },
+  outorgas_subterraneas: {
+    zCelula: 10, validadeDias: 30, tolerancia: 0,
+    buscar: (env) => arcgisAchado("outorgas_subterraneas", [{ pasta: SNIRH, servico: /subterr/i }], env),
+  },
+  frigorificos: {
+    zCelula: 9, validadeDias: 30, tolerancia: 0,
+    buscar: (env) => overpass(env, ['["industrial"="slaughterhouse"]', '["craft"="butcher"]["industrial"]', '["man_made"="works"]["product"~"meat|carne|beef",i]'],
+      () => "Frigorífico / abatedouro"),
+  },
+  silos_armazens: {
+    zCelula: 9, validadeDias: 30, tolerancia: 0,
+    buscar: (env) => overpass(env, ['["man_made"="silo"]', '["building"="silo"]', '["man_made"="storage_tank"]["content"~"grain|graos",i]', '["industrial"="grain"]'],
+      (t) => (t.man_made === "silo" || t.building === "silo" ? "Silo" : "Armazém de grãos")),
+  },
+  usinas_etanol: {
+    zCelula: 9, validadeDias: 30, tolerancia: 0,
+    buscar: (env) => overpass(env, ['["industrial"~"sugar|ethanol|biofuel|distillery"]', '["man_made"="works"]["product"~"sugar|ethanol|etanol|biodiesel|açúcar",i]'],
+      (t) => (/biodiesel/i.test(`${t.product ?? ""} ${t.industrial ?? ""}`) ? "Usina de biodiesel" : "Usina de açúcar e etanol")),
   },
   prodes_cerrado: {
     zCelula: 12, validadeDias: 90, tolerancia: 0.00002,

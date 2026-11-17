@@ -102,7 +102,7 @@ function amostraCor(cor: string, ponto = false) {
   return <span aria-hidden className={"inline-block size-3 shrink-0 ring-1 ring-linha-forte " + (ponto ? "rounded-full" : "rounded-sm")} style={{ background: cor }} />;
 }
 
-const GRUPOS: GrupoCamadas[] = ["Fundiário", "Ambiental", "Infraestrutura", "Relevo e água"];
+const GRUPOS: GrupoCamadas[] = ["Fundiário", "Ambiental", "Infraestrutura", "Solo e clima", "Produção", "Relevo e água"];
 
 export function PainelCamadas({
   onFechar, grupo, selecionarGrupo, ativas, estado, onAlternar,
@@ -291,12 +291,15 @@ export type SituacaoCar = (typeof SITUACOES_CAR)[number]["id"];
 // Energia (ANEEL, barragens, pivôs, aeródromos) passa a ficar em Infraestrutura.
 const COR_GRUPO: Record<GrupoCamadas, string> = {
   "Fundiário": "#26A69A", "Ambiental": "#E91E63", "Infraestrutura": "#FFD54F", "Relevo e água": "#4FA8E0",
+  "Solo e clima": "#A1887F", "Produção": "#9CCC65",
 };
 const DICA_GRUPO: Record<GrupoCamadas, string> = {
   "Fundiário": "SIGEF, SNCI, crédito rural, terras indígenas, quilombolas, assentamentos e mais",
   "Ambiental": "Unidades de conservação, desmatamento, embargos, queimadas, outorgas e mais",
   "Infraestrutura": "Linhas de transmissão, usinas, barragens, pivôs, aeródromos, mineração e planta urbana",
   "Relevo e água": "Relevo sombreado, altitude, curvas de nível, declividade e hidrografia",
+  "Solo e clima": "Classes e textura do solo, aptidão agrícola e climas do Brasil",
+  "Produção": "Produção agrícola, rebanhos, armazéns, frigoríficos e usinas",
 };
 /** Ligadas de uma vez quando a pílula é tocada com tudo desligado. */
 const PADRAO_GRUPO: Partial<Record<GrupoCamadas, CamadaOficialId[]>> = {
