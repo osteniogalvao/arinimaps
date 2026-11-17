@@ -53,7 +53,7 @@ const HANDLERS = {
   lembretes_proprietario: lembretesProprietario,
   // cotações do agro para a faixa do topo e o /mercado (migration 0056)
   coletar_cotacoes: coletarCotacoes,
-  // safras de grãos da CONAB por UF (migration 0145), uma vez por dia
+  // safras de grãos da CONAB por UF (migration 0146), uma vez por dia
   coletar_safras_conab: coletarSafrasConab,
   atualizar_glebas_sicor: atualizarGlebasSicor,
 };

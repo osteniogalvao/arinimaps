@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
- * Safras de grãos da CONAB por UF (migration 0145, job `coletar_safras_conab`).
+ * Safras de grãos da CONAB por UF (migration 0146, job `coletar_safras_conab`).
  * Pedido do Carlos (17/11): "CONAB safras" das camadas do Dados Fazenda, que é
  * tabela e não mapa, aparece junto das cotações e no WhatsApp. Nunca lança.
  */

@@ -1,5 +1,5 @@
 export const CNPJ_IMOVEIS = "61134351000180";
-export const CNPJ_TECNOLOGIA = "68128846000145";
+export const CNPJ_TECNOLOGIA = "68128846000146";
 
 export function parametrosFiscais(texto: string) {
   const p = JSON.parse(texto);
