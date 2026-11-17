@@ -5,7 +5,7 @@
  * MapaRegional para o componente do mapa cuidar só de mapa.
  */
 
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import {
   ChevronDown, List as ListIcon, Fuel, GraduationCap, Hospital, Landmark, Layers, LoaderCircle, MapPin, Pill, Route, ShoppingCart, Trash2, X,
   type LucideIcon,
@@ -286,13 +286,26 @@ export const SITUACOES_CAR = [
 ] as const;
 export type SituacaoCar = (typeof SITUACOES_CAR)[number]["id"];
 
-const AMBIENTAL: CamadaOficialId[] = ["ucs", "ucs_brasil", "prodes_cerrado", "prodes_biomas", "ibama_embargos", "ibama_autos", "inpe_queimadas",
-  "outorgas_federais", "ana_rios", "quilombolas", "assentamentos", "florestas_publicas", "iphan_sitios", "anm", "ibge_biomas"];
-// 17/11: energia (ANEEL) ganha pílula própria, como no Dados Fazenda
-const ENERGIA: CamadaOficialId[] = ["aneel_transmissao", "aneel_hidreletricas", "aneel_termeletricas", "aneel_solar", "barragens", "ana_pivos", "aerodromos"];
-const COR_ENERGIA = "#FFD54F";
-const AMBIENTAL_PADRAO: CamadaOficialId[] = ["ucs", "prodes_cerrado", "ibama_embargos"];
-const COR_AMBIENTAL = "#E91E63";
+// 17/11 (pedido do Stenio): as categorias do painel "Camadas e Dados" viram
+// pílulas coloridas nesta coluna, cada uma com a lista dos seus itens.
+// Energia (ANEEL, barragens, pivôs, aeródromos) passa a ficar em Infraestrutura.
+const COR_GRUPO: Record<GrupoCamadas, string> = {
+  "Fundiário": "#26A69A", "Ambiental": "#E91E63", "Infraestrutura": "#FFD54F", "Relevo e água": "#4FA8E0",
+};
+const DICA_GRUPO: Record<GrupoCamadas, string> = {
+  "Fundiário": "SIGEF, SNCI, crédito rural, terras indígenas, quilombolas, assentamentos e mais",
+  "Ambiental": "Unidades de conservação, desmatamento, embargos, queimadas, outorgas e mais",
+  "Infraestrutura": "Linhas de transmissão, usinas, barragens, pivôs, aeródromos, mineração e planta urbana",
+  "Relevo e água": "Relevo sombreado, altitude, curvas de nível, declividade e hidrografia",
+};
+/** Ligadas de uma vez quando a pílula é tocada com tudo desligado. */
+const PADRAO_GRUPO: Partial<Record<GrupoCamadas, CamadaOficialId[]>> = {
+  "Ambiental": ["ucs", "prodes_cerrado", "ibama_embargos"],
+};
+const COR_RELEVO: Record<RelevoId, string> = {
+  sombra: "#9E9E9E", altitude: "#B9C36A", curvas: "#D49A55", declividade: "#E57373", hidrografia: COR_AGUA,
+};
+type ItemGrupo = { id: string; cor: string; nome: string; ponto?: boolean; ligada: boolean; alternar: () => void; carregando?: boolean; aviso?: string };
 
 function Pilula({ cor, ligada, rotulo, titulo, carregando, aviso, onClick, aberto, onAbrir }: {
   cor: string; ligada: boolean; rotulo: string; titulo: string; carregando?: boolean; aviso?: boolean;
@@ -334,7 +347,10 @@ function ItemFiltro({ cor, nome, ligada, alternar, ponto, detalhe }: { cor: stri
   );
 }
 
-export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar, onCatalogo }: {
+export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar, onCatalogo,
+  planta, corUrbana, alternarPlanta, relevoAtivas, estadoRelevo, onAlternarRelevo }: {
+  planta: boolean; corUrbana: string; alternarPlanta: () => void;
+  relevoAtivas: ReadonlySet<RelevoId>; estadoRelevo: EstadoRelevo; onAlternarRelevo: (id: RelevoId) => void;
   /** 17/11 (pedido do Stenio): o botão "Camadas e Dados" fica no alto desta coluna, no computador */
   onCatalogo?: () => void;
   car: boolean; alternarCar: () => void; avisoCar?: string;
@@ -344,7 +360,7 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
   onAlternar: (id: CamadaOficialId) => void;
 }) {
   const [aberto, setAberto] = useState(true);
-  const [lista, setLista] = useState<"car" | "ambiental" | "energia" | null>(null);
+  const [lista, setLista] = useState<"car" | GrupoCamadas | null>(null);
   const def = (id: CamadaOficialId) => CAMADAS_OFICIAIS.find((c) => c.id === id)!;
   const simples = (id: CamadaOficialId, rotulo: string) => {
     const d = def(id); const e = estado[id];
@@ -352,13 +368,43 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
       titulo={[`${d.nome} · ${d.orgao}`, ativas.has(id) && e?.aviso].filter(Boolean).join(" — ")}
       carregando={e?.carregando} aviso={!!e?.aviso} onClick={() => onAlternar(id)} />;
   };
-  const ambientaisLigadas = AMBIENTAL.filter((id) => ativas.has(id));
-  const energiaLigadas = ENERGIA.filter((id) => ativas.has(id));
-  const itemDaLista = (id: CamadaOficialId) => {
-    const d = def(id); const e = estado[id];
-    return <ItemFiltro key={id} cor={d.cores ? "linear-gradient(135deg,#2E9E5B,#C9B23B,#4FA3C7)" : d.cor} nome={d.nome.replace(/ \(.*\)$/, "")} ponto={d.ponto}
-      ligada={ativas.has(id)} alternar={() => onAlternar(id)}
-      detalhe={ativas.has(id) && e?.carregando ? <LoaderCircle className="size-3 animate-spin text-texto-2" aria-label="Carregando" /> : undefined} />;
+  const itensDoGrupo = (g: GrupoCamadas): ItemGrupo[] => [
+    ...(g === "Infraestrutura" ? [{ id: "planta", cor: corUrbana, nome: "Planta completa", ligada: planta, alternar: alternarPlanta }] : []),
+    ...CAMADAS_OFICIAIS.filter((c) => c.grupo === g).map((c): ItemGrupo => ({
+      id: c.id, cor: c.cores ? "linear-gradient(135deg,#2E9E5B,#C9B23B,#4FA3C7)" : c.cor, nome: c.nome.replace(/ \(.*\)$/, ""), ponto: c.ponto,
+      ligada: ativas.has(c.id), alternar: () => onAlternar(c.id), carregando: estado[c.id]?.carregando, aviso: estado[c.id]?.aviso,
+    })),
+    ...(g === "Relevo e água" ? CAMADAS_RELEVO.map((c): ItemGrupo => ({
+      id: c.id, cor: COR_RELEVO[c.id], nome: c.nome, ligada: relevoAtivas.has(c.id), alternar: () => onAlternarRelevo(c.id), aviso: estadoRelevo[c.id]?.aviso,
+    })) : []),
+  ];
+  const pilulaGrupo = (g: GrupoCamadas) => {
+    const itens = itensDoGrupo(g);
+    const ligadas = itens.filter((i) => i.ligada);
+    const padrao = PADRAO_GRUPO[g];
+    return (
+      <Fragment key={g}>
+        <Pilula cor={COR_GRUPO[g]} ligada={ligadas.length > 0}
+          rotulo={ligadas.length ? `${g} · ${ligadas.length}` : g} titulo={DICA_GRUPO[g]}
+          carregando={ligadas.some((i) => i.carregando)}
+          onClick={() => {
+            if (ligadas.length) ligadas.forEach((i) => i.alternar());
+            else if (padrao) padrao.forEach(onAlternar);
+            else setLista(lista === g ? null : g);
+          }}
+          aberto={lista === g} onAbrir={() => setLista(lista === g ? null : g)} />
+        {lista === g && (
+          <div className={caixa}>
+            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">{g}</p>
+            {itens.map((i) => <ItemFiltro key={i.id} cor={i.cor} nome={i.nome} ponto={i.ponto} ligada={i.ligada} alternar={i.alternar}
+              detalhe={i.ligada && i.carregando ? <LoaderCircle className="size-3 animate-spin text-texto-2" aria-label="Carregando" /> : undefined} />)}
+            {ligadas.some((i) => i.aviso) && (
+              <p className="pt-1 text-[11px] leading-snug text-alerta">Algumas camadas só aparecem com o mapa mais aproximado.</p>
+            )}
+          </div>
+        )}
+      </Fragment>
+    );
   };
   const caixa = "w-64 rounded-2xl border border-linha bg-superficie/97 p-3 shadow-[0_14px_32px_-18px_rgb(0_0_0/0.8)] backdrop-blur-md";
   return (
@@ -392,33 +438,7 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
         )}
         {simples("credito_rural", "Crédito rural")}
         {simples("funai", "Indígenas")}
-        <Pilula cor={COR_AMBIENTAL} ligada={ambientaisLigadas.length > 0}
-          rotulo={ambientaisLigadas.length ? `Ambiental · ${ambientaisLigadas.length}` : "Ambiental"}
-          titulo="Unidades de conservação, desmatamento, embargos, queimadas, outorgas e mais"
-          carregando={ambientaisLigadas.some((id) => estado[id]?.carregando)}
-          onClick={() => (ambientaisLigadas.length ? ambientaisLigadas : AMBIENTAL_PADRAO).forEach(onAlternar)}
-          aberto={lista === "ambiental"} onAbrir={() => setLista(lista === "ambiental" ? null : "ambiental")} />
-        {lista === "ambiental" && (
-          <div className={caixa}>
-            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Ambiental</p>
-            {AMBIENTAL.map(itemDaLista)}
-            {ambientaisLigadas.some((id) => estado[id]?.aviso) && (
-              <p className="pt-1 text-[11px] leading-snug text-alerta">Algumas camadas só aparecem com o mapa mais aproximado.</p>
-            )}
-          </div>
-        )}
-        <Pilula cor={COR_ENERGIA} ligada={energiaLigadas.length > 0}
-          rotulo={energiaLigadas.length ? `Energia · ${energiaLigadas.length}` : "Energia"}
-          titulo="Linhas de transmissão, usinas, barragens, pivôs e aeródromos"
-          carregando={energiaLigadas.some((id) => estado[id]?.carregando)}
-          onClick={() => (energiaLigadas.length ? energiaLigadas : ENERGIA).forEach(onAlternar)}
-          aberto={lista === "energia"} onAbrir={() => setLista(lista === "energia" ? null : "energia")} />
-        {lista === "energia" && (
-          <div className={caixa}>
-            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Energia e infraestrutura</p>
-            {ENERGIA.map(itemDaLista)}
-          </div>
-        )}
+        {GRUPOS.map(pilulaGrupo)}
       </>}
     </div>
   );

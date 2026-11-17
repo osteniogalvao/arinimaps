@@ -1948,7 +1948,9 @@ export default function MapaRegional({
               if (nova.has(id)) nova.delete(id); else nova.add(id);
               return nova;
             })}
-            ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada} />
+            ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada}
+            planta={plantaAtiva} corUrbana={CARTO_CORES[base].linha} alternarPlanta={() => setPlantaAtiva(!plantaAtiva)}
+            relevoAtivas={relevoAtivas} estadoRelevo={estadoRelevo} onAlternarRelevo={alternarRelevo} />
         )}
         {camadasAbertas && (
           <PainelCamadas onFechar={() => setPainelMapa(null)}
