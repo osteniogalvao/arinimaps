@@ -14,6 +14,8 @@ import { consultarCar } from "@/lib/geo/car";
 import { formatArea } from "@/lib/format";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
 import IndicadoresMunicipio from "@/components/rural/IndicadoresMunicipio";
+import TempoDaArea from "@/components/rural/TempoDaArea";
+import bbox from "@turf/bbox";
 import EnviarWhatsApp from "@/components/compartilhar/EnviarWhatsApp";
 import BotaoExportarSig from "@/components/compartilhar/BotaoExportarSig";
 import { OG_IMAGEM_PADRAO, OG_NOME_SITE } from "@/lib/compartilhar";
@@ -158,6 +160,12 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
 
         {/* o código do CAR traz o município: UF-IBGE-... */}
         <IndicadoresMunicipio codIbge={Number(p.cod.match(/^[A-Z]{2}-(\d{7})-/)?.[1]) || null} />
+
+        {(() => {
+          const [x0, y0, x1, y1] = bbox(car.geometry);
+          return Number.isFinite(x0) ? <TempoDaArea lat={(y0 + y1) / 2} lng={(x0 + x1) / 2}
+            ibge={Number(p.cod.match(/^[A-Z]{2}-(\d{7})-/)?.[1]) || null} /> : null;
+        })()}
 
         <SecaoFontesOficiais
           url={`/api/consulta/car/${encodeURIComponent(p.cod)}`}

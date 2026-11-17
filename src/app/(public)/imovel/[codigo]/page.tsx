@@ -1,4 +1,5 @@
 import HabilitacaoLeilao from "@/components/imovel/HabilitacaoLeilao";
+import AcoesInteresse from "@/components/imovel/AcoesInteresse";
 import { visitasDoNavegador } from "@/lib/imovel/visitas";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
@@ -527,6 +528,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
             </p>
           </aside>
         </div>
+        <div className="mt-16"><AcoesInteresse titulo="Este não é o imóvel que você procura?" /></div>
       </Conteudo>
 
       {/* faixa de conversão: Verde Profundo com linhas de mapa e o radar do manual */}

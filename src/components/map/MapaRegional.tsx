@@ -25,6 +25,7 @@ import CompararParcelasRurais from "@/components/map/CompararParcelasRurais";
 import BuscaUrbana from "@/components/map/BuscaUrbana";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
+import ResumoSigef from "@/components/rural/ResumoSigef";
 import AmbienteCar from "./AmbienteCar";
 import Ferramentas from "@/components/map/Ferramentas";
 import { guardarCarPendente } from "@/lib/map/carPendente";
@@ -119,7 +120,6 @@ const CAR_TIPO: Record<string, string> = {
   IRU: "Imóvel rural", AST: "Assentamento", PCT: "Povos e comunidades tradicionais",
 };
 
-/** Cartão do imóvel do CAR clicado: o atalho para o proprietário anunciar a área dele. */
 /** O que as camadas oficiais ligadas têm no ponto clicado: uma linha por feição, com a cor da camada. */
 function ListaOficiais({ itens }: { itens: FeicaoNoPonto[] }) {
   return (
@@ -159,60 +159,76 @@ function CartaoOficiais({ itens, ponto, onFechar }: {
   );
 }
 
+/**
+ * Cartão do imóvel do CAR clicado, enxuto no modelo do Geomart (item 14 do
+ * PDF do Carlos, 17/11/2026): área no topo, depois imóvel, matrícula,
+ * município e CAR; as ações "é minha / anunciar", "vincular" e "consultar".
+ * O resto (ambiental, fontes no ponto, divergência) fica em "Mais detalhes".
+ */
 function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [] }: { car: CarProps; mapa: MLMap | null; podeAmbiente: boolean; onFechar: () => void; oficiais?: FeicaoNoPonto[] }) {
   const area = Number(car.area_ha);
-  const [aba, setAba] = useState<"resumo" | "ambiental" | "fontes">(oficiais.length ? "fontes" : "resumo");
+  const [detalhes, setDetalhes] = useState(false);
+  const [aba, setAba] = useState<"ambiental" | "fontes" | "sigef">(oficiais.length ? "fontes" : "sigef");
+  const linha = "flex items-baseline justify-between gap-3 py-1.5";
   return (
     <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto overscroll-contain p-4 space-y-3 ${VIDRO}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro">{CAR_TIPO[car.tipo ?? ""] ?? "Imóvel rural"} · CAR</p>
-          <p className="lp-display text-2xl text-verde mt-2">
+          <p className="lp-display text-2xl text-verde mt-1.5">
             {Number.isFinite(area) && area > 0 ? formatArea(area * 10_000, "rural") : "Área não informada"}
           </p>
         </div>
         <BotaoFechar onClick={onFechar} />
       </div>
-      <div role="group" aria-label="Informações desta área" className="flex flex-wrap gap-1">
-        {(["resumo", "ambiental", ...(oficiais.length ? ["fontes" as const] : [])] as const).map(k =>
-          <button type="button" key={k} aria-pressed={aba === k} onClick={() => setAba(k)} className={"min-h-9 rounded-lg px-2.5 text-sm " + (aba === k ? "bg-verde text-white" : "border border-linha text-texto")}>
-            {{resumo:"Resumo",ambiental:"Ambiental",fontes:"Fontes no ponto"}[k]}
-          </button>)}
-      </div>
-      {aba === "ambiental" && (podeAmbiente
-        ? <AmbienteCar cod={car.cod} mapa={mapa} />
-        : <Link href="/planos" className="text-sm text-verde underline">Consultar planos com mapa ambiental</Link>)}
-      {aba === "fontes" && oficiais.length > 0 && <ListaOficiais itens={oficiais} />}
-      {(aba === "resumo" || (aba === "fontes" && !oficiais.length)) && <>
-      <dl className="text-sm divide-y divide-linha rounded-xl border border-linha bg-superficie-2/60 px-3.5">
-        <div className="flex justify-between gap-2 py-2.5"><dt className="text-texto-2">Município</dt><dd className="text-texto font-medium">{car.municipio ?? "—"}</dd></div>
-        <div className="flex justify-between gap-2 py-2.5"><dt className="text-texto-2 shrink-0">Situação no CAR</dt><dd className="text-texto text-right">{car.condicao ?? "—"}</dd></div>
-        <div className="py-2.5">
-          <dt className="text-texto-2">Código do CAR</dt>
-          <dd className="mt-0.5 font-mono text-[11px] text-texto break-all">{car.cod}</dd>
+      <dl className="text-sm divide-y divide-linha rounded-xl border border-linha bg-superficie-2/60 px-3">
+        <ResumoSigef cod={car.cod} linha={linha} />
+        <div className={linha}><dt className="text-texto-2">Município</dt><dd className="text-right font-medium text-texto">{car.municipio ?? "—"}</dd></div>
+        <div className={linha}>
+          <dt className="shrink-0 text-texto-2">Nº do CAR</dt>
+          <dd className="min-w-0 truncate text-right font-mono text-[11px] text-texto" title={car.cod}>{car.cod}</dd>
         </div>
       </dl>
-      <MatriculaSigef cod={car.cod} compacto />
-      </>}
       <div className="space-y-2">
         <Link href={`/painel/novo?car=${encodeURIComponent(car.cod)}`} onClick={() => guardarCarPendente(car.cod)}
           className="btn-ouro flex w-full items-center justify-center gap-1.5 py-2.5 text-sm">
-          Esta área é minha — anunciar <ArrowRight className="size-4" />
+          Esta área é minha · anunciar <ArrowRight className="size-4" />
         </Link>
-        <Link href={`/painel/cofre?car=${encodeURIComponent(car.cod)}`} className="btn-contorno flex w-full items-center justify-center py-2.5 text-sm">Verificar meu vínculo com esta área</Link>
-        <Link href={`/consulta/car/${encodeURIComponent(car.cod)}`}
-          className="btn-contorno flex w-full items-center justify-center gap-1.5 py-2.5 text-sm">
-          <ScanSearch className="size-4" /> Consultar informações
-        </Link>
+        <div className="grid grid-cols-2 gap-2">
+          <Link href={`/painel/cofre?car=${encodeURIComponent(car.cod)}`} className="btn-contorno flex items-center justify-center py-2 text-sm">Vincular área</Link>
+          <Link href={`/consulta/car/${encodeURIComponent(car.cod)}`} className="btn-contorno flex items-center justify-center gap-1.5 py-2 text-sm">
+            <ScanSearch className="size-4" /> Consultar
+          </Link>
+        </div>
       </div>
-      <Link href={`/cartografia/solicitar?referencia=${encodeURIComponent("car:" + car.cod)}&tipo=divergencia`}
-        className="flex items-center justify-center gap-1.5 text-xs text-texto-2 hover:text-verde transition">
-        <Flag className="size-3.5" /> O mapa está divergente desta área
-      </Link>
-      <p className="text-[11px] text-texto-2 leading-relaxed border-t border-linha pt-3">
-        A divisa vem pronta do CAR. Para publicar, a Arini confere a matrícula do imóvel — o CAR é
-        autodeclarado e não comprova propriedade.
-      </p>
+      <button type="button" aria-expanded={detalhes} onClick={() => setDetalhes(!detalhes)}
+        className="w-full text-center text-xs font-semibold text-verde hover:underline">
+        {detalhes ? "Menos detalhes" : "Mais detalhes desta área"}
+      </button>
+      {detalhes && <>
+        <div role="group" aria-label="Detalhes desta área" className="flex flex-wrap gap-1">
+          {(["sigef", "ambiental", ...(oficiais.length ? ["fontes" as const] : [])] as const).map(k =>
+            <button type="button" key={k} aria-pressed={aba === k} onClick={() => setAba(k)} className={"min-h-8 rounded-lg px-2.5 text-xs " + (aba === k ? "bg-verde text-white" : "border border-linha text-texto")}>
+              {{ sigef: "Matrícula", ambiental: "Ambiental", fontes: "Fontes no ponto" }[k]}
+            </button>)}
+        </div>
+        {aba === "sigef" && <>
+          <p className="text-xs text-texto-2">Situação no CAR · <span className="text-texto">{car.condicao ?? "—"}</span></p>
+          <MatriculaSigef cod={car.cod} compacto />
+        </>}
+        {aba === "ambiental" && (podeAmbiente
+          ? <AmbienteCar cod={car.cod} mapa={mapa} />
+          : <Link href="/planos" className="text-sm text-verde underline">Consultar planos com mapa ambiental</Link>)}
+        {aba === "fontes" && oficiais.length > 0 && <ListaOficiais itens={oficiais} />}
+        <Link href={`/cartografia/solicitar?referencia=${encodeURIComponent("car:" + car.cod)}&tipo=divergencia`}
+          className="flex items-center justify-center gap-1.5 text-xs text-texto-2 hover:text-verde transition">
+          <Flag className="size-3.5" /> O mapa está divergente desta área
+        </Link>
+        <p className="text-[11px] text-texto-2 leading-relaxed border-t border-linha pt-3">
+          A divisa vem pronta do CAR. Para publicar, a Arini confere a matrícula do imóvel. O CAR é
+          autodeclarado e não comprova propriedade.
+        </p>
+      </>}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { formatBRL, formatArea, STATUS_LABEL } from "@/lib/format";
 import { imoveisDaVitrine, STATUS_VITRINE } from "@/lib/imovel/vitrine";
 import { codigosFavoritos } from "@/lib/imovel/favoritos";
 import BotaoFavorito from "@/components/imovel/BotaoFavorito";
+import AcoesInteresse from "@/components/imovel/AcoesInteresse";
 import MapaBuscaCliente from "@/components/map/MapaBuscaCliente";
 import type { ItemMapaBusca } from "@/components/map/MapaBusca";
 
@@ -349,6 +350,7 @@ export default async function BuscarImoveis({ searchParams }: PageProps<"/imovei
             </div>
           </div>
         )}
+        <div className="mt-16"><AcoesInteresse /></div>
       </Conteudo>
     </Moldura>
   );
