@@ -61,6 +61,9 @@ export async function generateMetadata({ params, searchParams }: PageProps<"/imo
   };
 }
 
+/** Faixa colorida à esquerda de cada fonte (17/11/2026: relatório com mais cor, também na impressão). */
+const COR_TOM = { verde: "#2E9E6B", ouro: "#E0A100", alerta: "#E9B949", critico: "#D80B0B", neutro: "#C2C7B6" } as const;
+
 export default async function RelatorioTerritorial({ params, searchParams }: PageProps<"/imovel/[codigo]/relatorio">) {
   const { codigo } = await params;
   const escolha = lerSecoes((await searchParams).secoes);
@@ -146,7 +149,7 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
   const secao = (rotulo: string, titulo: string) => (
     <div className="mb-5 print:mb-3">
       <p className="lp-eyebrow !text-[0.7rem] print:!text-[9px]">{proximo()} · {rotulo}</p>
-      <h2 className="lp-display mt-2.5 text-3xl text-texto md:text-[2.4rem] print:mt-1.5 print:text-2xl print:text-black">{titulo}</h2>
+      <h2 className="lp-display mt-2.5 text-3xl text-texto md:text-[2.4rem] print:mt-1.5 print:text-2xl print:text-verde">{titulo}</h2>
     </div>
   );
   const linha = "flex items-baseline justify-between gap-4 border-b border-linha px-5 py-3.5 last:border-b-0 print:border-gray-300 print:px-3 print:py-2";
@@ -165,14 +168,14 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
     // fica neutro para não ser lido como "nada encontrado".
     const tom = c?.erro ? "alerta" : !c ? "neutro" : c.quantidade > 0 ? "ouro" : "verde";
     return (
-      <div key={f.id} className="cartao p-5 md:p-6 print:rounded-none print:border print:border-gray-300 print:bg-white print:p-4 print:shadow-none break-inside-avoid">
+      <div key={f.id} style={{ borderLeft: `4px solid ${COR_TOM[tom]}` }} className="cartao p-5 md:p-6 print:rounded-none print:border print:border-gray-300 print:bg-white print:p-4 print:shadow-none break-inside-avoid">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[0.7rem] font-semibold tabular-nums tracking-[0.1em] text-ouro print:text-gray-500">{String(idx + 1).padStart(2, "0")}</p>
+            <p className="text-[0.7rem] font-semibold tabular-nums tracking-[0.1em] text-ouro">{String(idx + 1).padStart(2, "0")}</p>
             <p className="lp-display mt-1 text-2xl leading-none print:text-lg">{f.nome}</p>
             <p className="mt-1 text-sm text-texto-2 print:text-xs print:text-gray-500">{f.orgao}</p>
           </div>
-          <Etiqueta tom={tom} className="print:!border-gray-400 print:!bg-white print:!text-gray-700">{estado}</Etiqueta>
+          <Etiqueta tom={tom}>{estado}</Etiqueta>
         </div>
 
         {c?.erro && (
@@ -187,7 +190,7 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
             {itens.slice(0, 12).map((i, k) => (
               <li key={k} className="border-b border-linha py-2.5 last:border-0 print:border-gray-200 print:py-1.5">
                 <p>{i.titulo}</p>
-                {i.extra?.matricula ? <p className="mt-1 inline-flex items-center rounded-full border border-[#D9BD6F]/70 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-texto print:border-gray-400 print:bg-white print:text-black">Matrícula nº {String(i.extra.matricula)}</p> : null}
+                {i.extra?.matricula ? <p className="mt-1 inline-flex items-center rounded-full border border-[#D9BD6F]/70 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-texto print:bg-[#FFF6DB]">Matrícula nº {String(i.extra.matricula)}</p> : null}
                 {i.detalhe && <p className="text-xs text-texto-2 print:text-gray-600">{i.detalhe}</p>}
                 {i.extra && (
                   <p className="text-[11px] text-texto-2 print:text-gray-500">
@@ -235,19 +238,19 @@ export default async function RelatorioTerritorial({ params, searchParams }: Pag
   const mostraPendentes = pendentes.length > 0 && (mostra("ambiental") || mostra("fundiario") || mostra("satelite"));
 
   return (
-    <div className="min-h-screen bg-fundo text-texto print:bg-white print:text-black">
+    <div className="min-h-screen bg-fundo text-texto print:bg-white print:text-texto">
       <div className="mx-auto max-w-4xl px-5 py-10 md:px-8 md:py-14 print:px-0 print:py-0">
         {/* ---------- capa da prancha: rótulo, radar no canto, título grande ---------- */}
-        <header className="relative mb-10 border-b border-linha pb-8 print:mb-6 print:border-gray-300 print:pb-5">
+        <header className="relative mb-10 border-b-2 border-[#D9BD6F] pb-8 print:mb-6 print:pb-5">
           <MarcaArini variante="radar" titulo=""
             className="absolute right-0 top-0 w-9 print:w-7" />
           <p className="lp-eyebrow !text-[0.7rem] print:!text-[9px]">
             {texto(cfg, "nome_sistema", "ARINI")} · {imovel.codigo}
           </p>
-          <h1 className="lp-display mt-4 max-w-[90%] text-5xl text-verde md:text-[5rem] print:mt-2 print:text-5xl print:text-black">
+          <h1 className="lp-display mt-4 max-w-[90%] text-5xl text-verde md:text-[5rem] print:mt-2 print:text-5xl print:text-verde">
             Relatório territorial
           </h1>
-          <p className="lp-display mt-3 text-2xl text-texto-2 md:text-3xl print:mt-2 print:text-xl print:text-gray-700">{imovel.titulo}</p>
+          <p className="lp-display mt-3 text-2xl text-texto-2 md:text-3xl print:mt-2 print:text-xl print:text-texto-3">{imovel.titulo}</p>
           <dl className="mt-6 grid gap-x-8 sm:grid-cols-2 print:mt-4 print:grid-cols-2">
             <div className="flex justify-between gap-4 border-t border-linha py-2.5 print:border-gray-300 print:py-1.5">
               <dt className={rotuloLinha}>Gerado em</dt>

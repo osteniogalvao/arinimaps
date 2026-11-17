@@ -10,6 +10,9 @@ test("privacidade, exclusividade e recuperação da Central", {skip:!local}, asy
   const db="arini_test_"+randomUUID().replaceAll("-","");
   const host=new pg.Client({connectionString:url}); await host.connect(); await host.query("create database "+db);
   const u=new URL(url);u.pathname="/"+db;const pool=new pg.Pool({connectionString:u.href});const c=await pool.connect();
+  // As regras de prazo usam a data de Brasília; current_date do teste precisa seguir o mesmo fuso,
+  // senão entre 21h e 0h (horário de Brasília) os dias divergem e o teste falha pelo relógio.
+  await c.query("set timezone='America/Sao_Paulo'");
   const q=(s,v=[])=>c.query(s,v); const desde=(id)=>readFile(new URL("../supabase/migrations/"+id,import.meta.url),"utf8");
   const [owner,corretor,marketing,ops,par,im,aut]=Array.from({length:7},()=>randomUUID());
   try {

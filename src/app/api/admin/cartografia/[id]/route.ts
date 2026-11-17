@@ -25,10 +25,10 @@ const LIMITES = {
   escalaMin: 0.5,
   escalaMax: 2,
   // parte da planta: é ajuste fino de quadra ou bairro, não de datum
-  parteOffset: 500,
+  parteOffset: 2_000,
   // esticar uma quadra ou bairro (áudio do Carlos, 09/11/2026): ajuste fino, não redesenho
-  parteEscalaMin: 0.8,
-  parteEscalaMax: 1.25,
+  parteEscalaMin: 0.5,
+  parteEscalaMax: 2,
   partes: 100,
   verticesArea: 300,
   // A planta municipal de Iturama tem mais de 200 mil linhas.

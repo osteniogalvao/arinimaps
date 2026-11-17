@@ -10,11 +10,21 @@ type Item = { id: string; nivel: "info" | "atencao" | "critico"; titulo: string;
 const ICONE = { info: Info, atencao: AlertTriangle, critico: Siren };
 const COR = { info: "text-texto-2", atencao: "text-ouro", critico: "text-critico" };
 
+const API = "/api/notificacoes";
+
 /**
- * Sino de notificações da Central (3 níveis) e envio do que ficou guardado
- * sem internet (modo de campo). Atualiza a cada minuto e quando a aba volta.
+ * Sino de notificações (3 níveis), usado na Central e no cabeçalho do site.
+ * Na Central (`campo`) também envia o que ficou guardado sem internet (modo
+ * de campo). Atualiza a cada minuto e quando a aba volta.
  */
-export default function Sino({ userId }: { userId: string }) {
+export default function Sino({ userId, campo = !!userId, variante = "central" }: {
+  /** obrigatório quando `campo` (dono da fila offline) */
+  userId?: string;
+  /** envia a fila offline do modo de campo (só na Central) */
+  campo?: boolean;
+  /** "site": botão no estilo do cabeçalho do AppShell */
+  variante?: "central" | "site";
+}) {
   const [itens, setItens] = useState<Item[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
   const [aberto, setAberto] = useState(false);
@@ -24,9 +34,9 @@ export default function Sino({ userId }: { userId: string }) {
   useEffect(() => {
     let vivo = true;
     let sincronizando = false;
-    const total = () => lerFila().filter((i) => !i.corpo.user_id || i.corpo.user_id === userId).length;
+    const total = () => !campo || !userId ? 0 : lerFila().filter((i) => !i.corpo.user_id || i.corpo.user_id === userId).length;
     async function carregar() {
-      const r = await fetch("/api/admin/notificacoes").catch(() => null);
+      const r = await fetch(API, { cache: "no-store" }).catch(() => null);
       if (!r?.ok || !vivo) return;
       const j = await r.json();
       setItens(j.itens); setNaoLidas(j.naoLidas);
@@ -35,7 +45,7 @@ export default function Sino({ userId }: { userId: string }) {
       setFila(total());
       if (navigator.onLine && total() && !sincronizando) {
         sincronizando = true;
-        try { await sincronizar(userId); } finally { sincronizando = false; if (vivo) setFila(total()); }
+        try { await sincronizar(userId!); } finally { sincronizando = false; if (vivo) setFila(total()); }
       }
     }
     void carregar(); void sync();
@@ -46,7 +56,7 @@ export default function Sino({ userId }: { userId: string }) {
     window.addEventListener("online", sync);
     window.addEventListener("arini-fila", mudouFila);
     return () => { vivo = false; clearInterval(t); document.removeEventListener("visibilitychange", vis); window.removeEventListener("online", sync); window.removeEventListener("arini-fila", mudouFila); };
-  }, [userId]);
+  }, [userId, campo]);
 
   useEffect(() => {
     if (!aberto) return;
@@ -56,7 +66,7 @@ export default function Sino({ userId }: { userId: string }) {
   }, [aberto]);
 
   async function lerTodas() {
-    await fetch("/api/admin/notificacoes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" });
+    await fetch(API, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" });
     setNaoLidas(0); setItens((x) => x.map((i) => ({ ...i, lida_em: i.lida_em ?? new Date().toISOString() })));
   }
   const critica = itens.some((i) => i.nivel === "critico" && !i.lida_em);
@@ -64,7 +74,10 @@ export default function Sino({ userId }: { userId: string }) {
   return (
     <div className="relative" ref={caixa}>
       <button type="button" aria-label={`Notificações${naoLidas ? `: ${naoLidas} novas` : ""}`} onClick={() => setAberto(!aberto)}
-        className="relative grid size-10 place-items-center rounded-full border border-linha-forte text-texto-2 transition-colors hover:border-verde hover:text-verde">
+        aria-expanded={aberto} aria-haspopup="dialog"
+        className={variante === "site"
+          ? "relative grid size-10 place-items-center rounded-[10px] text-texto-2 transition hover:bg-superficie-2 hover:text-texto"
+          : "relative grid size-10 place-items-center rounded-full border border-linha-forte text-texto-2 transition-colors hover:border-verde hover:text-verde"}>
         <Bell className="size-[18px]" />
         {naoLidas > 0 && (
           <span className={"absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold text-white " + (critica ? "bg-critico" : "bg-ouro")}>
@@ -95,7 +108,7 @@ export default function Sino({ userId }: { userId: string }) {
               );
               return i.link ? (
                 <Link key={i.id} href={i.link} className="block hover:bg-superficie-2/70"
-                  onClick={() => { setAberto(false); if (!i.lida_em) void fetch("/api/admin/notificacoes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: i.id }) }); }}>
+                  onClick={() => { setAberto(false); if (!i.lida_em) void fetch(API, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: i.id }) }); }}>
                   {corpo}
                 </Link>
               ) : <div key={i.id}>{corpo}</div>;

@@ -241,7 +241,7 @@ export default async function Home() {
     site: siteArini || undefined,
   };
 
-  const heroTitulo = texto(cfg, "hero_titulo", "Seu próximo negócio imobiliário,");
+  const heroTitulo = texto(cfg, "hero_titulo", "Seu próximo negócio imobiliário");
   const heroDestaque = texto(cfg, "hero_destaque", "começa no mapa.");
 
   const slides: SlideHero[] = [

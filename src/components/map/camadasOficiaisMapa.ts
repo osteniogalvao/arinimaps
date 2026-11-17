@@ -22,7 +22,7 @@ export type AreaCamadas = {
 
 const VAZIO: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 const fonte = (id: string) => `of-${id}`;
-const camadasDe = (id: string) => [`of-${id}-fill`, `of-${id}-linha`, `of-${id}-ponto`];
+const camadasDe = (id: string) => [`of-${id}-fill`, `of-${id}-linha`, `of-${id}-ponto`, `of-${id}-traco`];
 
 export function recortarEmWorker(dados: GeoJSON.FeatureCollection, areas: GeoJSON.Polygon[], signal: AbortSignal, contorno: boolean, car = false) {
   return new Promise<GeoJSON.FeatureCollection>((resolve, reject) => {
@@ -112,16 +112,44 @@ export class GerenciadorCamadasOficiais {
     this.map.addSource(fonte(id), { type: "geojson", data: VAZIO, promoteId: "id" });
     // por baixo dos anúncios: quem está à venda continua clicável por cima
     const antes = ["imoveis-fill", "imoveis-ponto", "imoveis-marcador"].find((l) => this.map.getLayer(l));
+    if (def.linha) {
+      // rede de linhas: o traço é a própria feição (clicável); subestação ou ponto da mesma fonte vira círculo
+      this.map.addLayer({
+        id: `of-${id}-traco`, type: "line", source: fonte(id),
+        filter: ["in", ["geometry-type"], ["literal", ["LineString", "MultiLineString"]]] as never,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": def.cor,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.4, 13, 2.6, 16, 3.6] as never,
+          "line-opacity": 0.95,
+        },
+      }, antes);
+      this.map.addLayer({
+        id: `of-${id}-ponto`, type: "circle", source: fonte(id),
+        filter: ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]] as never,
+        paint: { "circle-color": def.cor, "circle-radius": 5, "circle-stroke-color": "#111111", "circle-stroke-width": 1.5 },
+      }, antes);
+      return;
+    }
     if (def.ponto) {
       this.map.addLayer({
         id: `of-${id}-ponto`, type: "circle", source: fonte(id),
         paint: {
           "circle-color": def.cor,
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 2.5, 14, 5] as never,
-          "circle-stroke-color": "#1A0A00", "circle-stroke-width": 1, "circle-opacity": 0.9,
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3.5, 14, 6.5] as never,
+          "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5, "circle-opacity": 1,
         },
       }, antes);
       return;
+    }
+    if (def.misto) {
+      // fonte achada pelo nome: pode vir ponto (aeródromo, auto de infração) junto com polígono
+      this.map.addLayer({
+        id: `of-${id}-ponto`, type: "circle", source: fonte(id),
+        filter: ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]] as never,
+        paint: { "circle-color": def.cor, "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3.5, 14, 6.5] as never,
+          "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5 },
+      }, antes);
     }
     // cor por bioma (ou por outro valor de `nome`): expressão match do MapLibre
     const corFill = def.cores
@@ -130,7 +158,8 @@ export class GerenciadorCamadasOficiais {
     // Nas malhas de parcelas a divisa identifica o cadastro. A imagem continua
     // legível mesmo com SIGEF, SNCI e crédito rural ligados ao mesmo tempo.
     const malha = id === "sigef" || id === "snci" || id === "credito_rural";
-    const opacidade = malha ? 0.035 : def.semContorno ? 0.24 : 0.16;
+    // 17/11: contorno forte e um véu leve da mesma cor, para a malha "acender" sobre o satélite.
+    const opacidade = malha ? 0.1 : def.semContorno ? 0.28 : 0.22;
     this.map.addLayer({
       id: `of-${id}-fill`, type: "fill", source: fonte(id),
       // sem antisserrilhado na camada recortada em células: senão a emenda entre células vira um fio
@@ -141,8 +170,8 @@ export class GerenciadorCamadasOficiais {
       id: `of-${id}-linha`, type: "line", source: fonte(id),
       paint: {
         "line-color": def.cor,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 8, malha ? 0.6 : 1, 14, malha ? 1.5 : 2.2] as never,
-        ...(id === "sigef" ? { "line-dasharray": [3, 1.5] as never } : {}),
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, malha ? 1.1 : 1.6, 12, malha ? 1.8 : 2.4, 15, malha ? 2.6 : 3.2] as never,
+        "line-opacity": 1,
       },
     }, antes);
   }
@@ -196,11 +225,12 @@ export class GerenciadorCamadasOficiais {
         this.definir(id, { carregando: false, aviso: j?.error ?? "O órgão não respondeu agora." });
         return;
       }
-      const exibidas = recortes ? await recortarEmWorker(j, recortes, ctrl.signal, !def.semContorno && !def.ponto) : j;
+      const exibidas = recortes ? await recortarEmWorker(j, recortes, ctrl.signal, !def.semContorno && !def.ponto && !def.linha) : j;
       if (ctrl.signal.aborted) return;
       fonteAtual()?.setData(exibidas);
       this.definir(id, {
-        carregando: false, total: exibidas.features.filter(f => f.geometry?.type !== "MultiLineString").length,
+        // no recorte, a divisa da área volta como MultiLineString e não conta; numa rede de linhas, tudo conta
+        carregando: false, total: def.linha ? exibidas.features.length : exibidas.features.filter(f => f.geometry?.type !== "MultiLineString").length,
         aviso: j.falhas ? "Parte da área não carregou: o órgão não respondeu. Tente de novo em instantes." : "",
       });
     } catch (e) {
