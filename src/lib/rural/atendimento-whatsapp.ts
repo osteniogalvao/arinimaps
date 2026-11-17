@@ -58,7 +58,31 @@ export function pedidoAtendimento(m: Mensagem): PedidoAtendimento | null {
   if (cot) return { tipo: "cotacao", termo: cot[1]?.trim() || null };
   const safra = /^(?:safra|safras|conab)(?:\s+(?:do|da|de|dos|das))?(?:\s+(.{2,40}))?$/.exec(t);
   if (safra) return { tipo: "safra", termo: safra[1]?.trim() || null };
-  return null;
+  return cotacaoEmFrase(t);
+}
+
+/**
+ * Pedido de preço em frase comum (áudio do Carlos, 17/11 16h43): "valor do boi
+ * gordo hoje", "quanto tá a arroba?", "preço do milho". Precisa de uma palavra
+ * de preço e de um produto, para não tirar do CRM uma conversa de negócio.
+ */
+const PRODUTO_NA_FRASE: [RegExp, string][] = [
+  [/\b(boi|boi gordo|arroba)\b/, "boi gordo"],
+  [/\bvacas?\b/, "vacas"],
+  [/\bnovilhas?\b/, "novilhas"],
+  [/\bmilho\b/, "milho"],
+  [/\bsoja\b/, "soja"],
+  [/\bfrangos?\b/, "frango"],
+  [/\bdolar\b/, "dolar"],
+];
+export function cotacaoEmFrase(t: string): PedidoAtendimento | null {
+  if (t.length > 80) return null;
+  const produto = PRODUTO_NA_FRASE.find(([re]) => re.test(t))?.[1];
+  if (!produto) return null;
+  const sozinho = t.replace(/\b(hoje|agora|ai|por favor|pfv|pf)\b/g, "").replace(/\s+/g, " ").trim();
+  const pedePreco = /\b(valor|preco|precos|cotacao|cotacoes|quanto|qto|quanto ta|quanto esta|ta pagando|pagando|referencia)\b/.test(t);
+  if (!pedePreco && !PRODUTO_NA_FRASE.some(([re]) => new RegExp("^" + re.source + "$").test(sozinho))) return null;
+  return { tipo: "cotacao", termo: produto };
 }
 
 /**
@@ -109,7 +133,7 @@ function textoMenu(conta: Conta | null) {
       : `Não encontrei uma conta ARINI com este WhatsApp confirmado. Para receber as respostas do seu plano, confirme o número em ${site}/conta.`,
     "",
     "O que você pode pedir por aqui:",
-    "• BOI: cotação do boi gordo",
+    "• BOI (ou \"valor do boi gordo hoje\"): cotação do boi gordo com a referência dos últimos 7 e 30 dias, grátis",
     "• COTAÇÃO MILHO (ou SOJA, DÓLAR...): outras cotações",
     "• SAFRA SOJA (ou MILHO, CAFÉ...): produção, área e produtividade da safra pela CONAB",
     "• Envie a sua LOCALIZAÇÃO (clipe › Localização) para receber o imóvel do CAR naquele ponto e o relatório em PDF",
