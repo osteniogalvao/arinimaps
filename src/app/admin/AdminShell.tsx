@@ -20,6 +20,7 @@ import {
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, LogOut, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
   Settings, Shield, ShieldCheck, UserCheck, UserRound, Users, UsersRound, Wallet, X, Bot, Shuffle, Trophy,
+  CalendarDays, Contact, Settings2,
 } from "lucide-react";
 import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
@@ -59,6 +60,11 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/empreendimentos": Grid3x3,
   "/admin/leads": Users,
   "/admin/rodizio": Shuffle,
+  "/admin/agenda": CalendarDays,
+  "/admin/clientes": Contact,
+  "/admin/corretores": Target,
+  "/admin/comercial/relatorios": BarChart3,
+  "/admin/comercial/configurar": Settings2,
   "/admin/ranking": Trophy,
   "/admin/automacoes": Bot,
   "/admin/demandas": SearchX,

@@ -15,6 +15,7 @@ import { nomeAnunciante } from "@/lib/empreendimento/espelho";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { ArrowRight, Building2, Mail, Phone, Radio } from "lucide-react";
 import { Etiqueta } from "@/components/ui/Pagina";
+import PainelCrm, { type ModeloMensagem } from "@/components/crm-comercial/PainelCrm";
 
 export default async function OportunidadeAdmin({ params }: PageProps<"/admin/oportunidades/[id]">) {
   const user = await exigirSetor("comercial");
@@ -63,6 +64,13 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
     podeRepassar: user.setores.includes("comercial") || user.setores.includes("diretoria"),
     equipe,
   } : null;
+
+  // CRM comercial (0147): classificação, próxima ação, modelos e motivos de perda
+  const [crm, { data: modelos }, { data: motivos }] = await Promise.all([
+    admin.from("opportunities").select("temperatura, etiquetas, proxima_acao, proxima_acao_em, ultimo_contato_em").eq("id", id).maybeSingle(),
+    admin.from("crm_modelos_mensagem").select("id, titulo, canal, assunto, texto, etapa").eq("ativo", true).order("ordem"),
+    admin.from("crm_motivos_perda").select("nome").eq("ativo", true).order("ordem"),
+  ]);
 
   const lead = opp.lead as unknown as { nome: string; telefone: string | null; email: string | null; mensagem: string | null; origem: string } | null;
   const prop = opp.property as unknown as { id: string; codigo: string; titulo: string; tipo: string; status: string; valor: number | null; owner_id: string | null; partner_id: string | null; municipality: { nome: string } | null } | null;
@@ -139,6 +147,23 @@ export default async function OportunidadeAdmin({ params }: PageProps<"/admin/op
         percentualPadrao={Number(pctPadrao?.valor ?? 1.9)}
         percentualContratual={percentualContratual}
         atendimento={atendimento}
+        motivosPerda={(motivos ?? []).map((m) => m.nome)}
+      />
+
+      <PainelCrm
+        oportunidadeId={opp.id}
+        codigo={opp.codigo}
+        etapa={opp.etapa}
+        cliente={{ nome: lead?.nome ?? "", telefone: lead?.telefone ?? null, email: lead?.email ?? null }}
+        imovel={prop ? { codigo: prop.codigo, titulo: prop.titulo } : null}
+        corretor={atendimento?.responsavelNome ?? null}
+        temperatura={crm.data?.temperatura ?? null}
+        etiquetas={crm.data?.etiquetas ?? []}
+        proximaAcao={crm.data?.proxima_acao ?? null}
+        proximaAcaoEm={crm.data?.proxima_acao_em ?? null}
+        ultimoContatoEm={crm.data?.ultimo_contato_em ?? null}
+        modelos={(modelos ?? []) as ModeloMensagem[]}
+        semMigration={!!crm.error}
       />
 
       <ResumoIa oportunidade={opp.id} />

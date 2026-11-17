@@ -38,6 +38,8 @@ type Props = {
   percentualPadrao: number;
   percentualContratual?: number;
   atendimento?: Atendimento | null;
+  /** motivos de perda cadastrados (CRM comercial, 0147); sem a migration, campo livre */
+  motivosPerda?: string[];
 };
 
 const input = CAMPO;
@@ -63,6 +65,9 @@ export default function OportunidadeClient(props: Props) {
 
   // ---------- estados de formulários ----------
   const [nota, setNota] = useState("");
+  const [perdendo, setPerdendo] = useState(false);
+  const [motivoSel, setMotivoSel] = useState("");
+  const [motivoTexto, setMotivoTexto] = useState("");
   const [visitaData, setVisitaData] = useState("");
   const [relatorioDe, setRelatorioDe] = useState<{ id: string; tipo: "visita_status" | "visita_relatorio" } | null>(null);
   const [prop, setProp] = useState({ autor_lado: "comprador", valor: "", entrada: "", prazo: "", condicoes: "", observacoes: "" });
@@ -91,13 +96,29 @@ export default function OportunidadeClient(props: Props) {
             {[...ETAPAS, "perdido"].map((e) => <option key={e} value={e}>{ETAPA_LABEL[e]}</option>)}
           </select>
           <button disabled={ocupado} className={`${btn} btn-perigo`}
-            onClick={() => {
-              const motivo = prompt("Motivo da perda:");
-              if (motivo !== null) chamar("PATCH", { acao: "etapa", etapa: "perdido", motivo });
-            }}>
+            onClick={() => setPerdendo((v) => !v)}>
             Marcar perdido
           </button>
         </div>
+        {perdendo && (
+          <div className="space-y-2 rounded-xl border border-critico/30 bg-critico/5 p-3">
+            {!!props.motivosPerda?.length && (
+              <select className={input} value={motivoSel} onChange={(e) => setMotivoSel(e.target.value)} aria-label="Motivo da perda">
+                <option value="">Escolha o motivo…</option>
+                {props.motivosPerda.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )}
+            <input className={input} value={motivoTexto} onChange={(e) => setMotivoTexto(e.target.value)}
+              placeholder={props.motivosPerda?.length ? "Detalhe (opcional)" : "Motivo da perda"} maxLength={300} />
+            <button disabled={ocupado || (!motivoSel && !motivoTexto.trim())} className={`${btn} btn-perigo`}
+              onClick={async () => {
+                const motivo = [motivoSel, motivoTexto.trim()].filter(Boolean).join(" · ");
+                if (await chamar("PATCH", { acao: "etapa", etapa: "perdido", motivo })) setPerdendo(false);
+              }}>
+              Confirmar perda
+            </button>
+          </div>
+        )}
         {o.motivo_perda && <p className="text-xs text-critico">Perdido: {o.motivo_perda}</p>}
 
         {modo === "arini" && (
