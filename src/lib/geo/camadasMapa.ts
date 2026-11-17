@@ -108,6 +108,48 @@ const dataBr = (v: unknown) => {
 };
 const feicao = (geometry: GeoJSON.Geometry, properties: Feicao["properties"]): Feicao => ({ type: "Feature", geometry, properties });
 
+/** Primeiro campo preenchido entre os nomes possíveis, sem ligar para maiúsculas (o SIGEL não padroniza). */
+const campo = (p: Record<string, unknown>, ...nomes: string[]) => {
+  const chaves = new Map(Object.keys(p).map((k) => [k.toLowerCase(), k]));
+  for (const nome of nomes) {
+    const k = chaves.get(nome.toLowerCase());
+    if (k && p[k] != null && String(p[k]).trim() !== "") return p[k];
+  }
+  return null;
+};
+
+/** Camada de pontos: usina que vier como polígono vira o centro do retângulo dela. */
+function comoPonto(g: GeoJSON.Geometry): GeoJSON.Geometry {
+  if (g.type === "Point" || g.type === "MultiPoint") return g;
+  const lim = [Infinity, Infinity, -Infinity, -Infinity];
+  const visitar = (c: unknown) => {
+    if (typeof (c as number[])[0] === "number") {
+      const [x, y] = c as number[];
+      lim[0] = Math.min(lim[0], x); lim[1] = Math.min(lim[1], y); lim[2] = Math.max(lim[2], x); lim[3] = Math.max(lim[3], y);
+    } else (c as unknown[]).forEach(visitar);
+  };
+  if ("coordinates" in g) visitar(g.coordinates);
+  return Number.isFinite(lim[0]) ? { type: "Point", coordinates: [(lim[0] + lim[2]) / 2, (lim[1] + lim[3]) / 2] } : g;
+}
+
+// ANEEL/SIGEL: os mesmos serviços e índices da consulta de área (medidos em 07/10/2026)
+const SIGEL = "https://sigel.aneel.gov.br/arcgis/rest/services/PORTAL";
+async function usinasSigel(env: Env, camadas: { servico: string; id: number; tipo: string }[]) {
+  const listas = await Promise.allSettled(camadas.map(async (c) => (await arcgis(`${SIGEL}/${c.servico}/MapServer`, c.id, env, "*", 1000))
+    .flatMap((f) => f.geometry ? [feicao(c.servico === "Camadas" || c.tipo === "Subestação" ? comoPonto(f.geometry) : f.geometry, {
+      id: `${c.servico}-${c.id}-${s(campo(f.properties, "objectid", "fid", "ceg", "id")) ?? JSON.stringify(f.geometry).slice(0, 60)}`,
+      tipo: c.tipo,
+      nome: s(campo(f.properties, "nome", "nome_empre", "nom_empreendimento", "denominacao", "descricao", "name")),
+      situacao: s(campo(f.properties, "fase", "situacao", "estagio", "status")),
+      agente: s(campo(f.properties, "proprietar", "proprietario", "agente", "concession", "empresa")),
+      potencia_kw: n(campo(f.properties, "pot_kw", "potencia", "pot_outorg", "potencia_kw")),
+      tensao: s(campo(f.properties, "tensao", "tensao_kv", "nivel_tens", "kv")),
+    })] : [])));
+  // uma camada fora do ar não zera as outras; todas fora é a fonte fora
+  if (listas.every((l) => l.status === "rejected")) throw (listas[0] as PromiseRejectedResult).reason;
+  return listas.flatMap((l) => (l.status === "fulfilled" ? l.value : []));
+}
+
 const DEFS: Record<CamadaOficialId, Def> = {
   sigef: {
     zCelula: 12, validadeDias: 30, tolerancia: 0.00002,
@@ -244,6 +286,47 @@ const DEFS: Record<CamadaOficialId, Def> = {
       if (error) throw new Error(error.message);
       return (data ?? []) as Feicao[];
     },
+  },
+  aneel_transmissao: {
+    zCelula: 9, validadeDias: 30, tolerancia: 0.0001,
+    buscar: (env) => usinasSigel(env, [
+      { servico: "Transmiss%C3%A3o", id: 1, tipo: "Linha de transmissão" },
+      { servico: "Transmiss%C3%A3o", id: 3, tipo: "Subestação" },
+    ]),
+  },
+  aneel_hidreletricas: {
+    zCelula: 8, validadeDias: 30, tolerancia: 0,
+    buscar: (env) => usinasSigel(env, [
+      { servico: "Camadas", id: 1, tipo: "Usina hidrelétrica" },
+      { servico: "Camadas", id: 3, tipo: "Pequena central hidrelétrica" },
+      { servico: "Camadas", id: 5, tipo: "Central geradora hidrelétrica" },
+    ]),
+  },
+  aneel_termeletricas: {
+    zCelula: 8, validadeDias: 30, tolerancia: 0,
+    buscar: (env) => usinasSigel(env, [{ servico: "Camadas", id: 2, tipo: "Usina termelétrica" }]),
+  },
+  aneel_solar: {
+    zCelula: 8, validadeDias: 30, tolerancia: 0,
+    buscar: (env) => usinasSigel(env, [{ servico: "Camadas", id: 7, tipo: "Usina fotovoltaica" }]),
+  },
+  iphan_sitios: {
+    zCelula: 10, validadeDias: 30, tolerancia: 0,
+    buscar: async (env) => (await wfs("https://geoserver.iphan.gov.br/geoserver/ows", "SICG:tg_bem_classificacao", env, 1000)).flatMap((f) => f.geometry ? [feicao(comoPonto(f.geometry), {
+      id: s(f.properties.id_bem) ?? s(f.properties.co_iphan),
+      nome: s(f.properties.identificacao_bem),
+      tipo: s(f.properties.ds_tipo_bem) ?? s(f.properties.ds_natureza),
+      classificacao: s(f.properties.ds_classificacao),
+      codigo: s(f.properties.co_iphan),
+    })] : []),
+  },
+  ana_rios: {
+    zCelula: 11, validadeDias: 90, tolerancia: 0.00005,
+    buscar: async (env) => (await arcgis("https://www.snirh.gov.br/arcgis/rest/services/DADOSABERTOS/Curso_d%C3%81gua/MapServer", 0, env, "*", 2000))
+      .flatMap((f) => f.geometry ? [feicao(f.geometry, {
+        id: s(campo(f.properties, "objectid", "fid", "cocursodag")) ?? JSON.stringify(f.geometry).slice(0, 60),
+        nome: s(campo(f.properties, "BHB_NM_NORIOCOMP", "BHB_CD_NORIO", "nome", "noriocomp")),
+      })] : []),
   },
   prodes_cerrado: {
     zCelula: 12, validadeDias: 90, tolerancia: 0.00002,

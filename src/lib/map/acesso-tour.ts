@@ -10,6 +10,8 @@ const itensCamadas: Record<CamadaOficialId, number[]> = {
   sigef: [50, 64], snci: [50, 65], credito_rural: [56, 860], outorgas_federais: [52, 111],
   ibama_embargos: [52, 97], anm: [58], funai: [50, 94], ucs: [52, 96], quilombolas: [50],
   prodes_cerrado: [52, 98], inpe_queimadas: [52, 128], ibge_biomas: [52, 821],
+  aneel_transmissao: [58], aneel_hidreletricas: [58], aneel_termeletricas: [58], aneel_solar: [58],
+  iphan_sitios: [50], ana_rios: [52, 109],
 };
 const itensRelevo: Record<RelevoId, number> = { sombra: 119, altitude: 121, curvas: 122, declividade: 120, hidrografia: 109 };
 const itensAmbientais: Record<TemaCar | "nascente", number> = { area_imovel:62, app:88, reserva_legal:89, vegetacao_nativa:90,

@@ -22,7 +22,7 @@ export type AreaCamadas = {
 
 const VAZIO: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 const fonte = (id: string) => `of-${id}`;
-const camadasDe = (id: string) => [`of-${id}-fill`, `of-${id}-linha`, `of-${id}-ponto`];
+const camadasDe = (id: string) => [`of-${id}-fill`, `of-${id}-linha`, `of-${id}-ponto`, `of-${id}-traco`];
 
 export function recortarEmWorker(dados: GeoJSON.FeatureCollection, areas: GeoJSON.Polygon[], signal: AbortSignal, contorno: boolean, car = false) {
   return new Promise<GeoJSON.FeatureCollection>((resolve, reject) => {
@@ -112,6 +112,25 @@ export class GerenciadorCamadasOficiais {
     this.map.addSource(fonte(id), { type: "geojson", data: VAZIO, promoteId: "id" });
     // por baixo dos anúncios: quem está à venda continua clicável por cima
     const antes = ["imoveis-fill", "imoveis-ponto", "imoveis-marcador"].find((l) => this.map.getLayer(l));
+    if (def.linha) {
+      // rede de linhas: o traço é a própria feição (clicável); subestação ou ponto da mesma fonte vira círculo
+      this.map.addLayer({
+        id: `of-${id}-traco`, type: "line", source: fonte(id),
+        filter: ["in", ["geometry-type"], ["literal", ["LineString", "MultiLineString"]]] as never,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": def.cor,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.4, 13, 2.6, 16, 3.6] as never,
+          "line-opacity": 0.95,
+        },
+      }, antes);
+      this.map.addLayer({
+        id: `of-${id}-ponto`, type: "circle", source: fonte(id),
+        filter: ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]] as never,
+        paint: { "circle-color": def.cor, "circle-radius": 5, "circle-stroke-color": "#111111", "circle-stroke-width": 1.5 },
+      }, antes);
+      return;
+    }
     if (def.ponto) {
       this.map.addLayer({
         id: `of-${id}-ponto`, type: "circle", source: fonte(id),
@@ -197,11 +216,12 @@ export class GerenciadorCamadasOficiais {
         this.definir(id, { carregando: false, aviso: j?.error ?? "O órgão não respondeu agora." });
         return;
       }
-      const exibidas = recortes ? await recortarEmWorker(j, recortes, ctrl.signal, !def.semContorno && !def.ponto) : j;
+      const exibidas = recortes ? await recortarEmWorker(j, recortes, ctrl.signal, !def.semContorno && !def.ponto && !def.linha) : j;
       if (ctrl.signal.aborted) return;
       fonteAtual()?.setData(exibidas);
       this.definir(id, {
-        carregando: false, total: exibidas.features.filter(f => f.geometry?.type !== "MultiLineString").length,
+        // no recorte, a divisa da área volta como MultiLineString e não conta; numa rede de linhas, tudo conta
+        carregando: false, total: def.linha ? exibidas.features.length : exibidas.features.filter(f => f.geometry?.type !== "MultiLineString").length,
         aviso: j.falhas ? "Parte da área não carregou: o órgão não respondeu. Tente de novo em instantes." : "",
       });
     } catch (e) {
