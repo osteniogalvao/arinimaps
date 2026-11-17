@@ -102,7 +102,7 @@ function amostraCor(cor: string, ponto = false) {
   return <span aria-hidden className={"inline-block size-3 shrink-0 ring-1 ring-linha-forte " + (ponto ? "rounded-full" : "rounded-sm")} style={{ background: cor }} />;
 }
 
-const GRUPOS: GrupoCamadas[] = ["Fundiário", "Ambiental", "Infraestrutura", "Relevo e água"];
+const GRUPOS: GrupoCamadas[] = ["Fundiário", "Ambiental", "Infraestrutura", "Solo e clima", "Produção", "Relevo e água"];
 
 export function PainelCamadas({
   onFechar, grupo, selecionarGrupo, ativas, estado, onAlternar,

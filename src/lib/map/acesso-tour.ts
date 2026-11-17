@@ -14,6 +14,9 @@ const itensCamadas: Record<CamadaOficialId, number[]> = {
   iphan_sitios: [50], ana_rios: [52, 109],
   prodes_biomas: [52, 98], assentamentos: [50, 95], ucs_brasil: [52, 96], ibama_autos: [52, 92], florestas_publicas: [50],
   aerodromos: [58], ana_pivos: [58], barragens: [58],
+  solos: [52, 91], solos_textura: [52, 91], aptidao_agricola: [52, 91], climas: [52], faixa_fronteira: [50],
+  area_queimada: [52, 128], icmbio_embargos: [52, 97], sinaflor: [52, 92], outorgas_subterraneas: [52, 111],
+  frigorificos: [56], silos_armazens: [56], usinas_etanol: [56],
 };
 const itensRelevo: Record<RelevoId, number> = { sombra: 119, altitude: 121, curvas: 122, declividade: 120, hidrografia: 109 };
 const itensAmbientais: Record<TemaCar | "nascente", number> = { area_imovel:62, app:88, reserva_legal:89, vegetacao_nativa:90,
