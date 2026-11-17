@@ -22,7 +22,9 @@
   }
 
   // A câmera usa 512 px por bloco; a fonte raster pode usar outra resolução.
-  const z = Math.min(Number(dados.maxzoom), Math.round(zoom + Math.log2(512 / Number(dados.tileSize))));
+  // Tela retina pede o tile um zoom acima (mesma regra de TILE_SATELITE_PX).
+  const tamanho = devicePixelRatio >= 1.5 ? 128 : Number(dados.tileSize);
+  const z = Math.min(Number(dados.maxzoom), Math.round(zoom + Math.log2(512 / tamanho)));
   const n = 2 ** z;
   const x = Math.floor((lng + 180) / 360 * n);
   const y = Math.floor((1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) * n / 2);

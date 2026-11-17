@@ -27,14 +27,17 @@ test("só aceita imagem com cobertura válida e redução de áreas claras", () 
   assert.equal(melhoraCobertura(nebulosa, paisagem(() => [0, 0, 0, 255])), false);
   assert.equal(melhoraCobertura(nebulosa, paisagem(() => [0, 0, 0, 0])), false);
 });
-test("o mosaico regional e a fotografia de detalhe seguem o zoom em qualquer município", () => {
+test("panorama da NASA na visão do país; fotografia de detalhe (CDN) do z7 em diante", () => {
   const detalhe = "https://example.org/{z}/{x}/{y}";
   assert.match(urlDoTile(4, 5, 8, detalhe), /gibs[.]earthdata[.]nasa[.]gov.*4\/8\/5[.]jpeg$/);
+  assert.match(urlDoTile(6, 22, 32, detalhe), /gibs[.]earthdata[.]nasa[.]gov/);
+  for (const [z, x, y] of [[7, 45, 65], [9, 184, 284], [13, 2733, 4166], [14, 5464, 8330]]) {
+    assert.equal(urlDoTile(z, x, y, detalhe), `https://example.org/${z}/${x}/${y}`);
+  }
+});
+test("o mosaico Sentinel-2 (botão e reserva) continua com BBOX válido", () => {
   for (const [z, x, y] of [[7, 45, 65], [13, 2733, 4166]]) {
-    const url = new URL(urlDoTile(z, x, y, detalhe));
-    assert.equal(url.href, new URL(urlMosaico(z, x, y)).href);
-    const [w, s, e, n] = url.searchParams.get("BBOX").split(",").map(Number);
+    const [w, s, e, n] = new URL(urlMosaico(z, x, y)).searchParams.get("BBOX").split(",").map(Number);
     assert.ok(w < e && s < n);
   }
-  assert.equal(urlDoTile(14, 5464, 8330, detalhe), "https://example.org/14/5464/8330");
 });
