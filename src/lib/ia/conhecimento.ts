@@ -31,6 +31,36 @@ export type Lacuna = {
   primeira_em: string; ultima_em: string; status: StatusLacuna; artigo_id: string | null;
 };
 
+/** Tamanho máximo do conteúdo de um artigo. Era 20 mil; o Carlos pediu mais (áudio de 17/11/2026). */
+export const CONTEUDO_MAX = 200_000;
+/** Quanto do artigo o assistente recebe por consulta (os trechos que casam com a pergunta). */
+export const LEITURA_ASSISTENTE = 8_000;
+
+/**
+ * Artigo curto vai inteiro. Artigo longo vai com o começo e os parágrafos que
+ * citam os termos da pergunta, até LEITURA_ASSISTENTE caracteres.
+ */
+export function trechosParaAssistente(conteudo: string, consulta: string, max = LEITURA_ASSISTENTE): string {
+  if (conteudo.length <= max) return conteudo;
+  const sem = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const termos = [...new Set(sem(consulta).split(/[^a-z0-9]+/).filter((t) => t.length >= 3))];
+  const paragrafos = conteudo.split(/\n\s*\n/);
+  const inicio = paragrafos[0].slice(0, 1_500);
+  const pontuados = paragrafos.slice(1).map((p, i) => {
+    const n = sem(p);
+    return { i, p, pontos: termos.reduce((s, t) => s + (n.includes(t) ? 1 : 0), 0) };
+  }).filter((x) => x.pontos > 0).sort((a, b) => b.pontos - a.pontos || a.i - b.i);
+  const escolhidos: typeof pontuados = [];
+  let usado = inicio.length;
+  for (const x of pontuados) {
+    const p = x.p.length > 3_000 ? x.p.slice(0, 3_000) + " …" : x.p;
+    if (usado + p.length + 5 > max) continue;
+    escolhidos.push({ ...x, p }); usado += p.length + 5;
+  }
+  if (!escolhidos.length) return conteudo.slice(0, max) + " …";
+  return [inicio, ...escolhidos.sort((a, b) => a.i - b.i).map((x) => x.p)].join("\n\n[…]\n\n");
+}
+
 export const slugDe =(titulo: string) =>
   titulo.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
@@ -45,7 +75,7 @@ export function validarArtigo(b: Record<string, unknown>): { dados: Omit<Artigo,
   const slug = (String(b.slug ?? "").trim() || slugDe(titulo)).slice(0, 80);
   if (titulo.length < 3 || titulo.length > 200) return { erro: "Título: entre 3 e 200 caracteres." };
   if (!/^[a-z0-9][a-z0-9-]{2,80}$/.test(slug)) return { erro: "Identificador: só letras minúsculas, números e hífen (mínimo 3)." };
-  if (conteudo.length > 20_000) return { erro: "Conteúdo: no máximo 20 mil caracteres." };
+  if (conteudo.length > CONTEUDO_MAX) return { erro: `Conteúdo: no máximo ${CONTEUDO_MAX.toLocaleString("pt-BR")} caracteres.` };
   if (!STATUS_ARTIGO.includes(status)) return { erro: "Situação inválida." };
   if (status === "publicado" && (!conteudo || !fonte)) return { erro: "Para publicar, preencha o conteúdo e a fonte." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return { erro: "Data de referência inválida." };
