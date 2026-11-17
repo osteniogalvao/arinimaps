@@ -1,6 +1,6 @@
 import type { AddProtocolAction } from "maplibre-gl";
 import { TILE_DETALHE, urlTileAlto, urlTileHistorico, urlTileAtivo } from "./config";
-import { urlMosaico } from "../../../public/vendor/fonte-satelite.mjs";
+import { urlMosaico, ZOOM_PANORAMA_MAX } from "../../../public/vendor/fonte-satelite.mjs";
 import { amostrarImagem, melhoraCobertura } from "./coberturaNuvens";
 
 async function buscar(url: string, signal: AbortSignal, timeout: number) {
@@ -28,7 +28,7 @@ export const carregarTileSatelite: AddProtocolAction = async ({ url }, abort) =>
   } catch {
     signal.throwIfAborted();
     if (sobreposta) return { data: transparente.slice().buffer, cacheControl: "max-age=300" };
-    const reserva = z > 13 ? urlMosaico(z, x, y) :
+    const reserva = z > ZOOM_PANORAMA_MAX ? urlMosaico(z, x, y) :
       TILE_DETALHE.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
     return { ...await buscar(reserva, signal, 10000), cacheControl: "max-age=300" };
   }

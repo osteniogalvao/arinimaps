@@ -26,11 +26,10 @@ export default async function PaginaMapa() {
 
   return (
     <Moldura usuario={usuario} cheia>
-      <link rel="preconnect" href="https://titiler.terrascope.be" crossOrigin="anonymous" />
       <link rel="modulepreload" href={URL_MAPLIBRE} />
       <script
-        async fetchPriority="high" src="/precarregar-satelite.js?v=2"
-        data-fonte={TILE_DETALHE} data-maxzoom={SATELITE.maxzoom} data-tile-size={SATELITE.tileSize}
+        async fetchPriority="high" src="/precarregar-satelite.js?v=3"
+        data-fonte={TILE_DETALHE} data-maxzoom={SATELITE.maxzoom} data-tile-size={256}
         data-camera={JSON.stringify([...CENTRO_REGIAO, ZOOM_INICIAL_REGIONAL])}
         data-limites={JSON.stringify(LIMITES_MAPA_REGIONAL)} data-preferencias={CHAVE_PREFERENCIAS}
       />

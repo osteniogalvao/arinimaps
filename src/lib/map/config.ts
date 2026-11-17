@@ -104,10 +104,23 @@ export const TILE_DETALHE = PROVEDOR_SATELITE === "maptiler"
 
 export const urlTileAtivo = (z: number, x: number, y: number) => urlDoTile(z, x, y, TILE_DETALHE);
 
+/**
+ * NITIDEZ EM TELA RETINA (17/11/2026). Um tile raster de 256 px ocupa 256 px
+ * de CSS; numa tela com densidade 2 (celular, Mac, notebook com escala 150%+)
+ * cada pixel da foto vira 2×2 pixels da tela e a imagem fica "lavada". Com
+ * tileSize 128 o MapLibre pede o tile um zoom acima para o mesmo pedaço da
+ * tela, e cada pixel da foto cai num pixel da tela. Custa até 4× mais tiles,
+ * aceitável porque o Wayback vem de CDN (0,3–0,7 s por tile). O teto continua
+ * no maxzoom da fonte: perto do lote o ganho só vem de uma fonte com z18+.
+ * O mesmo cálculo está em public/precarregar-satelite.js.
+ */
+export const TILE_SATELITE_PX =
+  typeof window !== "undefined" && window.devicePixelRatio >= 1.5 ? 128 : 256;
+
 export const SATELITE: RasterSourceSpecification = {
   type: "raster",
   tiles: ["arini-satelite://tile/{z}/{x}/{y}"],
-  tileSize: 256,
+  tileSize: TILE_SATELITE_PX,
   maxzoom: PROVEDOR_SATELITE === "maptiler" ? 20 : 17,
   attribution: 'Panorama NASA Blue Marble · Sentinel-2 © ESA WorldCover / Copernicus (2021), CC BY 4.0 · ' +
     (PROVEDOR_SATELITE === "maptiler" ? "© MapTiler © OpenStreetMap contributors · Imagem alternativa © Esri e colaboradores" :
@@ -137,7 +150,7 @@ export const SATELITE_ALTO: RasterSourceSpecification | null =
     ? {
         type: "raster",
         tiles: ["arini-satelite://alto/{z}/{x}/{y}"],
-        tileSize: 256,
+        tileSize: TILE_SATELITE_PX,
         minzoom: 18,
         maxzoom: 19,
         attribution: "Powered by Esri · Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
