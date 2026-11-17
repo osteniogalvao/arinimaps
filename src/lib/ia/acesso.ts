@@ -25,7 +25,7 @@ export async function estadoIa(userId: string | null): Promise<EstadoIa> {
   const acesso = await acessoDe(userId);
   if (!acesso.recursos.has("chat_ia")) {
     return { ligado: true, sessao: true, permitido: false,
-      negacao: { mensagem: `O assistente não está no seu plano${acesso.planNome ? ` (${acesso.planNome})` : ""}.`, solucao: "Veja os planos em /planos ou fale com a Arini." } };
+      negacao: { mensagem: `O assistente não está no seu plano${acesso.planNome ? ` (${acesso.planNome})` : ""}.`, solucao: "Escolha um plano com o assistente em /planos: ele libera assim que o plano é ativado." } };
   }
   if (acesso.equipe) return { ligado: true, sessao: true, permitido: true, saldo: null };
   const saldo = await saldoAri(userId, acesso.nicho);

@@ -115,7 +115,7 @@ export async function conferirRecurso(
       : recurso === "anunciar" && !podeAnunciar(user.role, acesso.nicho)
       ? { codigo: "perfil_incompativel", mensagem: "O seu perfil não permite cadastrar anúncios.", solucao: "Fale com a Arini se também atua como anunciante." }
       : { codigo: "sem_plano", mensagem: `“${nome}” não está no seu plano${acesso.planNome ? ` (${acesso.planNome})` : ""}.`,
-          solucao: "Veja os planos em /planos ou fale com a Arini para liberar." };
+          solucao: "Escolha um plano em /planos: o recurso libera na conta assim que o plano é ativado." };
     await registrarTentativa({ request, userId: user?.id, role: user?.role, planId: acesso.planId, recurso, motivo: negacao.codigo });
     return { acesso, negacao };
   }
@@ -130,7 +130,7 @@ export async function conferirRecurso(
         mensagem: opcoes.cota === "consultas_area_mes"
           ? `Você já usou as ${limite} consultas de área do mês no plano ${acesso.planNome}.`
           : `Seu plano ${acesso.planNome} permite ${limite} imóveis ativos ao mesmo tempo.`,
-        solucao: opcoes.cota === "imoveis_ativos" ? "Reduza a quantidade de anúncios ativos ou fale com a Arini para ampliar o plano." : "Fale com a Arini para ampliar o plano ou aguarde o próximo mês.",
+        solucao: opcoes.cota === "imoveis_ativos" ? "Reduza a quantidade de anúncios ativos ou mude para um plano maior em /planos." : "Mude para um plano maior em /planos ou aguarde a cota do próximo mês.",
       };
       await registrarTentativa({ request, userId: user.id, role: user.role, planId: acesso.planId, recurso, motivo: `cota:${opcoes.cota}` });
       return { acesso, negacao };

@@ -21,13 +21,18 @@ export default function ConsultaAgro({
   const [local, setLocal] = useState(praca ?? "");
   const opcoes = Object.entries(PRODUTOS);
   if (produto && !(produto in PRODUTOS)) opcoes.push([produto, produto]);
-  const mensagem = `Olá! Gostaria de consultar a cotação de ${PRODUTOS[escolha] ?? escolha}${local.trim() ? ` em ${local.trim()}` : ""} com a ARINI.`;
+  // comando que o atendimento automático entende (COTAÇÃO <produto> <praça>): a resposta chega na hora
+  const mensagem = `COTAÇÃO ${PRODUTOS[escolha] ?? escolha}${local.trim() ? ` ${local.trim()}` : ""}`;
 
   return (
     <section aria-labelledby="consulta-agro" className="cartao mt-8 max-w-3xl space-y-4 p-5 md:p-7">
       <h2 id="consulta-agro" className="lp-display text-2xl">
-        Consultar uma cotação com a ARINI
+        Receber a cotação no WhatsApp
       </h2>
+      <p className="text-sm text-texto-2">
+        A resposta é automática, com o preço do dia e a variação em 7 e 30 dias. Depois, envie outro produto ou
+        SAFRA e o nome da cultura para ver a estimativa da CONAB.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm">
           Produto de interesse
@@ -56,7 +61,7 @@ export default function ConsultaAgro({
         target="_blank"
         rel="noopener noreferrer"
       >
-        <MessageCircle aria-hidden /> Consultar pelo WhatsApp
+        <MessageCircle aria-hidden /> Receber pelo WhatsApp
       </a>
     </section>
   );
