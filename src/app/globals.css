@@ -267,23 +267,38 @@ button:disabled,
 .btn-contorno {
   /* sem `display`: regra sem layer vence utilitario do Tailwind, e fixar
      inline-block aqui quebraria os botoes que sao `flex` (sidebar do mapa).
-     <button> ja e inline-block por padrao do navegador. */
-  background: var(--superficie-2);
-  border: 1px solid var(--linha-forte);
-  color: var(--texto);
-  font-weight: 600;
+     <button> ja e inline-block por padrao do navegador.
+     17/11/2026 ("botões sem vida"): o secundário deixou de ser bege. Agora é
+     contorno verde com texto e ícone verdes, e enche de verde no hover. */
+  background: color-mix(in srgb, var(--verde) 7%, var(--superficie));
+  border: 1.5px solid color-mix(in srgb, var(--verde) 70%, transparent);
+  color: var(--verde);
+  font-weight: 700;
   border-radius: 999px;
   box-shadow: 0 1px 2px var(--sombra-botao);
-  transition: transform 0.15s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.15s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
 .btn-contorno:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: color-mix(in srgb, var(--verde) 12%, var(--superficie-2));
-  border-color: var(--verde);
-  box-shadow: 0 4px 12px var(--sombra-botao);
+  background: var(--botao);
+  border-color: var(--botao);
+  color: var(--botao-texto);
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--botao) 60%, transparent);
 }
 .btn-contorno:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
 .btn-contorno:disabled { opacity: 0.45; box-shadow: none; }
+
+/* WhatsApp: verde da marca do app, escurecido para o texto branco passar em contraste */
+.btn-whatsapp {
+  background: #128C4A;
+  border: 1.5px solid #128C4A;
+  color: #fff;
+  font-weight: 700;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px -8px rgba(18, 140, 74, 0.7);
+  transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-whatsapp:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 0 0 4px rgba(37, 211, 102, 0.25); }
 
 /* ação destrutiva: mesma forma do secundário, cor de alerta só no texto e na
    borda — vermelho cheio num botão de lista puxa mais atenção do que merece */

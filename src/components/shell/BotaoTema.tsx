@@ -125,7 +125,7 @@ export default function BotaoTema({ compacto = false }: { compacto?: boolean }) 
       aria-label={`Mudar para o tema ${vaiPara}`}
       title={`Mudar para o tema ${vaiPara}`}
       className={
-        "shrink-0 rounded-[10px] text-texto-2 hover:text-texto hover:bg-superficie-2 transition grid place-items-center " +
+        "shrink-0 rounded-full text-verde hover:bg-verde/12 transition grid place-items-center " +
         (compacto ? "size-10" : "size-10 sm:w-auto sm:px-3 sm:gap-2 sm:flex sm:items-center")
       }
     >
