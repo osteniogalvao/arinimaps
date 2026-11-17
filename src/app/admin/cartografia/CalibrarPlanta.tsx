@@ -41,7 +41,7 @@ import { estiloSatelite } from "@/lib/map/ortofotos";
 import {
   centroDe, ajustarPorPontos, DESLOCAMENTO_DATUM, TRANSFORM_ZERO,
   afim, compor, inverter, aplicarMatriz, aplicarMatrizPonto, centroArea, partesDasLinhas,
-  aneisParte, centroParte, matrizParte, mesmaPeca, reunirPecas, separarPecas, partesSobrepostas, pertenceParte, aplicarEdicoesGeoJSON, pontoNaArea, centroFeature,
+  aneisParte, centroParte, matrizParte, mesmaPeca, reunirPecas, separarPecas, partesSobrepostas, pertenceParte, recortarFora, aplicarEdicoesGeoJSON, pontoNaArea, centroFeature,
   type Transform, type ParDeControle, type AjusteLocal, type EdicaoGeometria,
 } from "@/lib/geo/deslocar";
 import { enviarJson, type ErroApi } from "@/lib/api/enviar";
@@ -205,6 +205,25 @@ function AnguloExato({ valor, definir }: { valor: number; definir: (v: number) =
   </label>;
 }
 
+/** Giro em passos (item 7 do PDF de 17/11): dá a volta inteira sem passar de ±360°. */
+function girarPasso(atual: number, d: number) {
+  let v = Math.round((atual + d) * 1000) / 1000;
+  if (v > 360) v -= 360;
+  if (v < -360) v += 360;
+  return v;
+}
+
+/** Botões de − e + com passos fixos (giro em graus, tamanho em %). */
+function BotoesPasso({ passos, sufixo, aoClicar }: { passos: number[]; sufixo: string; aoClicar: (d: number) => void }) {
+  return <span className="flex flex-wrap gap-1.5">
+    {passos.map((d) => (
+      <button key={d} type="button" className="rounded-md btn-contorno px-2 py-0.5 text-xs tabular-nums hover:bg-superficie-2" onClick={() => aoClicar(d)}>
+        {d > 0 ? "+" : "−"}{Math.abs(d).toString().replace(".", ",")}{sufixo}
+      </button>
+    ))}
+  </span>;
+}
+
 export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; onFechar: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
@@ -263,6 +282,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const [ativa, setAtiva] = useState<string | null>(null);
   // vértices da área sendo desenhada (posição na tela, em graus)
   const [novoPoligono, setNovoPoligono] = useState(false);
+  /** "parte" desenhando o contorno de uma seleção por pontos, não uma peça */
+  const [laco, setLaco] = useState(false);
   const [desenho, setDesenho] = useState<[number, number][]>([]);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
@@ -1163,27 +1184,60 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         return;
       }
     }
-    const encosta = ajustes.find((a) => partesSobrepostas(a, perimetros));
-    if (encosta) {
-      setParteConflito(encosta.id);
-      setErro({
-        mensagem: `A seleção inclui uma região da peça “${encosta.nome}”.`,
-        motivo: "Cada linha da planta só pode pertencer a uma parte.",
-        solucao: "Use Localizar peça para abrir e ajustar o conjunto existente.",
-        codigo: "partes_sobrepostas", status: 0,
-      });
-      return;
+    // Retângulo que encosta em peça vizinha (pedido do Carlos, 17/11/2026):
+    // em vez de travar pedindo para ajustar uma peça que nem aparece na vista,
+    // a parte nova fica só com o que está fora das peças existentes. As linhas
+    // selecionadas que já são de outra peça continuam nela.
+    let contorno: Pick<AjusteLocal, "area" | "areasExtras"> = perimetros;
+    let ficaram = 0;
+    const vizinhas = ajustes.filter((a) => partesSobrepostas(a, perimetros));
+    if (vizinhas.length) {
+      const aneis = recortarFora(aneisParte(perimetros), vizinhas.flatMap(aneisParte));
+      if (!aneis.length || aneis.length > 40 || aneis.some((a) => a.length > 300)) {
+        setParteConflito(vizinhas[0].id);
+        setErro({
+          mensagem: !aneis.length ? `A seleção cai inteira dentro da peça “${vizinhas[0].nome}”.` : "O recorte da seleção ficou complexo demais.",
+          motivo: "Cada linha da planta só pode pertencer a uma parte.",
+          solucao: !aneis.length ? "Use Localizar peça para abrir e ajustar a peça existente." : "Selecione um trecho menor, ou use Desenhar perímetro em volta das quadras.",
+          codigo: "partes_sobrepostas", status: 0,
+        });
+        return;
+      }
+      contorno = { area: aneis[0], ...(aneis.length > 1 ? { areasExtras: aneis.slice(1) } : {}) };
+      if (bruto) {
+        let livres = 0;
+        for (const chave of selecaoRef.current) {
+          const [i, j] = chave.split(":").map(Number);
+          if ((membrosRef.current.m[i]?.[Number.isInteger(j) ? j : 0] ?? -1) >= 0) { ficaram++; continue; }
+          const f = bruto.features[i];
+          const c = f?.geometry?.type === "MultiLineString" && Number.isInteger(j)
+            ? centroLinha(f.geometry.coordinates[j] as [number, number][]) : f ? centroFeature(f) : null;
+          if (c && pertenceParte(c, contorno)) livres++;
+        }
+        if (!livres) {
+          setParteConflito(vizinhas[0].id);
+          setErro({
+            mensagem: `As linhas selecionadas já pertencem à peça “${vizinhas[0].nome}”.`,
+            motivo: "Cada linha da planta só pode pertencer a uma parte.",
+            solucao: "Use Localizar peça para abrir e ajustar a peça existente.",
+            codigo: "partes_sobrepostas", status: 0,
+          });
+          return;
+        }
+      }
     }
     const numero = ajustesRef.current.reduce((n, a) => Math.max(n, Number(a.nome.match(/(\d+)$/)?.[1] ?? 0)), 0) + 1;
     const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`).slice(0, 13);
-    const nova: AjusteLocal = { id, nome: `Parte ${numero}`, ...perimetros, t: { ...TRANSFORM_ZERO } };
-    const n = selecaoRef.current.size;
+    const nova: AjusteLocal = { id, nome: `Parte ${numero}`, ...contorno, t: { ...TRANSFORM_ZERO } };
+    const n = selecaoRef.current.size - ficaram;
     limparSelecao();
     setErro(null);
     ativaRef.current = id; setAtiva(id);
     definir(tRef.current, [...ajustesRef.current, nova]);
     setModo("mover");
-    setMsg(`${nova.nome} criada com ${fmt(n)} linhas. Arraste para mover juntas; gire ou estique no painel de baixo.`);
+    setPainelAberto(true); setAba("posicao");
+    setMsg(`${nova.nome} criada com ${fmt(n)} linhas. Arraste para mover juntas; gire ou mude o tamanho no painel de baixo.` +
+      (vizinhas.length ? ` O que já era de ${vizinhas.map((a) => `“${a.nome}”`).slice(0, 3).join(", ")}${vizinhas.length > 3 ? "…" : ""} ficou na peça de origem.` : ""));
   }
 
   fecharAreaRef.current = () => {
@@ -1206,9 +1260,18 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       });
       return;
     }
+    // seleção por pontos (item 10 do PDF de 17/11): o contorno marcado soma
+    // as linhas de dentro à seleção, como o retângulo do Selecionar área
+    if (laco) {
+      if (pts.length > 300) { setMsg("Use até 300 pontos no contorno."); return; }
+      desenhoRef.current = []; setDesenho([]); setLaco(false);
+      setModo("selecao");
+      selecionarNaCaixaRef.current(pts, true);
+      return;
+    }
     // a área é guardada no desenho cru: desfaz a calibração da planta inteira
     const inv = inverter(afim(centroRef.current, tRef.current));
-    const area = pts.map((p) => aplicarMatrizPonto(inv, p));
+    let area = pts.map((p) => aplicarMatrizPonto(inv, p));
     const atuais = ajustesRef.current;
     if (novoPoligono) {
       // O mesmo critério de pertencimento usado na publicação e no worker.
@@ -1228,20 +1291,27 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       linhaSelecionadaRef.current = alvo; setLinhaSelecionada(alvo); setFerramentaLinha("vertices"); setModo("vertices");
       setErro(null); setMsg("Polígono desenhado. Ajuste os vértices ou salve a planta."); return;
     }
-    const encosta = atuais.find((a) => partesSobrepostas(a, { area }));
-    if (encosta) {
-      setParteConflito(encosta.id);
-      setErro({
-        mensagem: `A área nova encosta em “${encosta.nome}”.`,
-        motivo: "Cada linha da planta só pode pertencer a uma parte.",
-        solucao: "Desenhe a área sem cruzar o contorno laranja da outra parte, ou remova a outra parte antes.",
-        codigo: "partes_sobrepostas", status: 0,
-      });
-      return;
+    // perímetro que cruza outra peça: fica só a parte de fora (17/11/2026)
+    const vizinhas = atuais.filter((a) => partesSobrepostas(a, { area }));
+    let areasExtras: [number, number][][] | undefined;
+    if (vizinhas.length) {
+      const aneis = recortarFora([area], vizinhas.flatMap(aneisParte));
+      if (!aneis.length || aneis.length > 40 || aneis.some((a) => a.length > 300)) {
+        setParteConflito(vizinhas[0].id);
+        setErro({
+          mensagem: !aneis.length ? `A área nova cai inteira dentro de “${vizinhas[0].nome}”.` : "O recorte da área ficou complexo demais.",
+          motivo: "Cada linha da planta só pode pertencer a uma parte.",
+          solucao: !aneis.length ? "Use Localizar peça para abrir e ajustar a peça existente." : "Desenhe uma área menor, sem cruzar o contorno laranja da outra parte.",
+          codigo: "partes_sobrepostas", status: 0,
+        });
+        return;
+      }
+      area = aneis[0];
+      if (aneis.length > 1) areasExtras = aneis.slice(1);
     }
     // linhas que a área nova pega e que ainda não são de outra parte
     const linhas = bruto.features.reduce((n, f, i) => {
-      const novas = partesDasLinhas(f, [area]);
+      const novas = partesDasLinhas(f, [{ area, areasExtras }]);
       const ja = membrosRef.current.m[i];
       return n + novas.reduce((s, k, j) => s + (k === 0 && (ja?.[j] ?? -1) < 0 ? 1 : 0), 0);
     }, 0);
@@ -1255,7 +1325,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     }
     const numero = atuais.reduce((n, a) => Math.max(n, Number(a.nome.match(/(\d+)$/)?.[1] ?? 0)), 0) + 1;
     const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`).slice(0, 13);
-    const nova: AjusteLocal = { id, nome: `Parte ${numero}`, area, t: { ...TRANSFORM_ZERO } };
+    const nova: AjusteLocal = { id, nome: `Parte ${numero}`, area, ...(areasExtras ? { areasExtras } : {}), t: { ...TRANSFORM_ZERO } };
     setErro(null);
     desenhoRef.current = [];
     setDesenho([]);
@@ -1361,6 +1431,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   }
 
   function cancelarDesenho() {
+    setLaco(false);
     desenhoRef.current = [];
     setDesenho([]);
     setModo("mover");
@@ -1495,8 +1566,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       return;
     }
     setErro(null);
-    if (parte && (Math.abs(ajuste.offsetLesteM) > 500 || Math.abs(ajuste.offsetNorteM) > 500 ||
-      Math.abs(ajuste.rotacaoGraus) > 360 || ajuste.escala < 0.8 || ajuste.escala > 1.25)) {
+    if (parte && (Math.abs(ajuste.offsetLesteM) > 2_000 || Math.abs(ajuste.offsetNorteM) > 2_000 ||
+      Math.abs(ajuste.rotacaoGraus) > 360 || ajuste.escala < 0.5 || ajuste.escala > 2)) {
       setMsg("Os pontos excedem os limites do ajuste da quadra. Confira se os pares indicam os mesmos cantos."); return;
     }
     setResiduo(ajuste.residuoM);
@@ -1800,7 +1871,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               {modo === "mover" && !parteAtual && "Arraste a planta com o mouse até bater no satélite. Segure Shift enquanto arrasta para andar devagar; setas do teclado para o ajuste fino (Shift = 1 m). Ctrl+Z desfaz."}
               {modo === "mover" && parteAtual && `Movendo só “${parteAtual.nome}” (linhas laranja). O resto da planta fica parado. Arraste, use as setas ou gire no painel abaixo. Para voltar a mover tudo, escolha “Planta inteira”.`}
               {modo === "parte" && novoPoligono && "Clique nos cantos do novo polígono. Enter fecha o contorno."}
-              {modo === "parte" && !novoPoligono && (desenho.length < 3
+              {modo === "parte" && laco && (desenho.length < 3
+                ? "Marque pontos em volta do que quer selecionar — quadras, lotes, linhas — em qualquer formato."
+                : "Feche no primeiro ponto, com duplo clique ou Enter: tudo o que ficou dentro entra na seleção. Esc desiste.")}
+              {modo === "parte" && !novoPoligono && !laco && (desenho.length < 3
                 ? "Clique em volta da quadra ou do trecho que quer mover separado — um clique por canto."
                 : "Feche a área clicando no primeiro ponto, com duplo clique ou Enter. Esc desiste.")}
               {modo === "objeto" && "Clique diretamente numa quadra, lote ou polilinha fechada. Ela vira uma peça independente e já fica pronta para arrastar."}
@@ -1861,9 +1935,11 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               title="Calibra a peça selecionada ou a planta inteira por pares de pontos"><Crosshair className="size-4" /> Pontos de controle</button>
             <button className={chip(modo === "selecao")} onClick={() => { if (modo === "parte") cancelarDesenho(); setMsg(""); setModo("selecao"); }}
               title="Arraste um retângulo para pegar várias linhas de uma vez — apagar ou mover juntas"><BoxSelect className="size-4" /> Selecionar área</button>
-            <button className={chip(modo === "parte" && novoPoligono)} onClick={() => { setNovoPoligono(true); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}>
+            <button className={chip(modo === "parte" && laco)} onClick={() => { setNovoPoligono(false); setLaco(true); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}
+              title="Marque pontos em volta das quadras, lotes ou linhas (formato regular ou irregular); feche no primeiro ponto para selecionar tudo o que ficou dentro"><PenLine className="size-4" /> Selecionar por pontos</button>
+            <button className={chip(modo === "parte" && novoPoligono)} onClick={() => { setNovoPoligono(true); setLaco(false); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}>
               <PenLine className="size-4" /> Desenhar polígono</button>
-            <button className={chip(modo === "parte" && !novoPoligono)} onClick={() => { setNovoPoligono(false); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}
+            <button className={chip(modo === "parte" && !novoPoligono && !laco)} onClick={() => { setNovoPoligono(false); setLaco(false); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}
               title="Clique em volta de um lote, quadra ou bairro para mover, girar e esticar só aquele trecho"><PenLine className="size-4" /> Desenhar perímetro</button>
             <button className={chip(modo === "apagar")} onClick={() => { if (modo === "parte") cancelarDesenho(); setMsg(""); setModo("apagar"); }}
               title="Clique numa linha para apagá-la da planta (o arquivo original não muda)"><Eraser className="size-4" /> Apagar linhas</button>
@@ -1922,7 +1998,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               </button>
               <button onClick={moverSelecionadasJuntas} disabled={!selecao.size}
                 className="btn-verde inline-flex items-center gap-1.5 px-3 py-1.5 text-sm disabled:opacity-50">
-                <Move className="size-4" /> Mover juntas
+                <Move className="size-4" /> Mover, girar ou redimensionar juntas
               </button>
               <button onClick={limparSelecao} disabled={!selecao.size}
                 className="rounded-lg btn-contorno px-3 py-1.5 text-sm hover:bg-superficie-2 disabled:opacity-40">Limpar seleção</button>
@@ -1958,7 +2034,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               {modo === "parte" && (
                 <span className="inline-flex items-center gap-1.5 ml-1">
                   <button onClick={() => fecharAreaRef.current()} disabled={desenho.length < 3}
-                    className="btn-verde px-3 py-1.5 text-sm disabled:opacity-50">{novoPoligono ? "Concluir polígono" : "Concluir área"} ({desenho.length} pontos)</button>
+                    className="btn-verde px-3 py-1.5 text-sm disabled:opacity-50">{laco ? "Selecionar o que está dentro" : novoPoligono ? "Concluir polígono" : "Concluir área"} ({desenho.length} pontos)</button>
                   <button onClick={cancelarDesenho} className="rounded-lg btn-contorno px-3 py-1.5 text-sm hover:bg-superficie-2">Cancelar</button>
                 </span>
               )}
@@ -2057,15 +2133,17 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
                       onChange={(e) => aplicarParte((pt) => ({ ...pt, rotacaoGraus: Number(e.target.value) }), false)} />
                   </label>
                   <AnguloExato valor={parteAtual.t.rotacaoGraus} definir={rotacaoGraus => aplicarParte(pt=>({...pt,rotacaoGraus}))} />
+                  <BotoesPasso passos={[-90, -15, -1, -0.1, 0.1, 1, 15, 90]} sufixo="°"
+                    aoClicar={(d) => aplicarParte((pt) => ({ ...pt, rotacaoGraus: girarPasso(pt.rotacaoGraus, d) }))} />
                   <label className="block space-y-1">
                     <span className="text-sm text-texto-2">Tamanho da parte: <strong className="text-texto">{((parteAtual.t.escala || 1) * 100).toFixed(1)}%</strong></span>
-                    <input type="range" min={0.8} max={1.25} step={0.001} value={parteAtual.t.escala || 1} className="w-full"
+                    <input type="range" min={0.5} max={2} step={0.001} value={parteAtual.t.escala || 1} className="w-full"
                       onPointerDown={registrar}
                       onChange={(e) => aplicarParte((pt) => ({ ...pt, escala: Number(e.target.value) }), false)} />
                     <span className="flex gap-1.5">
-                      {[-1, -0.1, 0.1, 1].map((d) => (
+                      {[-10, -1, -0.1, 0.1, 1, 10].map((d) => (
                         <button key={d} type="button" className="rounded-md btn-contorno px-2 py-0.5 text-xs hover:bg-superficie-2"
-                          onClick={() => aplicarParte((pt) => ({ ...pt, escala: Math.min(1.25, Math.max(0.8, Math.round(((pt.escala || 1) + d / 100) * 1e4) / 1e4)) }))}>
+                          onClick={() => aplicarParte((pt) => ({ ...pt, escala: Math.min(2, Math.max(0.5, Math.round(((pt.escala || 1) + d / 100) * 1e4) / 1e4)) }))}>
                           {d > 0 ? "+" : "−"}{Math.abs(d).toString().replace(".", ",")}%
                         </button>
                       ))}
@@ -2104,11 +2182,15 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
                     onChange={(e) => aplicar({ ...t, rotacaoGraus: Number(e.target.value) }, false)} />
                 </label>
                 <AnguloExato valor={t.rotacaoGraus} definir={rotacaoGraus => aplicar({...t,rotacaoGraus})} />
+                <BotoesPasso passos={[-90, -15, -1, -0.1, 0.1, 1, 15, 90]} sufixo="°"
+                  aoClicar={(d) => aplicar({ ...t, rotacaoGraus: girarPasso(t.rotacaoGraus, d) })} />
                 <label className="block space-y-1">
                   <span className="text-sm text-texto-2">Escala: <strong className="text-texto">{(t.escala * 100).toFixed(2)}%</strong></span>
                   <input type="range" min={0.5} max={2} step={0.0001} value={t.escala} className="w-full"
                     onPointerDown={registrar}
                     onChange={(e) => aplicar({ ...t, escala: Number(e.target.value) }, false)} />
+                  <BotoesPasso passos={[-10, -1, -0.1, 0.1, 1, 10]} sufixo="%"
+                    aoClicar={(d) => aplicar({ ...t, escala: Math.min(2, Math.max(0.5, Math.round((t.escala + d / 100) * 1e5) / 1e5)) })} />
                 </label>
                 <label className="block space-y-1">
                   <span className="text-sm text-texto-2">Opacidade da planta: <strong className="text-texto">{Math.round(opacidade * 100)}%</strong></span>
