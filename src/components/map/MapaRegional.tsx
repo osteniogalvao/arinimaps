@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
-import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
+import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, ResumoCamadas, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
 import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
 import CompararParcelasRurais from "@/components/map/CompararParcelasRurais";
 import BuscaUrbana from "@/components/map/BuscaUrbana";
@@ -1958,6 +1958,7 @@ export default function MapaRegional({
           recolhida={!!(painelMapa || carSel || loteSel || varios || pontoLivre || noPonto.length || selecionado)}
           mapa={mapaPronto}
           pedidoRecorte={pedidoRecorte} onDelimitar={salvarArea}
+          resumo={<ResumoCamadas ativas={camadasAtivas} estado={estadoCamadas} />}
           recursos={recursos}
           logado={logado}
           onDesenhando={aoDesenhar}
