@@ -10,7 +10,8 @@
  *    e o Puppeteer captura frame a frame com clock virtual).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { buffer } from "@turf/turf";
 import { RotateCcw } from "lucide-react";
 import type { Map as MLMap, ErrorEvent as MLErrorEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
@@ -31,7 +32,7 @@ export type TourData = {
   pois: { nome: string | null; categoria: string; lng: number; lat: number; distancia_m: number; destaque: boolean }[];
   record?: boolean;
   camadas?: CamadasTour | null;
-  consulta?: { voltar: string; limites: [number, number, number, number]; car?: string };
+  consulta?: { voltar: string; limites: [number, number, number, number]; car?: string; raio?: number; caminho?: string };
 };
 
 type Cam = { lng: number; lat: number; zoom: number; pitch: number; bearing: number };
@@ -47,6 +48,9 @@ const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
  * gravado pelo worker continua no ritmo 1, para não alongar a renderização.
  */
 const RITMO_AO_VIVO = 1.7;
+
+/** Raios do painel do tour (17/11/2026, vídeo do Carlos: "o raio aqui, até X km, e navegar vendo os pontos"). */
+const RAIOS_TOUR = [0, 1000, 2000, 5000, 10000];
 
 /** Espera o mapa terminar de baixar e desenhar o que está na tela, com teto. */
 function esperarMapa(map: MLMap, tetoMs: number) {
@@ -147,7 +151,29 @@ export default function Tour3D(dados: TourData) {
   const pausar = useRef<() => void>(() => {});
   const [relevo, setRelevo] = useState(1.4);
   const [esperandoTiles, setEsperandoTiles] = useState(false);
-  const [ambienteCar, setAmbienteCar] = useState(false);
+  // 17/11 (vídeo do Carlos, 16h37): a camada ambiental já abre ligada no tour
+  const [ambienteCar, setAmbienteCar] = useState(!!dados.consulta?.car);
+  const [raio, setRaio] = useState(dados.consulta?.raio ?? 0);
+  const raios = RAIOS_TOUR.includes(raio) ? RAIOS_TOUR : [...RAIOS_TOUR, raio].sort((a, b) => a - b);
+  // com raio, as camadas oficiais (usinas, linhas de energia, aeródromos...) valem para todo o entorno
+  const anel = useMemo(() => {
+    const g = dados.geometry;
+    if (raio <= 0 || (g.type !== "Polygon" && g.type !== "MultiPolygon")) return null;
+    return buffer({ type: "Feature", geometry: g, properties: {} } as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>, raio / 1000, { units: "kilometers" }) ?? null;
+  }, [dados.geometry, raio]);
+  useEffect(() => {
+    const map = mapaPronto;
+    if (!map) return;
+    const dadosAnel: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: anel ? [anel] : [] };
+    const fonte = map.getSource("raio-tour") as import("maplibre-gl").GeoJSONSource | undefined;
+    if (fonte) fonte.setData(dadosAnel);
+    else {
+      map.addSource("raio-tour", { type: "geojson", data: dadosAnel });
+      map.addLayer({ id: "raio-tour-linha", type: "line", source: "raio-tour",
+        paint: { "line-color": "#FFD400", "line-width": 2.5, "line-dasharray": [2, 1.5] } });
+    }
+  }, [mapaPronto, anel]);
+  const voltarConsulta = dados.consulta?.caminho ? `${dados.consulta.caminho}?raio_m=${raio}` : dados.consulta?.voltar;
   const [fase, setFase] = useState<"carregando" | "tocando" | "pausado" | "fim">("carregando");
   const [etapa, setEtapa] = useState("Carregando o mapa…");
   const faseRef = useRef(fase);
@@ -359,14 +385,18 @@ export default function Tour3D(dados: TourData) {
                 onChange={e => { const v = Number(e.target.value); setRelevo(v); mapRef.current?.setTerrain(v > 0 ? { source: "dem", exaggeration: v } : null); }} />
               <span className="tabular-nums text-xs">{relevo.toLocaleString("pt-BR")}×</span>
             </label>
+            {dados.consulta && <label className="mt-2 block text-sm">Raio <select className="ml-1 rounded bg-[#123b2a] px-1" value={raio}
+              onChange={e => setRaio(Number(e.target.value))}>
+              {raios.map(m => <option key={m} value={m}>{m === 0 ? "só a área" : `até ${m < 1000 ? m + " m" : m / 1000 + " km"}`}</option>)}
+            </select>{raio > 0 && <small className="block text-[#B3C3B8]">As camadas abaixo mostram o que há até {raio < 1000 ? raio + " m" : raio / 1000 + " km"} da área.</small>}</label>}
             {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
               && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
-              && <CamadasDoTour mapa={mapaPronto} geometria={dados.geometry} permitidas={dados.camadas} />}
+              && <CamadasDoTour mapa={mapaPronto} geometria={(anel?.geometry ?? dados.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon} permitidas={dados.camadas} />}
             {mapaPronto && dados.consulta?.car && !!dados.camadas?.ambiente.length && <>
               <label className="mt-2 block text-sm"><input type="checkbox" checked={ambienteCar} onChange={e => setAmbienteCar(e.target.checked)} /> Ambiente do CAR</label>
               {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={dados.consulta.car} mapa={mapaPronto} tour /></div>}
             </>}
-            {dados.consulta && <a className="mt-2 block text-sm underline" href={dados.consulta.voltar}>Voltar à consulta</a>}
+            {dados.consulta && <a className="mt-2 block text-sm underline" href={voltarConsulta}>Voltar à consulta</a>}
           </div>
 
           {(fase === "pausado" || fase === "fim") && (
@@ -376,7 +406,7 @@ export default function Tour3D(dados: TourData) {
                 onClick={() => controlar.current(fase === "fim")}>
                 <RotateCcw className="mr-1.5 inline size-4 -translate-y-px" />{fase === "fim" ? "Repetir tour" : "Continuar tour"}
               </button>
-              <a href={dados.consulta?.voltar ?? `/imovel/${dados.codigo}`}
+              <a href={voltarConsulta ?? `/imovel/${dados.codigo}`}
                 className="rounded-full bg-[#D80B0B] text-white font-semibold px-5 py-2.5 shadow-[0_0_0_5px_rgba(216,11,11,0.22)] hover:brightness-110">
                 {dados.consulta ? "Ver a consulta" : "Ver o imóvel"}
               </a>

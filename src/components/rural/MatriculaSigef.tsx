@@ -7,7 +7,7 @@ import BotaoMapaOnr from "./BotaoMapaOnr";
 
 type Matricula = {
   matricula: string; matriculas: string[]; nome: string; codigoIncra: string;
-  situacao: string; cobreDoImovel: number; dentroDoImovel: number;
+  situacao: string; cobreDoImovel: number; dentroDoImovel: number; parcela?: string;
 };
 
 /**
@@ -80,6 +80,13 @@ export default function MatriculaSigef({ cod, compacto = false }: { cod: string;
               {m.nome} · cobre {m.cobreDoImovel}% da área
               {!compacto && m.codigoIncra ? ` · código INCRA ${m.codigoIncra}` : ""}
             </p>
+            {/* 17/11 (vídeo do Carlos, 16h37): baixar a planta e o memorial da parcela e o CCIR direto no órgão */}
+            {!compacto && (m.parcela || m.codigoIncra) && <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold">
+              {m.parcela && /^[0-9a-f-]{36}$/i.test(m.parcela) && <a className="text-verde hover:underline" target="_blank" rel="noopener noreferrer"
+                href={`https://sigef.incra.gov.br/geo/parcela/detalhe/${m.parcela}/`}>Planta e memorial no SIGEF ↗</a>}
+              {m.codigoIncra && <a className="text-verde hover:underline" target="_blank" rel="noopener noreferrer"
+                href="https://sncr.serpro.gov.br/ccir/emissao" title={`Use o código INCRA ${m.codigoIncra}`}>Emitir o CCIR (código {m.codigoIncra}) ↗</a>}
+            </p>}
           </li>
         ))}
       </ul>

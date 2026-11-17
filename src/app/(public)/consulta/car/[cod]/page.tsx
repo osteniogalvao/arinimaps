@@ -13,6 +13,7 @@ import { carregarConsultaArea } from "@/lib/geo/consultaArea";
 import { consultarCar } from "@/lib/geo/car";
 import { formatArea } from "@/lib/format";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
+import DocumentosOficiaisCar from "@/components/rural/DocumentosOficiaisCar";
 import IndicadoresMunicipio from "@/components/rural/IndicadoresMunicipio";
 import TempoDaArea from "@/components/rural/TempoDaArea";
 import bbox from "@turf/bbox";
@@ -128,7 +129,7 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
         <Secao eyebrow="02 · Cadastro no mapa" titulo="Dados do cadastro">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           <MiniMapa geometry={car.geometry} status="publicado"
-            carAmbiental={consulta.acesso.recursos.has("camadas_oficiais") ? p.cod : undefined} areaHa={p.area_ha != null ? Number(p.area_ha) : null}
+            carAmbiental={consulta.acesso.recursos.has("camadas_oficiais") ? p.cod : undefined} areaHa={p.area_ha != null ? Number(p.area_ha) : null} raioM={raioM}
             className="h-80 lg:h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{area}</p>
@@ -161,6 +162,7 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
                 }} />
             </div>
             <div className="border-t border-linha pt-4"><MatriculaSigef cod={p.cod} /></div>
+            <div className="border-t border-linha pt-4"><DocumentosOficiaisCar cod={p.cod} /></div>
             {whatsappConfigurado() && <p className="text-sm text-texto-2">Para receber esta consulta pelo WhatsApp oficial da ARINI, envie <strong>CONSULTAR CAR {p.cod}</strong>.</p>}
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-4">
               Dados públicos do SICAR, copiados em{" "}

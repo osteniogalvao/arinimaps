@@ -229,7 +229,7 @@ export default function PainelImovel({
 
         <div className="flex gap-2">
           <Link href={`/imovel/${imovel.codigo}/tour`}
-            className="btn-contorno flex flex-1 items-center justify-center gap-1.5 text-sm py-2.5"><Box className="size-4" /> Tour 3D</Link>
+            className="btn-ouro flex flex-1 items-center justify-center gap-1.5 text-sm py-2.5"><Box className="size-4" /> Tour 3D</Link>
           <a href={`https://www.google.com/maps/dir/?api=1&destination=${imovel.lat},${imovel.lng}`}
             target="_blank" rel="noreferrer"
             className="btn-contorno flex flex-1 items-center justify-center gap-1.5 text-sm py-2.5"><Navigation className="size-4" /> Como chegar</a>
