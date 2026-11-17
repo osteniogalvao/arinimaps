@@ -29,7 +29,7 @@ export async function contatosDasAssinaturas() {
       .limit(6);
     if (ef) throw Error("Falha ao consultar avisos.");
     if ((!fila?.length && regra.tipo !== "recuperacao") || Date.now() - inicio > 45_000) continue;
-    const modelo = await modeloWhatsappAprovado(regra.modelo_id, 2).catch(() => null);
+    const modelo = await modeloWhatsappAprovado(regra.modelo_id, 2, false, regra.tipo === "recuperacao" ? "retomada" : "assinatura").catch(() => null);
     if (!modelo) continue;
     if (regra.tipo === "recuperacao") {
       for (let i = 0; i < 6 && Date.now() - inicio < 45_000; i++) {

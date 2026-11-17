@@ -1,5 +1,8 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import {
+  EvolutionErro, evolutionConfigurada, evolutionMidia, evolutionNumero, evolutionTexto,
+} from "@/lib/whatsapp/evolution";
 
 /**
  * Integrações da Meta (Central de CRMs, etapa 4): publicação no Instagram e no
@@ -15,12 +18,43 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *   WHATSAPP_PHONE_ID        id do número que envia
  *   WHATSAPP_VERIFY_TOKEN    texto combinado na configuração do webhook
  *   WHATSAPP_APP_SECRET      segredo do app (confere a assinatura do webhook)
+ *
+ * O WhatsApp também pode sair pela Evolution API (lib/whatsapp/evolution.ts).
+ * Com as duas configuradas, vale a Evolution; WHATSAPP_PROVEDOR=meta força a Meta.
  */
 const GRAPH = "https://graph.facebook.com/v23.0";
 
 export const instagramConfigurado = () => !!process.env.META_ACCESS_TOKEN && !!process.env.INSTAGRAM_USER_ID;
 export const facebookConfigurado = () => !!process.env.FACEBOOK_PAGE_ID && !!(process.env.FACEBOOK_PAGE_TOKEN || process.env.META_ACCESS_TOKEN);
-export const whatsappConfigurado = () => !!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_ID;
+const metaWhatsappConfigurado = () => !!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_ID;
+
+/** Qual provedor envia e recebe o WhatsApp da ARINI. */
+export function provedorWhatsapp(): "evolution" | "meta" | null {
+  const forcado = (process.env.WHATSAPP_PROVEDOR ?? "").trim().toLowerCase();
+  if (forcado === "meta") return metaWhatsappConfigurado() ? "meta" : null;
+  if (evolutionConfigurada()) return "evolution";
+  if (forcado === "evolution") return null;
+  return metaWhatsappConfigurado() ? "meta" : null;
+}
+const viaEvolution = () => provedorWhatsapp() === "evolution";
+export const whatsappConfigurado = () => provedorWhatsapp() !== null;
+
+/**
+ * Segredo das assinaturas internas do WhatsApp (código de confirmação do número
+ * e autorização de lembretes). Na Meta é o segredo do app; na Evolution, o do webhook.
+ */
+export function segredoWhatsapp() {
+  return viaEvolution() ? process.env.EVOLUTION_WEBHOOK_TOKEN || null : process.env.WHATSAPP_APP_SECRET || null;
+}
+
+/** Erros da Evolution no mesmo formato dos da Meta, que as telas já tratam. */
+async function naEvolution<T>(f: () => Promise<T>): Promise<T> {
+  try { return await f(); }
+  catch (e) {
+    if (e instanceof EvolutionErro) throw new MetaErro(e.mensagem, e.status, e.entregaIncerta);
+    throw e;
+  }
+}
 
 export class MetaErro extends Error {
   constructor(public mensagem: string, public codigo?: number, public entregaIncerta = false) { super(mensagem); }
@@ -87,6 +121,10 @@ export async function publicarFacebook(imagem: string | null, legenda: string, l
 
 export async function numeroDaApiWhatsapp() {
   if (!whatsappConfigurado()) return null;
+  if (viaEvolution()) {
+    const n = await evolutionNumero().catch(() => null);
+    return n ? telefoneWhatsapp(n) : null;
+  }
   const r=await fetch(GRAPH+"/"+process.env.WHATSAPP_PHONE_ID+"?fields=display_phone_number",{
     headers:{Authorization:"Bearer "+process.env.WHATSAPP_TOKEN},signal:AbortSignal.timeout(8_000),cache:"no-store"});
   if(!r.ok)return null;
@@ -101,7 +139,9 @@ export function telefoneWhatsapp(t: string | null | undefined) {
 }
 
 /** WhatsApp: mensagem de texto (dentro das 24 h depois da última mensagem do cliente). */
-export async function enviarWhatsapp(telefone: string, texto: string, phoneId = process.env.WHATSAPP_PHONE_ID) {
+export async function enviarWhatsapp(telefone: string, texto: string, canal?: string) {
+  if (viaEvolution()) return naEvolution(() => evolutionTexto(telefone, texto, canal));
+  const phoneId = canal || process.env.WHATSAPP_PHONE_ID;
   if (!whatsappConfigurado() || !phoneId) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
   const r = await fetch(`${GRAPH}/${phoneId}/messages`, {
     method: "POST",
@@ -122,7 +162,9 @@ export async function enviarWhatsapp(telefone: string, texto: string, phoneId = 
 }
 
 /** WhatsApp: documento por link (a Meta baixa o arquivo), dentro das 24 h. */
-export async function enviarDocumentoWhatsapp(telefone: string, link: string, nome: string, legenda: string, phoneId = process.env.WHATSAPP_PHONE_ID) {
+export async function enviarDocumentoWhatsapp(telefone: string, link: string, nome: string, legenda: string, canal?: string) {
+  if (viaEvolution()) return naEvolution(() => evolutionMidia(telefone, { tipo: "document", midia: link, mimetype: "application/pdf", nome, legenda }, canal));
+  const phoneId = canal || process.env.WHATSAPP_PHONE_ID;
   if (!whatsappConfigurado() || !phoneId) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
   const r = await fetch(`${GRAPH}/${phoneId}/messages`, {
     method: "POST",
@@ -139,11 +181,36 @@ export async function enviarDocumentoWhatsapp(telefone: string, link: string, no
 /** O modelo aprovado usa um parâmetro de corpo {{1}} para o link público do imóvel. */
 export async function modeloFiltroWhatsapp(finalidade: "filtro" | "monitoramento" = "filtro") {
   const id = finalidade === "monitoramento" ? process.env.WHATSAPP_MONITORAMENTO_TEMPLATE_ID : process.env.WHATSAPP_FILTRO_TEMPLATE_ID;
-  return modeloWhatsappAprovado(id, 1);
+  return modeloWhatsappAprovado(id, 1, false, finalidade);
 }
 
-export async function modeloWhatsappAprovado(id: string | undefined, parametros: number, comImagem=false) {
+/**
+ * Textos que substituem os modelos da Meta quando o envio é pela Evolution
+ * (não há aprovação de modelo). {{n}} recebe o n-ésimo valor, como na Meta.
+ */
+export const TEXTOS_MODELO: Record<string, string> = {
+  filtro: "ARINI: encontramos um imóvel que combina com o seu filtro. Veja: {{1}}\n\nPara não receber mais, ajuste em Minha conta > Filtros.",
+  monitoramento: "ARINI: há novidades nas áreas que você monitora. Veja: {{1}}",
+  pix: "Pix copia e cola da sua assinatura ARINI:\n{{1}}\n\nAcompanhe o pedido: {{2}}",
+  fatura: "ARINI: a fatura da sua assinatura está disponível. Acesse para pagar: {{1}}",
+  retomada: "Olá, {{1}}! Seu cadastro na ARINI ficou pela metade. Para concluir: {{2}}\n\nPara não receber mais, responda PARAR LEMBRETES.",
+  assinatura: "Olá, {{1}}. Há uma novidade sobre a sua assinatura ARINI. Confira em Meus pedidos: {{2}}",
+};
+
+export type ModeloWhatsapp = { name: string; language: { code: string }; texto?: string };
+
+/**
+ * Meta: confere se o modelo está aprovado e tem os parâmetros esperados.
+ * Evolution: o ID continua sendo o interruptor do aviso (qualquer número liga)
+ * e o texto vem de TEXTOS_MODELO pela finalidade.
+ */
+export async function modeloWhatsappAprovado(id: string | undefined | null, parametros: number, comImagem=false, finalidade?: string): Promise<ModeloWhatsapp | null> {
   if (!whatsappConfigurado() || !id || !/^\d+$/.test(id)) return null;
+  if (viaEvolution()) {
+    const texto = (finalidade && TEXTOS_MODELO[finalidade])
+      || Array.from({ length: parametros }, (_, i) => "{{" + (i + 1) + "}}").join("\n");
+    return { name: "evolution:" + (finalidade ?? "texto"), language: { code: "pt_BR" }, texto };
+  }
   const r = await fetch(GRAPH + "/" + id + "?fields=name,language,status,components", {
     headers: { Authorization: "Bearer " + process.env.WHATSAPP_TOKEN }, cache: "no-store", signal: AbortSignal.timeout(10_000),
   });
@@ -156,14 +223,23 @@ export async function modeloWhatsappAprovado(id: string | undefined, parametros:
   return { name: m.name, language: { code: m.language } };
 }
 
-export async function enviarFiltroWhatsapp(telefone: string, link: string, modelo: NonNullable<Awaited<ReturnType<typeof modeloFiltroWhatsapp>>>) {
+export async function enviarFiltroWhatsapp(telefone: string, link: string, modelo: ModeloWhatsapp) {
   return enviarModeloWhatsapp(telefone, [link], modelo);
 }
 
-export async function enviarModeloWhatsapp(telefone: string, valores: string[], modelo: NonNullable<Awaited<ReturnType<typeof modeloWhatsappAprovado>>>, imagemId?:string) {
+export async function enviarModeloWhatsapp(telefone: string, valores: string[], modelo: ModeloWhatsapp, imagemId?:string) {
+  if (viaEvolution()) {
+    const texto = (modelo.texto ?? valores.map((_, i) => "{{" + (i + 1) + "}}").join("\n"))
+      .replace(/\{\{(\d+)\}\}/g, (_, n) => valores[Number(n) - 1] ?? "");
+    return naEvolution(() => imagemId?.startsWith("b64:")
+      ? evolutionMidia(telefone, { tipo: "image", midia: imagemId.slice(4), mimetype: "image/png", nome: "pagamento-pix.png", legenda: texto })
+      : evolutionTexto(telefone, texto));
+  }
+  const { texto: _texto, ...modeloMeta } = modelo;
+  void _texto;
   const r = await fetch(GRAPH + "/" + process.env.WHATSAPP_PHONE_ID + "/messages", {
     method: "POST", headers: { Authorization: "Bearer " + process.env.WHATSAPP_TOKEN, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", to: telefone, type: "template", template: { ...modelo,
+    body: JSON.stringify({ messaging_product: "whatsapp", to: telefone, type: "template", template: { ...modeloMeta,
       components: [...(imagemId?[{type:"header",parameters:[{type:"image",image:{id:imagemId}}]}]:[]), { type: "body", parameters: valores.map(text => ({type:"text", text})) }] } }),
     signal: AbortSignal.timeout(12_000),
   }).catch(() => null);
@@ -175,6 +251,8 @@ export async function enviarModeloWhatsapp(telefone: string, valores: string[], 
 }
 
 export async function subirImagemWhatsapp(bytes:Uint8Array<ArrayBuffer>) {
+  // A Evolution recebe a imagem junto com a mensagem (base64), sem upload prévio.
+  if (viaEvolution()) return "b64:" + Buffer.from(bytes).toString("base64");
   const form=new FormData();
   form.set("messaging_product","whatsapp");
   form.set("file",new Blob([bytes],{type:"image/png"}),"pagamento-pix.png");
@@ -188,6 +266,7 @@ export async function subirImagemWhatsapp(bytes:Uint8Array<ArrayBuffer>) {
 
 /** Resposta de serviço com a imagem privada. O chamador reserva uma janela comprovada antes do envio. */
 export async function enviarPixNaJanela(telefone:string,imagem:string,codigo:string) {
+  if (viaEvolution()) return naEvolution(() => evolutionMidia(telefone, { tipo: "image", midia: imagem.replace(/^b64:/, ""), mimetype: "image/png", nome: "pagamento-pix.png", legenda: codigo }));
   const r=await fetch(GRAPH+"/"+process.env.WHATSAPP_PHONE_ID+"/messages",{method:"POST",
     headers:{Authorization:"Bearer "+process.env.WHATSAPP_TOKEN,"Content-Type":"application/json"},
     body:JSON.stringify({messaging_product:"whatsapp",to:telefone,type:"image",image:{id:imagem,caption:codigo}}),

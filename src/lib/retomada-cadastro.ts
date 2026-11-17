@@ -1,12 +1,12 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { telefoneWhatsapp } from "@/lib/meta";
+import { segredoWhatsapp, telefoneWhatsapp } from "@/lib/meta";
 
 const prefixo =
   "Autorizo até dois lembretes da ARINI no WhatsApp para concluir este cadastro. Posso cancelar com PARAR LEMBRETES. Código ";
 function assinatura(telefone: string, dados: string) {
-  return createHmac("sha256", process.env.WHATSAPP_APP_SECRET!)
+  return createHmac("sha256", segredoWhatsapp()!)
     .update(telefone + "|" + dados)
     .digest("hex")
     .slice(0, 32);
@@ -18,7 +18,7 @@ export function textoOptIn(telefone: string, plano: string, perfil: string) {
 /** Só a mensagem inbound autenticada da Meta confirma posse do telefone e autorização. */
 export async function receberOptIn(numero: string, texto: string, waId: string, nome: string) {
   const tel = telefoneWhatsapp(numero);
-  if (!tel || !process.env.WHATSAPP_APP_SECRET) return false;
+  if (!tel || !segredoWhatsapp()) return false;
   const parar = /^PARAR LEMBRETES[.!]?$/i.test(texto.trim());
   const partes = texto.trim().startsWith(prefixo) ? texto.trim().slice(prefixo.length).split(".") : [];
   if (!parar) {

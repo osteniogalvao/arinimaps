@@ -61,6 +61,7 @@ const EXCECOES_AUTH = {
   "/api/interno/avisos-imoveis": "worker autenticado por x-saude-token, comparação em tempo constante e rejeição quando ausente",
   "/api/interno/publicar": "chamada só pelo worker, com o SAUDE_TOKEN no cabeçalho x-saude-token",
   "/api/webhooks/whatsapp": "webhook da Meta: GET confere WHATSAPP_VERIFY_TOKEN, POST confere a assinatura HMAC (WHATSAPP_APP_SECRET)",
+  "/api/webhooks/whatsapp/evolution": "webhook da Evolution: POST confere EVOLUTION_WEBHOOK_TOKEN (query ou cabeçalho, comparação em tempo constante)",
 };
 // Leituras públicas por natureza (mapa, anúncios publicados).
 const LEITURA_PUBLICA = [/^\/api\/geo\//, /^\/api\/tiles\//];

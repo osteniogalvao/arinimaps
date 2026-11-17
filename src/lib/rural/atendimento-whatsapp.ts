@@ -8,6 +8,7 @@ import { catalogoCotacoes, historicoCotacao } from "@/lib/mercado/cotacoes";
 import { buscarSafra, formatarHectares, formatarToneladas, nomeProduto, safrasConab } from "@/lib/mercado/safras";
 import { estatisticas, formatarData, formatarValor, formatarVariacao, localDaSerie, PRODUTOS, recortar, type CotacaoAtual } from "@/lib/mercado/formato";
 import { telefoneWhatsapp } from "@/lib/meta";
+import { parametrosLinkWhatsapp } from "@/lib/relatorio/link-whatsapp";
 import { acessoDe } from "@/lib/planos-servidor";
 import type { Acesso } from "@/lib/planos";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -267,7 +268,8 @@ function respostaImovel(imovel: ImovelCar | null, conta: Conta | null, origem: "
   return {
     texto: linhas.join("\n"),
     documento: {
-      link: `${site}/api/consulta/car/${encodeURIComponent(imovel.cod)}/relatorio?modelo=${modelo}`,
+      // assinado: o provedor do WhatsApp baixa o PDF sem a sessão do cliente
+      link: `${site}/api/consulta/car/${encodeURIComponent(imovel.cod)}/relatorio?modelo=${modelo}${parametrosLinkWhatsapp(imovel.cod, modelo)}`,
       nome: `ARINI-${imovel.cod}-${modelo}.pdf`,
       legenda: `Relatório territorial ${modelo} · ${imovel.cod}`,
     },

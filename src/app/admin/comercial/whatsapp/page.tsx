@@ -19,6 +19,7 @@ export default async function CaixaWhatsapp({ searchParams }: PageProps<"/admin/
   return (
     <div className="space-y-5">
       <CabecalhoPagina titulo="WhatsApp do Comercial" eyebrow="Central" />
+      <Link href="/admin/comercial/whatsapp/conexao" className="text-sm underline">Conexão do número (Diretoria)</Link>
       {typeof q.conversa === "string" && <WhatsAppConversa key={q.conversa} entrada={q.conversa} />}
       <section className="space-y-2">
         <h2 className="text-xl font-semibold">Mensagens recebidas</h2>
