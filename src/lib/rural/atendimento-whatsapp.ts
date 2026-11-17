@@ -5,6 +5,7 @@ import { urlDoSite } from "@/lib/compartilhar";
 import { canalDoTitular } from "@/lib/confirmacao-whatsapp";
 import { garantirCarJanela } from "@/lib/geo/carSobDemanda";
 import { catalogoCotacoes, historicoCotacao } from "@/lib/mercado/cotacoes";
+import { buscarSafra, formatarHectares, formatarToneladas, nomeProduto, safrasConab } from "@/lib/mercado/safras";
 import { estatisticas, formatarData, formatarValor, formatarVariacao, localDaSerie, PRODUTOS, recortar, type CotacaoAtual } from "@/lib/mercado/formato";
 import { telefoneWhatsapp } from "@/lib/meta";
 import { acessoDe } from "@/lib/planos-servidor";
@@ -24,6 +25,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 export type PedidoAtendimento =
   | { tipo: "menu" }
   | { tipo: "cotacao"; termo: string | null }
+  | { tipo: "safra"; termo: string | null }
   | { tipo: "local"; lat: number; lng: number }
   | { tipo: "car"; cod: string };
 
@@ -53,6 +55,8 @@ export function pedidoAtendimento(m: Mensagem): PedidoAtendimento | null {
   if (/^(boi|boi gordo|arroba|arroba do boi)$/.test(t)) return { tipo: "cotacao", termo: "boi gordo" };
   const cot = /^(?:cotacao|cotacoes)(?:\s+(?:do|da|de|dos|das))?(?:\s+(.{2,40}))?$/.exec(t);
   if (cot) return { tipo: "cotacao", termo: cot[1]?.trim() || null };
+  const safra = /^(?:safra|safras|conab)(?:\s+(?:do|da|de|dos|das))?(?:\s+(.{2,40}))?$/.exec(t);
+  if (safra) return { tipo: "safra", termo: safra[1]?.trim() || null };
   return null;
 }
 
@@ -64,7 +68,7 @@ export function pedidoLinhaCotacoes(m: Mensagem): PedidoAtendimento {
   const geral: PedidoAtendimento = { tipo: "cotacao", termo: null };
   if (m.type !== "text" || !m.text?.body) return geral;
   const pedido = pedidoAtendimento(m);
-  if (pedido?.tipo === "cotacao") return pedido;
+  if (pedido?.tipo === "cotacao" || pedido?.tipo === "safra") return pedido;
   const t = semAcento(m.text.body).replace(/[.!?]+$/g, "").replace(/\s+/g, " ").trim();
   if (!t || t.length > 40 || /^(menu|ajuda|oi|ola|bom dia|boa tarde|boa noite|cotacao|cotacoes|inicio)\b/.test(t)) return geral;
   return { tipo: "cotacao", termo: t };
@@ -106,6 +110,7 @@ function textoMenu(conta: Conta | null) {
     "O que você pode pedir por aqui:",
     "• BOI: cotação do boi gordo",
     "• COTAÇÃO MILHO (ou SOJA, DÓLAR...): outras cotações",
+    "• SAFRA SOJA (ou MILHO, CAFÉ...): produção, área e produtividade da safra pela CONAB",
     "• Envie a sua LOCALIZAÇÃO (clipe › Localização) para receber o imóvel do CAR naquele ponto e o relatório em PDF",
     "• CONSULTAR CAR seguido do código do imóvel, para receber o relatório em PDF",
   ];
@@ -152,6 +157,11 @@ async function textoCotacao(termo: string | null, linhaDedicada = false) {
       const alvo = semAcento(`${PRODUTOS[s.produto] ?? ""} ${s.nome} ${s.descricao ?? ""} ${s.praca ?? ""} ${s.uf ?? ""}`);
       return palavras.length > 0 && palavras.every((w) => alvo.includes(w));
     });
+    // praça digitada que não existe: fica com o produto citado no começo do termo
+    if (!escolhidas.length && !produto) {
+      const doTermo = Object.entries(PRODUTOS).find(([, nome]) => t.startsWith(semAcento(nome)))?.[0];
+      if (doTermo) escolhidas = series.filter((s) => s.produto === doTermo);
+    }
     // indicadores nacionais primeiro, depois as praças
     escolhidas.sort((a, b) => Number(!!a.praca) - Number(!!b.praca) || a.ordem - b.ordem);
     escolhidas = escolhidas.slice(0, 6);
@@ -167,6 +177,31 @@ async function textoCotacao(termo: string | null, linhaDedicada = false) {
     linhaDedicada ? produtosDisponiveis(series) : "",
     `Gráficos, histórico e outras praças: ${site}/mercado`,
   ].filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== "")).join("\n");
+}
+
+/** Safra de grãos pela CONAB (camada "CONAB safras" do Dados Fazenda, pedido de 17/11). */
+async function textoSafra(termo: string | null) {
+  const site = urlDoSite();
+  const lista = await safrasConab();
+  if (!lista.length) return `As safras da CONAB estão indisponíveis agora. Veja em ${site}/mercado#safras`;
+  const achadas = termo ? buscarSafra(lista, termo).slice(0, 4) : [];
+  const escolhidas = achadas.length ? achadas : lista.slice(0, 6);
+  const linhas = escolhidas.map((s) => {
+    const partes = [`• ${nomeProduto(s.produto)}: ${formatarToneladas(s.producaoMilT)} em ${formatarHectares(s.areaMilHa)}`];
+    const extra: string[] = [];
+    if (s.produtividade) extra.push(`${Math.round(s.produtividade).toLocaleString("pt-BR")} kg/ha`);
+    if (s.variacao != null && s.anterior) extra.push(`${s.variacao >= 0 ? "+" : ""}${s.variacao.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% sobre ${s.anterior.safra}`);
+    if (extra.length) partes.push(`  (${extra.join(" · ")})`);
+    if (achadas.length && s.ufs.length) partes.push(`  Maiores produtores: ${s.ufs.slice(0, 5).map((u) => `${u.uf} ${formatarToneladas(u.producaoMilT)}`).join(", ")}`);
+    return partes.join("\n");
+  });
+  const s0 = escolhidas[0];
+  return [
+    !achadas.length && termo ? `Não encontrei a safra de "${termo}". Estas são as maiores da safra ${s0.safra}:` : `Safra ${s0.safra} (CONAB${s0.levantamento ? ", " + s0.levantamento : ""})`,
+    ...linhas,
+    "",
+    `Todas as culturas: ${site}/mercado#safras`,
+  ].join("\n");
 }
 
 type ImovelCar = { cod: string; area_ha: number | null; condicao: string | null; status: string | null; tipo: string | null; municipio: string | null };
@@ -242,6 +277,7 @@ function respostaImovel(imovel: ImovelCar | null, conta: Conta | null, origem: "
 /** Resposta ao pedido. Nunca lança: uma falha vira um aviso para tentar de novo. */
 export async function respostaAtendimento(pedido: PedidoAtendimento, numero: string, linhaCotacoes = false): Promise<RespostaAtendimento> {
   try {
+    if (pedido.tipo === "safra") return { texto: await textoSafra(pedido.termo) };
     if (linhaCotacoes) return { texto: await textoCotacao(pedido.tipo === "cotacao" ? pedido.termo : null, true) };
     if (pedido.tipo === "cotacao") return { texto: await textoCotacao(pedido.termo) };
     const conta = await contaDoNumero(numero).catch(() => null);

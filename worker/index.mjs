@@ -19,6 +19,7 @@ import { verificarAreas } from "./jobs/monitorarAreas.mjs";
 import { lembretesProprietario } from "./jobs/lembretesProprietario.mjs";
 import { agendarGlebasSicor, atualizarGlebasSicor } from "./jobs/glebasSicor.mjs";
 import { coletarCotacoes } from "./jobs/cotacoes.mjs";
+import { coletarSafrasConab } from "./jobs/conabSafras.mjs";
 
 const INTERVALO_MS = Number(process.env.WORKER_INTERVALO_MS ?? 15000);
 
@@ -52,6 +53,8 @@ const HANDLERS = {
   lembretes_proprietario: lembretesProprietario,
   // cotações do agro para a faixa do topo e o /mercado (migration 0056)
   coletar_cotacoes: coletarCotacoes,
+  // safras de grãos da CONAB por UF (migration 0145), uma vez por dia
+  coletar_safras_conab: coletarSafrasConab,
   atualizar_glebas_sicor: atualizarGlebasSicor,
 };
 
@@ -86,7 +89,7 @@ async function loop(apenasPois) {
 // Também recalcula, uma vez por dia, a inteligência de mercado do assistente
 // (preço por ha/m² por município). Cada rotina no seu try: uma falha não
 // impede a outra de ser agendada.
-const ROTINAS_DIARIAS = ["descarte_retencao", "inteligencia_mercado", "limpar_cofre"];
+const ROTINAS_DIARIAS = ["descarte_retencao", "inteligencia_mercado", "limpar_cofre", "coletar_safras_conab"];
 async function agendarRotinas() {
   for (const tipo of ROTINAS_DIARIAS) {
     try {

@@ -67,7 +67,7 @@ export default function GerirOrganizacao({ souAdmin, podeConvidar }: { souAdmin:
             <Lock className="mt-1 size-4 shrink-0 text-ouro" />
             <span>
               O plano atual da organização não inclui “Vários usuários”. Para convidar pessoas,{" "}
-              <a href="/suporte?assunto=plano:organizacao" className="text-verde hover:underline">fale com a Arini</a>.
+              <a href="/planos" className="text-verde hover:underline">escolha um plano com vários usuários</a>; o convite libera assim que o plano é ativado.
             </span>
           </p>
         )

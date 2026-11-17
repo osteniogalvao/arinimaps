@@ -42,6 +42,8 @@ export const GRUPOS: Grupo[] = [
         ajuda: "Aparece no topo do site, nos e-mails e no título das páginas." },
       { chave: "whatsapp_central", rotulo: "WhatsApp da central", tipo: "telefone", padrao: "553499745140",
         ajuda: "Botão “Chamar no WhatsApp” em cada anúncio. Use DDI+DDD+número, só dígitos." },
+      { chave: "whatsapp_cotacoes", rotulo: "WhatsApp das cotações", tipo: "telefone", padrao: "",
+        ajuda: "Número só de cotações (o mesmo de WHATSAPP_COTACOES_PHONE_ID), que responde sozinho. A página de cotações manda o pedido para ele; vazio, usa o da central." },
       { chave: "notify_email", rotulo: "E-mail que recebe os leads", tipo: "email", padrao: "",
         ajuda: "Toda demonstração de interesse chega neste endereço." },
       { chave: "email_contato", rotulo: "E-mail público de contato", tipo: "email", padrao: "",

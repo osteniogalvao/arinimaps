@@ -7,10 +7,12 @@ import { currentUser } from "@/lib/supabase/server";
 import { lerConfiguracoes, texto } from "@/lib/settings";
 import { numeroWhatsApp } from "@/lib/compartilhar";
 import { catalogoCotacoes, historicoCotacao } from "@/lib/mercado/cotacoes";
+import { safrasConab } from "@/lib/mercado/safras";
 import { type PeriodoId, PERIODOS, competenciaMensal, formatarDataHora, localDaSerie } from "@/lib/mercado/formato";
 import { podeComparar, urlSerie } from "@/lib/mercado/pracas";
 import PainelMercado from "./PainelMercado";
 import ConsultaAgro from "./ConsultaAgro";
+import SafrasConab from "./SafrasConab";
 
 /**
  * Cotações do agro (item 27 da segunda etapa): consulta por produto, praça e
@@ -34,8 +36,9 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 }
 
 export default async function Mercado({ searchParams }: Props) {
-  const [sp, user, catalogo, cfg] = await Promise.all([searchParams, currentUser(), catalogoCotacoes(), lerConfiguracoes()]);
-  const telefone = numeroWhatsApp(texto(cfg, "whatsapp_central"));
+  const [sp, user, catalogo, cfg, safras] = await Promise.all([searchParams, currentUser(), catalogoCotacoes(), lerConfiguracoes(), safrasConab()]);
+  // o número só de cotações responde na hora (PR #13); sem ele, o da central
+  const telefone = numeroWhatsApp(texto(cfg, "whatsapp_cotacoes") || texto(cfg, "whatsapp_central"));
   const usuario = user
     ? { nome: user.nome || "Conta", papel: user.role === "admin_central" ? "Administrador" : "Usuário" }
     : null;
@@ -78,7 +81,7 @@ export default async function Mercado({ searchParams }: Props) {
           <Vazio
             icone={LineChart}
             titulo="As cotações estão a caminho"
-            texto="Ainda não há fechamentos disponíveis para consulta. Você pode solicitar uma cotação à equipe."
+            texto="Ainda não há fechamentos disponíveis para consulta. Enquanto isso, veja os preços públicos da Conab no link abaixo."
             acao={
               <Link href="/" className="lp-btn lp-btn-contorno">
                 Voltar ao início <ArrowRight />
@@ -89,6 +92,8 @@ export default async function Mercado({ searchParams }: Props) {
 
         {telefone && <ConsultaAgro key={selecionada?.id} telefone={telefone} produto={selecionada?.produto}
           praca={selecionada && localDaSerie(selecionada)} />}
+
+        <SafrasConab safras={safras} />
 
         <div className="mt-12 max-w-3xl space-y-2 text-sm leading-relaxed text-texto-2">
           <p>Para consultar outros produtos e insumos diretamente no levantamento público, acesse os{" "}
