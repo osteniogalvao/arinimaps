@@ -12,6 +12,8 @@ const itensCamadas: Record<CamadaOficialId, number[]> = {
   prodes_cerrado: [52, 98], inpe_queimadas: [52, 128], ibge_biomas: [52, 821],
   aneel_transmissao: [58], aneel_hidreletricas: [58], aneel_termeletricas: [58], aneel_solar: [58],
   iphan_sitios: [50], ana_rios: [52, 109],
+  prodes_biomas: [52, 98], assentamentos: [50, 95], ucs_brasil: [52, 96], ibama_autos: [52, 92], florestas_publicas: [50],
+  aerodromos: [58], ana_pivos: [58], barragens: [58],
 };
 const itensRelevo: Record<RelevoId, number> = { sombra: 119, altitude: 121, curvas: 122, declividade: 120, hidrografia: 109 };
 const itensAmbientais: Record<TemaCar | "nascente", number> = { area_imovel:62, app:88, reserva_legal:89, vegetacao_nativa:90,

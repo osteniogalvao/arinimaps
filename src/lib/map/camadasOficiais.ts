@@ -10,7 +10,8 @@
  */
 export type CamadaOficialId =
   | "snci" | "credito_rural" | "outorgas_federais" | "sigef" | "ibama_embargos" | "anm" | "funai" | "ucs" | "quilombolas" | "prodes_cerrado" | "inpe_queimadas" | "ibge_biomas"
-  | "aneel_transmissao" | "aneel_hidreletricas" | "aneel_termeletricas" | "aneel_solar" | "iphan_sitios" | "ana_rios";
+  | "aneel_transmissao" | "aneel_hidreletricas" | "aneel_termeletricas" | "aneel_solar" | "iphan_sitios" | "ana_rios"
+  | "prodes_biomas" | "assentamentos" | "ucs_brasil" | "ibama_autos" | "florestas_publicas" | "aerodromos" | "ana_pivos" | "barragens";
 
 export type CamadaOficial = {
   id: CamadaOficialId;
@@ -23,6 +24,8 @@ export type CamadaOficial = {
   ponto?: boolean;
   /** rede de linhas (transmissão, rios): traço clicável, sem preenchimento; pontos da mesma fonte viram círculos */
   linha?: boolean;
+  /** fonte de geometria variável (achada pelo nome do serviço): desenha polígono, linha e ponto */
+  misto?: boolean;
   /** o que essa camada significa para quem negocia terra */
   ajuda: string;
   /** cor por valor de `nome` (biomas); sem isto, tudo em `cor` */
@@ -92,6 +95,25 @@ export const CAMADAS_OFICIAIS: CamadaOficial[] = [
     ajuda: "Base hidrográfica oficial da ANA. Margens de rio são APP pelo Código Florestal." },
   { id: "iphan_sitios", nome: "Sítios arqueológicos e bens tombados", orgao: "IPHAN", grupo: "Fundiário", cor: "#D7A86E", zoomMin: 9, ponto: true,
     ajuda: "Bem cultural cadastrado no IPHAN: obra ou supressão no local exige autorização prévia." },
+  // 17/11/2026, segundo lote. O serviço de cada uma é achado pelo nome na pasta
+  // do órgão (src/lib/geo/camadasMapa.ts): se o órgão renomear, a camada avisa
+  // que não respondeu, e o resto do mapa segue igual.
+  { id: "prodes_biomas", nome: "Desmatamento (PRODES outros biomas)", orgao: "INPE", grupo: "Ambiental", cor: "#B2FF59", zoomMin: 12,
+    ajuda: "PRODES da Amazônia Legal, Mata Atlântica, Caatinga, Pampa e Pantanal: supressão detectada por satélite, por ano." },
+  { id: "assentamentos", nome: "Assentamentos", orgao: "INCRA", grupo: "Fundiário", cor: "#26A69A", zoomMin: 8, misto: true,
+    ajuda: "Projeto de assentamento da reforma agrária: lote não pode ser vendido antes da titulação." },
+  { id: "ucs_brasil", nome: "Unidades de conservação (Brasil)", orgao: "ICMBio/MMA", grupo: "Ambiental", cor: "#00C853", zoomMin: 7, misto: true,
+    ajuda: "UCs federais, estaduais e municipais de todo o país. A de proteção integral impede o uso; a de uso sustentável impõe regras." },
+  { id: "ibama_autos", nome: "Autos de infração", orgao: "IBAMA", grupo: "Ambiental", cor: "#FF4081", zoomMin: 10, misto: true,
+    ajuda: "Autuação ambiental registrada no local. Vale checar se gerou embargo ou débito." },
+  { id: "florestas_publicas", nome: "Florestas públicas", orgao: "SFB", grupo: "Fundiário", cor: "#2E7D32", zoomMin: 8, misto: true,
+    ajuda: "Cadastro Nacional de Florestas Públicas: terra pública ou destinada não pode ser vendida como particular." },
+  { id: "aerodromos", nome: "Aeródromos", orgao: "ANAC", grupo: "Infraestrutura", cor: "#B0BEC5", zoomMin: 7, misto: true,
+    ajuda: "Pistas públicas e privadas. Perto delas há limite de altura de construção e de aplicação aérea." },
+  { id: "ana_pivos", nome: "Pivôs de irrigação", orgao: "ANA/Embrapa", grupo: "Infraestrutura", cor: "#00E5FF", zoomMin: 10, misto: true,
+    ajuda: "Pivôs centrais mapeados por satélite: sinal de agricultura irrigada e de outorga de água." },
+  { id: "barragens", nome: "Barragens e reservatórios", orgao: "ANA/ANEEL", grupo: "Infraestrutura", cor: "#448AFF", zoomMin: 9, misto: true,
+    ajuda: "Barragens do SNISB e reservatórios de usinas: há APP no entorno e risco a jusante." },
 ];
 
 export const camadaOficialPorId = (id: string) => CAMADAS_OFICIAIS.find((c) => c.id === id);
@@ -137,5 +159,15 @@ export function descreverFeicao(id: CamadaOficialId, p: Record<string, unknown>)
       return { titulo: s(p.nome) || "Bem cultural cadastrado", detalhe: junta(s(p.tipo), s(p.classificacao), s(p.codigo) && `IPHAN ${s(p.codigo)}`) };
     case "ana_rios":
       return { titulo: s(p.nome) || "Curso d'água sem nome cadastrado", detalhe: "Base hidrográfica da ANA" };
+    case "prodes_biomas":
+      return { titulo: `Desmatamento ${s(p.ano)}`, detalhe: junta(ha(p.area_ha), s(p.bioma) && `PRODES ${s(p.bioma)}`) };
+    case "assentamentos":
+    case "ucs_brasil":
+    case "ibama_autos":
+    case "florestas_publicas":
+    case "aerodromos":
+    case "ana_pivos":
+    case "barragens":
+      return { titulo: s(p.nome) || camadaOficialPorId(id)!.nome, detalhe: junta(s(p.detalhe), ha(p.area_ha)) };
   }
 }

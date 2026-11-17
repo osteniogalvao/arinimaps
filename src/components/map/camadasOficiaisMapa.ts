@@ -142,6 +142,15 @@ export class GerenciadorCamadasOficiais {
       }, antes);
       return;
     }
+    if (def.misto) {
+      // fonte achada pelo nome: pode vir ponto (aeródromo, auto de infração) junto com polígono
+      this.map.addLayer({
+        id: `of-${id}-ponto`, type: "circle", source: fonte(id),
+        filter: ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]] as never,
+        paint: { "circle-color": def.cor, "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3.5, 14, 6.5] as never,
+          "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5 },
+      }, antes);
+    }
     // cor por bioma (ou por outro valor de `nome`): expressão match do MapLibre
     const corFill = def.cores
       ? (["match", ["get", "nome"], ...Object.entries(def.cores).flat(), def.cor] as never)

@@ -283,9 +283,10 @@ export const SITUACOES_CAR = [
 ] as const;
 export type SituacaoCar = (typeof SITUACOES_CAR)[number]["id"];
 
-const AMBIENTAL: CamadaOficialId[] = ["ucs", "prodes_cerrado", "ibama_embargos", "inpe_queimadas", "outorgas_federais", "ana_rios", "quilombolas", "iphan_sitios", "anm", "ibge_biomas"];
+const AMBIENTAL: CamadaOficialId[] = ["ucs", "ucs_brasil", "prodes_cerrado", "prodes_biomas", "ibama_embargos", "ibama_autos", "inpe_queimadas",
+  "outorgas_federais", "ana_rios", "quilombolas", "assentamentos", "florestas_publicas", "iphan_sitios", "anm", "ibge_biomas"];
 // 17/11: energia (ANEEL) ganha pílula própria, como no Dados Fazenda
-const ENERGIA: CamadaOficialId[] = ["aneel_transmissao", "aneel_hidreletricas", "aneel_termeletricas", "aneel_solar"];
+const ENERGIA: CamadaOficialId[] = ["aneel_transmissao", "aneel_hidreletricas", "aneel_termeletricas", "aneel_solar", "barragens", "ana_pivos", "aerodromos"];
 const COR_ENERGIA = "#FFD54F";
 const AMBIENTAL_PADRAO: CamadaOficialId[] = ["ucs", "prodes_cerrado", "ibama_embargos"];
 const COR_AMBIENTAL = "#E91E63";
@@ -397,13 +398,13 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
         )}
         <Pilula cor={COR_ENERGIA} ligada={energiaLigadas.length > 0}
           rotulo={energiaLigadas.length ? `Energia · ${energiaLigadas.length}` : "Energia"}
-          titulo="Linhas de transmissão, subestações e usinas (ANEEL)"
+          titulo="Linhas de transmissão, usinas, barragens, pivôs e aeródromos"
           carregando={energiaLigadas.some((id) => estado[id]?.carregando)}
           onClick={() => (energiaLigadas.length ? energiaLigadas : ENERGIA).forEach(onAlternar)}
           aberto={lista === "energia"} onAbrir={() => setLista(lista === "energia" ? null : "energia")} />
         {lista === "energia" && (
           <div className={caixa}>
-            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Energia</p>
+            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Energia e infraestrutura</p>
             {ENERGIA.map(itemDaLista)}
           </div>
         )}
@@ -418,6 +419,8 @@ const UNIDADE: Partial<Record<CamadaOficialId, string>> = {
   quilombolas: "territórios", ibama_embargos: "embargos", ucs: "unidades", prodes_cerrado: "polígonos",
   inpe_queimadas: "focos", ibge_biomas: "biomas", anm: "processos", aneel_transmissao: "trechos",
   aneel_hidreletricas: "usinas", aneel_termeletricas: "usinas", aneel_solar: "usinas", ana_rios: "trechos", iphan_sitios: "bens",
+  prodes_biomas: "polígonos", assentamentos: "assentamentos", ucs_brasil: "unidades", ibama_autos: "autos", florestas_publicas: "florestas",
+  aerodromos: "pistas", ana_pivos: "pivôs", barragens: "barragens",
 };
 
 /**

@@ -150,6 +150,84 @@ async function usinasSigel(env: Env, camadas: { servico: string; id: number; tip
   return listas.flatMap((l) => (l.status === "fulfilled" ? l.value : []));
 }
 
+// ---------------------------------------------------------------- serviços achados pelo nome
+/**
+ * Segundo lote (17/11/2026): o serviço é achado pelo nome dentro da pasta do
+ * órgão (`?f=json` lista serviços e camadas), em vez de um endereço fixo que
+ * ninguém aqui conseguiu medir (a rede do ambiente de desenvolvimento não
+ * alcança os .gov.br). Achado ou não, o resultado fica 12 h (não achado: 30 min)
+ * em memória, para não listar a pasta a cada célula.
+ */
+type Alvo = { pasta: string; servico: RegExp; camada?: RegExp } | { servicoUrl: string; camada?: RegExp };
+const achados = new Map<string, { em: number; url?: string; id?: number; erro?: string }>();
+
+async function descobrir(chave: string, alvos: Alvo[]): Promise<{ url: string; id: number }> {
+  const guardado = achados.get(chave);
+  if (guardado && Date.now() - guardado.em < (guardado.url ? 12 : 0.5) * 3_600_000) {
+    if (guardado.url) return { url: guardado.url, id: guardado.id! };
+    throw new Error(guardado.erro);
+  }
+  for (const alvo of alvos) {
+    try {
+      let url: string;
+      if ("servicoUrl" in alvo) url = alvo.servicoUrl;
+      else {
+        const lista = await (await pedir(`${alvo.pasta}?f=json`)).json() as { services?: { name: string; type: string }[] };
+        const svc = (lista.services ?? []).find((x) => alvo.servico.test(x.name) && /^(MapServer|FeatureServer)$/.test(x.type));
+        if (!svc) continue;
+        url = `${alvo.pasta.replace(/\/rest\/services\/.*$/, "/rest/services")}/${svc.name}/${svc.type}`;
+      }
+      const info = await (await pedir(`${url}?f=json`)).json() as { layers?: { id: number; name: string; subLayerIds?: number[] | null }[] };
+      const camadas = (info.layers ?? []).filter((l) => !l.subLayerIds?.length);
+      const camada = alvo.camada ? camadas.find((l) => alvo.camada!.test(l.name)) : camadas[0];
+      if (!camada) continue;
+      achados.set(chave, { em: Date.now(), url, id: camada.id });
+      return { url, id: camada.id };
+    } catch (e) {
+      console.error(`camada ${chave}: pasta do órgão falhou:`, e instanceof Error ? e.message : e);
+    }
+  }
+  const erro = "o serviço não foi encontrado na pasta do órgão";
+  achados.set(chave, { em: Date.now(), erro });
+  throw new Error(erro);
+}
+
+/** Campos de nome, descrição e área variam por órgão: pega o que houver. */
+function propsGenericas(p: Record<string, unknown>) {
+  const chaves = Object.keys(p);
+  const nome = campo(p, "nome", "nome_uc", "nm_uc", "nomeuc", "nome_proje", "nome_projeto", "nm_projeto", "nome_pa", "nm_pa",
+    "nome_aerod", "nm_aerodromo", "nome_barra", "nm_barragem", "nome_flore", "nm_floresta", "denominacao", "name")
+    ?? (() => { const k = chaves.find((c) => /^(nm_|nome|no_)/i.test(c) && p[c] != null && String(p[c]).trim()); return k ? p[k] : null; })();
+  const curtos = chaves.filter((c) => /categ|esfera|grupo|fase|situa|tipo|classe|uso|munic|^uf$|^sg_uf/i.test(c))
+    .map((c) => s(p[c])).filter((v): v is string => !!v && v.length <= 60);
+  const data = chaves.find((c) => /^(dat|data|dt_)/i.test(c) && p[c] != null && p[c] !== "");
+  const detalhe = [...new Set(curtos)].slice(0, 3).join(" · ") + (data ? `${curtos.length ? " · " : ""}${dataBr(p[data])}` : "");
+  const area = campo(p, "area_ha", "areahectar", "area_hecta", "qtd_area", "area_haa", "nu_area_ha", "area");
+  return { nome: s(nome)?.slice(0, 120) ?? null, detalhe: detalhe || null, area_ha: n(area) };
+}
+
+async function arcgisAchado(chave: string, alvos: Alvo[], env: Env, max = 2000) {
+  const { url, id } = await descobrir(chave, alvos);
+  // serviço sem paginação recusa resultRecordCount (como o SIGMINE): tenta de novo sem
+  const linhas = await arcgis(url, id, env, "*", max).catch(() => arcgis(url, id, env, "*", null));
+  return linhas.flatMap((f) => f.geometry ? [feicao(f.geometry, {
+    id: `${chave}-${s(campo(f.properties, "objectid", "fid", "gid", "id")) ?? JSON.stringify(f.geometry).slice(0, 60)}`,
+    ...propsGenericas(f.properties),
+  })] : []);
+}
+
+const PAMGIA = "https://pamgia.ibama.gov.br/server/rest/services/BasesSincronizadas";
+const SNIRH = "https://www.snirh.gov.br/arcgis/rest/services/DADOSABERTOS";
+
+/** PRODES dos outros biomas no TerraBrasilis; só pergunta aos biomas que cruzam a célula (limite do IBGE já no banco). */
+const PRODES_BIOMAS: Record<string, string> = {
+  "Amazônia": "prodes-legal-amz:yearly_deforestation",
+  "Mata Atlântica": "prodes-mata-atlantica-nb:yearly_deforestation",
+  "Caatinga": "prodes-caatinga-nb:yearly_deforestation",
+  "Pampa": "prodes-pampa-nb:yearly_deforestation",
+  "Pantanal": "prodes-pantanal-nb:yearly_deforestation",
+};
+
 const DEFS: Record<CamadaOficialId, Def> = {
   sigef: {
     zCelula: 12, validadeDias: 30, tolerancia: 0.00002,
@@ -261,7 +339,8 @@ const DEFS: Record<CamadaOficialId, Def> = {
   },
   inpe_queimadas: {
     // histórico desde 1998: só o último ano, que é o que pesa numa negociação
-    zCelula: 10, validadeDias: 1, tolerancia: 0,
+    // 17/11: validade de 3 h (era 1 dia), mais perto do "tempo real" do Dados Fazenda
+    zCelula: 10, validadeDias: 0.125, tolerancia: 0,
     buscar: async (env) => {
       const desde = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
       const filtro = encodeURIComponent(`data_hora_gmt >= '${desde}' AND BBOX(geometria,${env.xmin},${env.ymin},${env.xmax},${env.ymax})`);
@@ -327,6 +406,66 @@ const DEFS: Record<CamadaOficialId, Def> = {
         id: s(campo(f.properties, "objectid", "fid", "cocursodag")) ?? JSON.stringify(f.geometry).slice(0, 60),
         nome: s(campo(f.properties, "BHB_NM_NORIOCOMP", "BHB_CD_NORIO", "nome", "noriocomp")),
       })] : []),
+  },
+  prodes_biomas: {
+    zCelula: 12, validadeDias: 90, tolerancia: 0.00002,
+    buscar: async (env) => {
+      const { data, error } = await supabaseAdmin().rpc("fn_biomas_mapa", {
+        p_xmin: env.xmin, p_ymin: env.ymin, p_xmax: env.xmax, p_ymax: env.ymax,
+      });
+      if (error) throw new Error(error.message);
+      const biomas = [...new Set(((data ?? []) as Feicao[]).map((f) => String(f.properties.nome)))].filter((b) => PRODES_BIOMAS[b]);
+      if (!biomas.length) return [];
+      const listas = await Promise.allSettled(biomas.map(async (bioma) => (await wfs("https://terrabrasilis.dpi.inpe.br/geoserver/ows", PRODES_BIOMAS[bioma], env, 3000))
+        .map((f) => feicao(f.geometry, {
+          id: `${bioma}-${s(f.properties.uuid) ?? s(f.properties.fid) ?? s(f.properties.id)}`,
+          ano: n(f.properties.year ?? f.properties.ano),
+          area_ha: f.properties.area_km == null ? null : Math.round(Number(f.properties.area_km) * 10000) / 100,
+          bioma,
+        }))));
+      if (listas.every((l) => l.status === "rejected")) throw (listas[0] as PromiseRejectedResult).reason;
+      return listas.flatMap((l) => (l.status === "fulfilled" ? l.value : []));
+    },
+  },
+  assentamentos: {
+    zCelula: 10, validadeDias: 30, tolerancia: 0.0001,
+    buscar: (env) => arcgisAchado("assentamentos", [{ pasta: PAMGIA, servico: /assentament/i }], env),
+  },
+  ucs_brasil: {
+    zCelula: 8, validadeDias: 90, tolerancia: 0.0003,
+    buscar: (env) => arcgisAchado("ucs_brasil", [{ pasta: PAMGIA, servico: /unidade.*conserv|(^|[/_])ucs?(_|$)|cnuc/i }], env, 500),
+  },
+  ibama_autos: {
+    zCelula: 10, validadeDias: 7, tolerancia: 0.00005,
+    buscar: (env) => arcgisAchado("ibama_autos", [
+      { servicoUrl: "https://pamgia.ibama.gov.br/server/rest/services/SISCOM/publico/MapServer", camada: /auto/i },
+      { pasta: PAMGIA, servico: /auto.*infra/i },
+    ], env),
+  },
+  florestas_publicas: {
+    zCelula: 8, validadeDias: 90, tolerancia: 0.0003,
+    buscar: (env) => arcgisAchado("florestas_publicas", [{ pasta: PAMGIA, servico: /floresta.*publica|cnfp/i }], env, 500),
+  },
+  aerodromos: {
+    zCelula: 8, validadeDias: 90, tolerancia: 0,
+    buscar: (env) => arcgisAchado("aerodromos", [{ pasta: PAMGIA, servico: /aer[oó]dromo|aeroporto/i }], env),
+  },
+  ana_pivos: {
+    zCelula: 10, validadeDias: 90, tolerancia: 0.00005,
+    buscar: (env) => arcgisAchado("ana_pivos", [{ pasta: SNIRH, servico: /piv/i }, { pasta: PAMGIA, servico: /piv/i }], env),
+  },
+  barragens: {
+    zCelula: 9, validadeDias: 90, tolerancia: 0.0001,
+    buscar: async (env) => {
+      const listas = await Promise.allSettled([
+        arcgisAchado("barragens", [{ pasta: SNIRH, servico: /barrag|snisb/i }, { pasta: PAMGIA, servico: /barrag/i }], env),
+        usinasSigel(env, [{ servico: "Camadas", id: 8, tipo: "Reservatório" }]).then((fs) => fs.map((f) => ({
+          ...f, properties: { id: f.properties.id, nome: f.properties.nome, detalhe: ["Reservatório (ANEEL)", f.properties.agente].filter(Boolean).join(" · "), area_ha: null },
+        }))),
+      ]);
+      if (listas.every((l) => l.status === "rejected")) throw (listas[0] as PromiseRejectedResult).reason;
+      return listas.flatMap((l) => (l.status === "fulfilled" ? l.value : []));
+    },
   },
   prodes_cerrado: {
     zCelula: 12, validadeDias: 90, tolerancia: 0.00002,
