@@ -29,6 +29,12 @@ export default async function FunilDoSetor({ params, searchParams }: PageProps<"
     admin.from("crm_itens").select("*").eq("pipeline_id", id).eq("status", "aberto").order("entrou_etapa_em").limit(500),
     admin.from("profiles").select("user_id, nome").in("role", ["admin_central", "analista_arini"]).order("nome"),
   ]);
+  const [{ data: fechados }, extras] = await Promise.all([
+    admin.from("crm_itens").select("id, codigo, titulo, status, updated_at").eq("pipeline_id", id).neq("status", "aberto")
+      .order("updated_at", { ascending: false }).limit(30),
+    admin.from("crm_itens").select("prioridade").limit(1),
+  ]);
+  const comExtras = !extras.error;
   const membros = (equipe ?? []).map((m) => ({ user_id: m.user_id as string, nome: (m.nome as string) || "—" }));
 
   return (
@@ -42,7 +48,23 @@ export default async function FunilDoSetor({ params, searchParams }: PageProps<"
       </div>
       {config
         ? <ConfigFunil pipeline={pipeline} etapas={(etapas ?? []) as Etapa[]} campos={(campos ?? []) as CampoCrm[]} />
-        : <QuadroCrm pipelineId={id} etapas={(etapas ?? []) as Etapa[]} campos={(campos ?? []) as CampoCrm[]} itens={(itens ?? []) as ItemCrm[]} equipe={membros} souEu={user.id} />}
+        : <QuadroCrm pipelineId={id} etapas={(etapas ?? []) as Etapa[]} campos={(campos ?? []) as CampoCrm[]} itens={(itens ?? []) as ItemCrm[]} equipe={membros} souEu={user.id}
+            comExtras={comExtras} />}
+      {!config && !!fechados?.length && (
+        <details className="cartao p-5">
+          <summary className="cursor-pointer font-semibold text-texto">Concluídos e cancelados recentes ({fechados.length})</summary>
+          <ul className="mt-3 divide-y divide-linha text-sm">
+            {fechados.map((i) => (
+              <li key={i.id} className="flex flex-wrap gap-x-3 py-2">
+                <span className="font-mono text-xs text-texto-2">{i.codigo}</span>
+                <Link href={`/admin/crm/item/${i.id}`} className="font-medium text-texto hover:text-verde">{i.titulo}</Link>
+                <span className={i.status === "concluido" ? "text-verde" : "text-critico"}>{i.status === "concluido" ? "concluído" : "cancelado"}</span>
+                <span className="text-texto-2">{new Date(i.updated_at).toLocaleDateString("pt-BR")}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

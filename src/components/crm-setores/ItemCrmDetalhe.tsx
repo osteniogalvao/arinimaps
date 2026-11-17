@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { camposFaltando, type CampoCrm, type Etapa, type ItemCrm } from "@/lib/crmSetores";
+import { PRIORIDADES, PRIORIDADE_CRM_LABEL, camposFaltando, type CampoCrm, type Etapa, type ItemCrm } from "@/lib/crmSetores";
 import { CAMPO_COMPACTO } from "@/components/admin/estilos";
 import CampoDado from "./CampoDado";
 import { crm } from "./api";
@@ -12,7 +12,11 @@ export default function ItemCrmDetalhe({ item, etapas, campos, equipe }: {
   item: ItemCrm; etapas: Etapa[]; campos: CampoCrm[]; equipe: { user_id: string; nome: string }[];
 }) {
   const router = useRouter();
-  const [f, setF] = useState({ titulo: item.titulo, descricao: item.descricao ?? "", responsavel: item.responsavel ?? "", dados: { ...(item.dados ?? {}) } });
+  const comExtras = item.prioridade !== undefined;
+  const [f, setF] = useState({
+    titulo: item.titulo, descricao: item.descricao ?? "", responsavel: item.responsavel ?? "", dados: { ...(item.dados ?? {}) },
+    ...(comExtras ? { prioridade: item.prioridade ?? "normal", prazo_final: item.prazo_final ?? "", etiquetas: (item.etiquetas ?? []).join(", ") } : {}),
+  });
   const [erro, setErro] = useState("");
   const [ok, setOk] = useState("");
   const aberto = item.status === "aberto";
@@ -38,7 +42,18 @@ export default function ItemCrmDetalhe({ item, etapas, campos, equipe }: {
             <option value="">Sem responsável</option>
             {equipe.map((m) => <option key={m.user_id} value={m.user_id}>{m.nome}</option>)}
           </select></label>
-        <div />
+        {comExtras ? (
+          <label className="text-sm"><span className="mb-1 block font-semibold">Prioridade</span>
+            <select className={CAMPO_COMPACTO + " w-full"} value={f.prioridade} onChange={(e) => setF({ ...f, prioridade: e.target.value as typeof f.prioridade })}>
+              {PRIORIDADES.map((x) => <option key={x} value={x}>{PRIORIDADE_CRM_LABEL[x]}</option>)}
+            </select></label>
+        ) : <div />}
+        {comExtras && <>
+          <label className="text-sm"><span className="mb-1 block font-semibold">Prazo final</span>
+            <input type="date" className={CAMPO_COMPACTO + " w-full"} value={f.prazo_final} onChange={(e) => setF({ ...f, prazo_final: e.target.value })} /></label>
+          <label className="text-sm"><span className="mb-1 block font-semibold">Etiquetas</span>
+            <input className={CAMPO_COMPACTO + " w-full"} value={f.etiquetas} placeholder="separe por vírgula" onChange={(e) => setF({ ...f, etiquetas: e.target.value })} /></label>
+        </>}
         {campos.map((c) => {
           const exigido = c.exigido_desde ? etapas.find((e) => e.id === c.exigido_desde) : null;
           return (

@@ -4,7 +4,7 @@ import { ator, temSetor, type Ator } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 import { concluirTarefaDoEvento } from "@/lib/central";
 import { SETOR_IDS, type SetorId } from "@/lib/setores";
-import { camposFaltando, normalizarDados, prazoDaEtapa, type CampoCrm, type Etapa } from "@/lib/crmSetores";
+import { camposFaltando, extrasDoItem, normalizarDados, prazoDaEtapa, type CampoCrm, type Etapa } from "@/lib/crmSetores";
 
 /**
  * Motor de CRM por setor (migration 0069). Configuração (funil, etapas e
@@ -125,12 +125,16 @@ export async function POST(request: Request) {
         const dados = normalizarDados(campos, (b.dados as Record<string, unknown>) ?? {});
         const falta = camposFaltando(campos, etapas, primeira.id, dados);
         if (falta.length) throw new Erro(`Preencha: ${falta.map((c) => c.rotulo).join(", ")}.`);
-        const { data, error } = await admin.from("crm_itens").insert({
+        const linha = {
           pipeline_id: p.id, etapa_id: primeira.id, titulo, descricao: String(b.descricao ?? "").slice(0, 5000) || null,
           responsavel: b.responsavel ? id(b.responsavel) : a.userId, dados, prazo_etapa: prazoDaEtapa(primeira), criado_por: a.userId,
           property_id: b.property_id ? id(b.property_id) : null, opportunity_id: b.opportunity_id ? id(b.opportunity_id) : null,
-        }).select("id").single();
-        if (error) throw new Erro("Não foi possível criar o item.");
+        };
+        // prioridade, prazo final e etiquetas (0148); sem a migration, grava o resto
+        const extras = extrasDoItem(b);
+        let { data, error } = await admin.from("crm_itens").insert({ ...linha, ...extras }).select("id").single();
+        if (error && extras && /column/i.test(error.message)) ({ data, error } = await admin.from("crm_itens").insert(linha).select("id").single());
+        if (error || !data) throw new Erro("Não foi possível criar o item.");
         await evento(data.id, "criado", a.userId, `Criado em "${primeira.nome}"`);
         await logAudit({ user_id: a.userId, acao: "crm_item_criado", entidade: "crm_itens", entidade_id: data.id });
         return NextResponse.json({ ok: true, id: data.id });
@@ -172,7 +176,10 @@ export async function POST(request: Request) {
           if (typeof b.titulo === "string" && b.titulo.trim()) mud.titulo = b.titulo.trim().slice(0, 200);
           if (typeof b.descricao === "string") mud.descricao = b.descricao.slice(0, 5000) || null;
           if (b.responsavel !== undefined) mud.responsavel = b.responsavel ? id(b.responsavel) : null;
+          const extras = extrasDoItem(b);
+          if (extras && "prioridade" in item) Object.assign(mud, extras);
           await atualizar(mud);
+          if (extras?.prioridade && extras.prioridade !== item.prioridade && "prioridade" in item) await evento(item.id, "campo", a.userId, `Prioridade: ${extras.prioridade}`);
           const mudou = campos.filter((c) => JSON.stringify(item.dados?.[c.chave] ?? null) !== JSON.stringify(dados[c.chave] ?? null)).map((c) => c.rotulo);
           if (mudou.length) await evento(item.id, "campo", a.userId, `Atualizou: ${mudou.join(", ")}`);
           if (mud.responsavel !== undefined && mud.responsavel !== item.responsavel) await evento(item.id, "responsavel", a.userId, "Trocou o responsável");
