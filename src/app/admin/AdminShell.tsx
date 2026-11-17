@@ -115,7 +115,7 @@ type Grupo = { id: SetorId | "geral"; titulo: string; itens: ItemMenu[] };
 const LINK_RODAPE =
   "flex flex-col items-center gap-1 rounded-2xl border border-linha-forte/70 px-2 py-2 text-texto-2 transition-colors hover:border-ouro hover:text-ouro";
 const LINK_TOPO =
-  "items-center gap-2 rounded-full border border-linha-forte px-4 py-2 text-sm font-semibold text-texto-2 transition-colors hover:border-verde hover:text-verde";
+  "btn-contorno items-center gap-2 px-4 py-2 text-sm";
 
 export default function AdminShell({
   children, userId, nome, papel, setores, avatar = null,

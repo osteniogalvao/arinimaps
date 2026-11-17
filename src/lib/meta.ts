@@ -101,9 +101,9 @@ export function telefoneWhatsapp(t: string | null | undefined) {
 }
 
 /** WhatsApp: mensagem de texto (dentro das 24 h depois da última mensagem do cliente). */
-export async function enviarWhatsapp(telefone: string, texto: string) {
-  if (!whatsappConfigurado()) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
-  const r = await fetch(`${GRAPH}/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+export async function enviarWhatsapp(telefone: string, texto: string, phoneId = process.env.WHATSAPP_PHONE_ID) {
+  if (!whatsappConfigurado() || !phoneId) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
+  const r = await fetch(`${GRAPH}/${phoneId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", to: telefone, type: "text", text: { body: texto.slice(0, 4000) } }),
@@ -118,6 +118,21 @@ export async function enviarWhatsapp(telefone: string, texto: string) {
       ? "Passaram 24 h desde a última mensagem do cliente: o WhatsApp só aceita um modelo aprovado. Ligue ou mande pelo seu WhatsApp."
       : j?.error?.message ?? `O WhatsApp recusou (HTTP ${r.status}).`);
   }
+  return String(j?.messages?.[0]?.id ?? "");
+}
+
+/** WhatsApp: documento por link (a Meta baixa o arquivo), dentro das 24 h. */
+export async function enviarDocumentoWhatsapp(telefone: string, link: string, nome: string, legenda: string, phoneId = process.env.WHATSAPP_PHONE_ID) {
+  if (!whatsappConfigurado() || !phoneId) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
+  const r = await fetch(`${GRAPH}/${phoneId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", to: telefone, type: "document", document: { link, filename: nome, caption: legenda.slice(0, 1000) } }),
+    signal: AbortSignal.timeout(20_000),
+  }).catch(() => null);
+  if (!r) throw new MetaErro("O WhatsApp não respondeu a tempo.");
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new MetaErro(j?.error?.message ?? `O WhatsApp recusou (HTTP ${r.status}).`);
   return String(j?.messages?.[0]?.id ?? "");
 }
 

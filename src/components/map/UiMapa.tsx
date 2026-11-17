@@ -5,9 +5,9 @@
  * MapaRegional para o componente do mapa cuidar só de mapa.
  */
 
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import {
-  ChevronDown, List as ListIcon, Fuel, GraduationCap, Hospital, Landmark, Layers, LoaderCircle, MapPin, Pill, Route, ShoppingCart, Trash2, X,
+  ChevronDown, Crop, List as ListIcon, Fuel, GraduationCap, Hospital, Landmark, Layers, LoaderCircle, MapPin, Pill, Route, ShoppingCart, Trash2, X,
   type LucideIcon,
 } from "lucide-react";
 import { STATUS_LABEL } from "@/lib/format";
@@ -191,15 +191,16 @@ export function Legenda({ car, corUrbana, extras = [], relevo = [] }: {
   if (!aberta) {
     return (
       <button type="button" onClick={() => setAberta(true)} aria-expanded={false}
-        className={`absolute bottom-24 sm:bottom-36 lg:bottom-32 left-10 inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-texto-3 ${VIDRO}`}>
-        <ListIcon className="size-3.5 text-ouro" /> Legenda
+        className="absolute bottom-24 sm:bottom-[calc(9rem+var(--faixa,0px))] lg:bottom-[calc(8rem+var(--faixa,0px))] left-10 inline-flex items-center gap-1.5 rounded-full border border-linha bg-superficie/85 px-3 py-1.5 text-[11px] font-semibold text-texto-2 shadow-[0_6px_18px_-12px_rgb(0_0_0/0.8)] backdrop-blur-md transition hover:text-texto">
+        <ListIcon className="size-3 text-ouro" /> Legenda
       </button>
     );
   }
   return (
-    <div className={`absolute bottom-24 sm:bottom-36 lg:bottom-32 left-10 max-h-[45%] sm:max-h-[55%] overflow-y-auto px-4 py-3 text-xs space-y-1.5 ${VIDRO}`}>
+    // 17/11/2026 (item 16 do Carlos): legenda discreta, vidro mais leve, letra menor
+    <div className="absolute bottom-24 sm:bottom-[calc(9rem+var(--faixa,0px))] lg:bottom-[calc(8rem+var(--faixa,0px))] left-10 max-h-[45%] sm:max-h-[55%] w-52 overflow-y-auto rounded-xl border border-linha bg-superficie/85 px-3 py-2 text-[11px] leading-tight space-y-1 shadow-[0_10px_24px_-16px_rgb(0_0_0/0.8)] backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
-        <p className="lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro">Legenda</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-texto-2">Legenda</p>
         <button type="button" onClick={() => setAberta(false)} aria-expanded aria-label="Recolher legenda" title="Recolher legenda"
           className="grid size-6 place-items-center rounded-md text-texto-2 transition hover:bg-superficie-2 hover:text-texto">
           <ChevronDown className="size-3.5" />
@@ -221,7 +222,9 @@ export function Legenda({ car, corUrbana, extras = [], relevo = [] }: {
       </p>
       {extras.map((c) => (
         <p key={c.nome} className="flex items-center gap-2 text-texto-3">
-          <span className={"inline-block size-2.5 " + (c.ponto ? "rounded-full" : "rounded-sm")} style={{ background: c.cor }} />
+          {/* polígono vira contorno, como aparece no mapa; ponto continua cheio */}
+          <span className={"inline-block size-2.5 shrink-0 " + (c.ponto ? "rounded-full" : "rounded-[3px] border-2")}
+            style={c.ponto ? { background: c.cor } : { borderColor: c.cor, background: c.cor + "33" }} />
           {c.nome}
         </p>
       ))}
@@ -283,13 +286,29 @@ export const SITUACOES_CAR = [
 ] as const;
 export type SituacaoCar = (typeof SITUACOES_CAR)[number]["id"];
 
-const AMBIENTAL: CamadaOficialId[] = ["ucs", "ucs_brasil", "prodes_cerrado", "prodes_biomas", "ibama_embargos", "ibama_autos", "inpe_queimadas",
-  "outorgas_federais", "ana_rios", "quilombolas", "assentamentos", "florestas_publicas", "iphan_sitios", "anm", "ibge_biomas"];
-// 17/11: energia (ANEEL) ganha pílula própria, como no Dados Fazenda
-const ENERGIA: CamadaOficialId[] = ["aneel_transmissao", "aneel_hidreletricas", "aneel_termeletricas", "aneel_solar", "barragens", "ana_pivos", "aerodromos"];
-const COR_ENERGIA = "#FFD54F";
-const AMBIENTAL_PADRAO: CamadaOficialId[] = ["ucs", "prodes_cerrado", "ibama_embargos"];
-const COR_AMBIENTAL = "#E91E63";
+// 17/11 (pedido do Stenio): as categorias do painel "Camadas e Dados" viram
+// pílulas coloridas nesta coluna, cada uma com a lista dos seus itens.
+// Energia (ANEEL, barragens, pivôs, aeródromos) passa a ficar em Infraestrutura.
+const COR_GRUPO: Record<GrupoCamadas, string> = {
+  "Fundiário": "#26A69A", "Ambiental": "#E91E63", "Infraestrutura": "#FFD54F", "Relevo e água": "#4FA8E0",
+  "Solo e clima": "#A1887F", "Produção": "#9CCC65",
+};
+const DICA_GRUPO: Record<GrupoCamadas, string> = {
+  "Fundiário": "SIGEF, SNCI, crédito rural, terras indígenas, quilombolas, assentamentos e mais",
+  "Ambiental": "Unidades de conservação, desmatamento, embargos, queimadas, outorgas e mais",
+  "Infraestrutura": "Linhas de transmissão, usinas, barragens, pivôs, aeródromos, mineração e planta urbana",
+  "Relevo e água": "Relevo sombreado, altitude, curvas de nível, declividade e hidrografia",
+  "Solo e clima": "Classes e textura do solo, aptidão agrícola e climas do Brasil",
+  "Produção": "Produção agrícola, rebanhos, armazéns, frigoríficos e usinas",
+};
+/** Ligadas de uma vez quando a pílula é tocada com tudo desligado. */
+const PADRAO_GRUPO: Partial<Record<GrupoCamadas, CamadaOficialId[]>> = {
+  "Ambiental": ["ucs", "prodes_cerrado", "ibama_embargos"],
+};
+const COR_RELEVO: Record<RelevoId, string> = {
+  sombra: "#9E9E9E", altitude: "#B9C36A", curvas: "#D49A55", declividade: "#E57373", hidrografia: COR_AGUA,
+};
+type ItemGrupo = { id: string; cor: string; nome: string; ponto?: boolean; ligada: boolean; alternar: () => void; carregando?: boolean; aviso?: string };
 
 function Pilula({ cor, ligada, rotulo, titulo, carregando, aviso, onClick, aberto, onAbrir }: {
   cor: string; ligada: boolean; rotulo: string; titulo: string; carregando?: boolean; aviso?: boolean;
@@ -331,7 +350,14 @@ function ItemFiltro({ cor, nome, ligada, alternar, ponto, detalhe }: { cor: stri
   );
 }
 
-export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar }: {
+export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar, onDelimitar, areas = 0, onAreas,
+  planta, corUrbana, alternarPlanta, relevoAtivas, estadoRelevo, onAlternarRelevo }: {
+  planta: boolean; corUrbana: string; alternarPlanta: () => void;
+  relevoAtivas: ReadonlySet<RelevoId>; estadoRelevo: EstadoRelevo; onAlternarRelevo: (id: RelevoId) => void;
+  /** 17/11 (pedido do Stenio): sem o botão "Camadas e Dados" no computador; a
+   *  delimitação de área (que abre o painel com as camadas da área) fica aqui */
+  onDelimitar?: () => void;
+  areas?: number; onAreas?: () => void;
   car: boolean; alternarCar: () => void; avisoCar?: string;
   situacoes: ReadonlySet<SituacaoCar>; alternarSituacao: (id: SituacaoCar) => void;
   ativas: ReadonlySet<CamadaOficialId>;
@@ -339,7 +365,7 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
   onAlternar: (id: CamadaOficialId) => void;
 }) {
   const [aberto, setAberto] = useState(true);
-  const [lista, setLista] = useState<"car" | "ambiental" | "energia" | null>(null);
+  const [lista, setLista] = useState<"car" | GrupoCamadas | null>(null);
   const def = (id: CamadaOficialId) => CAMADAS_OFICIAIS.find((c) => c.id === id)!;
   const simples = (id: CamadaOficialId, rotulo: string) => {
     const d = def(id); const e = estado[id];
@@ -347,18 +373,60 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
       titulo={[`${d.nome} · ${d.orgao}`, ativas.has(id) && e?.aviso].filter(Boolean).join(" — ")}
       carregando={e?.carregando} aviso={!!e?.aviso} onClick={() => onAlternar(id)} />;
   };
-  const ambientaisLigadas = AMBIENTAL.filter((id) => ativas.has(id));
-  const energiaLigadas = ENERGIA.filter((id) => ativas.has(id));
-  const itemDaLista = (id: CamadaOficialId) => {
-    const d = def(id); const e = estado[id];
-    return <ItemFiltro key={id} cor={d.cores ? "linear-gradient(135deg,#2E9E5B,#C9B23B,#4FA3C7)" : d.cor} nome={d.nome.replace(/ \(.*\)$/, "")} ponto={d.ponto}
-      ligada={ativas.has(id)} alternar={() => onAlternar(id)}
-      detalhe={ativas.has(id) && e?.carregando ? <LoaderCircle className="size-3 animate-spin text-texto-2" aria-label="Carregando" /> : undefined} />;
+  const itensDoGrupo = (g: GrupoCamadas): ItemGrupo[] => [
+    ...(g === "Infraestrutura" ? [{ id: "planta", cor: corUrbana, nome: "Planta completa", ligada: planta, alternar: alternarPlanta }] : []),
+    ...CAMADAS_OFICIAIS.filter((c) => c.grupo === g).map((c): ItemGrupo => ({
+      id: c.id, cor: c.cores ? "linear-gradient(135deg,#2E9E5B,#C9B23B,#4FA3C7)" : c.cor, nome: c.nome.replace(/ \(.*\)$/, ""), ponto: c.ponto,
+      ligada: ativas.has(c.id), alternar: () => onAlternar(c.id), carregando: estado[c.id]?.carregando, aviso: estado[c.id]?.aviso,
+    })),
+    ...(g === "Relevo e água" ? CAMADAS_RELEVO.map((c): ItemGrupo => ({
+      id: c.id, cor: COR_RELEVO[c.id], nome: c.nome, ligada: relevoAtivas.has(c.id), alternar: () => onAlternarRelevo(c.id), aviso: estadoRelevo[c.id]?.aviso,
+    })) : []),
+  ];
+  const pilulaGrupo = (g: GrupoCamadas) => {
+    const itens = itensDoGrupo(g);
+    const ligadas = itens.filter((i) => i.ligada);
+    const padrao = PADRAO_GRUPO[g];
+    return (
+      <Fragment key={g}>
+        <Pilula cor={COR_GRUPO[g]} ligada={ligadas.length > 0}
+          rotulo={ligadas.length ? `${g} · ${ligadas.length}` : g} titulo={DICA_GRUPO[g]}
+          carregando={ligadas.some((i) => i.carregando)}
+          onClick={() => {
+            if (ligadas.length) ligadas.forEach((i) => i.alternar());
+            else if (padrao) padrao.forEach(onAlternar);
+            else setLista(lista === g ? null : g);
+          }}
+          aberto={lista === g} onAbrir={() => setLista(lista === g ? null : g)} />
+        {lista === g && (
+          <div className={caixa}>
+            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">{g}</p>
+            {itens.map((i) => <ItemFiltro key={i.id} cor={i.cor} nome={i.nome} ponto={i.ponto} ligada={i.ligada} alternar={i.alternar}
+              detalhe={i.ligada && i.carregando ? <LoaderCircle className="size-3 animate-spin text-texto-2" aria-label="Carregando" /> : undefined} />)}
+            {ligadas.some((i) => i.aviso) && (
+              <p className="pt-1 text-[11px] leading-snug text-alerta">Algumas camadas só aparecem com o mapa mais aproximado.</p>
+            )}
+          </div>
+        )}
+      </Fragment>
+    );
   };
   const caixa = "w-64 rounded-2xl border border-linha bg-superficie/97 p-3 shadow-[0_14px_32px_-18px_rgb(0_0_0/0.8)] backdrop-blur-md";
   return (
-    <div role="group" aria-label="Filtros rápidos de camadas"
+    <div role="group" aria-label="Filtros rápidos de camadas" data-tour="camadas"
       className="absolute top-[var(--abaixo-chips,4rem)] right-14 z-10 hidden max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto sm:flex flex-col items-end gap-1.5 p-0.5">
+      {onDelimitar && (
+        <button type="button" onClick={onDelimitar} title="Desenhe uma área no mapa e escolha as camadas só para ela"
+          className="chip inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-xs font-medium shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md">
+          <Crop className="size-3.5" /> Delimitar área
+        </button>
+      )}
+      {areas > 0 && onAreas && (
+        <button type="button" onClick={onAreas} aria-controls="catalogo-camadas" title="Camadas das áreas que você delimitou"
+          className="chip inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-xs font-medium shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md">
+          <Layers className="size-3.5" /> Áreas delimitadas · {areas}
+        </button>
+      )}
       <button type="button" onClick={() => setAberto(!aberto)} aria-expanded={aberto}
         className="inline-flex items-center gap-1 rounded-full bg-superficie/95 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2 shadow-[0_6px_18px_-10px_rgb(0_0_0/0.8)] ring-1 ring-linha backdrop-blur-md transition hover:text-texto">
         <Layers className="size-3" /> Filtros
@@ -381,33 +449,7 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
         )}
         {simples("credito_rural", "Crédito rural")}
         {simples("funai", "Indígenas")}
-        <Pilula cor={COR_AMBIENTAL} ligada={ambientaisLigadas.length > 0}
-          rotulo={ambientaisLigadas.length ? `Ambiental · ${ambientaisLigadas.length}` : "Ambiental"}
-          titulo="Unidades de conservação, desmatamento, embargos, queimadas, outorgas e mais"
-          carregando={ambientaisLigadas.some((id) => estado[id]?.carregando)}
-          onClick={() => (ambientaisLigadas.length ? ambientaisLigadas : AMBIENTAL_PADRAO).forEach(onAlternar)}
-          aberto={lista === "ambiental"} onAbrir={() => setLista(lista === "ambiental" ? null : "ambiental")} />
-        {lista === "ambiental" && (
-          <div className={caixa}>
-            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Ambiental</p>
-            {AMBIENTAL.map(itemDaLista)}
-            {ambientaisLigadas.some((id) => estado[id]?.aviso) && (
-              <p className="pt-1 text-[11px] leading-snug text-alerta">Algumas camadas só aparecem com o mapa mais aproximado.</p>
-            )}
-          </div>
-        )}
-        <Pilula cor={COR_ENERGIA} ligada={energiaLigadas.length > 0}
-          rotulo={energiaLigadas.length ? `Energia · ${energiaLigadas.length}` : "Energia"}
-          titulo="Linhas de transmissão, usinas, barragens, pivôs e aeródromos"
-          carregando={energiaLigadas.some((id) => estado[id]?.carregando)}
-          onClick={() => (energiaLigadas.length ? energiaLigadas : ENERGIA).forEach(onAlternar)}
-          aberto={lista === "energia"} onAbrir={() => setLista(lista === "energia" ? null : "energia")} />
-        {lista === "energia" && (
-          <div className={caixa}>
-            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Energia e infraestrutura</p>
-            {ENERGIA.map(itemDaLista)}
-          </div>
-        )}
+        {GRUPOS.map(pilulaGrupo)}
       </>}
     </div>
   );
@@ -424,30 +466,35 @@ const UNIDADE: Partial<Record<CamadaOficialId, string>> = {
 };
 
 /**
- * Faixa de resumo (17/11/2026, referência do Dados Fazenda): um cartão por
+ * Faixa de resumo (17/11/2026, referência do Dados Fazenda): uma coluna por
  * camada oficial ligada, com a contagem do que está na tela. Só lê o estado
  * que as camadas já calculam; não faz pedido nenhum.
+ * Desde 17/11 (pedido do Stenio) é uma faixa branca presa no rodapé, de ponta
+ * a ponta, com a altura em --faixa: o mapa e os botões de baixo sobem por ela.
  */
+export const ALTURA_FAIXA = "sm:[--faixa:3.5rem]";
+
 export function ResumoCamadas({ ativas, estado }: {
   ativas: ReadonlySet<CamadaOficialId>; estado: Partial<Record<CamadaOficialId, EstadoCamada>>;
 }) {
   const ligadas = CAMADAS_OFICIAIS.filter((c) => ativas.has(c.id));
   if (!ligadas.length) return null;
   return (
-    <div role="status" aria-label="Resumo das camadas na tela" className="hidden sm:flex gap-2 overflow-x-auto pb-0.5">
+    <div role="status" aria-label="Resumo das camadas na tela"
+      className="absolute inset-x-0 bottom-0 z-20 hidden h-[var(--faixa)] sm:flex items-stretch overflow-x-auto border-t border-neutral-200 bg-white text-neutral-800 shadow-[0_-6px_18px_-12px_rgb(0_0_0/0.5)]">
       {ligadas.map((c) => {
         const e = estado[c.id];
         return (
           <div key={c.id} title={`${c.nome} · ${c.orgao}`}
-            className="min-w-[8.5rem] shrink-0 rounded-xl border border-linha bg-superficie/95 px-3 py-2 shadow-[0_6px_18px_-12px_rgb(0_0_0/0.8)] backdrop-blur-md">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-texto-2">
+            className="flex min-w-[10rem] shrink-0 flex-col justify-center border-r border-neutral-200 px-4 last:border-r-0">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
               <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ background: c.cor }} />
               <span className="truncate">{c.nome.replace(/ \(.*\)$/, "")}</span>
             </p>
-            <p className="mt-0.5 text-sm text-texto">
-              {e?.carregando ? <LoaderCircle className="inline size-3.5 animate-spin text-texto-2" aria-label="Carregando" />
-                : e?.aviso ? <span className="text-[11px] text-texto-2">{e.aviso.startsWith("Aproxime") ? "Aproxime o mapa" : "Sem resposta"}</span>
-                : <><strong className="tabular-nums">{(e?.total ?? 0).toLocaleString("pt-BR")}</strong> <span className="text-xs text-texto-2">{UNIDADE[c.id] ?? "itens"} na tela</span></>}
+            <p className="mt-0.5 text-sm">
+              {e?.carregando ? <LoaderCircle className="inline size-3.5 animate-spin text-neutral-400" aria-label="Carregando" />
+                : e?.aviso ? <span className="text-[11px] text-neutral-500" title={e.aviso}>{e.aviso.startsWith("Aproxime") ? "Aproxime o mapa" : "Sem resposta"}</span>
+                : <><strong className="tabular-nums">{(e?.total ?? 0).toLocaleString("pt-BR")}</strong> <span className="text-xs text-neutral-500">{UNIDADE[c.id] ?? "itens"} na tela</span></>}
             </p>
           </div>
         );

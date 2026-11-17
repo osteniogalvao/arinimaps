@@ -25,6 +25,7 @@ export default async function SiteHeader({ sobreHero = false }: { sobreHero?: bo
       email={texto(cfg, "email_contato") || undefined}
       usuario={user ? { nome: user.nome?.split(" ")[0] || "Painel", href: painelHref } : null}
       cotacoes={cotacoes}
+      whatsappCotacoes={texto(cfg, "whatsapp_cotacoes") || texto(cfg, "whatsapp_central") || undefined}
     />
   );
 }

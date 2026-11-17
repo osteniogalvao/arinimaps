@@ -15,13 +15,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowRight, Bell, Building2, ChevronRight, CreditCard, FileText, House,
+  ArrowRight, Building2, ChevronRight, CreditCard, FileText, House,
   LayoutDashboard, Map as Mapa, Menu, Plus, Search, X,
 } from "lucide-react";
 import BotaoTema from "./BotaoTema";
 import MarcaArini from "@/components/marca/MarcaArini";
 import ChatIA, { abrirAssistente } from "@/components/ia/ChatIA";
 import Avatar from "./Avatar";
+import Sino from "@/components/admin/Sino";
 import { usePreferencias } from "@/lib/usePreferencias";
 
 /** avatar: foto do perfil (4.6); ausente = o cabeçalho busca na conta */
@@ -233,12 +234,8 @@ export default function AppShell({
               </span>
               <span className="hidden text-sm font-bold sm:inline">Pergunte à Ari</span>
             </button>
-            <button type="button"
-              className="relative grid size-10 place-items-center rounded-[10px] text-texto-2 transition hover:bg-superficie-2 hover:text-texto"
-              aria-label="Notificações">
-              <Bell className="size-[18px]" />
-              <span className="absolute right-2 top-2 size-2 rounded-full bg-[#D9BD6F] ring-2 ring-superficie" />
-            </button>
+            {/* o sino era só desenho (sem clique e com a bolinha sempre acesa) */}
+            {usuario && <Sino variante="site" />}
             {usuario ? (
               <Link href="/painel" className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-superficie-2">
                 <Avatar nome={usuario.nome} url={avatar} tamanho={36} />

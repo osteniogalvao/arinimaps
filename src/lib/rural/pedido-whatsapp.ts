@@ -1,6 +1,6 @@
 import "server-only";
 import { urlDoSite } from "@/lib/compartilhar";
-import { enviarWhatsapp } from "@/lib/meta";
+import { enviarDocumentoWhatsapp, enviarWhatsapp } from "@/lib/meta";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /** Só comandos explícitos abrem autosserviço. Conversas comerciais seguem no CRM. */
@@ -14,18 +14,21 @@ export function respostaConsultaWhatsapp(texto: string): string | null {
   return "Escolha a área no mapa da ARINI ou envie CONSULTAR CAR seguido do código completo do imóvel. " + urlDoSite() + "/mapa";
 }
 
-export async function atenderPedidoConsulta(id: string, telefone: string, texto: string, recebida: string, resposta: string) {
+export async function atenderPedidoConsulta(id: string, telefone: string, texto: string, recebida: string, resposta: string, tipo = "text", phoneId?: string, documento?: { link: string; nome: string; legenda: string }) {
   const db = supabaseAdmin();
   // Uma reserva por mensagem assinada da Meta. Reentregas não disparam nova resposta.
   const {error: reserva} = await db.from("whatsapp_mensagens").insert({
-    wa_id:id, telefone, recebida_em:recebida, direcao:"entrada", tipo:"text", texto, status:"consulta_em_envio",
+    wa_id:id, telefone, recebida_em:recebida, direcao:"entrada", tipo, texto, status:"consulta_em_envio",
   });
   if (reserva && reserva.code !== "23505") throw Error("Falha ao registrar o pedido territorial.");
   if (!reserva) {
-    const waId = await enviarWhatsapp(telefone,resposta).catch(() => "");
+    const waId = await enviarWhatsapp(telefone,resposta,phoneId).catch(() => "");
     if (waId) {
       const saida = await db.from("whatsapp_mensagens").upsert({wa_id:waId,telefone,direcao:"saida",tipo:"text",texto:resposta}, {onConflict:"wa_id",ignoreDuplicates:true});
       if (saida.error) throw Error("Falha ao registrar a resposta territorial.");
+      // o PDF vai depois do texto; se a Meta recusar, o texto já tem o link da ficha
+      const docId = documento ? await enviarDocumentoWhatsapp(telefone, documento.link, documento.nome, documento.legenda, phoneId).catch(() => "") : "";
+      if (docId) await db.from("whatsapp_mensagens").upsert({wa_id:docId,telefone,direcao:"saida",tipo:"document",texto:documento!.legenda}, {onConflict:"wa_id",ignoreDuplicates:true});
       const fim = await db.from("whatsapp_mensagens").update({status:"consulta_respondida"}).eq("wa_id",id);
       if (fim.error) throw Error("Falha ao encerrar o pedido territorial.");
       return;

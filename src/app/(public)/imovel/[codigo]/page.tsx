@@ -1,4 +1,5 @@
 import HabilitacaoLeilao from "@/components/imovel/HabilitacaoLeilao";
+import AcoesInteresse from "@/components/imovel/AcoesInteresse";
 import { visitasDoNavegador } from "@/lib/imovel/visitas";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
@@ -489,7 +490,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
             {centroid && (
               <a href={`https://www.google.com/maps/dir/?api=1&destination=${centroid.lat},${centroid.lng}`}
                 target="_blank" rel="noreferrer"
-                className="flex items-center justify-center gap-2 rounded-full border-[1.5px] border-linha-forte py-3 text-sm font-bold text-texto transition hover:border-verde hover:text-verde">
+                className="btn-contorno flex items-center justify-center gap-2 py-3 text-sm">
                 <Navigation className="size-4" /> Como chegar até o imóvel
               </a>
             )}
@@ -527,6 +528,7 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
             </p>
           </aside>
         </div>
+        <div className="mt-16"><AcoesInteresse titulo="Este não é o imóvel que você procura?" /></div>
       </Conteudo>
 
       {/* faixa de conversão: Verde Profundo com linhas de mapa e o radar do manual */}

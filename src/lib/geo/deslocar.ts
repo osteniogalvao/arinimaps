@@ -1,4 +1,4 @@
-import { intersection } from "polyclip-ts";
+import { difference, intersection } from "polyclip-ts";
 
 /**
  * Transformação da planta CAD sobre o mapa.
@@ -509,6 +509,44 @@ export function parteDaFeature(f: GeoJSON.Feature, areas: AreaDaLinha[]): number
 }
 
 /** A interseção de dois polígonos com um lado em comum não tem superfície. */
+/**
+ * Recorta os perímetros de uma seleção nova para que não invadam as peças que
+ * já existem (pedido do Carlos, 17/11/2026: a seleção em retângulo encostava
+ * numa peça vizinha e travava com "ajuste a parte N"). Devolve só anéis
+ * simples (sem buraco), como as partes guardam; uma peça inteira dentro da
+ * seleção é contornada partindo o recorte ao meio.
+ */
+export function recortarFora(aneis: AnelParte[], ocupadas: AnelParte[]): AnelParte[] {
+  const fechar = (a: AnelParte): AnelParte => {
+    const [x0, y0] = a[0], [x1, y1] = a[a.length - 1];
+    return x0 === x1 && y0 === y1 ? a : [...a, a[0]];
+  };
+  const abrir = (a: AnelParte): AnelParte => {
+    const r = a.map(([x, y]) => [x, y] as [number, number]);
+    if (r.length > 1 && r[0][0] === r.at(-1)![0] && r[0][1] === r.at(-1)![1]) r.pop();
+    return r;
+  };
+  type Poligono = AnelParte[];
+  const semBuraco = (pol: Poligono, fundo: number): AnelParte[] => {
+    if (pol.length <= 1) return pol.length ? [abrir(pol[0])] : [];
+    if (fundo > 8) return [abrir(pol[0])];
+    // corta na vertical pelo meio do primeiro buraco: ele deixa de ser buraco
+    let bx0 = Infinity, bx1 = -Infinity;
+    for (const [x] of pol[1]) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of pol[0]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const cx = (bx0 + bx1) / 2, f = Math.max(x1 - x0, y1 - y0, 1e-9);
+    const metades: AnelParte[] = [
+      [[x0 - f, y0 - f], [cx, y0 - f], [cx, y1 + f], [x0 - f, y1 + f], [x0 - f, y0 - f]],
+      [[cx, y0 - f], [x1 + f, y0 - f], [x1 + f, y1 + f], [cx, y1 + f], [cx, y0 - f]],
+    ];
+    return metades.flatMap(m => intersection(pol, [m]).flatMap(p => semBuraco(p, fundo + 1)));
+  };
+  if (!ocupadas.length) return aneis;
+  const resto = difference(aneis.map(a => [fechar(a)]), ...ocupadas.map(o => [[fechar(o)]]));
+  return resto.flatMap(p => semBuraco(p, 0)).filter(a => a.length >= 3);
+}
+
 export function areasSeSobrepoem(a: [number, number][], b: [number, number][]): boolean {
   const limites = (anel: [number, number][]) => {
     let oeste = Infinity, leste = -Infinity, sul = Infinity, norte = -Infinity;

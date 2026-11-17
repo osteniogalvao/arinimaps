@@ -97,7 +97,7 @@ function Resultado({ l, onBaixar }: { l: LeituraMatricula; onBaixar: () => void 
           <h2 className="lp-display text-3xl text-texto">{l.matricula ?? "sem número legível"}</h2>
           <p className="text-xs text-texto-2 mt-1">Leitura com confiança {l.confianca}{l.observacao_leitura ? ` · ${l.observacao_leitura}` : ""}</p>
         </div>
-        <button type="button" onClick={onBaixar} className="inline-flex items-center gap-2 rounded-full border-[1.5px] border-linha-forte px-5 py-2.5 text-sm font-bold text-texto hover:border-verde hover:text-verde">
+        <button type="button" onClick={onBaixar} className="btn-contorno inline-flex items-center gap-2 px-5 py-2.5 text-sm">
           <Download className="size-4" /> Baixar resumo (Word)
         </button>
       </div>
