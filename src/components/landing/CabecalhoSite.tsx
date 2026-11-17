@@ -23,7 +23,7 @@ import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/
 import { ArrowRight, LogIn, Mail, Menu, MessageCircle, UserPlus, UserRound, X } from "lucide-react";
 import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
-import type { CotacaoAtual } from "@/lib/mercado/formato";
+import type { CotacaoFaixa } from "@/lib/mercado/formato";
 import FaixaCotacoes from "./FaixaCotacoes";
 import { formatarTelefone } from "./telefone";
 
@@ -43,10 +43,12 @@ type Props = {
   email?: string;
   usuario?: { nome: string; href: string } | null;
   /** cotações da faixa do topo, lidas no servidor (SiteHeader) */
-  cotacoes?: CotacaoAtual[];
+  cotacoes?: CotacaoFaixa[];
+  /** número que responde às cotações sozinho (ou o da central) */
+  whatsappCotacoes?: string;
 };
 
-export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usuario, cotacoes }: Props) {
+export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usuario, cotacoes, whatsappCotacoes }: Props) {
   const caminho = usePathname();
   const [aberto, setAberto] = useState(false);
   const botaoMenu = useRef<HTMLButtonElement>(null);
@@ -110,7 +112,7 @@ export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usua
           className={`overflow-hidden text-sm ${temCotacoes ? "" : "hidden md:block"} ${transparente ? "bg-black/35 text-white/85" : "lp-escuro bg-[#0A2219] text-white/85"}`}
         >
           {temCotacoes ? (
-            <FaixaCotacoes itens={cotacoes!} />
+            <FaixaCotacoes itens={cotacoes!} whatsapp={whatsappCotacoes} />
           ) : (
             <div className="lp-container flex h-10 items-center gap-6">
               {wa && (
