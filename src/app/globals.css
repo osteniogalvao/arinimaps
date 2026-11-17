@@ -371,6 +371,17 @@ button:disabled,
 @media print {
   @page { size: A4; margin: 14mm 12mm; }
   html, body { background: #fff !important; color: #111 !important; }
+  /* 17/11/2026: impressão colorida. A folha usa sempre a paleta do tema claro
+     (verde ARINI legível sobre branco) e o navegador mantém fundos e cores. */
+  :root {
+    --fundo: #FFFFFF; --superficie: #FFFFFF; --superficie-2: #F2F2EC;
+    --linha: #DADCD0; --linha-forte: #C2C7B6;
+    --texto: #0E2A20; --texto-2: #55655A; --texto-3: #2C4237;
+    --verde: #124431; --verde-2: #0A2219; --verde-escuro: #DCE8E0;
+    --ouro: #9A7B2F; --ouro-claro: #998C54; --alerta: #8A6A15; --critico: #D80B0B;
+    --marca: #124431;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .cartao { background: #fff !important; border-color: #d4d4d4 !important; box-shadow: none !important; }
   a[href]::after { content: ""; }
   .break-inside-avoid { break-inside: avoid; }
@@ -530,6 +541,33 @@ button:disabled,
     url("/img/marca/curvas-nivel.svg") center / cover no-repeat,
     linear-gradient(160deg, #124431 0%, #0A2219 60%, #071912 100%);
 }
+/* Barra lateral do app (17/11/2026): verde profundo no tema escuro; no tema
+   claro acompanha o site (off-white com curvas de nível em verde suave). */
+:root[data-tema="claro"] .lateral-app {
+  --fundo: #F2F2EC;
+  --superficie: #FFFFFF;
+  --superficie-2: #E9EAE1;
+  --linha: #DADCD0;
+  --linha-forte: #C2C7B6;
+  --texto: #0E2A20;
+  --texto-2: #55655A;
+  --texto-3: #2C4237;
+  --verde: #124431;
+  --verde-2: #0A2219;
+  --verde-escuro: #DCE8E0;
+  --ouro: #63633B;
+  --ouro-claro: #998C54;
+  --marca: #124431;
+  --botao: #124431;
+  --botao-texto: #F2F2EC;
+  --sombra-botao: rgba(10, 34, 25, 0.12);
+  color-scheme: light;
+  border-right: 1px solid var(--linha);
+  background:
+    url("/img/marca/curvas-nivel-claro.svg") center / cover no-repeat,
+    linear-gradient(160deg, #FFFFFF 0%, #F2F2EC 70%, #E9EEE6 100%);
+}
+:root[data-tema="claro"] .lateral-app .lp-eyebrow { color: var(--verde); }
 .lp-grade {
   background-image:
     linear-gradient(rgb(255 255 255 / 0.045) 1px, transparent 1px),

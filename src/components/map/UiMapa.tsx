@@ -266,3 +266,131 @@ export function Legenda({ car, corUrbana, extras = [], relevo = [] }: {
     </div>
   );
 }
+
+/**
+ * Filtros rápidos (17/11/2026, pedido do Carlos com o Geomart como referência):
+ * as camadas mais usadas viram pílulas coloridas no canto superior direito,
+ * a um clique, sem abrir o painel "Camadas e Dados". A pílula ligada fica
+ * preenchida com a cor da camada; desligada, só a bolinha mostra a cor.
+ * CAR e Ambiental abrem uma lista com subfiltros (situação do CAR e cada
+ * camada ambiental), cada um com sua cor e seu interruptor.
+ */
+export const SITUACOES_CAR = [
+  { id: "aguardando", nome: "Aguardando análise", cor: "#FFC400" },
+  { id: "em_analise", nome: "Em análise", cor: "#29B6F6" },
+  { id: "analisado", nome: "Analisado", cor: "#00E676" },
+  { id: "cancelado", nome: "Cancelado / suspenso", cor: "#FF5252" },
+] as const;
+export type SituacaoCar = (typeof SITUACOES_CAR)[number]["id"];
+
+const AMBIENTAL: CamadaOficialId[] = ["ucs", "prodes_cerrado", "ibama_embargos", "inpe_queimadas", "outorgas_federais", "quilombolas", "anm", "ibge_biomas"];
+const AMBIENTAL_PADRAO: CamadaOficialId[] = ["ucs", "prodes_cerrado", "ibama_embargos"];
+const COR_AMBIENTAL = "#E91E63";
+
+function Pilula({ cor, ligada, rotulo, titulo, carregando, aviso, onClick, aberto, onAbrir }: {
+  cor: string; ligada: boolean; rotulo: string; titulo: string; carregando?: boolean; aviso?: boolean;
+  onClick: () => void; aberto?: boolean; onAbrir?: () => void;
+}) {
+  return (
+    <span style={ligada ? { background: cor, borderColor: cor } : { borderColor: cor }}
+      className={"inline-flex min-w-[9rem] items-stretch overflow-hidden rounded-full border-2 text-xs font-semibold shadow-[0_6px_18px_-10px_rgb(0_0_0/0.8)] transition "
+        + (ligada ? "text-[#111]" : "bg-superficie/95 text-texto backdrop-blur-md")}>
+      <button type="button" aria-pressed={ligada} title={titulo} onClick={onClick}
+        className="flex flex-1 items-center gap-2 py-1.5 pl-3 pr-2 text-left transition hover:brightness-110">
+        <span aria-hidden className={"inline-block size-2.5 shrink-0 rounded-full " + (ligada ? "bg-white ring-2 ring-black/25" : "")}
+          style={ligada ? undefined : { background: cor }} />
+        <span className="flex-1">{rotulo}</span>
+        {ligada && carregando && <LoaderCircle className="size-3.5 animate-spin" aria-label="Carregando" />}
+        {ligada && !carregando && aviso && <span aria-hidden className="text-[10px] font-bold">!</span>}
+      </button>
+      {onAbrir && (
+        <button type="button" onClick={onAbrir} aria-expanded={aberto} aria-label={`Filtros de ${rotulo}`} title={`Filtros de ${rotulo}`}
+          className={"grid w-7 place-items-center border-l transition " + (ligada ? "border-black/20 hover:bg-black/10" : "border-linha hover:bg-superficie-2")}>
+          <ChevronDown className={"size-3.5 transition " + (aberto ? "rotate-180" : "")} />
+        </button>
+      )}
+    </span>
+  );
+}
+
+function ItemFiltro({ cor, nome, ligada, alternar, ponto, detalhe }: { cor: string; nome: string; ligada: boolean; alternar: () => void; ponto?: boolean; detalhe?: ReactNode }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 py-1.5 text-[13px] text-texto">
+      <span className="flex min-w-0 items-center gap-2.5">
+        <span aria-hidden className={"inline-block size-3 shrink-0 ring-2 ring-white/70 " + (ponto ? "rounded-full" : "rounded-full")} style={{ background: cor }} />
+        <span className="truncate">{nome}</span>
+        {detalhe}
+      </span>
+      <input type="checkbox" role="switch" checked={ligada} onChange={alternar} aria-label={`Mostrar ${nome}`} className="peer sr-only" />
+      <Interruptor on={ligada} />
+    </label>
+  );
+}
+
+export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternarSituacao, ativas, estado, onAlternar }: {
+  car: boolean; alternarCar: () => void; avisoCar?: string;
+  situacoes: ReadonlySet<SituacaoCar>; alternarSituacao: (id: SituacaoCar) => void;
+  ativas: ReadonlySet<CamadaOficialId>;
+  estado: Partial<Record<CamadaOficialId, EstadoCamada>>;
+  onAlternar: (id: CamadaOficialId) => void;
+}) {
+  const [aberto, setAberto] = useState(true);
+  const [lista, setLista] = useState<"car" | "ambiental" | null>(null);
+  const def = (id: CamadaOficialId) => CAMADAS_OFICIAIS.find((c) => c.id === id)!;
+  const simples = (id: CamadaOficialId, rotulo: string) => {
+    const d = def(id); const e = estado[id];
+    return <Pilula key={id} cor={d.cor} ligada={ativas.has(id)} rotulo={rotulo}
+      titulo={[`${d.nome} · ${d.orgao}`, ativas.has(id) && e?.aviso].filter(Boolean).join(" — ")}
+      carregando={e?.carregando} aviso={!!e?.aviso} onClick={() => onAlternar(id)} />;
+  };
+  const ambientaisLigadas = AMBIENTAL.filter((id) => ativas.has(id));
+  const caixa = "w-64 rounded-2xl border border-linha bg-superficie/97 p-3 shadow-[0_14px_32px_-18px_rgb(0_0_0/0.8)] backdrop-blur-md";
+  return (
+    <div role="group" aria-label="Filtros rápidos de camadas"
+      className="absolute top-[var(--abaixo-chips,4rem)] right-14 z-10 hidden max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto sm:flex flex-col items-end gap-1.5 p-0.5">
+      <button type="button" onClick={() => setAberto(!aberto)} aria-expanded={aberto}
+        className="inline-flex items-center gap-1 rounded-full bg-superficie/95 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2 shadow-[0_6px_18px_-10px_rgb(0_0_0/0.8)] ring-1 ring-linha backdrop-blur-md transition hover:text-texto">
+        <Layers className="size-3" /> Filtros
+        <ChevronDown className={"size-3 transition " + (aberto ? "" : "-rotate-90")} />
+      </button>
+      {aberto && <>
+        {simples("sigef", "SIGEF")}
+        {simples("snci", "SNCI")}
+        <Pilula cor={CORES_RURAIS.car} ligada={car} rotulo="CAR"
+          titulo={["Imóveis rurais declarados (CAR)", car && avisoCar].filter(Boolean).join(" — ")}
+          aviso={!!avisoCar} onClick={alternarCar} aberto={lista === "car"} onAbrir={() => setLista(lista === "car" ? null : "car")} />
+        {lista === "car" && (
+          <div className={caixa}>
+            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Situação do CAR</p>
+            {SITUACOES_CAR.map((s) => (
+              <ItemFiltro key={s.id} cor={s.cor} nome={s.nome} ligada={car && situacoes.has(s.id)}
+                alternar={() => { if (!car) alternarCar(); alternarSituacao(s.id); }} />
+            ))}
+          </div>
+        )}
+        {simples("credito_rural", "Crédito rural")}
+        {simples("funai", "Indígenas")}
+        <Pilula cor={COR_AMBIENTAL} ligada={ambientaisLigadas.length > 0}
+          rotulo={ambientaisLigadas.length ? `Ambiental · ${ambientaisLigadas.length}` : "Ambiental"}
+          titulo="Unidades de conservação, desmatamento, embargos, queimadas, outorgas e mais"
+          carregando={ambientaisLigadas.some((id) => estado[id]?.carregando)}
+          onClick={() => (ambientaisLigadas.length ? ambientaisLigadas : AMBIENTAL_PADRAO).forEach(onAlternar)}
+          aberto={lista === "ambiental"} onAbrir={() => setLista(lista === "ambiental" ? null : "ambiental")} />
+        {lista === "ambiental" && (
+          <div className={caixa}>
+            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Ambiental</p>
+            {AMBIENTAL.map((id) => {
+              const d = def(id); const e = estado[id];
+              return <ItemFiltro key={id} cor={d.cores ? "linear-gradient(135deg,#2E9E5B,#C9B23B,#4FA3C7)" : d.cor} nome={d.nome.replace(/ \(.*\)$/, "")} ponto={d.ponto}
+                ligada={ativas.has(id)} alternar={() => onAlternar(id)}
+                detalhe={ativas.has(id) && e?.carregando ? <LoaderCircle className="size-3 animate-spin text-texto-2" aria-label="Carregando" /> : undefined} />;
+            })}
+            {ambientaisLigadas.some((id) => estado[id]?.aviso) && (
+              <p className="pt-1 text-[11px] leading-snug text-alerta">Algumas camadas só aparecem com o mapa mais aproximado.</p>
+            )}
+          </div>
+        )}
+      </>}
+    </div>
+  );
+}

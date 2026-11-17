@@ -117,8 +117,8 @@ export class GerenciadorCamadasOficiais {
         id: `of-${id}-ponto`, type: "circle", source: fonte(id),
         paint: {
           "circle-color": def.cor,
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 2.5, 14, 5] as never,
-          "circle-stroke-color": "#1A0A00", "circle-stroke-width": 1, "circle-opacity": 0.9,
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3.5, 14, 6.5] as never,
+          "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5, "circle-opacity": 1,
         },
       }, antes);
       return;
@@ -130,7 +130,8 @@ export class GerenciadorCamadasOficiais {
     // Nas malhas de parcelas a divisa identifica o cadastro. A imagem continua
     // legível mesmo com SIGEF, SNCI e crédito rural ligados ao mesmo tempo.
     const malha = id === "sigef" || id === "snci" || id === "credito_rural";
-    const opacidade = malha ? 0.035 : def.semContorno ? 0.24 : 0.16;
+    // 17/11: contorno forte e um véu leve da mesma cor, para a malha "acender" sobre o satélite.
+    const opacidade = malha ? 0.1 : def.semContorno ? 0.28 : 0.22;
     this.map.addLayer({
       id: `of-${id}-fill`, type: "fill", source: fonte(id),
       // sem antisserrilhado na camada recortada em células: senão a emenda entre células vira um fio
@@ -141,8 +142,8 @@ export class GerenciadorCamadasOficiais {
       id: `of-${id}-linha`, type: "line", source: fonte(id),
       paint: {
         "line-color": def.cor,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 8, malha ? 0.6 : 1, 14, malha ? 1.5 : 2.2] as never,
-        ...(id === "sigef" ? { "line-dasharray": [3, 1.5] as never } : {}),
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, malha ? 1.1 : 1.6, 12, malha ? 1.8 : 2.4, 15, malha ? 2.6 : 3.2] as never,
+        "line-opacity": 1,
       },
     }, antes);
   }
