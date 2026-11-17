@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import AmbienteCar from "./AmbienteCar";
+import AlertasDaArea from "./AlertasDaArea";
+import { buffer } from "@turf/turf";
 import type { Map as MLMap } from "maplibre-gl";
 import { estiloSatelite } from "@/lib/map/ortofotos";
 import { RADAR_ANEL, STATUS_MAPA } from "./statusMapa";
@@ -14,10 +16,12 @@ type Props = {
   carAmbiental?: string;
   /** área do imóvel (ha), base do % no quadro ambiental */
   areaHa?: number | null;
+  /** raio da pesquisa (m): anel tracejado em volta da área, como no Tour 3D */
+  raioM?: number;
 };
 
 /** Mapa satélite com a geometria do imóvel destacada (página do imóvel e admin). */
-export default function MiniMapa({ geometry, status, className, carAmbiental, areaHa }: Props) {
+export default function MiniMapa({ geometry, status, className, carAmbiental, areaHa, raioM = 0 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const [mapaCar, setMapaCar] = useState<MLMap | null>(null);
@@ -74,6 +78,14 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
             else if (Array.isArray(c)) c.forEach(walk);
           };
           walk((geometry as GeoJSON.Polygon).coordinates);
+          // 17/11 (vídeo do Carlos, 16h37): o raio da pesquisa à vista no próprio mapa
+          const anel = raioM > 0 ? buffer({ type: "Feature", geometry, properties: {} } as GeoJSON.Feature<GeoJSON.Polygon>, raioM / 1000, { units: "kilometers" }) : null;
+          if (anel) {
+            map.addSource("raio", { type: "geojson", data: anel });
+            map.addLayer({ id: "raio-linha", type: "line", source: "raio",
+              paint: { "line-color": "#FFD400", "line-width": 2.2, "line-dasharray": [2, 1.5] } });
+            if (raioM <= 5000) walk((anel.geometry as GeoJSON.Polygon).coordinates);
+          }
           if (!limites.isEmpty()) map.fitBounds(limites, { padding: 50, duration: 0, maxZoom: 18 });
         }
       });
@@ -84,7 +96,7 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
       mapa?.remove();
       mapRef.current = null;
     };
-  }, [geometry, status, carAmbiental]);
+  }, [geometry, status, carAmbiental, raioM]);
 
   useEffect(() => {
     if (!mapaCar || mapaCar !== mapRef.current) return;
@@ -106,5 +118,6 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
       {ambiental ? "Ocultar camadas ambientais" : "Mostrar APP, reserva e camadas ambientais"}
     </button>
     {ambiental && mapaCar && <AmbienteCar key={carAmbiental} mapa={mapaCar} cod={carAmbiental} quadro areaHa={areaHa} />}
+    {ambiental && mapaCar && <AlertasDaArea mapa={mapaCar} geometria={geometry} />}
   </div>;
 }

@@ -78,7 +78,7 @@ export default async function ConsultaAreaDesenhada({ params, searchParams }: Pa
       <Conteudo className="py-12 md:py-16 space-y-12 md:space-y-16">
         <Secao eyebrow="02 · Divisa no mapa" titulo="Dados da área">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <MiniMapa geometry={area.geometry} status="publicado"
+          <MiniMapa geometry={area.geometry} status="publicado" raioM={raioM}
             className="h-80 lg:h-full lg:min-h-80 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{tamanho}</p>

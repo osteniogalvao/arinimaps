@@ -92,7 +92,7 @@ export default async function ConsultaLote({ params, searchParams }: PageProps<"
       <Conteudo className="py-12 md:py-16 space-y-12 md:space-y-16">
         <Secao eyebrow="02 · Lote no mapa" titulo="Dados da planta">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <MiniMapa geometry={lote.geometry} status="publicado"
+          <MiniMapa geometry={lote.geometry} status="publicado" raioM={raioM}
             className="h-80 lg:h-full lg:min-h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{m2(p.area_m2)} m²</p>

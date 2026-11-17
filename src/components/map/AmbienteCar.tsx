@@ -38,7 +38,7 @@ export default function AmbienteCar({ cod, mapa, tour = false, quadro = false, a
     const instalar = () => {
       if (mapa.getSource(FONTE)) return;
       mapa.addSource(FONTE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      mapa.addLayer({ id: IDS[0], source: FONTE, type: "fill", filter: ["all", ["==", ["geometry-type"], "Polygon"], ["!=", ["get", "tema"], "area_imovel"]], paint: { "fill-color": ["get", "cor"], "fill-opacity": 0.38 } });
+      mapa.addLayer({ id: IDS[0], source: FONTE, type: "fill", filter: ["all", ["==", ["geometry-type"], "Polygon"], ["!=", ["get", "tema"], "area_imovel"]], paint: { "fill-color": ["get", "cor"], "fill-opacity": 0.55 } });
       mapa.addLayer({ id: IDS[1], source: FONTE, type: "line", filter: ["==", ["geometry-type"], "Polygon"], paint: { "line-color": ["get", "cor"], "line-width": ["case", ["==", ["get", "tema"], "area_imovel"], 3, 2.2] } });
       mapa.addLayer({ id: IDS[2], source: FONTE, type: "circle", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-color": CORES.nascente, "circle-radius": 5, "circle-stroke-color": "#124431", "circle-stroke-width": 1.5 } });
     };

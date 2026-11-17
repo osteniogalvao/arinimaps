@@ -39,8 +39,8 @@ export default function CamadasDoTour({ mapa, geometria, permitidas }: {
     })));
   }, [areas, oficiais]);
   return <>
-    <details className="mt-3 text-sm">
-      <summary className="cursor-pointer font-semibold">Camadas nesta área</summary>
+    <details className="mt-3 text-sm" open>
+      <summary className="cursor-pointer font-semibold text-[#FFE299]">Camadas nesta área</summary>
       <div className="mt-2 max-h-[30vh] space-y-1 overflow-auto">
         {CAMADAS_RELEVO.filter(c => permitidas.relevo.includes(c.id)).map(c =>
           <label key={c.id} className="block"><input type="checkbox" checked={relevo.has(c.id)} onChange={() => {
