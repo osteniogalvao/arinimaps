@@ -1,6 +1,6 @@
 import { raioConsulta } from "@/lib/rural/raios";
 import { tourDaArea } from "@/components/tour/tourDaArea";
-import RelatorioPersonalizado from "@/components/rural/RelatorioPersonalizado";
+import GeradorRelatorio from "@/components/rural/GeradorRelatorio";
 import { whatsappConfigurado } from "@/lib/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -137,24 +137,17 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
                 }} />
             </div>
             <div className="border-t border-linha pt-4"><MatriculaSigef cod={p.cod} /></div>
-            <RelatorioPersonalizado caminho={"/api/consulta/car/" + encodeURIComponent(p.cod) + "/relatorio"} raioM={raioM} completo />
             {whatsappConfigurado() && <p className="text-sm text-texto-2">Para receber esta consulta pelo WhatsApp oficial da ARINI, envie <strong>CONSULTAR CAR {p.cod}</strong>.</p>}
-            <div className="flex flex-wrap gap-2 border-t border-linha pt-4">
-              {(["simples", "completo"]).map(modelo => {
-                const href = `/api/consulta/car/${encodeURIComponent(p.cod)}/relatorio?modelo=${modelo}&raio_m=${raioM}`;
-                return <div key={modelo} className="flex items-center gap-3 rounded-xl border border-linha px-4 py-2 text-sm">
-                  <strong>Modelo {modelo}</strong>
-                  <a className="text-verde underline" href={href+"&visualizar=1"} target="_blank" rel="noreferrer" aria-label={`Ver PDF ${modelo}`}>Ver PDF</a>
-                  <a className="text-verde underline" href={href} aria-label={`Baixar PDF ${modelo}`}>Baixar</a>
-                </div>;
-              })}
-            </div>
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-4">
               Dados públicos do SICAR, copiados em{" "}
               {p.importado_em ? new Date(p.importado_em).toLocaleDateString("pt-BR") : "—"}. O CAR é
               autodeclarado: não comprova propriedade nem substitui a matrícula.
             </p>
           </div>
+        </div>
+        <div className="mt-6">
+          <GeradorRelatorio caminho={"/api/consulta/car/" + encodeURIComponent(p.cod) + "/relatorio"} raioM={raioM}
+            completo={consulta.acesso.recursos.has("relatorio_territorial")} nomeArquivo={p.cod} />
         </div>
         </Secao>
 

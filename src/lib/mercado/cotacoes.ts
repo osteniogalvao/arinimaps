@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import type { CotacaoAtual, PontoCotacao } from "./formato";
+import { estatisticas, recortar, type CotacaoAtual, type CotacaoFaixa, type PontoCotacao } from "./formato";
 
 /**
  * Leitura das cotações gravadas pelo worker (job `coletar_cotacoes`, migration
@@ -43,8 +43,39 @@ async function lerUltimas(soDestaques: boolean): Promise<CotacaoAtual[]> {
   }
 }
 
-/** Cotações da faixa do topo (séries marcadas como destaque). */
-export const cotacoesFaixa = unstable_cache(() => lerUltimas(true), ["cotacoes-faixa"], {
+/** Produtos que a faixa sempre mostra (áudio do Carlos, 16/11: boi, grãos e dólar), mesmo sem destaque marcado. */
+const ESSENCIAIS = ["boi-gordo", "soja", "milho", "dolar"];
+const LIMITE_FAIXA = 14;
+
+/**
+ * Cotações da faixa do topo: as séries em destaque e, se faltar, um indicador
+ * de cada produto essencial. Cada item leva a variação do dia (ou a do último
+ * fechamento, quando a fonte não traz), a de 30 dias e os últimos 20 valores
+ * para a minilinha.
+ */
+async function lerFaixa(): Promise<CotacaoFaixa[]> {
+  const todas = await lerUltimas(false);
+  const escolhidas = todas.filter((s) => s.destaque);
+  for (const produto of ESSENCIAIS) {
+    if (escolhidas.some((s) => s.produto === produto)) continue;
+    const doProduto = todas.filter((s) => s.produto === produto).sort((a, b) => Number(!!a.praca) - Number(!!b.praca) || a.ordem - b.ordem);
+    if (doProduto[0]) escolhidas.push(doProduto[0]);
+  }
+  escolhidas.sort((a, b) => a.ordem - b.ordem);
+  return Promise.all(escolhidas.slice(0, LIMITE_FAIXA).map(async (s) => {
+    const pontos = await historicoCotacao(s.id);
+    const ant = pontos.length > 1 ? pontos[pontos.length - 2] : null;
+    const variacao = s.variacao ?? (ant && ant.valor > 0 ? (s.valor / ant.valor - 1) * 100 : null);
+    const mes = estatisticas(recortar(pontos, 30));
+    return {
+      ...s, variacao,
+      variacao30: mes && mes.n > 1 ? mes.variacao : null,
+      linha: pontos.slice(-20).map((p) => p.valor),
+    };
+  }));
+}
+
+export const cotacoesFaixa = unstable_cache(lerFaixa, ["cotacoes-faixa-v2"], {
   revalidate: REVALIDAR, tags: ["cotacoes"],
 });
 

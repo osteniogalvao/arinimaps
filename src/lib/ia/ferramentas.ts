@@ -5,6 +5,7 @@ import { processamentoLigado } from "@/lib/sentinel/copernicus";
 import { alcanceDaFonte } from "@/lib/rural/raios";
 import { imoveisDaVitrine } from "@/lib/imovel/vitrine";
 import { formatArea, formatBRL, STATUS_LABEL } from "@/lib/format";
+import { trechosParaAssistente } from "@/lib/ia/conhecimento";
 
 /**
  * As ÚNICAS coisas que o assistente consegue fazer no sistema (Segurança 18:
@@ -385,7 +386,7 @@ async function buscarConhecimento(e: Record<string, unknown>): Promise<Resultado
     conteudo: json({
       artigos: achados.map((a) => ({
         titulo: a.titulo, fonte: a.fonte, data_referencia: a.data_referencia, versao: a.versao,
-        texto: conteudo.get(a.id)?.slice(0, 3000) ?? a.trecho,
+        texto: conteudo.has(a.id) ? trechosParaAssistente(conteudo.get(a.id)!, consulta) : a.trecho,
       })),
     }),
   };

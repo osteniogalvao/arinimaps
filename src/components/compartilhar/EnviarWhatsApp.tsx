@@ -24,7 +24,7 @@ type Props = {
 type Perfil = { logado: boolean; numero: string | null };
 
 const BOTAO_PADRAO =
-  "flex w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-verde bg-transparent py-3 text-sm font-bold text-verde transition hover:bg-verde hover:text-fundo";
+  "btn-whatsapp flex w-full items-center justify-center gap-2 py-3 text-sm";
 const ITEM =
   "flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-texto transition hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-50";
 

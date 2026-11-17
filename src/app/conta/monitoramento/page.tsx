@@ -89,6 +89,7 @@ export default async function Monitoramento({searchParams}:{searchParams:Promise
         {painel.areas.map(a=><div key={a.id} className="cartao space-y-2 p-4"><h3 className="font-semibold">{a.nome}</h3>
           <p>{Number(a.hectares).toLocaleString("pt-BR")} ha · {a.ativo ? !a.vinculo ? "Suspenso até nova confirmação da divisa e do vínculo" : a.habilitada?"Ativo":"Suspenso pelo plano ou pela cota" : "Encerrado"}</p>
           {a.leituras.map(l=><p key={l.fonte} className="text-sm">{FONTES[l.fonte][0]} · {l.falhou?"Fonte indisponível na última tentativa. ":""}{l.lida_em?"Última leitura em "+data(l.lida_em):"Aguardando a primeira leitura"}</p>)}
+          <a href={`/api/conta/monitoramento/${a.id}/relatorio`} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold underline">Relatório do mês (PDF)</a>
           {a.ativo && <form action={desativar}><input type="hidden" name="id" value={a.id}/><button className="btn-contorno px-3 py-1">Desativar monitoramento</button></form>}
         </div>)}
       </Secao>

@@ -26,6 +26,9 @@ export type CotacaoAtual = {
 
 export type PontoCotacao = { data: string; valor: number; variacao: number | null };
 
+/** Item da faixa do topo: a cotação com a variação do dia, a de 30 dias e a linha dos últimos fechamentos. */
+export type CotacaoFaixa = CotacaoAtual & { variacao30: number | null; linha: number[] };
+
 export const PRODUTOS: Record<string, string> = {
   "boi-gordo": "Boi gordo",
   milho: "Milho",

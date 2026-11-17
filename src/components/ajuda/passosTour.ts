@@ -68,7 +68,7 @@ export const PASSOS_TOUR: Record<PerfilTour, PassoTour[]> = {
     },
     {
       id: "camadas", titulo: "Camadas e dados",
-      texto: "Ligue as camadas oficiais: CAR, embargos ambientais, focos de queimada, processos minerários, biomas. Clique numa área para ver o que há nela.",
+      texto: "Ligue as camadas oficiais pelas pílulas coloridas: CAR, embargos ambientais, focos de queimada, processos minerários, biomas. Clique numa área para ver o que há nela.",
       alvos: [dt("camadas"), { seletor: "button", texto: "Camadas e Dados" }],
     },
     {

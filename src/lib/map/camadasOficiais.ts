@@ -11,13 +11,15 @@
 export type CamadaOficialId =
   | "snci" | "credito_rural" | "outorgas_federais" | "sigef" | "ibama_embargos" | "anm" | "funai" | "ucs" | "quilombolas" | "prodes_cerrado" | "inpe_queimadas" | "ibge_biomas"
   | "aneel_transmissao" | "aneel_hidreletricas" | "aneel_termeletricas" | "aneel_solar" | "iphan_sitios" | "ana_rios"
-  | "prodes_biomas" | "assentamentos" | "ucs_brasil" | "ibama_autos" | "florestas_publicas" | "aerodromos" | "ana_pivos" | "barragens";
+  | "prodes_biomas" | "assentamentos" | "ucs_brasil" | "ibama_autos" | "florestas_publicas" | "aerodromos" | "ana_pivos" | "barragens"
+  | "solos" | "solos_textura" | "aptidao_agricola" | "climas" | "faixa_fronteira" | "area_queimada" | "icmbio_embargos" | "sinaflor"
+  | "outorgas_subterraneas" | "frigorificos" | "silos_armazens" | "usinas_etanol";
 
 export type CamadaOficial = {
   id: CamadaOficialId;
   nome: string;
   orgao: string;
-  grupo: "Fundiário" | "Ambiental" | "Infraestrutura";
+  grupo: "Fundiário" | "Ambiental" | "Infraestrutura" | "Solo e clima" | "Produção";
   cor: string;
   zoomMin: number;
   /** focos de calor são pontos; o resto, polígonos */
@@ -44,12 +46,15 @@ export const CORES_BIOMAS: Record<string, string> = {
  * Cores da cartografia ARINI, compartilhadas pela busca, pelo desenho e pela legenda.
  * 17/11/2026: o Carlos achou o mapa pálido. As malhas passaram a cores puras e
  * saturadas, que se destacam sobre o satélite (referência de estilo: Geomart):
- * SIGEF vermelho, SNCI azul, CAR laranja ARINI, crédito rural amarelo.
+ * SIGEF vermelho, SNCI azul, CAR verde, crédito rural amarelo.
+ * 17/11/2026 (áudio do Carlos, 10h49): a malha do CAR voltou ao verde da paleta
+ * de 15/11 ("linhas verdes, igual estava, para dar um ar de fechado"); o
+ * resto do visual novo foi aprovado.
  */
 export const CORES_RURAIS = {
   sigef: "#FF2A2A",
   snci: "#2F6BFF",
-  car: "#FF9800",
+  car: "#34DB1E",
   credito_rural: "#FFE11A",
   funai: "#B44DFF",
   outorgas_federais: "#00D9FF",
@@ -114,6 +119,32 @@ export const CAMADAS_OFICIAIS: CamadaOficial[] = [
     ajuda: "Pivôs centrais mapeados por satélite: sinal de agricultura irrigada e de outorga de água." },
   { id: "barragens", nome: "Barragens e reservatórios", orgao: "ANA/ANEEL", grupo: "Infraestrutura", cor: "#448AFF", zoomMin: 9, misto: true,
     ajuda: "Barragens do SNISB e reservatórios de usinas: há APP no entorno e risco a jusante." },
+  // 17/11/2026, lote 3: o restante da lista do Dados Fazenda. Mesmo cuidado do
+  // lote 2: serviço achado pelo nome; falhou, só a camada avisa.
+  { id: "solos", nome: "Classes de solo", orgao: "IBGE/Embrapa", grupo: "Solo e clima", cor: "#A1887F", zoomMin: 8, misto: true,
+    ajuda: "Mapa de solos (pedologia) 1:250 mil: a classe do solo pesa no preço da terra e na aptidão para lavoura." },
+  { id: "solos_textura", nome: "Composição do solo (textura)", orgao: "Embrapa", grupo: "Solo e clima", cor: "#D7A86E", zoomMin: 8, misto: true,
+    ajuda: "Teor de argila e areia do solo: arenoso exige mais correção e retém menos água." },
+  { id: "aptidao_agricola", nome: "Aptidão agrícola", orgao: "Embrapa/IBGE", grupo: "Solo e clima", cor: "#9CCC65", zoomMin: 8, misto: true,
+    ajuda: "Classe de aptidão das terras (lavoura, pastagem, silvicultura) pelo sistema da Embrapa." },
+  { id: "climas", nome: "Climas do Brasil", orgao: "IBGE", grupo: "Solo e clima", cor: "#80DEEA", zoomMin: 5, misto: true,
+    ajuda: "Zonas climáticas do IBGE (temperatura e meses secos). A chuva da área está no relatório." },
+  { id: "area_queimada", nome: "Área queimada", orgao: "INPE", grupo: "Ambiental", cor: "#8D6E63", zoomMin: 10, misto: true,
+    ajuda: "Cicatrizes de queimada mapeadas por satélite: mostram onde o fogo passou, não só o foco." },
+  { id: "icmbio_embargos", nome: "Embargos ICMBio", orgao: "ICMBio", grupo: "Ambiental", cor: "#F50057", zoomMin: 9, misto: true,
+    ajuda: "Embargos aplicados pelo ICMBio, em geral dentro ou no entorno de unidades de conservação." },
+  { id: "sinaflor", nome: "Autorizações de supressão (SINAFLOR)", orgao: "IBAMA", grupo: "Ambiental", cor: "#76FF03", zoomMin: 10, misto: true,
+    ajuda: "Supressão de vegetação autorizada: separa desmatamento legal do ilegal." },
+  { id: "outorgas_subterraneas", nome: "Outorgas subterrâneas (poços)", orgao: "ANA", grupo: "Ambiental", cor: "#18FFFF", zoomMin: 9, misto: true,
+    ajuda: "Poços com outorga registrada na base nacional. Muitos estados (IGAM, DAEE) mantêm a própria base." },
+  { id: "faixa_fronteira", nome: "Faixa de fronteira (150 km)", orgao: "IBGE", grupo: "Fundiário", cor: "#FFAB40", zoomMin: 5, misto: true,
+    ajuda: "Na faixa de 150 km da fronteira, venda a estrangeiro e alguns atos exigem assentimento do Conselho de Defesa Nacional." },
+  { id: "frigorificos", nome: "Frigoríficos e abatedouros", orgao: "OpenStreetMap", grupo: "Produção", cor: "#EF5350", zoomMin: 8, ponto: true,
+    ajuda: "Frigoríficos mapeados no OpenStreetMap (a lista oficial do SIF não tem coordenadas). Distância ao frigorífico pesa no preço do boi." },
+  { id: "silos_armazens", nome: "Silos e armazéns", orgao: "OpenStreetMap", grupo: "Produção", cor: "#FFCA28", zoomMin: 8, ponto: true,
+    ajuda: "Silos e armazéns de grãos mapeados no OpenStreetMap. Complementa o cadastro de armazéns da CONAB." },
+  { id: "usinas_etanol", nome: "Usinas de açúcar, etanol e biodiesel", orgao: "OpenStreetMap", grupo: "Produção", cor: "#7CB342", zoomMin: 7, ponto: true,
+    ajuda: "Usinas mapeadas no OpenStreetMap. Arrendamento para cana costuma seguir o raio da usina." },
 ];
 
 export const camadaOficialPorId = (id: string) => CAMADAS_OFICIAIS.find((c) => c.id === id);
@@ -168,6 +199,18 @@ export function descreverFeicao(id: CamadaOficialId, p: Record<string, unknown>)
     case "aerodromos":
     case "ana_pivos":
     case "barragens":
+    case "solos":
+    case "solos_textura":
+    case "aptidao_agricola":
+    case "climas":
+    case "faixa_fronteira":
+    case "area_queimada":
+    case "icmbio_embargos":
+    case "sinaflor":
+    case "outorgas_subterraneas":
+    case "frigorificos":
+    case "silos_armazens":
+    case "usinas_etanol":
       return { titulo: s(p.nome) || camadaOficialPorId(id)!.nome, detalhe: junta(s(p.detalhe), ha(p.area_ha)) };
   }
 }

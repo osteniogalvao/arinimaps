@@ -12,7 +12,7 @@
  */
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Map as MLMap, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import type { RecursoId } from "@/lib/planos";
@@ -30,10 +30,9 @@ type Modo = null | "area" | "distancia" | "consulta" | "recorte";
 const CONSULTA_MAX_HA = 50_000;
 
 export default function Ferramentas({
-  mapa, recolhida, onImportarKml, onCapturar, recursos, logado = false, onDesenhando, pedidoRecorte, onDelimitar, resumo,
+  mapa, recolhida, onImportarKml, onCapturar, recursos, logado = false, onDesenhando, pedidoRecorte, onDelimitar,
 }: {
   /** faixa com a contagem das camadas ligadas, logo acima da barra */
-  resumo?: ReactNode;
   mapa: MLMap | null;
   recolhida: boolean;
   /** avisa o mapa que um desenho está em curso (o clique não deve abrir cartão de lote/CAR) */
@@ -335,7 +334,7 @@ export default function Ferramentas({
   return (
     // no celular a barra fica compacta (só ícones, sem o título): antes ela e a
     // legenda tampavam ~40 % do mapa e Imprimir, Capturar e a Ari ficavam fora (QA 09/11)
-    <div hidden={recolhida && !modo} className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-[min(92%,760px)] space-y-2">
+    <div hidden={recolhida && !modo} className="absolute bottom-3 sm:bottom-[calc(1.5rem+var(--faixa,0px))] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-[min(92%,760px)] space-y-2">
       {bloqueio && (
         <div className={`flex items-center gap-3 px-4 py-3 text-sm ${VIDRO}`}>
           <Lock className="size-4 shrink-0 text-ouro" />
@@ -398,7 +397,6 @@ export default function Ferramentas({
         </div>
       )}
 
-      {!modo && resumo}
       <div className={`px-1.5 py-1.5 sm:px-2.5 sm:py-2 ${VIDRO}`}>
         <p className="hidden sm:block lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro px-2 pt-0.5 mb-2">Ferramentas</p>
         <div className="flex items-center justify-between gap-0.5 sm:gap-1 overflow-x-auto">

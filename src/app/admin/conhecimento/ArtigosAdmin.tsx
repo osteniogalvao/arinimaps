@@ -4,7 +4,7 @@ import { useState } from "react";
 import { enviarJson, type ErroApi } from "@/lib/api/enviar";
 import { AvisoErro } from "@/components/ui/Aviso";
 import {
-  STATUS_ARTIGO, STATUS_ARTIGO_LABEL, slugDe, type Artigo, type Lacuna, type StatusArtigo,
+  CONTEUDO_MAX, STATUS_ARTIGO, STATUS_ARTIGO_LABEL, slugDe, type Artigo, type Lacuna, type StatusArtigo,
 } from "@/lib/ia/conhecimento";
 import LacunasLista from "./LacunasLista";
 import { CAMPO, Etiqueta, ROTULO } from "@/components/ui/Pagina";
@@ -223,7 +223,7 @@ export default function ArtigosAdmin({ inicial, lacunasIniciais, resumoLacunas }
                 <label htmlFor="kb-conteudo" className={ROTULO}>Conteúdo (markdown simples)</label>
                 <textarea id="kb-conteudo" rows={16} className={campo + " font-mono !text-[13px] leading-relaxed"} value={edit.conteudo}
                   onChange={(e) => setEdit({ ...edit, conteudo: e.target.value })} />
-                <p className="text-xs text-texto-2 mt-1.5 tabular-nums">{edit.conteudo.length.toLocaleString("pt-BR")} / 20.000 caracteres. O assistente lê até 3.000 por artigo.</p>
+                <p className="text-xs text-texto-2 mt-1.5 tabular-nums">{edit.conteudo.length.toLocaleString("pt-BR")} / {CONTEUDO_MAX.toLocaleString("pt-BR")} caracteres. Em artigo longo, o assistente lê o começo e os parágrafos que tratam da pergunta (separe os assuntos com linha em branco).</p>
               </div>
 
               {erro && <AvisoErro erro={erro} aoFechar={() => setErro(null)} />}

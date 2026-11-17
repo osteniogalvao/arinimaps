@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
-import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, ResumoCamadas, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
+import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, ResumoCamadas, ALTURA_FAIXA, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
 import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
 import CompararParcelasRurais from "@/components/map/CompararParcelasRurais";
 import BuscaUrbana from "@/components/map/BuscaUrbana";
@@ -93,6 +93,8 @@ type Camada = {
  * primeira vista (pedido: "cores cartográficas distintas para urbano e rural").
  */
 const COR_RURAL = CORES_RURAIS.car;
+/** Contorno da área do CAR clicada (print do Carlos de 17/11: verde na malha, amarelo na seleção). */
+const COR_SELECAO_CAR = "#FFD400";
 /** Situação do CAR nos tiles (`status` do SICAR e `condicao`) agrupada como no subfiltro. */
 const CONDICAO_CAR = ["downcase", ["coalesce", ["get", "condicao"], ""]];
 const CATEGORIA_CAR = ["case",
@@ -1011,7 +1013,9 @@ export default function MapaRegional({
           id: "car-fill", type: "fill", source: "car", "source-layer": "car", minzoom: CAR_ZOOM_MIN,
           paint: {
             "fill-color": COR_RURAL,
-            "fill-opacity": ["case", ["boolean", ["feature-state", "selecionado"], false], 0.32, ["boolean", ["feature-state", "hover"], false], 0.2, 0.07] as never,
+            // 17/11 (áudio do Carlos, 11h08): a área clicada fica limpa por dentro,
+            // só com o contorno da cor de seleção (camada car-selecao)
+            "fill-opacity": ["case", ["boolean", ["feature-state", "selecionado"], false], 0, ["boolean", ["feature-state", "hover"], false], 0.2, 0.07] as never,
           },
         });
         // o traço afina conforme afasta: de longe a malha vira textura, de perto vira divisa
@@ -1022,6 +1026,15 @@ export default function MapaRegional({
             // 17/11: mais grosso e opaco (pedido do Carlos: linhas visíveis como no Geomart)
             "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 10, 1, 12, 1.6, 15, 2.6] as never,
             "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.7, 10, 0.9, 12, 1] as never,
+          },
+        });
+        // contorno da área selecionada: amarelo de seleção, grosso, com o interior limpo
+        map.addLayer({
+          id: "car-selecao", type: "line", source: "car", "source-layer": "car", minzoom: CAR_ZOOM_MIN,
+          paint: {
+            "line-color": COR_SELECAO_CAR,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 7, 2, 12, 3, 15, 4] as never,
+            "line-opacity": ["case", ["boolean", ["feature-state", "selecionado"], false], 1, 0] as never,
           },
         });
 
@@ -1350,13 +1363,13 @@ export default function MapaRegional({
     // de longe) continua sempre visível.
     const filtro = situacoesCar.size === SITUACOES_CAR.length ? null
       : ["in", CATEGORIA_CAR, ["literal", [...situacoesCar, "outros"]]];
-    for (const id of ["car-fill", "car-linha"]) map.setFilter(id, filtro as never);
+    for (const id of ["car-fill", "car-linha", "car-selecao"]) map.setFilter(id, filtro as never);
   }, [pronto, situacoesCar]);
   useEffect(() => {
     carAtivoRef.current = carVisivel;
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("car-fill")) return;
-    for (const id of ["car-fill", "car-linha"]) map.setLayoutProperty(id, "visibility", carAtivo ? "visible" : "none");
+    for (const id of ["car-fill", "car-linha", "car-selecao"]) map.setLayoutProperty(id, "visibility", carAtivo ? "visible" : "none");
     if (carVisivel) { conferirZoomCar(); garantirCarSobDemanda(); }
     else { setCarSel(null); setCarAviso(""); }
   }, [carAtivo, carVisivel, pronto, conferirZoomCar, garantirCarSobDemanda]);
@@ -1779,9 +1792,10 @@ export default function MapaRegional({
       </button>
 
       {/* ---------- mapa ---------- */}
-      <div ref={areaMapaRef} className="relative flex-1 min-w-0">
+      <div ref={areaMapaRef} className={`relative flex-1 min-w-0 ${CAMADAS_OFICIAIS.some((c) => camadasAtivas.has(c.id)) ? ALTURA_FAIXA : ""}`}>
         {/* inline: o CSS do maplibre força position:relative na classe e colapsaria a altura */}
-        <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+        <div ref={containerRef} style={{ position: "absolute", inset: "0 0 var(--faixa, 0px) 0" }} />
+        <ResumoCamadas ativas={camadasAtivas} estado={estadoCamadas} />
 
         {/* Barra do mapa (QA 09/11): antes era uma fila só com rolagem lateral e, em
             1366 px ou no celular, "Não encontrei meu imóvel", Satélite/Mapa e Camadas
@@ -1811,7 +1825,7 @@ export default function MapaRegional({
           </button>
           <button onClick={() => { setPainelMapa(camadasAbertas ? null : "camadas"); setAvisoPlano(""); }}
             aria-controls="catalogo-camadas" aria-expanded={camadasAbertas} data-ativo={camadasAbertas}
-            className={chipBase} data-tour="camadas">
+            className={`${chipBase} sm:hidden`} data-tour="camadas">
             <Layers className="size-3.5" /> Camadas e Dados
           </button>
           <button onClick={() => { setPainelMapa(null); setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
@@ -1837,7 +1851,7 @@ export default function MapaRegional({
         )}
 
         {avisoCarga && (
-          <div role="status" className={`absolute bottom-12 left-3 right-14 sm:right-auto z-20 flex items-center gap-3 px-3 py-2 text-sm ${VIDRO}`}>
+          <div role="status" className={`absolute bottom-[calc(3rem+var(--faixa,0px))] left-3 right-14 sm:right-auto z-20 flex items-center gap-3 px-3 py-2 text-sm ${VIDRO}`}>
             {avisoCarga}
             <BotaoFechar onClick={() => setAvisoCarga("")} />
           </div>
@@ -1936,7 +1950,9 @@ export default function MapaRegional({
         </>}
         <MarcadorDaUrl map={mapaPronto} />
         {pronto && !camadasAbertas && (
-          <FiltrosRapidos car={carAtivo} avisoCar={carAviso} alternarCar={() => {
+          <FiltrosRapidos onDelimitar={() => { setPainelMapa(null); setPedidoRecorte(n => n + 1); }}
+            areas={areasCamadas.length} onAreas={() => { if (!areaId) setAreaId(areasCamadas[0].id); setPainelMapa("camadas"); setAvisoPlano(""); }}
+            car={carAtivo} avisoCar={carAviso} alternarCar={() => {
               carEscolhido.current = true;
               setCarAtivo(!carAtivo);
               void salvarPrefs({ camada_car: !carAtivo });
@@ -1946,7 +1962,9 @@ export default function MapaRegional({
               if (nova.has(id)) nova.delete(id); else nova.add(id);
               return nova;
             })}
-            ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada} />
+            ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada}
+            planta={plantaAtiva} corUrbana={CARTO_CORES[base].linha} alternarPlanta={() => setPlantaAtiva(!plantaAtiva)}
+            relevoAtivas={relevoAtivas} estadoRelevo={estadoRelevo} onAlternarRelevo={alternarRelevo} />
         )}
         {camadasAbertas && (
           <PainelCamadas onFechar={() => setPainelMapa(null)}
@@ -1976,7 +1994,6 @@ export default function MapaRegional({
           recolhida={!!(painelMapa || carSel || loteSel || varios || pontoLivre || noPonto.length || selecionado)}
           mapa={mapaPronto}
           pedidoRecorte={pedidoRecorte} onDelimitar={salvarArea}
-          resumo={<ResumoCamadas ativas={camadasAtivas} estado={estadoCamadas} />}
           recursos={recursos}
           logado={logado}
           onDesenhando={aoDesenhar}
