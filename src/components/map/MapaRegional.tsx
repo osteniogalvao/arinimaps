@@ -11,7 +11,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useS
 import bbox from "@turf/bbox";
 import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpecification, VectorTileSource } from "maplibre-gl";
 import { DETALHES_SATELITE, camadaDeDetalhe } from "@/lib/map/ortofotos";
-import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, MOSAICO_MENOS_NUVENS, SATELITE, ZOOM_INICIAL_REGIONAL } from "@/lib/map/config";
+import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, MOSAICO_MENOS_NUVENS, SATELITE, ZOOM_INICIAL_REGIONAL, ZOOM_MOSAICO_ATE } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { formatBRL, formatArea } from "@/lib/format";
 import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeoJSON, TRANSFORM_ZERO, type Transform, type AjusteLocal, type EdicaoGeometria } from "@/lib/geo/deslocar";
@@ -844,6 +844,11 @@ export default function MapaRegional({
         maxBounds: LIMITES_MAPA_REGIONAL,
         hash: "pos", // posição na URL → link compartilhável, estilo Google Maps
         fadeDuration: 150,
+        // 17/11/2026: tiles do CAR saem com max-age=30 (recortes urbanos) e os de
+        // reserva do satélite com 300 s; com o padrão (true) o MapLibre baixava
+        // de novo, a cada 30 s, todos os tiles do CAR na tela. Vencido, o tile
+        // é renovado quando volta a ser pedido, sem recarga contínua.
+        refreshExpiredTiles: false,
         // v5 moveu as opções de WebGL para cá; sem isto "Capturar Imagem" sai em branco
         canvasContextAttributes: { preserveDrawingBuffer: true },
         attributionControl: { compact: true },
@@ -875,7 +880,9 @@ export default function MapaRegional({
         map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" },
           paint: { "raster-saturation": 0.18, "raster-contrast": 0.08 } });
         map.addSource("mosaico-anual", MOSAICO_MENOS_NUVENS);
-        map.addLayer({ id: "mosaico-anual", type: "raster", source: "mosaico-anual", layout: { visibility: "none" } });
+        // por cima do satélite normal e só até o z13: de perto, a foto de detalhe assume
+        map.addLayer({ id: "mosaico-anual", type: "raster", source: "mosaico-anual", maxzoom: ZOOM_MOSAICO_ATE,
+          layout: { visibility: "none" }, paint: { "raster-saturation": 0.2, "raster-contrast": 0.12, "raster-brightness-min": 0.02 } });
         for (const detalhe of DETALHES_SATELITE) {
           map.addSource(detalhe.id, detalhe.fonte);
           map.addLayer(camadaDeDetalhe(detalhe, baseRef.current==="satelite"));
@@ -1313,7 +1320,8 @@ export default function MapaRegional({
     baseRef.current = base; // planta que chegar depois já nasce na cor certa
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("satelite")) return;
-    const mostrarDetalhe = base === "satelite" && !mosaicoAnual;
+    // com o mosaico ligado o detalhe continua por baixo: é ele que aparece do z14 para perto
+    const mostrarDetalhe = base === "satelite";
     map.setLayoutProperty("satelite", "visibility", mostrarDetalhe ? "visible" : "none");
     if (map.getLayer("mosaico-anual")) {
       map.setLayoutProperty("mosaico-anual", "visibility", base === "satelite" && mosaicoAnual ? "visible" : "none");
@@ -1819,7 +1827,7 @@ export default function MapaRegional({
           ))}
           <button type="button" className={chipBase} data-ativo={base === "satelite" && mosaicoAnual}
             aria-pressed={base === "satelite" && mosaicoAnual}
-            title="Panorama da NASA na visão do país. Ao aproximar, mosaico Sentinel-2 de 2021 com filtro de nuvens e resolução de 10 metros."
+            title="Mosaico Sentinel-2 sem nuvens (2016, 10 m) na visão regional. Do zoom de bairro para perto, a fotografia de detalhe normal."
             onClick={() => { setBase("satelite"); setMosaicoAnual(true); setImagemAno(null); setComparar(false); }}>
             Mosaico com menos nuvens
           </button>
@@ -1918,8 +1926,8 @@ export default function MapaRegional({
               aoEscolher={(id) => { setImagemAno(id); if (id) { setMosaicoAnual(false); setBase("satelite"); } else setComparar(false); }} />
             <p className="text-xs text-texto-2 leading-relaxed border-t border-linha pt-3">
               Wayback mostra o mosaico da Esri como estava publicado no fim de cada ano — a foto de um lugar
-              pode ser anterior. Sentinel-2 é um mosaico anual sem nuvens, bom para vegetação e mancha urbana,
-              não para lote. A fonte aparece no canto do mapa.
+              pode ser anterior. O mosaico com menos nuvens é o Sentinel-2 de 2016 (10 m), bom para a visão
+              regional; de perto o mapa volta à fotografia de detalhe. A fonte aparece no canto do mapa.
             </p>
           </div>
         )}

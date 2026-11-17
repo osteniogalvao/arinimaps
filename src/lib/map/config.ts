@@ -93,9 +93,23 @@ export const urlTileSatelite = (
 export const urlTileHistorico = (z: number, x: number, y: number, release: string) =>
   urlTileSatelite(z, x, y, release) + (ARCGIS_KEY ? "?token=" + ARCGIS_KEY : "");
 
+/**
+ * "MOSAICO COM MENOS NUVENS" (botão do mapa). 17/11/2026, Stenio: "quando
+ * seleciono 'mosaico com menos nuvens' fica tudo feio". Antes era o Sentinel-2
+ * de 2021 montado na hora pelo WMS da Terrascope: granulado, avermelhado,
+ * 1,5 s ou mais por tile, e ampliado até o z14+ (10 m esticados viram borrão).
+ *
+ * Agora: Sentinel-2 cloudless da EOX, edição 2016, em tiles prontos de CDN
+ * (~0,5–1 s). É a ÚNICA edição da EOX com licença CC BY 4.0 (uso comercial);
+ * as de 2018 em diante são CC BY-NC-SA e exigem licença paga da EOX.
+ * A camada vai só até o z13 (ZOOM_MOSAICO_ATE); dali para perto aparece a
+ * fotografia de detalhe normal, que já troca tile com nuvem por outro release.
+ */
+export const ZOOM_MOSAICO_ATE = 14;
 export const MOSAICO_MENOS_NUVENS: RasterSourceSpecification = {
-  type: "raster", tiles: ["arini-satelite://mosaico/{z}/{x}/{y}"], tileSize: 256, maxzoom: 14,
-  attribution: "Panorama NASA Blue Marble · Mosaico anual Sentinel-2 (2021, 10 m) © ESA WorldCover / Copernicus · CC BY 4.0",
+  type: "raster", tiles: ["https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg"],
+  tileSize: 256, maxzoom: 13,
+  attribution: 'Sentinel-2 cloudless 2016 por <a href="https://s2maps.eu">EOX IT Services GmbH</a> (contém dados modificados do Copernicus Sentinel 2016) · CC BY 4.0',
 };
 
 export const TILE_DETALHE = PROVEDOR_SATELITE === "maptiler"
@@ -105,7 +119,8 @@ export const TILE_DETALHE = PROVEDOR_SATELITE === "maptiler"
 export const urlTileAtivo = (z: number, x: number, y: number) => urlDoTile(z, x, y, TILE_DETALHE);
 
 /**
- * NITIDEZ EM TELA RETINA (17/11/2026). Um tile raster de 256 px ocupa 256 px
+ * NITIDEZ EM TELA RETINA (17/11/2026; limiar 1,5 → 2 na mesma noite, porque
+ * em notebook com escala 150% o ganho era pequeno e o custo, 4× mais tiles). Um tile raster de 256 px ocupa 256 px
  * de CSS; numa tela com densidade 2 (celular, Mac, notebook com escala 150%+)
  * cada pixel da foto vira 2×2 pixels da tela e a imagem fica "lavada". Com
  * tileSize 128 o MapLibre pede o tile um zoom acima para o mesmo pedaço da
@@ -115,7 +130,7 @@ export const urlTileAtivo = (z: number, x: number, y: number) => urlDoTile(z, x,
  * O mesmo cálculo está em public/precarregar-satelite.js.
  */
 export const TILE_SATELITE_PX =
-  typeof window !== "undefined" && window.devicePixelRatio >= 1.5 ? 128 : 256;
+  typeof window !== "undefined" && window.devicePixelRatio >= 2 ? 128 : 256;
 
 export const SATELITE: RasterSourceSpecification = {
   type: "raster",
