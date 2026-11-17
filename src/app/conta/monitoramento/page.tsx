@@ -13,6 +13,7 @@ const FONTES = {
   ibama_embargos: ["IBAMA · embargos", "https://pamgia.ibama.gov.br/server/rest/services/SISCOM/publico/MapServer/3"],
   prodes_cerrado: ["INPE · desmatamento no Cerrado", "https://terrabrasilis.dpi.inpe.br/"],
   sigef: ["INCRA · parcelas certificadas", "https://geoportal.incra.gov.br/catalogue/#/dataset/1"],
+  inmet_avisos: ["INMET · avisos meteorológicos (tempestade, chuva forte, ventania, geada, onda de calor)", "https://alertas2.inmet.gov.br/"],
 } as const;
 type Fonte = keyof typeof FONTES;
 type Area = {id:string;nome:string;hectares:number;ativo:boolean;vinculo:boolean;habilitada:boolean;leituras:{
@@ -66,7 +67,8 @@ async function desativar(form:FormData) {
   revalidatePath(pagina); redirect(pagina+"?aviso="+(error?"falha":"fim"));
 }
 const labels:Record<string,string> = {data_hora_gmt:"Detecção (GMT)",satelite:"Satélite",id_foco_bdq:"Foco",year:"Ano PRODES",area_km:"Área (km²)",
-  num_tad:"Termo",serie_tad:"Série",dat_embargo:"Data do embargo",sit_desmatamento:"Situação",parcela_codigo:"Parcela",status:"Situação",data_aprovacao:"Aprovação"};
+  num_tad:"Termo",serie_tad:"Série",dat_embargo:"Data do embargo",sit_desmatamento:"Situação",parcela_codigo:"Parcela",status:"Situação",data_aprovacao:"Aprovação",
+  evento:"Evento",severidade:"Severidade",cor:"Nível",inicio:"Início",fim:"Fim"};
 function valor(k:string,v:unknown) {return k==="dat_embargo" && typeof v==="number" ? new Date(v).toLocaleDateString("pt-BR",{timeZone:"UTC"}) : String(v);}
 
 export default async function Monitoramento({searchParams}:{searchParams:Promise<{p?:string;aviso?:string}>}) {

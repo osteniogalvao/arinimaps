@@ -16,3 +16,12 @@ Pedido 19 de Carlos, 16/11: planejar consultas e alertas. Região proposta: Itur
 - Seção "Previsão e avisos para a área" em `/consulta/car/[cod]` (`TempoDaArea`).
 - Uso comercial do Open-Meteo: pôr a chave paga em `OPEN_METEO_API_KEY` (passa a usar `customer-api.open-meteo.com`). Confirmar com o INMET a redistribuição comercial dos avisos.
 - Falta: alerta automático das áreas monitoradas (aviso do INMET no município da área vira notificação), que pede a fonte nova em `monitor_*` e uma migration.
+
+## Alerta automático do INMET nas áreas monitoradas (17/11/2026)
+
+- Migration `0145_monitor_avisos_inmet.sql`: nova fonte `inmet_avisos` no monitoramento territorial (`/conta/monitoramento`).
+- O worker (`worker/jobs/monitorarAreas.mjs`) lê `apiprevmet3.inmet.gov.br/avisos/ativos` (guardado por 15 min), monta a área de cada aviso com a malha dos municípios dos `geocodes` (`ibge_municipios.geom`, via `monitor_malha_municipios`) e o PostGIS cruza com a área do titular.
+- Diferente das outras fontes: lê de hora em hora (30 min após falha), avisa já na primeira leitura e guarda no retrato só os avisos ativos.
+- Novidade gera evento no histórico e, com WhatsApp ligado, o aviso diário que já existia.
+- Depende da malha municipal carregada em `ibge_municipios.geom`. Sem ela, a leitura falha e tenta de novo, sem gravar retrato vazio.
+- Formato da API do INMET não pôde ser conferido da nuvem (bloqueio de rede). O leitor aceita `{hoje, futuro}` ou lista, e os campos `id`/`id_aviso`, `descricao`, `severidade`, `aviso_cor`, `inicio`, `fim`, `geocodes`. Conferir no primeiro dia de produção.
