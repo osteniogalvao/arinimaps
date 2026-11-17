@@ -44,12 +44,15 @@ export const CORES_BIOMAS: Record<string, string> = {
  * Cores da cartografia ARINI, compartilhadas pela busca, pelo desenho e pela legenda.
  * 17/11/2026: o Carlos achou o mapa pálido. As malhas passaram a cores puras e
  * saturadas, que se destacam sobre o satélite (referência de estilo: Geomart):
- * SIGEF vermelho, SNCI azul, CAR laranja ARINI, crédito rural amarelo.
+ * SIGEF vermelho, SNCI azul, CAR verde, crédito rural amarelo.
+ * 17/11/2026 (áudio do Carlos, 10h49): a malha do CAR voltou ao verde da paleta
+ * de 15/11 ("linhas verdes, igual estava, para dar um ar de fechado"); o
+ * resto do visual novo foi aprovado.
  */
 export const CORES_RURAIS = {
   sigef: "#FF2A2A",
   snci: "#2F6BFF",
-  car: "#FF9800",
+  car: "#34DB1E",
   credito_rural: "#FFE11A",
   funai: "#B44DFF",
   outorgas_federais: "#00D9FF",
