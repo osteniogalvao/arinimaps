@@ -3,6 +3,7 @@ import { tourDaArea } from "@/components/tour/tourDaArea";
 import RelatorioPersonalizado from "@/components/rural/RelatorioPersonalizado";
 import { whatsappConfigurado } from "@/lib/meta";
 import { notFound } from "next/navigation";
+import { Download, Eye, FileText } from "lucide-react";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
 import MiniMapa from "@/components/map/MiniMapa";
@@ -142,10 +143,12 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
             <div className="flex flex-wrap gap-2 border-t border-linha pt-4">
               {(["simples", "completo"]).map(modelo => {
                 const href = `/api/consulta/car/${encodeURIComponent(p.cod)}/relatorio?modelo=${modelo}&raio_m=${raioM}`;
-                return <div key={modelo} className="flex items-center gap-3 rounded-xl border border-linha px-4 py-2 text-sm">
-                  <strong>Modelo {modelo}</strong>
-                  <a className="text-verde underline" href={href+"&visualizar=1"} target="_blank" rel="noreferrer" aria-label={`Ver PDF ${modelo}`}>Ver PDF</a>
-                  <a className="text-verde underline" href={href} aria-label={`Baixar PDF ${modelo}`}>Baixar</a>
+                // 17/11: os links viraram botões de verdade (pedido "botões sem vida")
+                return <div key={modelo} className="flex flex-1 basis-60 items-center gap-3 rounded-2xl border border-verde/30 bg-verde/5 px-4 py-3 text-sm">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-verde/12 text-verde"><FileText className="size-[18px]" aria-hidden /></span>
+                  <span className="mr-auto leading-tight"><strong className="block">Relatório {modelo}</strong><span className="text-xs text-texto-2">PDF com a marca ARINI</span></span>
+                  <a className="btn-contorno inline-flex items-center gap-1.5 px-3.5 py-2 text-xs" href={href+"&visualizar=1"} target="_blank" rel="noreferrer" aria-label={`Ver PDF ${modelo}`}><Eye className="size-3.5" aria-hidden /> Ver</a>
+                  <a className="btn-verde inline-flex items-center gap-1.5 px-3.5 py-2 text-xs" href={href} aria-label={`Baixar PDF ${modelo}`}><Download className="size-3.5" aria-hidden /> Baixar</a>
                 </div>;
               })}
             </div>

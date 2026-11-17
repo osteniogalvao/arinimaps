@@ -1,4 +1,5 @@
 import { raioConsulta } from "@/lib/rural/raios";
+import { Download } from "lucide-react";
 import { tourDaArea } from "@/components/tour/tourDaArea";
 import RelatorioPersonalizado from "@/components/rural/RelatorioPersonalizado";
 import { notFound } from "next/navigation";
@@ -92,9 +93,9 @@ export default async function ConsultaAreaDesenhada({ params, searchParams }: Pa
               ))}
             </dl>
             <div>
-              <div className="mb-4 flex flex-wrap gap-4 text-sm font-semibold text-verde underline">
-                <a href={relatorio + "?modelo=simples&raio_m=" + raioM}>Baixar PDF simples</a>
-                {relatorioCompleto && <a href={relatorio + "?modelo=completo&raio_m=" + raioM}>Baixar PDF completo</a>}
+              <div className="mb-4 flex flex-wrap gap-2">
+                <a className="btn-verde inline-flex items-center gap-2 px-4 py-2.5 text-sm" href={relatorio + "?modelo=simples&raio_m=" + raioM}><Download className="size-4" aria-hidden /> Baixar PDF simples</a>
+                {relatorioCompleto && <a className="btn-contorno inline-flex items-center gap-2 px-4 py-2.5 text-sm" href={relatorio + "?modelo=completo&raio_m=" + raioM}><Download className="size-4" aria-hidden /> Baixar PDF completo</a>}
               </div>
               <RelatorioPersonalizado caminho={relatorio} raioM={raioM} completo={relatorioCompleto} desenho />
               <BotaoExportarSig nomeBase={`area-${tamanho.replace(/\s+/g, "")}-${chave.slice(4, 12)}`}
