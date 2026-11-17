@@ -10,7 +10,10 @@ test("privacidade, exclusividade e recuperação da Central", {skip:!local}, asy
   const db="arini_test_"+randomUUID().replaceAll("-","");
   const host=new pg.Client({connectionString:url}); await host.connect(); await host.query("create database "+db);
   const u=new URL(url);u.pathname="/"+db;const pool=new pg.Pool({connectionString:u.href});const c=await pool.connect();
-  const q=(s,v=[])=>c.query(s,v); const desde=(id)=>readFile(new URL("../supabase/migrations/"+id,import.meta.url),"utf8");
+  const q=(s,v=[])=>c.query(s,v);
+  // As regras de vigência contam o dia em Brasília; sem isto, entre 0h e 3h UTC
+  // o current_date do teste fica um dia à frente e o prazo de 180 dias não vence.
+  await q("set timezone='America/Sao_Paulo'"); const desde=(id)=>readFile(new URL("../supabase/migrations/"+id,import.meta.url),"utf8");
   const [owner,corretor,marketing,ops,par,im,aut]=Array.from({length:7},()=>randomUUID());
   try {
     await q(`do $$begin if not exists(select from pg_roles where rolname='anon') then create role anon; end if; if not exists(select from pg_roles where rolname='authenticated') then create role authenticated;end if; if not exists(select from pg_roles where rolname='service_role') then create role service_role;end if;end$$;
