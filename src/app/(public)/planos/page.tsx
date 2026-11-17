@@ -16,6 +16,7 @@ import CabecalhoPlanos, { apresentacaoDoPerfil } from "./CabecalhoPlanos";
 import FluxoDoPerfil from "./FluxoDoPerfil";
 import OfertasDoPerfil from "./OfertasDoPerfil";
 import ModulosDoPerfil from "./ModulosDoPerfil";
+import RolarParaPlanos from "./RolarParaPlanos";
 import { PERFIS_COM_VITRINE, type OfertaPerfil } from "@/lib/ofertas-perfis";
 import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA, type PrecoVigente } from "@/lib/planos-catalogo";
 import {
@@ -79,6 +80,7 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
     <Moldura usuario={usuario} site>
       <div className="vitrine-pagina">
       <CabecalhoPlanos persona={persona} />
+      <RolarParaPlanos key={persona.id} />
       <Conteudo className="vitrine-conteudo space-y-8 py-8 md:py-12">
         {user && acesso.planNome && <p className="flex items-center gap-2 text-sm"><BadgeCheck className="size-5 text-verde" /> Seu plano atual · {acesso.planNome}
           {acesso.nicho && <span> · {NICHO_LABEL[acesso.nicho] ?? acesso.nicho}</span>}{acesso.vencido && " · vencido"}</p>}
