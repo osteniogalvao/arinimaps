@@ -308,3 +308,36 @@ export async function tileCurvas(z: number, x: number, y: number, sinal?: AbortS
   }
   return codificarMvt(feicoes);
 }
+
+// ------------------------------------------------------------------ no ponto
+/**
+ * Altitude (m) e declive (%) num ponto, do mesmo SRTM das camadas de relevo.
+ * Vídeo do Carlos (17/11/2026, 22h00): "a altitude ficou nesta cor, e qual que
+ * é a altitude? Na hora que eu clicasse eu poderia ver a altitude".
+ * Lê o tile do z14 (~9 m por pixel no Triângulo Mineiro), com interpolação
+ * bilinear; o declive usa a mesma base de ~90 m da camada de declividade.
+ */
+export async function relevoNoPonto(lng: number, lat: number, sinal?: AbortSignal):
+  Promise<{ altitude: number; declive: number; classe: string } | null> {
+  const z = 14, n = 2 ** z;
+  const fx = ((lng + 180) / 360) * n;
+  const r = (lat * Math.PI) / 180;
+  const fy = ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n;
+  const x = Math.floor(fx), y = Math.floor(fy);
+  // sem o sinal no download: o tile fica no cache compartilhado, e um clique
+  // cancelado não pode deixar lá uma leitura abortada para o próximo
+  const bruto = await demDoTile(z, x, y);
+  if (!bruto || sinal?.aborted) return null;
+  const dem = suavizar(bruto, 2);
+  const px = (fx - x) * LADO - 0.5, py = (fy - y) * LADO - 0.5;
+  const em = (cx: number, cy: number) => dem[Math.min(LADO - 1, Math.max(0, cy)) * LADO + Math.min(LADO - 1, Math.max(0, cx))];
+  const i = Math.floor(px), j = Math.floor(py), a = px - i, b = py - j;
+  const altitude = em(i, j) * (1 - a) * (1 - b) + em(i + 1, j) * a * (1 - b) + em(i, j + 1) * (1 - a) * b + em(i + 1, j + 1) * a * b;
+  const mpp = metrosPorPixel(z, y);
+  const k = Math.max(1, Math.round(45 / mpp));
+  const ci = Math.round(px), cj = Math.round(py);
+  const dx = (em(ci + k, cj) - em(ci - k, cj)) / (2 * k * mpp);
+  const dy = (em(ci, cj + k) - em(ci, cj - k)) / (2 * k * mpp);
+  const declive = Math.hypot(dx, dy) * 100;
+  return { altitude, declive, classe: CLASSES_DECLIVE.find((c) => declive < c.ate)!.nome };
+}

@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Map as Mapa, GeoJSONSource } from "maplibre-gl";
-import { CORES_AMBIENTE as CORES, TEMAS_AMBIENTE as TEMAS, formatarHa, quadroAmbiental, type TemaAmbiente as Tema } from "@/lib/geo/ambienteCar";
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import area from "@turf/area";
+import { CORES_AMBIENTE as CORES, NOME_CURTO, TEMAS_AMBIENTE as TEMAS, formatarHa, quadroAmbiental, type TemaAmbiente as Tema } from "@/lib/geo/ambienteCar";
+import { registrarAmbiente } from "./InfoNoPonto";
 type Dados = GeoJSON.FeatureCollection<GeoJSON.Geometry, { tema: Tema; fonte: string; data: string | null }>;
 const IDS = ["car-ambiental-poligono", "car-ambiental-linha", "car-ambiental-ponto"];
 const FONTE = "car-ambiental-imovel";
@@ -56,6 +59,26 @@ export default function AmbienteCar({ cod, mapa, tour = false, quadro = false, a
     if (mapa.getSource(FONTE)) aplicar(); else mapa.once("load", aplicar);
     return () => { mapa.off("load", aplicar); };
   }, [mapa, visiveis]);
+  // vídeo do Carlos (17/11, 22h00): "aqui é uma reserva; eu cliquei, tem que aparecer quanto da reserva"
+  useEffect(() => {
+    if (!mapa || !dados) return;
+    const poligonos = dados.features.filter(f => f.geometry && (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"));
+    const linhas = quadroAmbiental(dados.features, areaHa);
+    return registrarAmbiente(mapa, (lng, lat) => {
+      const pt: [number, number] = [lng, lat];
+      const aqui = poligonos.filter(f => booleanPointInPolygon(pt, f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>));
+      const temImovel = poligonos.some(f => f.properties.tema === "area_imovel");
+      if (temImovel ? !aqui.some(f => f.properties.tema === "area_imovel") : !aqui.length) return "fora";
+      const vistos = new Set<Tema>();
+      return aqui.filter(f => f.properties.tema !== "area_imovel" && !ocultos.includes(f.properties.tema)).flatMap(f => {
+        const t = f.properties.tema;
+        if (vistos.has(t)) return [];
+        vistos.add(t);
+        const l = linhas.find(x => x.tema === t);
+        return [{ tema: t, nome: NOME_CURTO[t], cor: CORES[t], ha: area(f) / 10_000, totalHa: l?.ha ?? area(f) / 10_000, pct: l?.pct ?? null }];
+      });
+    });
+  }, [mapa, dados, ocultos, areaHa]);
   if (erro) return <p role="status" className="text-sm">{erro} <button type="button" className="underline" onClick={() => { setErro(""); setTentativa(t => t + 1); }}>Tentar novamente</button></p>;
   if (!dados) return <p role="status" className="text-sm">Consultando as feições desta área…</p>;
   const linhas = quadroAmbiental(dados.features, areaHa);

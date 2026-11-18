@@ -39,6 +39,7 @@ import { useTema } from "@/components/shell/BotaoTema";
 import { usePreferencias } from "@/lib/usePreferencias";
 import { escaparHtml } from "@/lib/seguranca/html";
 import { GerenciadorCamadasOficiais, type AreaCamadas, type EstadoCamada, type FeicaoNoPonto } from "@/components/map/camadasOficiaisMapa";
+import { ListaNoPonto, LinhaRelevo, LinhaAmbiente, ambienteNoPonto, type AmbienteNoPonto } from "@/components/map/InfoNoPonto";
 import { exibirCarNasAreas } from "@/components/map/vetoresNasAreas";
 import RelevoNasAreas from "@/components/map/RelevoNasAreas";
 import { CAMADAS_OFICIAIS, CORES_RURAIS, camadaOficialPorId, descreverFeicao, type CamadaOficialId } from "@/lib/map/camadasOficiais";
@@ -124,32 +125,26 @@ const CAR_TIPO: Record<string, string> = {
   IRU: "Imóvel rural", AST: "Assentamento", PCT: "Povos e comunidades tradicionais",
 };
 
-/** O que as camadas oficiais ligadas têm no ponto clicado: uma linha por feição, com a cor da camada. */
-function ListaOficiais({ itens }: { itens: FeicaoNoPonto[] }) {
-  return (
-    <ul className="space-y-2">
-      {itens.slice(0, 12).map((f, i) => {
-        const c = camadaOficialPorId(f.camada)!;
-        const { titulo, detalhe } = descreverFeicao(f.camada, f.props);
-        return (
-          <li key={i} className="flex gap-2.5 rounded-xl border border-linha bg-superficie-2/60 px-3 py-2">
-            <span className={"mt-1 inline-block size-2.5 shrink-0 " + (c.ponto ? "rounded-full" : "rounded-sm")} style={{ background: c.cor }} />
-            <span className="min-w-0 text-sm leading-snug">
-              <span className="block text-[11px] font-bold uppercase tracking-wide text-texto-2">{c.orgao} · {c.nome}</span>
-              <span className="block font-semibold text-texto">{titulo}</span>
-              {detalhe && <span className="block text-xs text-texto-2">{detalhe}</span>}
-            </span>
-          </li>
-        );
-      })}
-      {itens.length > 12 && <li className="text-xs text-texto-2">e mais {itens.length - 12} no ponto clicado.</li>}
-    </ul>
-  );
+/**
+ * Extras do ponto clicado além das camadas oficiais (vídeo do Carlos, 17/11,
+ * 22h00): altitude quando há camada de relevo ligada e o tema ambiental do
+ * CAR quando a camada ambiental do imóvel está aberta.
+ */
+type ExtrasNoPonto = { lng: number; lat: number; relevo: boolean; ambiente: AmbienteNoPonto[] | null };
+
+/** "Neste ponto": tudo o que as camadas ligadas têm onde a pessoa clicou. */
+function NestePonto({ itens, extras }: { itens: FeicaoNoPonto[]; extras: ExtrasNoPonto | null }) {
+  return <div className="space-y-2">
+    {extras?.ambiente && <LinhaAmbiente itens={extras.ambiente} />}
+    {extras?.relevo && <LinhaRelevo lng={extras.lng} lat={extras.lat} />}
+    {itens.length > 0 && <ListaNoPonto itens={itens} />}
+  </div>;
 }
+const temExtras = (x: ExtrasNoPonto | null) => !!x && (x.relevo || !!x.ambiente);
 
 /** Clique fora do CAR mas sobre camadas oficiais: o mesmo resumo, sem o cartão do imóvel. */
-function CartaoOficiais({ itens, ponto, onFechar }: {
-  itens: FeicaoNoPonto[]; ponto: { lng: number; lat: number; zoom: number } | null; onFechar: () => void;
+function CartaoOficiais({ itens, extras, ponto, onFechar }: {
+  itens: FeicaoNoPonto[]; extras: ExtrasNoPonto | null; ponto: { lng: number; lat: number; zoom: number } | null; onFechar: () => void;
 }) {
   return (
     <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[70%] overflow-y-auto p-5 space-y-3 ${VIDRO}`}>
@@ -157,7 +152,7 @@ function CartaoOficiais({ itens, ponto, onFechar }: {
         <p className="lp-display text-2xl text-verde">Neste ponto</p>
         <BotaoFechar onClick={onFechar} />
       </div>
-      <ListaOficiais itens={itens} />
+      <NestePonto itens={itens} extras={extras} />
       {ponto && <BotaoCompartilharPonto lng={ponto.lng} lat={ponto.lat} zoom={Math.max(ponto.zoom, 15)} />}
     </div>
   );
@@ -167,15 +162,16 @@ function CartaoOficiais({ itens, ponto, onFechar }: {
  * Cartão do imóvel do CAR clicado, enxuto no modelo do Geomart (item 14 do
  * PDF do Carlos, 17/11/2026): área no topo, depois imóvel, matrícula,
  * município e CAR; as ações "é minha / anunciar", "vincular" e "consultar".
- * O resto (ambiental, fontes no ponto, divergência) fica em "Mais detalhes".
+ * O resto (ambiental, divergência) fica em "Mais detalhes"; o que as camadas
+ * ligadas têm no ponto aparece já no topo (vídeo do Carlos, 17/11, 22h00).
  */
-function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [] }: { car: CarProps; mapa: MLMap | null; podeAmbiente: boolean; onFechar: () => void; oficiais?: FeicaoNoPonto[] }) {
+function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [], extras = null }: { car: CarProps; mapa: MLMap | null; podeAmbiente: boolean; onFechar: () => void; oficiais?: FeicaoNoPonto[]; extras?: ExtrasNoPonto | null }) {
   const area = Number(car.area_ha);
   const [detalhes, setDetalhes] = useState(false);
   // áudio do Carlos (17/11, 19h09): anúncio só nos municípios que a Arini atende
   const atendidos = useMunicipiosAtendidos();
   const foraDaArea = !!atendidos && !municipioAtendidoDoCar(atendidos, car);
-  const [aba, setAba] = useState<"ambiental" | "fontes" | "sigef">(oficiais.length ? "fontes" : "sigef");
+  const [aba, setAba] = useState<"ambiental" | "sigef">("sigef");
   const linha = "flex items-baseline justify-between gap-3 py-1.5";
   return (
     <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto overscroll-contain p-4 space-y-3 ${VIDRO}`}>
@@ -188,6 +184,11 @@ function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [] }: { car: 
         </div>
         <BotaoFechar onClick={onFechar} />
       </div>
+      {/* vídeo do Carlos (17/11, 22h00): o clique na fazenda também responde pelas camadas ligadas (solo, clima, crédito...) */}
+      {(oficiais.length > 0 || temExtras(extras)) && <section aria-label="Neste ponto" className="space-y-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-texto-2">Neste ponto · camadas ligadas</p>
+        <NestePonto itens={oficiais} extras={extras} />
+      </section>}
       <dl className="text-sm divide-y divide-linha rounded-xl border border-linha bg-superficie-2/60 px-3">
         <ResumoSigef cod={car.cod} linha={linha} />
         <div className={linha}><dt className="text-texto-2">Município</dt><dd className="text-right font-medium text-texto">{car.municipio ?? "—"}</dd></div>
@@ -224,9 +225,9 @@ function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [] }: { car: 
       </button>
       {detalhes && <>
         <div role="group" aria-label="Detalhes desta área" className="flex flex-wrap gap-1">
-          {(["sigef", "ambiental", ...(oficiais.length ? ["fontes" as const] : [])] as const).map(k =>
+          {(["sigef", "ambiental"] as const).map(k =>
             <button type="button" key={k} aria-pressed={aba === k} onClick={() => setAba(k)} className={"min-h-8 rounded-lg px-2.5 text-xs " + (aba === k ? "bg-verde text-white" : "border border-linha text-texto")}>
-              {{ sigef: "Matrícula", ambiental: "Ambiental", fontes: "Fontes no ponto" }[k]}
+              {{ sigef: "Matrícula", ambiental: "Ambiental" }[k]}
             </button>)}
         </div>
         {aba === "sigef" && <>
@@ -236,7 +237,6 @@ function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [] }: { car: 
         {aba === "ambiental" && (podeAmbiente
           ? <AmbienteCar cod={car.cod} mapa={mapa} />
           : <Link href="/planos" className="text-sm text-verde underline">Consultar planos com mapa ambiental</Link>)}
-        {aba === "fontes" && oficiais.length > 0 && <ListaOficiais itens={oficiais} />}
         <Link href={`/cartografia/solicitar?referencia=${encodeURIComponent("car:" + car.cod)}&tipo=divergencia`}
           className="flex items-center justify-center gap-1.5 text-xs text-texto-2 hover:text-verde transition">
           <Flag className="size-3.5" /> O mapa está divergente desta área
@@ -429,6 +429,7 @@ export default function MapaRegional({
   const [noPonto, setNoPonto] = useState<FeicaoNoPonto[]>([]);
   // onde foi o último clique: o cartão "Neste ponto" oferece compartilhar esse ponto
   const [pontoClicado, setPontoClicado] = useState<{ lng: number; lat: number; zoom: number } | null>(null);
+  const [extrasPonto, setExtrasPonto] = useState<ExtrasNoPonto | null>(null);
   // pressão longa / botão direito em qualquer ponto: cartão mínimo "Neste ponto" (QA 09/11)
   const [pontoLivre, setPontoLivre] = useState<PontoLivre | null>(null);
   const alternarCamada = useCallback((id: CamadaOficialId) => {
@@ -1258,6 +1259,11 @@ export default function MapaRegional({
           if (desenhandoRef.current) return;
           const oficiais = camadasRef.current?.noPonto(e.point) ?? [];
           setNoPonto(oficiais);
+          setExtrasPonto({
+            lng: e.lngLat.lng, lat: e.lngLat.lat,
+            relevo: [...relevoAtivasRef.current].some((id) => id !== "hidrografia"),
+            ambiente: ambienteNoPonto(map, e.lngLat.lng, e.lngLat.lat),
+          });
           setPontoClicado({ lng: e.lngLat.lng, lat: e.lngLat.lat, zoom: map.getZoom() });
           const carLocal = map.getLayer("car-areas-fill") && map.queryRenderedFeatures(e.point, { layers: ["car-areas-fill"] })[0];
           const noCar = carLocal || (!!map.getLayer("car-fill") && map.getLayoutProperty("car-fill", "visibility") !== "none"
@@ -1952,8 +1958,8 @@ export default function MapaRegional({
         )}
 
         {!painelMapa && !avisoPlano && !selecionado && <>
-        {carSel && <CartaoCar key={carSel.cod} car={carSel} mapa={mapaPronto} podeAmbiente={liberado("camadas_oficiais")} oficiais={noPonto} onFechar={() => { setCarSel(null); setNoPonto([]); }} />}
-        {!carSel && noPonto.length > 0 && !loteSel && <CartaoOficiais itens={noPonto} ponto={pontoClicado} onFechar={() => setNoPonto([])} />}
+        {carSel && <CartaoCar key={carSel.cod} car={carSel} mapa={mapaPronto} podeAmbiente={liberado("camadas_oficiais")} oficiais={noPonto} extras={extrasPonto} onFechar={() => { setCarSel(null); setNoPonto([]); setExtrasPonto(null); }} />}
+        {!carSel && (noPonto.length > 0 || temExtras(extrasPonto)) && !loteSel && <CartaoOficiais itens={noPonto} extras={extrasPonto} ponto={pontoClicado} onFechar={() => { setNoPonto([]); setExtrasPonto(null); }} />}
         {pontoLivre && !carSel && !loteSel && !varios && noPonto.length === 0 && (
           <CartaoPonto ponto={pontoLivre} onFechar={() => setPontoLivre(null)} />
         )}
@@ -2009,7 +2015,7 @@ export default function MapaRegional({
         {mapaPronto && gerenteRelevo && recortesRelevo.map(({id, areas}) => <RelevoNasAreas
           key={id + "-" + areas.map(a => a.id).join(",")} id={id} areas={areas.map(a => a.geometria)}
           mapa={mapaPronto} gerente={gerenteRelevo} aoErro={avisarRelevoLocal} />)}
-        {!painelMapa && !carSel && !loteSel && !varios && !pontoLivre && !noPonto.length && !selecionado && <Legenda car={carVisivel} corUrbana={CARTO_CORES[base].linha} relevo={[...relevoAtivas, ...recortesRelevo.map(c => c.id)]} extras={CAMADAS_OFICIAIS.filter((c) => camadasVisiveis.has(c.id))
+        {!painelMapa && !carSel && !loteSel && !varios && !pontoLivre && !noPonto.length && !temExtras(extrasPonto) && !selecionado && <Legenda car={carVisivel} corUrbana={CARTO_CORES[base].linha} relevo={[...relevoAtivas, ...recortesRelevo.map(c => c.id)]} extras={CAMADAS_OFICIAIS.filter((c) => camadasVisiveis.has(c.id))
           // camada com cor por valor (biomas): uma linha por valor na legenda
           .flatMap((c) => (c.cores ? Object.entries(c.cores).map(([nome, cor]) => ({ nome, cor })) : [c]))} />}
 

@@ -151,16 +151,77 @@ export const CAMADAS_OFICIAIS: CamadaOficial[] = [
 
 export const camadaOficialPorId = (id: string) => CAMADAS_OFICIAIS.find((c) => c.id === id);
 
+export type DescricaoFeicao = {
+  titulo: string;
+  detalhe: string;
+  /** "Ver tudo" do cartão (vídeo do Carlos, 17/11, 22h02: "clicar e ver todo o clima") */
+  linhas?: [string, string][];
+};
+
+const reais = (v: unknown) => (Number(v) > 0
+  ? Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: Number(v) >= 100_000 ? 0 : 2 })
+  : "");
+const dataIsoBr = (v: unknown) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v ?? ""));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+};
+/** Só as linhas com valor. */
+const comValor = (...xs: [string, string][]) => xs.filter(([, v]) => !!v);
+
 /** Linha do cartão do clique: título e detalhe a partir das propriedades já enxutas pelo servidor. */
-export function descreverFeicao(id: CamadaOficialId, p: Record<string, unknown>): { titulo: string; detalhe: string } {
+export function descreverFeicao(id: CamadaOficialId, p: Record<string, unknown>): DescricaoFeicao {
   const s = (v: unknown) => (v == null || v === "" ? "" : String(v));
   const ha = (v: unknown) => (Number(v) > 0 ? `${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} ha` : "");
   const junta = (...xs: string[]) => xs.filter(Boolean).join(" · ");
   switch (id) {
+    // vídeos do Carlos (17/11, 22h00 e 22h02): dizer O QUE há no ponto, não o nome da camada
+    case "climas":
+      return {
+        titulo: s(p.nome) ? `Clima ${s(p.nome)}` : "Climas do Brasil",
+        detalhe: s(p.detalhe) || junta(s(p.temperatura), s(p.umidade), s(p.meses_secos)),
+        linhas: comValor(["Zona climática", s(p.nome)], ["Temperatura", s(p.temperatura)], ["Umidade", s(p.umidade)],
+          ["Período seco", s(p.meses_secos)], ["Fonte", "IBGE · Clima do Brasil 1:5.000.000"]),
+      };
+    case "solos":
+      return {
+        titulo: s(p.nome) || "Classe de solo",
+        detalhe: s(p.detalhe) || junta(s(p.subgrupo), s(p.textura) && `textura ${s(p.textura)}`),
+        linhas: comValor(["Classe", s(p.nome)], ["Unidade de mapeamento", s(p.simbolo)], ["Subgrupo", s(p.subgrupo)],
+          ["Textura", s(p.textura)], ["Horizonte A", s(p.horizonte)], ["Relevo", s(p.relevo)],
+          ["Associação de solos", s(p.associacao)], ["Inclusões", s(p.inclusao)], ["Fonte", "IBGE · Pedologia 1:250.000"]),
+      };
+    case "solos_textura":
+      return {
+        titulo: s(p.nome) || "Composição do solo (textura)",
+        detalhe: s(p.faixa) || s(p.detalhe),
+        linhas: comValor(["Textura", s(p.textura)], ["Composição", s(p.faixa)], ["Solo", s(p.solo)],
+          ["Fonte", "IBGE/Embrapa · Pedologia 1:250.000 (classes texturais do SiBCS)"]),
+      };
+    case "aptidao_agricola":
+      return {
+        titulo: s(p.nome) || "Aptidão agrícola",
+        detalhe: s(p.legenda) || s(p.detalhe),
+        linhas: comValor(["Classe", s(p.simbolo)], ["O que significa", s(p.legenda)], ["Solo dominante", s(p.solo)],
+          ["Suscetibilidade à erosão", s(p.erosao)], ["Impedimento à mecanização", s(p.mecanizacao)],
+          ["Fonte", "Embrapa · Aptidão agrícola das terras do Brasil 1:500.000"]),
+      };
+    case "credito_rural": {
+      const valor = reais(p.valor);
+      const carga = s(p.importado_em) && new Date(String(p.importado_em)).toLocaleDateString("pt-BR");
+      const oque = junta(s(p.finalidade), s(p.produto));
+      return {
+        titulo: valor ? `Crédito rural de ${valor}` : "Gleba de crédito rural",
+        detalhe: valor ? junta(oque, `SICOR ${s(p.ano)}`, dataIsoBr(p.emissao) && `emitido em ${dataIsoBr(p.emissao)}`)
+          : junta("SICOR", s(p.ano), carga && "Carga em " + carga),
+        linhas: comValor(["Valor do crédito", valor || "não informado nesta carga"], ["Finalidade", s(p.finalidade)],
+          ["Atividade", s(p.atividade)], ["Produto", s(p.produto)], ["Modalidade", s(p.modalidade)], ["Programa", s(p.programa)],
+          ["Área financiada", ha(p.area_financiada_ha)], ["Juros", Number(p.juros_aa) > 0 ? `${Number(p.juros_aa).toLocaleString("pt-BR")}% a.a.` : ""],
+          ["Emissão", dataIsoBr(p.emissao)], ["Vencimento", dataIsoBr(p.vencimento)], ["Ano do SICOR", s(p.ano)],
+          ["Fonte", `Banco Central · SICOR${carga ? `, carga em ${carga}` : ""}`]),
+      };
+    }
     case "snci":
       return { titulo: s(p.nome) || "Imóvel certificado no SNCI", detalhe: junta(s(p.natureza), s(p.certificacao), ha(p.area_ha), s(p.fonte)) };
-    case "credito_rural":
-      return { titulo: "Gleba de crédito rural", detalhe: junta("SICOR", s(p.ano), s(p.importado_em) && "Carga em " + new Date(String(p.importado_em)).toLocaleDateString("pt-BR")) };
     case "outorgas_federais":
       return { titulo: s(p.curso) || "Outorga federal", detalhe: junta(s(p.municipio), s(p.ato), s(p.validade), s(p.status)) };
     case "sigef":
@@ -201,10 +262,6 @@ export function descreverFeicao(id: CamadaOficialId, p: Record<string, unknown>)
     case "aerodromos":
     case "ana_pivos":
     case "barragens":
-    case "solos":
-    case "solos_textura":
-    case "aptidao_agricola":
-    case "climas":
     case "faixa_fronteira":
     case "area_queimada":
     case "icmbio_embargos":

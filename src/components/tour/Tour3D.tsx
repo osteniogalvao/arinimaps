@@ -10,9 +10,9 @@
  *    e o Puppeteer captura frame a frame com clock virtual).
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buffer } from "@turf/turf";
-import { RotateCcw } from "lucide-react";
+import { Compass, RotateCcw, RotateCw } from "lucide-react";
 import type { Map as MLMap, ErrorEvent as MLErrorEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { adicionarPinosPoi } from "@/lib/map/pinosPoi";
@@ -20,6 +20,9 @@ import { SATELITE } from "@/lib/map/config";
 import type { CamadasTour } from "@/lib/map/acesso-tour";
 import CamadasDoTour from "./CamadasDoTour";
 import AmbienteCar from "@/components/map/AmbienteCar";
+import { CartaoNoPonto } from "@/components/map/InfoNoPonto";
+import MedicaoMapa from "@/components/map/MedicaoMapa";
+import type { GerenciadorCamadasOficiais } from "@/components/map/camadasOficiaisMapa";
 
 export type TourData = {
   codigo: string;
@@ -33,6 +36,8 @@ export type TourData = {
   pois: { nome: string | null; categoria: string; lng: number; lat: number; distancia_m: number; destaque: boolean }[];
   record?: boolean;
   camadas?: CamadasTour | null;
+  /** plano com "Medir área e distância"; sem ele a régua aparece bloqueada (áudio do Carlos, 17/11, 22h14) */
+  medir?: boolean;
   consulta?: { voltar: string; limites: [number, number, number, number]; car?: string; raio?: number; caminho?: string };
 };
 
@@ -157,6 +162,47 @@ export default function Tour3D(dados: TourData) {
         paint: { "line-color": "#FFD400", "line-width": 2.5, "line-dasharray": [2, 1.5] } });
     }
   }, [mapaPronto, anel]);
+  // vídeo do Carlos (17/11, 22h12), como no Google Earth: inclinar, girar a direção e dar a volta de 360°
+  const [camera, setCamera] = useState({ pitch: 0, bearing: 0 });
+  const giro = useRef(0);
+  useEffect(() => {
+    const map = mapaPronto;
+    if (!map) return;
+    const ler = () => setCamera({ pitch: Math.round(map.getPitch()), bearing: Math.round(((map.getBearing() % 360) + 360) % 360) });
+    ler();
+    map.on("moveend", ler);
+    map.on("pitchend", ler);
+    map.on("rotateend", ler);
+    return () => { map.off("moveend", ler); map.off("pitchend", ler); map.off("rotateend", ler); cancelAnimationFrame(giro.current); };
+  }, [mapaPronto]);
+  const ajustar = (c: { pitch?: number; bearing?: number }) => {
+    const map = mapRef.current;
+    if (!map) return;
+    pausar.current();
+    cancelAnimationFrame(giro.current);
+    map.jumpTo(c);
+    setCamera(v => ({ ...v, ...c }));
+  };
+  const darVolta = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    pausar.current();
+    cancelAnimationFrame(giro.current);
+    const inicio = performance.now(), base = map.getBearing();
+    const passo = (agora: number) => {
+      const k = Math.min(1, (agora - inicio) / 12_000);
+      map.jumpTo({ bearing: base + 360 * k });
+      if (k < 1) giro.current = requestAnimationFrame(passo);
+      else setCamera(v => ({ ...v, bearing: Math.round(((base % 360) + 360) % 360) }));
+    };
+    giro.current = requestAnimationFrame(passo);
+  };
+
+  // vídeo do Carlos (17/11, 22h00): clicar no 3D e ver o que há no ponto (altitude, reserva, camadas)
+  const gerenteOficiais = useRef<GerenciadorCamadasOficiais | null>(null);
+  const aoGerente = useCallback((g: GerenciadorCamadasOficiais | null) => { gerenteOficiais.current = g; }, []);
+  const oficiaisNoPonto = useCallback((e: import("maplibre-gl").MapMouseEvent) => gerenteOficiais.current?.noPonto(e.point) ?? [], []);
+  const relevoSempre = useCallback(() => true, []);
   const voltarConsulta = dados.consulta?.caminho ? `${dados.consulta.caminho}?raio_m=${raio}` : dados.consulta?.voltar;
   const [fase, setFase] = useState<"carregando" | "tocando" | "pausado" | "fim">("carregando");
   const [etapa, setEtapa] = useState("Carregando o mapa…");
@@ -325,7 +371,7 @@ export default function Tour3D(dados: TourData) {
 
       {!dados.record && (
         <>
-          <div className="absolute top-4 left-4 max-w-[min(22rem,calc(100vw-2rem))] rounded-[20px] bg-[#0A2219]/92 px-5 py-4 text-[#F2F2EC]">
+          <div className="absolute top-4 left-4 max-h-[calc(100vh-7rem)] max-w-[min(22rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-[20px] bg-[#0A2219]/92 px-5 py-4 text-[#F2F2EC]">
             <span className="block h-0.5 w-7 rounded bg-[#D9BD6F]" aria-hidden />
             <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D3DCD2]">Tour 3D · {dados.codigo}</p>
             <p className="lp-display mt-1.5 text-3xl text-[#F2F2EC]">{dados.titulo}</p>
@@ -347,13 +393,38 @@ export default function Tour3D(dados: TourData) {
             </select>{raio > 0 && <small className="block text-[#B3C3B8]">As camadas abaixo mostram o que há até {raio < 1000 ? raio + " m" : raio / 1000 + " km"} da área.</small>}</label>}
             {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
               && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
-              && <CamadasDoTour mapa={mapaPronto} geometria={(anel?.geometry ?? dados.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon} permitidas={dados.camadas} />}
+              && <CamadasDoTour mapa={mapaPronto} geometria={(anel?.geometry ?? dados.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon} permitidas={dados.camadas} aoGerente={aoGerente} />}
             {mapaPronto && dados.consulta?.car && !!dados.camadas?.ambiente.length && <>
               <label className="mt-2 block text-sm"><input type="checkbox" checked={ambienteCar} onChange={e => setAmbienteCar(e.target.checked)} /> Ambiente do CAR</label>
               {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={dados.consulta.car} mapa={mapaPronto} tour /></div>}
             </>}
+            {mapaPronto && <div className="mt-3 space-y-1.5 text-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D3DCD2]">Ajustes da vista</p>
+              <label className="flex items-center gap-2">Inclinar
+                <input type="range" min={0} max={75} step={1} value={camera.pitch} className="w-28 accent-[#D9BD6F]"
+                  onChange={e => ajustar({ pitch: Number(e.target.value) })} />
+                <span className="tabular-nums text-xs">{camera.pitch}°</span>
+              </label>
+              <label className="flex items-center gap-2">Direção
+                <input type="range" min={0} max={359} step={1} value={camera.bearing} className="w-28 accent-[#D9BD6F]"
+                  onChange={e => ajustar({ bearing: Number(e.target.value) })} />
+                <span className="tabular-nums text-xs">{camera.bearing}°</span>
+              </label>
+              <div className="flex flex-wrap gap-2 pt-0.5">
+                <button type="button" onClick={darVolta}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#F2F2EC]/40 px-3 py-1.5 text-xs font-semibold hover:border-[#D9BD6F]">
+                  <RotateCw className="size-3.5" /> Volta de 360°
+                </button>
+                <button type="button" onClick={() => ajustar({ bearing: 0 })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#F2F2EC]/40 px-3 py-1.5 text-xs font-semibold hover:border-[#D9BD6F]">
+                  <Compass className="size-3.5" /> Norte para cima
+                </button>
+              </div>
+            </div>}
+            {mapaPronto && <MedicaoMapa mapa={mapaPronto} escuro liberado={dados.medir !== false} />}
             {dados.consulta && <a className="mt-2 block text-sm underline" href={voltarConsulta}>Voltar à consulta</a>}
           </div>
+          {mapaPronto && <CartaoNoPonto mapa={mapaPronto} oficiais={oficiaisNoPonto} relevo={relevoSempre} />}
 
           {(fase === "pausado" || fase === "fim") && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">

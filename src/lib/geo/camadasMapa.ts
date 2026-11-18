@@ -37,6 +37,8 @@ type Def = {
   /** tolerância de simplificação em graus (~111 km por grau) */
   tolerancia: number;
   buscar: (env: Env) => Promise<Feicao[]>;
+  /** células gravadas antes desta data ficam velhas (mudou o que a camada guarda de cada feição) */
+  desde?: string;
 };
 
 // ---------------------------------------------------------------- fontes
@@ -257,6 +259,112 @@ async function wfsAchado(chave: string, alvos: { base: string; nome: RegExp }[],
   })] : []);
 }
 
+// ---------------------------------------------------------------- solo e clima com o atributo à mostra
+/**
+ * Vídeo do Carlos (17/11/2026, 22h02): o cartão "Neste ponto" dizia só
+ * "Climas do Brasil", "Composição do solo (textura)" e "Classes de solo ·
+ * típico" — o nome da camada, não o que há no ponto. Estas camadas agora
+ * guardam os campos que interessam a quem negocia terra:
+ *  - clima: zona, temperatura, umidade e meses secos (IBGE, Clima do Brasil 1:5 mi);
+ *  - classe de solo: a legenda (ex.: Latossolo Vermelho Distrófico), subgrupo,
+ *    textura, horizonte, relevo e a associação completa (IBGE/BDIA, pedologia 1:250 mil);
+ *  - textura: a classe textural da mesma base (arenosa, média, argilosa...) com
+ *    a faixa de argila do SiBCS. A camada "textura" achada antes no GeoServer da
+ *    Embrapa era um zoneamento de milho de MG, não um mapa de textura;
+ *  - aptidão agrícola: o mapa nacional da Embrapa (1:500 mil), com a legenda
+ *    por extenso. A busca pelo nome pegava o mapa do Amapá.
+ */
+const SOLO_SIMBOLO = /^[A-Z][A-Za-z0-9]*\s*-\s*/;
+const limpa = (v: unknown) => s(String(v ?? "").replace(/\s+/g, " "));
+/** Faixas de argila das classes texturais (SiBCS/Embrapa). */
+export const FAIXA_TEXTURA: Record<string, string> = {
+  "arenosa": "menos de 15% de argila, mais de 70% de areia",
+  "média": "15% a 35% de argila",
+  "siltosa": "menos de 35% de argila e menos de 15% de areia",
+  "argilosa": "35% a 60% de argila",
+  "muito argilosa": "mais de 60% de argila",
+};
+function textoTextura(v: unknown) {
+  const t = limpa(v)?.toLowerCase() ?? null;
+  if (!t) return null;
+  const partes = t.split(/\s*\/\s*/).map((x) => FAIXA_TEXTURA[x] ? `${x} (${FAIXA_TEXTURA[x]})` : x);
+  return partes.join(" sobre ");
+}
+
+async function climasIbge(env: Env) {
+  return (await wfs(IBGE, "CREN:ClimadoBrasil_5000", env, 300)).flatMap((f) => f.geometry ? [feicao(f.geometry, {
+    id: `climas-${s(f.properties.desc_compl) ?? JSON.stringify(f.geometry).slice(0, 60)}`,
+    nome: limpa(f.properties.zona),
+    temperatura: limpa(f.properties.temperatur),
+    umidade: limpa(f.properties.tp_umidade),
+    meses_secos: limpa(f.properties.distr_umid),
+    detalhe: [limpa(f.properties.temperatur), [limpa(f.properties.tp_umidade), limpa(f.properties.distr_umid)].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || null,
+    area_ha: null,
+  })] : []);
+}
+
+async function pedologiaIbge(env: Env) {
+  return (await wfs(IBGE, "BDIA:pedo_area", env, 500)).flatMap((f) => {
+    if (!f.geometry) return [];
+    const p = f.properties;
+    const legenda = limpa(p.legenda);
+    return [{ geometry: f.geometry, p, legenda, nome: legenda?.replace(SOLO_SIMBOLO, "") ?? limpa(p.legenda_2) ?? limpa(p.ordem) }];
+  });
+}
+
+async function solosIbge(env: Env) {
+  return (await pedologiaIbge(env)).map(({ geometry, p, nome }) => feicao(geometry, {
+    id: `solos-${s(p.id1) ?? JSON.stringify(geometry).slice(0, 60)}`,
+    nome,
+    simbolo: limpa(p.nom_unidad) ?? limpa(p.cod_simbol),
+    subgrupo: limpa(p.subgrupos),
+    textura: limpa(p.textura),
+    horizonte: limpa(p.horizonte),
+    relevo: limpa(p.relevo),
+    associacao: limpa(p.componente),
+    inclusao: [limpa(p.inclu_p1), limpa(p.inclu_p2), limpa(p.inclu_p3)].filter(Boolean).join("; ") || null,
+    detalhe: [limpa(p.subgrupos), limpa(p.textura) && `textura ${limpa(p.textura)}`, limpa(p.relevo) && `relevo ${limpa(p.relevo)}`].filter(Boolean).join(" · ") || null,
+    area_ha: null,
+  }));
+}
+
+async function texturaIbge(env: Env) {
+  return (await pedologiaIbge(env)).flatMap(({ geometry, p, nome }) => {
+    const textura = limpa(p.textura);
+    if (!textura) return [];
+    return [feicao(geometry, {
+      id: `solos_textura-${s(p.id1) ?? JSON.stringify(geometry).slice(0, 60)}`,
+      nome: `Textura ${textura.toLowerCase()}`,
+      textura,
+      faixa: FAIXA_TEXTURA[textura.toLowerCase()] ? `${FAIXA_TEXTURA[textura.toLowerCase()].charAt(0).toUpperCase()}${FAIXA_TEXTURA[textura.toLowerCase()].slice(1)}` : textoTextura(textura),
+      solo: nome,
+      detalhe: [textoTextura(textura), nome].filter(Boolean).join(" · ") || null,
+      area_ha: null,
+    })];
+  });
+}
+
+async function aptidaoEmbrapa(env: Env) {
+  return (await wfs(EMBRAPA, "geonode:aptidao_agr_bra", env, 500)).flatMap((f) => {
+    if (!f.geometry) return [];
+    const p = f.properties;
+    const legenda = limpa(p.legenda_ap);
+    const simbolo = limpa(p.simb_apt) ?? limpa(p.apt_comp1);
+    const texto = legenda?.replace(/^\S+\s+/, "") ?? null;
+    return [feicao(f.geometry, {
+      id: `aptidao_agricola-${s(p.ogc_fid) ?? JSON.stringify(f.geometry).slice(0, 60)}`,
+      nome: simbolo ? `Aptidão ${simbolo}` : "Aptidão agrícola",
+      simbolo,
+      legenda: texto,
+      solo: limpa(p.solo_comp1),
+      erosao: limpa(p.eros_comp1),
+      mecanizacao: limpa(p.mec_comp1),
+      detalhe: [texto, limpa(p.eros_comp1) && `suscetível à erosão: ${limpa(p.eros_comp1)}`, limpa(p.mec_comp1) && `impedimento à mecanização: ${limpa(p.mec_comp1)}`].filter(Boolean).join(" · ") || null,
+      area_ha: null,
+    })];
+  });
+}
+
 /** Pontos do OpenStreetMap (Overpass) na célula: frigoríficos, silos, usinas. */
 async function overpass(env: Env, seletores: string[], rotulo: (t: Record<string, string>) => string) {
   const bbox = `${env.ymin},${env.xmin},${env.ymax},${env.xmax}`;
@@ -336,7 +444,8 @@ const DEFS: Record<CamadaOficialId, Def> = {
     },
   },
   credito_rural: {
-    zCelula: 12, validadeDias: 7, tolerancia: 0.00002,
+    // 0150: a gleba passa a trazer valor, finalidade e produto da operação
+    zCelula: 12, validadeDias: 7, tolerancia: 0.00002, desde: "2026-11-18T00:00:00Z",
     buscar: async env => {
       const { data, error } = await supabaseAdmin().rpc("fn_sicor_glebas_mapa", {
         p_xmin: env.xmin, p_ymin: env.ymin, p_xmax: env.xmax, p_ymax: env.ymax,
@@ -537,21 +646,22 @@ const DEFS: Record<CamadaOficialId, Def> = {
       return listas.flatMap((l) => (l.status === "fulfilled" ? l.value : []));
     },
   },
+  // vídeo do Carlos (17/11, 22h02): camadas fixas, com o atributo do ponto (ver solosIbge e vizinhas)
   solos: {
-    zCelula: 8, validadeDias: 180, tolerancia: 0.0005,
-    buscar: (env) => wfsAchado("solos", [{ base: IBGE, nome: /pedolog|solos?_|_solos?/i }, { base: EMBRAPA, nome: /pedolog|classes?.de.solo|mapa.de.solos/i }], env, 500),
+    zCelula: 8, validadeDias: 180, tolerancia: 0.0005, desde: "2026-11-18T00:00:00Z",
+    buscar: (env) => solosIbge(env).catch(() => wfsAchado("solos", [{ base: EMBRAPA, nome: /pedolog|classes?.de.solo|mapa.de.solos/i }], env, 500)),
   },
   solos_textura: {
-    zCelula: 8, validadeDias: 180, tolerancia: 0.0005,
-    buscar: (env) => wfsAchado("solos_textura", [{ base: EMBRAPA, nome: /textur|granulom|argila/i }, { base: IBGE, nome: /textur/i }], env, 500),
+    zCelula: 8, validadeDias: 180, tolerancia: 0.0005, desde: "2026-11-18T00:00:00Z",
+    buscar: (env) => texturaIbge(env),
   },
   aptidao_agricola: {
-    zCelula: 8, validadeDias: 180, tolerancia: 0.0005,
-    buscar: (env) => wfsAchado("aptidao_agricola", [{ base: EMBRAPA, nome: /aptid/i }, { base: IBGE, nome: /aptid|potencial.agr/i }], env, 500),
+    zCelula: 8, validadeDias: 180, tolerancia: 0.0005, desde: "2026-11-18T00:00:00Z",
+    buscar: (env) => aptidaoEmbrapa(env),
   },
   climas: {
-    zCelula: 5, validadeDias: 365, tolerancia: 0.002,
-    buscar: (env) => wfsAchado("climas", [{ base: IBGE, nome: /clima/i }], env, 300),
+    zCelula: 5, validadeDias: 365, tolerancia: 0.002, desde: "2026-11-18T00:00:00Z",
+    buscar: (env) => climasIbge(env).catch(() => wfsAchado("climas", [{ base: IBGE, nome: /clima/i }], env, 300)),
   },
   faixa_fronteira: {
     zCelula: 5, validadeDias: 365, tolerancia: 0.002,
@@ -656,7 +766,8 @@ export async function camadaNaJanela(id: CamadaOficialId, env: Env) {
   for (let x = x0; x <= x1; x++)
     for (let y = y0; y <= y1; y++) celulas.push({ x, y });
 
-  const corte = new Date(Date.now() - def.validadeDias * 86_400_000).toISOString();
+  const vencido = Date.now() - def.validadeDias * 86_400_000;
+  const corte = new Date(def.desde ? Math.max(vencido, Date.parse(def.desde)) : vencido).toISOString();
   const { data: guardadas } = await supabaseAdmin().from("camadas_celulas")
     .select("x, y, geojson").eq("camada", id).eq("z", def.zCelula).is("erro", null).gte("buscado_em", corte)
     .in("x", [...new Set(celulas.map((c) => c.x))]).in("y", [...new Set(celulas.map((c) => c.y))]);
