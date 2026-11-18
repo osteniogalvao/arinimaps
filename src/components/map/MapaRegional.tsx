@@ -165,6 +165,39 @@ function CartaoOficiais({ itens, extras, ponto, onFechar }: {
  * O resto (ambiental, divergência) fica em "Mais detalhes"; o que as camadas
  * ligadas têm no ponto aparece já no topo (vídeo do Carlos, 17/11, 22h00).
  */
+/**
+ * Pedido de 18/11/2026: visitante e conta gratuita veem só imóveis à venda. A
+ * área do CAR sem anúncio é de terceiro: o cartão não mostra área, matrícula,
+ * nº do CAR nem camadas; fica só o caminho para o dono anunciar ou vincular e
+ * para os planos de consulta (a trava de verdade está nas rotas, src/lib/dados-terceiros.ts).
+ */
+function CartaoCarBloqueado({ car, logado, onFechar }: { car: CarProps; logado: boolean; onFechar: () => void }) {
+  return (
+    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] p-4 space-y-3 ${VIDRO}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro">{CAR_TIPO[car.tipo ?? ""] ?? "Imóvel rural"}{car.municipio ? ` · ${car.municipio}` : ""}</p>
+          <p className="lp-display text-2xl text-verde mt-1.5 flex items-center gap-2"><Lock className="size-5 shrink-0 text-ouro" /> Área sem anúncio</p>
+        </div>
+        <BotaoFechar onClick={onFechar} />
+      </div>
+      <p className="text-sm leading-relaxed text-texto-2">
+        Esta área não está à venda na Arini. Área, matrícula, quadro ambiental e crédito rural de imóveis de terceiros fazem parte dos planos de consulta.
+      </p>
+      <div className="space-y-2">
+        <Link href={logado ? "/planos" : "/entrar?cadastro=1"} className="btn-verde flex w-full items-center justify-center gap-1.5 py-2.5 text-sm">
+          {logado ? "Ver planos de consulta" : "Criar conta grátis"} <ArrowRight className="size-4" />
+        </Link>
+        <div className="grid grid-cols-2 gap-2">
+          <Link href={`/painel/novo?car=${encodeURIComponent(car.cod)}`} onClick={() => guardarCarPendente(car.cod)}
+            className="btn-contorno flex items-center justify-center py-2 text-sm">É minha · anunciar</Link>
+          <Link href={`/painel/cofre?car=${encodeURIComponent(car.cod)}`} className="btn-contorno flex items-center justify-center py-2 text-sm">Vincular área</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [], extras = null }: { car: CarProps; mapa: MLMap | null; podeAmbiente: boolean; onFechar: () => void; oficiais?: FeicaoNoPonto[]; extras?: ExtrasNoPonto | null }) {
   const area = Number(car.area_ha);
   const [detalhes, setDetalhes] = useState(false);
@@ -338,6 +371,9 @@ export default function MapaRegional({
   const interativo = useSyncExternalStore(assinarHidratacao, () => true, () => false);
   const router = useRouter();
   const liberado = (r: string) => !recursos || recursos.includes(r);
+  // 18/11/2026: sem `dados_terceiros`, área do CAR e lote sem anúncio não mostram dado nenhum
+  const podeTerceiros = liberado("dados_terceiros");
+  const podeTerceirosRef = useRef(podeTerceiros);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const dadosRef = useRef<GeoJSON.FeatureCollection | null>(null);
@@ -993,6 +1029,7 @@ export default function MapaRegional({
         map.addLayer({
           id: "lotes-medidas", type: "symbol", source: "lotes", "source-layer": "medidas", minzoom: MEDIDA_ZOOM_MIN,
           layout: {
+            visibility: podeTerceirosRef.current ? "visible" : "none",
             "text-field": ["get", "m"],
             "text-font": ["Open Sans Regular"],
             "text-size": ["interpolate", ["linear"], ["zoom"], 18, 9.5, 20, 13],
@@ -1007,6 +1044,7 @@ export default function MapaRegional({
         map.addLayer({
           id: "lotes-rotulos", type: "symbol", source: "lotes", "source-layer": "rotulos", minzoom: ROTULO_ZOOM_MIN,
           layout: {
+            visibility: podeTerceirosRef.current ? "visible" : "none",
             "text-field": ["case",
               ["all", ["has", "numero"], ["has", "quadra"]],
               ["format", ["get", "numero"], {}, "\nQd ", { "font-scale": 0.72 }, ["get", "quadra"], { "font-scale": 0.72 }],
@@ -1958,13 +1996,14 @@ export default function MapaRegional({
         )}
 
         {!painelMapa && !avisoPlano && !selecionado && <>
-        {carSel && <CartaoCar key={carSel.cod} car={carSel} mapa={mapaPronto} podeAmbiente={liberado("camadas_oficiais")} oficiais={noPonto} extras={extrasPonto} onFechar={() => { setCarSel(null); setNoPonto([]); setExtrasPonto(null); }} />}
+        {carSel && !podeTerceiros && <CartaoCarBloqueado key={carSel.cod} car={carSel} logado={logado} onFechar={() => { setCarSel(null); setNoPonto([]); setExtrasPonto(null); }} />}
+        {carSel && podeTerceiros && <CartaoCar key={carSel.cod} car={carSel} mapa={mapaPronto} podeAmbiente={liberado("camadas_oficiais")} oficiais={noPonto} extras={extrasPonto} onFechar={() => { setCarSel(null); setNoPonto([]); setExtrasPonto(null); }} />}
         {!carSel && (noPonto.length > 0 || temExtras(extrasPonto)) && !loteSel && <CartaoOficiais itens={noPonto} extras={extrasPonto} ponto={pontoClicado} onFechar={() => { setNoPonto([]); setExtrasPonto(null); }} />}
         {pontoLivre && !carSel && !loteSel && !varios && noPonto.length === 0 && (
           <CartaoPonto ponto={pontoLivre} onFechar={() => setPontoLivre(null)} />
         )}
         {loteSel && !carSel && !varios && (
-          <CartaoLote lote={loteSel} onFechar={() => {
+          <CartaoLote lote={loteSel} logado={logado} onFechar={() => {
             setLoteSel(null);
             mapRef.current?.removeFeatureState({ source: "lotes", sourceLayer: "lotes" });
           }} onVarios={() => { setAvisoVarios(""); mudarVarios([loteSel]); setLoteSel(null); }} />

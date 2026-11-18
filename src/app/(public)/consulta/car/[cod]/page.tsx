@@ -2,7 +2,9 @@ import { raioConsulta } from "@/lib/rural/raios";
 import { camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
 import GeradorRelatorio from "@/components/rural/GeradorRelatorio";
 import { whatsappConfigurado } from "@/lib/meta";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { podeVerArea } from "@/lib/dados-terceiros";
+import BloqueioTerceiros from "@/components/conta/BloqueioTerceiros";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
 import MiniMapa from "@/components/map/MiniMapa";
@@ -28,6 +30,8 @@ export const dynamic = "force-dynamic";
 /** Prévia do link (WhatsApp): área e município do CAR. Só lê as propriedades, sem a divisa. */
 export async function generateMetadata({ params }: PageProps<"/consulta/car/[cod]">): Promise<Metadata> {
   const cod = decodeURIComponent((await params).cod);
+  // 18/11/2026: a prévia do link não entrega a área de terceiro a quem não pode vê-la
+  if (!(await podeVerArea({ car: cod })).pode) return { title: "Consulta de área rural" };
   const { data } = await consultarCar(cod);
   const p = (data as Car | null)?.properties;
   if (!p) return { title: "Consulta de área rural" };
@@ -64,6 +68,10 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
   const raioM = raioConsulta((await searchParams).raio_m, 2000);
   if (raioM === null) notFound();
   const cod = decodeURIComponent((await params).cod);
+  // 18/11/2026: visitante e conta gratuita veem só imóveis à venda
+  const direito = await podeVerArea({ car: cod });
+  if (!direito.pode) return <BloqueioTerceiros tipo="rural" anunciar={`/painel/cofre?car=${encodeURIComponent(cod)}`} />;
+  if (direito.anuncio && !direito.acesso.equipe && !direito.acesso.recursos.has("dados_terceiros")) redirect(`/imovel/${direito.anuncio}`);
   const admin = supabaseAdmin();
   const [{ data: carRaw, error }, { data: anuncio }, consulta, atendidos] = await Promise.all([
     consultarCar(cod),

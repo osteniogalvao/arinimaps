@@ -1,5 +1,6 @@
 import HabilitacaoLeilao from "@/components/imovel/HabilitacaoLeilao";
 import AcoesInteresse from "@/components/imovel/AcoesInteresse";
+import FichaVisitante, { type DadosVitrine } from "@/components/imovel/FichaVisitante";
 import { visitasDoNavegador } from "@/lib/imovel/visitas";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
@@ -109,7 +110,7 @@ function fichaTecnica(
   return itens;
 }
 
-export default async function PaginaImovel({ params, searchParams }: PageProps<"/imovel/[codigo]">) {
+export default async function PaginaImovel({ params }: PageProps<"/imovel/[codigo]">) {
   const { codigo } = await params;
   // código do nome antigo (ARINI-MAP-000002) → o mesmo imóvel no padrão novo
   const antigo = codigo.match(/^ARINI-MAP-(\d{6})$/i);
@@ -126,19 +127,29 @@ export default async function PaginaImovel({ params, searchParams }: PageProps<"
   ]);
   if (!imovel || imovel.status==="vendido") notFound();
   if (!user) {
-    const {lista, limite} = await visitasDoNavegador();
-    const liberado = lista.includes(imovel.codigo);
-    const destino = "/entrar?volta=" + encodeURIComponent("/imovel/" + imovel.codigo);
-    return <Moldura usuario={null}><Conteudo className="space-y-5 py-12">
-      <Link href="/imoveis" className="text-sm text-verde underline">Imóveis à venda</Link>
-      <h1 className="lp-display text-4xl">{imovel.titulo}</h1>
-      <p>{[imovel.codigo,imovel.municipio?.nome,formatBRL(imovel.valor)].filter(Boolean).join(" · ")}</p>
-      {liberado && <p>{imovel.tipo==="rural"?"Imóvel rural":"Imóvel urbano"}{imovel.area_m2 ? " · "+formatArea(imovel.area_m2,imovel.tipo):""}</p>}
-      {!liberado && lista.length<limite && (await searchParams).resumo!=="1" &&
-        <a className="mr-5 inline-flex rounded-full border border-verde px-4 py-2 text-verde" href={"/api/vitrine/abrir?codigo="+encodeURIComponent(imovel.codigo)}>Abrir resumo do imóvel</a>}
-      <Link href={destino} className="inline-flex rounded-full bg-[#124431] px-5 py-2.5 font-bold text-white">Entrar para ver a ficha completa</Link>
-      {!liberado && lista.length>=limite && <p>Você atingiu o limite de resumos por visitante. O cadastro é gratuito.</p>}
-    </Conteudo></Moldura>;
+    // 18/11/2026: sem conta, a vitrine completa do imóvel à venda até o limite
+    // de fichas do navegador; depois, só a parede "crie sua conta grátis"
+    const { lista, limite } = await visitasDoNavegador();
+    const jaVista = lista.includes(imovel.codigo);
+    const liberado = jaVista || lista.length < limite;
+    const fotosV = imovel.media.filter((m) => m.tipo === "foto");
+    const capaV = imovel.media.find((m) => m.capa && m.tipo === "foto") ?? fotosV[0];
+    const dados: DadosVitrine = {
+      codigo: imovel.codigo, titulo: imovel.titulo, tipo: imovel.tipo, descricao: imovel.descricao, valor: imovel.valor,
+      municipio: imovel.municipio,
+      slides: [
+        ...fotosV.map((f) => ({ tipo: "foto" as const, url: mediaUrl(f.path) })),
+        ...imovel.media.filter((m) => m.tipo === "video").map((v) => ({ tipo: "video" as const, url: mediaUrl(v.path) })),
+        // o slide do tour leva ao login (a página do tour pede conta)
+        ...(imovel.geometry ? [{ tipo: "tour" as const, href: `/imovel/${imovel.codigo}/tour`, poster: fotosV[0] ? mediaUrl(fotosV[0].path) : null }] : []),
+      ],
+      capa: capaV ? mediaUrl(capaV.path) : null,
+      ficha: fichaTecnica(imovel.caracteristicas ?? {}, imovel.area_m2, imovel.tipo),
+      benfeitorias: (imovel.caracteristicas?.benfeitorias as string[] | undefined) ?? [],
+      condicoes: imovel.condicoes_venda, aceitaPermuta: imovel.aceita_permuta, aceitaFinanciamento: imovel.aceita_financiamento,
+      leilao: propId?.modalidade === "leilao", temDivisa: !!imovel.geometry,
+    };
+    return <FichaVisitante d={dados} liberado={liberado} registrar={liberado && !jaVista} vistos={lista.length} limite={limite} />;
   }
   const leilao = propId?.modalidade === "leilao" ? (propId.leilao ?? {}) as Leilao : null;
   const [{ data: tourData }, { data: video }, { data: unidades }, { data: whats }, { data: divisa }, { data: origemCadastro }, favoritos, a, permiteHabilitacao, candidatura, configEspelho] = await Promise.all([
