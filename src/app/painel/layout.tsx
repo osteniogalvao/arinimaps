@@ -30,19 +30,21 @@ export default async function PainelLayout({ children }: LayoutProps<"/painel">)
   return (
     <AppShell usuario={{ nome: user.nome || "Conta", papel: PAPEL_LABEL[user.role] ?? "Cliente", avatar: user.avatarUrl }} busca={false} anunciar={anunciar}>
       <div className="mx-auto w-full max-w-[1280px] md:px-4 md:pt-4">
-        {/* capa de prancha: Verde Profundo, linhas de mapa e o radar no canto */}
-        <header className="lp-escuro lp-malha-escura relative mb-8 overflow-hidden rounded-3xl p-6 md:mb-10 md:p-9">
+        {/* capa de prancha: Verde Profundo, linhas de mapa e o radar no canto.
+            Auditoria mobile 18/11: no celular a capa encolhe (ocupava ~45 % da
+            primeira tela em toda página do painel e empurrava o conteúdo) */}
+        <header className="lp-escuro lp-malha-escura relative mb-5 overflow-hidden rounded-3xl p-4 md:mb-10 md:p-9">
           <MarcaArini variante="radar" titulo=""
             className="pointer-events-none absolute right-6 top-6 hidden w-9 md:block" />
-          <p className="lp-eyebrow">01 · Área do cliente</p>
-          <p className="lp-display mt-4 text-3xl md:text-[2.75rem] text-texto text-balance">
+          <p className="lp-eyebrow max-md:hidden">01 · Área do cliente</p>
+          <p className="lp-display text-2xl md:mt-4 md:text-[2.75rem] text-texto text-balance">
             Olá{primeiroNome ? <>, <span className="text-ouro">{primeiroNome}</span></> : ""}
           </p>
-          <p className="mt-3 text-base text-texto-2">
+          <p className="mt-1 text-sm text-texto-2 md:mt-3 md:text-base">
             {PAPEL_LABEL[user.role] ?? "Anunciante"}
             {plano && <> · plano <strong className="font-semibold text-texto">{plano}</strong></>}
           </p>
-          <div className="mt-7">
+          <div className="mt-4 md:mt-7">
             <AbasPainel leiloes={user.role==="leiloeiro"} territorio={territorio} crm={crm} anunciar={anunciar} cofre={temPerfilCofre(user.role, user.nicho)} insumos={acesso?.recursos.has("calculadora_insumos")} />
           </div>
         </header>

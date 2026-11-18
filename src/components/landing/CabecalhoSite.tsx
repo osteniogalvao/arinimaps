@@ -104,12 +104,13 @@ export default function CabecalhoSite({ sobreHero = false, whatsapp, email, usua
   return (
     <header className={`${sobreHero ? "fixed" : "sticky"} inset-x-0 top-0 z-50 ${transparente ? "lp-escuro" : ""}`}>
       {/* ---------- faixa do topo: cotações (ou contato, sem cotações) ---------- */}
+      {/* auditoria mobile 18/11: no mapa do celular a faixa sai (40 px a mais de mapa) */}
       {(temCotacoes || wa || email) && (
         <motion.div
           initial={false}
           animate={{ height: rolou ? 0 : 40 }}
           transition={{ duration: 0.3 }}
-          className={`overflow-hidden text-sm ${temCotacoes ? "" : "hidden md:block"} ${transparente ? "bg-black/35 text-white/85" : "lp-escuro bg-[#0A2219] text-white/85"}`}
+          className={`overflow-hidden text-sm ${temCotacoes ? "" : "hidden md:block"} ${caminho.startsWith("/mapa") ? "max-sm:hidden" : ""} ${transparente ? "bg-black/35 text-white/85" : "lp-escuro bg-[#0A2219] text-white/85"}`}
         >
           {temCotacoes ? (
             <FaixaCotacoes itens={cotacoes!} whatsapp={whatsappCotacoes} />

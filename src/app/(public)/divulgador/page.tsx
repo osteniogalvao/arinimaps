@@ -1,3 +1,5 @@
+import Moldura from "@/components/shell/Moldura";
+import { currentUser } from "@/lib/supabase/server";
 import Link from "next/link";
 import { ator } from "@/lib/authz";
 import { botaoDiv, caixaDiv, campoDiv, nomesEstado, situacaoPiloto } from "@/lib/divulgacao";
@@ -6,7 +8,11 @@ import Carteira from "./Carteira";
 type Busca=Promise<{aviso?:string;tipo?:string;regiao?:string}>;
 export default async function Divulgador({searchParams}:{searchParams:Busca}) {
   const a=await ator(), p=await situacaoPiloto(a?.userId), {aviso,tipo,regiao}=await searchParams;
-  return <main className="mx-auto w-full max-w-3xl space-y-6 px-5 py-12">
+  // auditoria mobile 18/11: a página abria sem o cabeçalho do site (sem menu, sem
+  // volta) — no celular a pessoa ficava presa nela
+  const u = await currentUser();
+  const usuario = u ? { nome: u.nome || "Conta", papel: "Usuário" } : null;
+  return <Moldura usuario={usuario} site><main className="mx-auto w-full max-w-3xl space-y-6 px-5 py-12">
     <Link className="text-verde underline" href={a?"/conta/perfis":"/planos?perfil=divulgador"}>{a?"Perfis de acesso":"Perfis da ARINI"}</Link>
     <h1 className="lp-display text-4xl">Programa de divulgadores</h1>
     {aviso && <p role="status" className={caixaDiv}>{aviso}</p>}
@@ -28,5 +34,5 @@ export default async function Divulgador({searchParams}:{searchParams:Busca}) {
         <button className={botaoDiv}>{p.temVaga?"Enviar para análise":"Avise-me"}</button>
       </form>}
     </section>{p.estado==="ativo"&&p.aberto&&a.nicho==="divulgador"&&<Carteira titular={a.userId} tipo={tipo} regiao={regiao}/>}</>}
-  </main>;
+  </main></Moldura>;
 }

@@ -34,8 +34,9 @@ export default async function PaginaMapa() {
         data-limites={JSON.stringify(LIMITES_MAPA_REGIONAL)} data-preferencias={CHAVE_PREFERENCIAS}
       />
       <MapaRegional recursos={[...acesso.recursos]} logado={!!user} versaoLotes={versaoLotes} />
-      {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14) */}
-      <AjudaTour perfil="mapa" className="fixed bottom-56 right-3 z-30 lg:bottom-36" />
+      {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14). No celular fica
+          abaixo dos cartões do mapa (z-5), para não tampar o que a pessoa tocou. */}
+      <AjudaTour perfil="mapa" className="fixed bottom-56 right-3 z-[5] sm:z-30 lg:bottom-36" />
     </Moldura>
   );
 }

@@ -220,17 +220,19 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
   return (
     <>
       {/* Revisão do Carlos (29/10): a IA se chama "Ari" e precisa ser vista — o
-          nome fica sempre à mostra, com o radar da marca pulsando de leve */}
+          nome fica sempre à mostra, com o radar da marca pulsando de leve.
+          Auditoria mobile 18/11: no celular a pílula diz só "Ari" — a frase
+          inteira tampava campos de busca e textos no pé das telas */}
       {flutuante && !aberto && (
         <button type="button" onClick={abrir} aria-label="Pergunte à Ari, a assistente de IA da Arini"
-          className="group fixed bottom-3 right-3 z-50 flex h-12 items-center gap-2.5 rounded-full pl-2 pr-4 sm:bottom-5 sm:right-5 sm:h-14 sm:pr-5 text-[#F2F2EC] shadow-[0_1px_2px_rgba(10,34,25,0.25),0_12px_24px_-14px_rgba(10,34,25,0.5)] ring-2 ring-[#D9BD6F]/70 transition hover:-translate-y-0.5 hover:ring-[#D9BD6F]"
+          className="group fixed bottom-3 right-3 z-50 flex h-12 items-center gap-2 sm:gap-2.5 rounded-full pl-1.5 pr-3.5 sm:bottom-5 sm:right-5 sm:h-14 sm:pr-5 text-[#F2F2EC] shadow-[0_1px_2px_rgba(10,34,25,0.25),0_12px_24px_-14px_rgba(10,34,25,0.5)] ring-2 ring-[#D9BD6F]/70 transition hover:-translate-y-0.5 hover:ring-[#D9BD6F]"
           style={{ background: "#124431" }}>
           <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-[#0B2A1E] sm:size-10" aria-hidden>
             <span className="absolute inset-0 animate-ping rounded-full bg-[#D9BD6F]/25 motion-reduce:hidden" />
             <MarcaArini variante="radar" titulo="" className="relative size-5 sm:size-6" />
           </span>
           <span className="text-left leading-tight">
-            <span className="block text-[15px] font-bold">Pergunte à Ari</span>
+            <span className="block text-[15px] font-bold"><span className="max-sm:hidden">Pergunte à </span>Ari</span>
             <span className="hidden text-[11px] text-[#F2F2EC]/70 sm:block">sua assistente de IA</span>
           </span>
         </button>
