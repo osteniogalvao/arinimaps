@@ -21,6 +21,7 @@ import MiniMapa from "@/components/map/MiniMapa";
 import { SeloPoi } from "@/components/map/UiMapa";
 import InteresseForm from "@/components/InteresseForm";
 import BotaoCompartilhar from "@/components/BotaoCompartilhar";
+import BotaoLinkExclusivo from "@/components/compartilhar/BotaoLinkExclusivo";
 import BotaoExportarSig from "@/components/compartilhar/BotaoExportarSig";
 import { OG_IMAGEM_PADRAO, OG_NOME_SITE } from "@/lib/compartilhar";
 import BotaoFavorito from "@/components/imovel/BotaoFavorito";
@@ -82,7 +83,8 @@ export async function generateMetadata(
       url: `/imovel/${imovel.codigo}`,
       title: imovel.titulo,
       description: `${resumo} — ${OG_NOME_SITE}`,
-      images: [{ url: capa ? mediaUrl(capa.path) : OG_IMAGEM_PADRAO, alt: imovel.titulo }],
+      // sem foto: o satélite da área com a divisa (áudio do Carlos, 18/11/2026, 9h27)
+      images: [{ url: capa ? mediaUrl(capa.path) : imovel.geometry ? `/og/imovel/${imovel.codigo}` : OG_IMAGEM_PADRAO, alt: imovel.titulo }],
     },
     twitter: { card: "summary_large_image" },
   };
@@ -475,6 +477,10 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
             )}
             <BotaoCompartilhar codigo={imovel.codigo} titulo={imovel.titulo}
               resumo={[formatBRL(imovel.valor), imovel.municipio ? `${imovel.municipio.nome}/${imovel.municipio.uf}` : null].filter(Boolean).join(" · ")} />
+            {/* áudio do Carlos (18/11/2026): link do tour para uma pessoa só, que não dá para repassar */}
+            {a && imovel.geometry && ["publicado", "em_negociacao"].includes(imovel.status) && (
+              <BotaoLinkExclusivo codigo={imovel.codigo} titulo={imovel.titulo} />
+            )}
             {/* item 8: exportar para SIG — só quando a ficha já mostra a divisa (mesma regra do mapa acima) */}
             {imovel.geometry && (
               <BotaoExportarSig nomeBase={imovel.codigo}

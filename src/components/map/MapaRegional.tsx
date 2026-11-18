@@ -207,7 +207,7 @@ function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [], extras = 
   const [aba, setAba] = useState<"ambiental" | "sigef">("sigef");
   const linha = "flex items-baseline justify-between gap-3 py-1.5";
   return (
-    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto overscroll-contain p-4 space-y-3 ${VIDRO}`}>
+    <div className={`absolute top-[var(--abaixo-chips,4rem)] left-3 z-10 w-80 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-var(--abaixo-chips,4rem)-6.5rem)] sm:max-h-[calc(100%-var(--abaixo-chips,4rem)-8rem)] overflow-y-auto overscroll-contain p-4 space-y-3 ${VIDRO}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro">{CAR_TIPO[car.tipo ?? ""] ?? "Imóvel rural"} · CAR</p>
@@ -249,6 +249,10 @@ function CartaoCar({ car, mapa, podeAmbiente, onFechar, oficiais = [], extras = 
           <Link href={`/painel/cofre?car=${encodeURIComponent(car.cod)}`} className="btn-contorno flex items-center justify-center py-2 text-sm">Vincular área</Link>
           <Link href={`/consulta/car/${encodeURIComponent(car.cod)}`} className="btn-contorno flex items-center justify-center gap-1.5 py-2 text-sm">
             <ScanSearch className="size-4" /> Consultar
+          </Link>
+          {/* áudio do Carlos (18/11/2026): no celular faltava o 3D a partir do mapa */}
+          <Link href={`/consulta/car/${encodeURIComponent(car.cod)}?tour=1`} className="btn-contorno col-span-2 flex items-center justify-center gap-1.5 py-2 text-sm">
+            Tour 3D desta área
           </Link>
         </div>
       </div>
@@ -2059,7 +2063,9 @@ export default function MapaRegional({
           .flatMap((c) => (c.cores ? Object.entries(c.cores).map(([nome, cor]) => ({ nome, cor })) : [c]))} />}
 
         <Ferramentas
-          recolhida={!!(painelMapa || carSel || loteSel || varios || pontoLivre || noPonto.length || selecionado)}
+          // 18/11/2026 (áudio do Carlos): no celular, tocar numa área sumia com as
+          // ferramentas e "só dava para visualizar". Agora só os painéis grandes as recolhem.
+          recolhida={!!(painelMapa || selecionado)}
           mapa={mapaPronto}
           pedidoRecorte={pedidoRecorte} onDelimitar={salvarArea}
           recursos={recursos}

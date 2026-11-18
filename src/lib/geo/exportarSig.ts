@@ -327,3 +327,31 @@ export function baixar(conteudo: Blob | string, nomeArquivo: string, tipo = "app
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+/** KMZ = o KML compactado (doc.kml dentro do zip), como o Google Earth gera. */
+export async function paraKMZ(camadas: CamadaSig[], nomeDocumento: string): Promise<Blob> {
+  const { default: JSZip } = await import("jszip");
+  const zip = new JSZip().file("doc.kml", paraKML(camadas, nomeDocumento));
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.google-earth.kmz" });
+}
+
+/**
+ * Encaminhar o arquivo (áudio do Carlos, 18/11/2026, 9h25: "quando eu fecho uma
+ * área eu tenho que ter a disponibilidade de encaminhar ela"). No celular abre a
+ * folha de compartilhar do aparelho (WhatsApp, e-mail, Drive) já com o arquivo;
+ * onde o navegador não compartilha arquivo, baixa. Devolve "baixado" nesse caso.
+ */
+export async function encaminhar(conteudo: Blob | string, nomeArquivo: string, tipo: string, titulo: string): Promise<"enviado" | "baixado" | "cancelado"> {
+  const blob = typeof conteudo === "string" ? new Blob([conteudo], { type: tipo }) : conteudo;
+  try {
+    const arquivo = new File([blob], nomeArquivo, { type: tipo });
+    if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [arquivo] })) {
+      await navigator.share({ files: [arquivo], title: titulo, text: titulo });
+      return "enviado";
+    }
+  } catch (e) {
+    if ((e as Error)?.name === "AbortError") return "cancelado";
+  }
+  baixar(blob, nomeArquivo, tipo);
+  return "baixado";
+}

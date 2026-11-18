@@ -13,7 +13,7 @@ import { MARCA_CAMINHOS, MARCA_VIEWBOX } from "./marca-pdf";
  * (release fixo do Wayback, sem nuvem), montando os tiles com o sharp e
  * recortando exatamente a janela pedida. Devolve JPEG ou lança erro.
  */
-async function mosaicoEsri(janela: number[], largura: number, altura: number, privada: boolean) {
+export async function mosaicoEsri(janela: number[], largura: number, altura: number, privada: boolean) {
   const [sul, oeste, norte, leste] = janela;
   const merc = (lng: number, lat: number, z: number) => {
     const n = 256 * 2 ** z, s = Math.sin(Math.max(-85, Math.min(85, lat)) * Math.PI / 180);
