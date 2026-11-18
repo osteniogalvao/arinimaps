@@ -5,7 +5,7 @@
 # Passo a passo completo: docs/WHATSAPP-EVOLUTION.md
 services:
   evolution:
-    image: atendai/evolution-api:v2.2.3
+    image: evoapicloud/evolution-api:v2.3.7
     restart: unless-stopped
     depends_on: [evolution-db, evolution-redis]
     environment:
