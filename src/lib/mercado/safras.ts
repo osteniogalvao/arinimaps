@@ -29,7 +29,8 @@ async function ler(): Promise<SafraProduto[]> {
   try {
     const db = supabaseAdmin();
     const { data: ultima, error: e1 } = await db.from("conab_safras").select("safra").order("safra", { ascending: false }).limit(1).maybeSingle();
-    if (e1 || !ultima) return [];
+    if (e1) throw e1;
+    if (!ultima) return [];
     const ano = Number(String(ultima.safra).slice(0, 4));
     const anterior = `${ano - 1}/${String(ano).slice(-2)}`;
     const linhas: Linha[] = [];
@@ -62,12 +63,21 @@ async function ler(): Promise<SafraProduto[]> {
     }
     return resumo.filter((r) => r.producaoMilT > 0).sort((a, b) => b.producaoMilT - a.producaoMilT);
   } catch (e) {
+    // relança: falha do banco não pode ficar 1 h no cache (ver semCacheDeFalha em cotacoes.ts)
+    throw e;
+  }
+}
+
+const safrasEmCache = unstable_cache(ler, ["conab-safras"], { revalidate: 3600, tags: ["conab-safras"] });
+
+export async function safrasConab(): Promise<SafraProduto[]> {
+  try {
+    return await safrasEmCache();
+  } catch (e) {
     console.warn("safras da CONAB indisponíveis:", (e as Error).message);
     return [];
   }
 }
-
-export const safrasConab = unstable_cache(ler, ["conab-safras"], { revalidate: 3600, tags: ["conab-safras"] });
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 

@@ -24,7 +24,7 @@ const normalizar = (r: Record<string, unknown>): CotacaoAtual => ({
 
 async function lerUltimas(soDestaques: boolean): Promise<CotacaoAtual[]> {
   if (!temBanco()) return [];
-  try {
+  {
     const db = supabaseAdmin();
     const series: CotacaoAtual[] = [];
     const tamanho = 500;
@@ -37,10 +37,24 @@ async function lerUltimas(soDestaques: boolean): Promise<CotacaoAtual[]> {
       series.push(...data.map(normalizar));
       if (data.length < tamanho) return series;
     }
-  } catch (e) {
-    console.warn("cotações indisponíveis:", (e as Error).message);
-    return [];
   }
+}
+
+/**
+ * Falha do banco NÃO pode entrar no cache: em 18/11 o Supabase travou, as
+ * leituras voltaram vazias e o /mercado ficou 15 min sem histórico nem
+ * variações, parecendo a versão antiga. Agora a função em cache lança e quem
+ * chama cai no vazio só naquele pedido; o próximo tenta o banco de novo.
+ */
+function semCacheDeFalha<A extends unknown[], R>(fn: (...a: A) => Promise<R>, vazio: R, rotulo: string) {
+  return async (...a: A): Promise<R> => {
+    try {
+      return await fn(...a);
+    } catch (e) {
+      console.warn(`${rotulo} indisponível:`, (e as Error).message);
+      return vazio;
+    }
+  };
 }
 
 /** Produtos que a faixa sempre mostra (áudio do Carlos, 16/11: boi, grãos e dólar), mesmo sem destaque marcado. */
@@ -63,7 +77,7 @@ async function lerFaixa(): Promise<CotacaoFaixa[]> {
   }
   escolhidas.sort((a, b) => a.ordem - b.ordem);
   return Promise.all(escolhidas.slice(0, LIMITE_FAIXA).map(async (s) => {
-    const pontos = await historicoCotacao(s.id);
+    const pontos = await historicoEmCache(s.id);
     const ant = pontos.length > 1 ? pontos[pontos.length - 2] : null;
     const variacao = s.variacao ?? (ant && ant.valor > 0 ? (s.valor / ant.valor - 1) * 100 : null);
     const mes = estatisticas(recortar(pontos, 30));
@@ -75,20 +89,20 @@ async function lerFaixa(): Promise<CotacaoFaixa[]> {
   }));
 }
 
-export const cotacoesFaixa = unstable_cache(lerFaixa, ["cotacoes-faixa-v2"], {
+const faixaEmCache = unstable_cache(lerFaixa, ["cotacoes-faixa-v2"], {
   revalidate: REVALIDAR, tags: ["cotacoes"],
 });
 
 /** Todas as séries ativas com o último valor (lista do /mercado). */
-export const catalogoCotacoes = unstable_cache(() => lerUltimas(false), ["cotacoes-catalogo"], {
+const catalogoEmCache = unstable_cache(() => lerUltimas(false), ["cotacoes-catalogo"], {
   revalidate: REVALIDAR, tags: ["cotacoes"],
 });
 
 /** Até ~1 ano de valores diários de uma série, do mais antigo ao mais recente. */
-export const historicoCotacao = unstable_cache(
+const historicoEmCache = unstable_cache(
   async (serieId: string): Promise<PontoCotacao[]> => {
     if (!temBanco()) return [];
-    try {
+    {
       const desde = new Date(Date.now() - 372 * 86_400_000).toISOString().slice(0, 10);
       const { data, error } = await supabaseAdmin()
         .from("cotacoes_valores")
@@ -103,11 +117,12 @@ export const historicoCotacao = unstable_cache(
         valor: Number(p.valor),
         variacao: p.variacao == null ? null : Number(p.variacao),
       }));
-    } catch (e) {
-      console.warn("histórico da cotação indisponível:", (e as Error).message);
-      return [];
     }
   },
   ["cotacoes-historico"],
   { revalidate: REVALIDAR, tags: ["cotacoes"] },
 );
+
+export const cotacoesFaixa = semCacheDeFalha(faixaEmCache, [] as CotacaoFaixa[], "faixa de cotações");
+export const catalogoCotacoes = semCacheDeFalha(catalogoEmCache, [] as CotacaoAtual[], "catálogo de cotações");
+export const historicoCotacao = semCacheDeFalha(historicoEmCache, [] as PontoCotacao[], "histórico da cotação");
