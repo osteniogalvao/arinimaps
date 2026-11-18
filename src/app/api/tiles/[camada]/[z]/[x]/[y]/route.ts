@@ -28,15 +28,30 @@ const CACHE = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=6048
 // Cache em memória do processo: o mesmo tile pedido por vários usuários (ou
 // pelo mesmo, ao voltar) não refaz a consulta no banco. Pequeno e com prazo —
 // o CAR e os lotes mudam só em reimportação.
-const MEMORIA_MAX = 400;
+// Limite por bytes (não por quantidade): um tile do CAR em z8–z10 passa de 150 KB.
+// 18/11/2026: com só 400 tiles e prazo de 30 s para o CAR, quase todo movimento
+// do mapa gerava o tile de novo no banco e esgotava o Disk IO do Supabase.
+const MEMORIA_MAX_BYTES = 300 * 1024 * 1024;
 const MEMORIA_TTL_MS = 60 * 60_000;
+// CAR: o mapa troca o `?v=` quando grava área nova, então o tile sem `v` pode
+// ficar 15 min; antes eram 30 s
+const CAR_TTL_MS = 15 * 60_000;
 const memoria = new Map<string, { raw: Buffer; gz: Buffer; em: number }>();
+let memoriaBytes = 0;
 function lembrar(chave: string, raw: Buffer, gz: Buffer) {
-  if (memoria.size >= MEMORIA_MAX) {
-    const primeira = memoria.keys().next().value;
-    if (primeira) memoria.delete(primeira);
+  const antigo = memoria.get(chave);
+  if (antigo) {
+    memoriaBytes -= antigo.raw.length + antigo.gz.length;
+    memoria.delete(chave);
+  }
+  while (memoria.size && memoriaBytes + raw.length + gz.length > MEMORIA_MAX_BYTES) {
+    const primeira = memoria.keys().next().value!;
+    const item = memoria.get(primeira)!;
+    memoriaBytes -= item.raw.length + item.gz.length;
+    memoria.delete(primeira);
   }
   memoria.set(chave, { raw, gz, em: Date.now() });
+  memoriaBytes += raw.length + gz.length;
 }
 
 export async function GET(request: Request, ctx: RouteContext<"/api/tiles/[camada]/[z]/[x]/[y]">) {
@@ -45,7 +60,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/tiles/[camad
   const { camada, z: zs, x: xs, y: ys } = await ctx.params;
   const cfg = CAMADAS[camada];
   if (!cfg) return NextResponse.json({ error: "Camada desconhecida." }, { status: 404 });
-  const cache = camada === "car" ? "public, max-age=30, s-maxage=30" : CACHE;
+  const cache = camada === "car" ? "public, max-age=600, s-maxage=600" : CACHE;
 
   const z = Number(zs), x = Number(xs), y = Number(ys.replace(/\.(pbf|mvt)$/i, ""));
   const max = 2 ** z;
@@ -63,7 +78,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/tiles/[camad
   const chaveTile = `${camada}/${z}/${x}/${y}/${versao}`;
   const aceitaGzip = /gzip/.test(request.headers.get("accept-encoding") ?? "");
   const lembrado = memoria.get(chaveTile);
-  if (lembrado && Date.now() - lembrado.em < (camada === "car" ? 30_000 : MEMORIA_TTL_MS)) {
+  if (lembrado && Date.now() - lembrado.em < (camada === "car" ? CAR_TTL_MS : MEMORIA_TTL_MS)) {
     return responder(lembrado.raw.length ? (aceitaGzip ? lembrado.gz : lembrado.raw) : null, aceitaGzip, cache);
   }
 
