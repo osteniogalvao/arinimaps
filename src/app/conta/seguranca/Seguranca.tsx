@@ -8,6 +8,7 @@ import {
   ShieldAlert, Smartphone, QrCode, KeyRound, MonitorSmartphone, LogOut, Activity, type LucideIcon,
 } from "lucide-react";
 import { CAMPO, ROTULO, Etiqueta } from "@/components/ui/Pagina";
+import { formatDataHora } from "@/lib/format";
 
 type Evento = { id: string; evento: string; ip: string | null; agente: string | null; created_at: string };
 type Fator = { id: string; status: string; friendly_name?: string | null; created_at: string };
@@ -178,7 +179,7 @@ export default function Seguranca({
           {ativo && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-base text-texto-2">
-                Ativa desde {new Date(ativo.created_at).toLocaleDateString("pt-BR")}. Trocou de celular? Desative e ative de novo no aparelho novo.
+                Ativa desde {formatDataHora(ativo.created_at, false)}. Trocou de celular? Desative e ative de novo no aparelho novo.
               </p>
               <button onClick={desativar} disabled={ocupado} className="btn-perigo px-4 py-2 text-sm">
                 Desativar
@@ -223,7 +224,7 @@ export default function Seguranca({
             <div key={e.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-superficie-2/60">
               <span className="text-[0.95rem] text-texto">{EVENTO[e.evento] ?? e.evento}</span>
               <span className="text-xs text-texto-2 tabular-nums">
-                {new Date(e.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}{e.ip && ` · ${e.ip}`}
+                {formatDataHora(e.created_at)}{e.ip && ` · ${e.ip}`}
               </span>
             </div>
           ))}

@@ -32,3 +32,20 @@ export const STATUS_LABEL: Record<string, string> = {
 export function plural(n: number, singular: string, pluralForma = `${singular}s`): string {
   return `${n.toLocaleString("pt-BR")} ${Math.abs(n) === 1 ? singular : pluralForma}`;
 }
+
+/**
+ * Data e hora no fuso de Brasília, sempre no mesmo formato no servidor e no
+ * aparelho ("18/11/2026 12:23"). `toLocaleString` sem fuso dava texto diferente
+ * no servidor (UTC) e no celular (America/Sao_Paulo), e o React acusava erro de
+ * hidratação (#418) em /conta/seguranca (auditoria mobile, 18/11/2026).
+ */
+export function formatDataHora(v: string | number | Date, comHora = true): string {
+  const partes = Object.fromEntries(
+    new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric",
+      ...(comHora ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" as const } : {}),
+    }).formatToParts(new Date(v)).map((p) => [p.type, p.value]),
+  );
+  const data = `${partes.day}/${partes.month}/${partes.year}`;
+  return comHora ? `${data} ${partes.hour}:${partes.minute}` : data;
+}
