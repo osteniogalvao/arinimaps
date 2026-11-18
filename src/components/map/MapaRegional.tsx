@@ -1507,6 +1507,19 @@ export default function MapaRegional({
     mapRef.current?.fitBounds([[w, s], [e, n]], { padding: 60, duration: 1200 });
   }, []);
 
+  // Busca do topo do site (áudio do Carlos, 18/11/2026, 16h20): "/mapa?municipio=<IBGE>&nome=…"
+  // abre o mapa já enquadrado no município, com o nome na caixa de busca.
+  const parametros = useSearchParams();
+  const municipioPedido = Number(parametros.get("municipio")) || 0;
+  const nomePedido = parametros.get("nome") ?? "";
+  const municipioAplicado = useRef(0);
+  useEffect(() => {
+    if (!pronto || !municipioPedido || municipioAplicado.current === municipioPedido) return;
+    municipioAplicado.current = municipioPedido;
+    if (nomePedido) setBusca(nomePedido);
+    void irParaMunicipioIbge(municipioPedido);
+  }, [pronto, municipioPedido, nomePedido, irParaMunicipioIbge]);
+
   /** Coordenada digitada: voa até o ponto e o marca com o anel dourado. */
   const irParaPonto = useCallback((lat: number, lng: number) => {
     const map = mapRef.current;

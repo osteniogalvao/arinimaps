@@ -12,12 +12,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight, Building2, ChevronRight, CreditCard, FileText, House,
-  LayoutDashboard, Map as Mapa, Menu, Plus, Search, X,
+  LayoutDashboard, LogOut, Map as Mapa, Menu, Plus, Search, X,
 } from "lucide-react";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import BotaoTema from "./BotaoTema";
 import MarcaArini from "@/components/marca/MarcaArini";
 import ChatIA, { abrirAssistente } from "@/components/ia/ChatIA";
@@ -34,6 +35,15 @@ type ItemMenu = { href: string; rotulo: string; icone: LucideIcon };
  * "-19.73, -50.19", "-19,73 -50,19" ou "-19.73;-50.19" → [lat, lng]. Aceita
  * vírgula decimal (como se escreve no Brasil) quando o separador é espaço ou ";".
  */
+type Sugestao = { cod: number; nome: string; uf: string };
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+/** "Santa Vitória", "santa vitoria" ou "Santa Vitória · MG" → o município da lista, se o nome bate inteiro. */
+function municipioDoTermo(termo: string, lista: Sugestao[]): Sugestao | null {
+  const m = termo.match(/^(.*?)\s*(?:·|,|-|\/)\s*([A-Za-z]{2})$/);
+  const nome = semAcento(m ? m[1] : termo), uf = m?.[2].toUpperCase();
+  return lista.find((x) => semAcento(x.nome) === nome && (!uf || x.uf === uf)) ?? null;
+}
+
 export function lerCoordenada(texto: string): [number, number] | null {
   const t = texto.trim();
   const m = t.match(/^(-?\d{1,2}(?:[.,]\d+)?)\s*[;\s]\s*(-?\d{1,3}(?:[.,]\d+)?)$/)
@@ -106,19 +116,59 @@ export default function AppShell({
   // a busca do topo era só desenho: digitava e nada acontecia (QA 19/10/2026).
   // Coordenada → mapa no ponto (o mapa segue o #pos= da URL, inclusive já aberto);
   // o resto → busca de imóveis, que procura em título, código e município.
-  function buscar(e: React.FormEvent<HTMLFormElement>) {
+  // Áudio do Carlos (18/11/2026, 16h29): "sou proprietário, quero sair, deslogar, e não consigo".
+  // O site e o painel não tinham "Sair"; só a Central e a tela de segurança.
+  const [saindo, setSaindo] = useState(false);
+  async function sair() {
+    setSaindo(true);
+    await fetch("/api/auth/evento", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evento: "logout" }),
+    }).catch(() => undefined);
+    await supabaseBrowser().auth.signOut().catch(() => undefined);
+    router.push("/entrar");
+    router.refresh();
+  }
+  async function buscar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const termo = String(new FormData(e.currentTarget).get("q") ?? "").trim();
     if (!termo) return;
     const ponto = lerCoordenada(termo);
     if (ponto) {
       const destino = `/mapa#pos=17/${ponto[0]}/${ponto[1]}`;
-      if (caminho === "/mapa") window.location.hash = `pos=17/${ponto[0]}/${ponto[1]}`;
+      if (caminho === "/mapa") window.location.assign(`#pos=17/${ponto[0]}/${ponto[1]}`);
       else router.push(destino);
       return;
     }
+    // Áudio do Carlos (18/11/2026, 16h20): "quero colocar município de Santa Vitória e não carrega".
+    // Nome de município vai para o mapa, enquadrado nele; o resto continua na busca de imóveis.
+    const municipio = municipioDoTermo(termo, sugestoes);
+    if (municipio) {
+      router.push(`/mapa?municipio=${municipio.cod}&nome=${encodeURIComponent(municipio.nome)}`);
+      return;
+    }
+    if (!/^AIB-?\d+$/i.test(termo) && termo.length >= 3) {
+      const r = await fetch(`/api/geo/municipio-busca?q=${encodeURIComponent(termo.replace(/\s*[·,-]\s*[A-Z]{2}$/i, ""))}`)
+        .then((x) => (x.ok ? x.json() : null)).catch(() => null) as { municipios?: Sugestao[] } | null;
+      const achado = municipioDoTermo(termo, r?.municipios ?? []);
+      if (achado) { router.push(`/mapa?municipio=${achado.cod}&nome=${encodeURIComponent(achado.nome)}`); return; }
+    }
     router.push(`/imoveis?q=${encodeURIComponent(termo)}`);
   }
+  // sugestões de município enquanto digita (lista do IBGE, em cache no servidor)
+  const [termoBusca, setTermoBusca] = useState("");
+  const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
+  useEffect(() => {
+    const termo = termoBusca.trim();
+    if (termo.length < 3 || lerCoordenada(termo) || /^AIB-?\d/i.test(termo) || / · [A-Z]{2}$/.test(termo)) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/geo/municipio-busca?q=${encodeURIComponent(termo)}`, { signal: ctrl.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { municipios?: Sugestao[] } | null) => setSugestoes(j?.municipios ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [termoBusca]);
   // a maioria das páginas não passa a foto: vem do mesmo pedido das preferências
   const { conta } = usePreferencias();
   const avatar = usuario?.avatar !== undefined ? usuario.avatar : conta?.avatar_url ?? null;
@@ -203,7 +253,11 @@ export default function AppShell({
                 aria-label="Buscar imóvel, código, município ou coordenada"
                 title="Ex.: AIB-000029, Iturama, -19.73, -50.19 — Enter para buscar"
                 className="w-full rounded-full border border-linha-forte bg-superficie-2 py-2.5 pl-10 pr-4 text-[15px] text-texto placeholder:text-texto-2/70 transition focus:border-verde focus:outline-none focus:ring-2 focus:ring-verde/30"
+                list="busca-municipios" autoComplete="off" onChange={(e) => setTermoBusca(e.target.value)}
               />
+              <datalist id="busca-municipios">
+                {sugestoes.map((m) => <option key={m.cod} value={`${m.nome} · ${m.uf}`} />)}
+              </datalist>
             </form>
           )}
 
@@ -247,6 +301,12 @@ export default function AppShell({
             ) : (
               <Link href="/entrar" className="lp-btn lp-btn-ouro !px-4 !py-2.5 text-sm">Entrar</Link>
             )}
+            {usuario && (
+              <button type="button" onClick={sair} disabled={saindo} title="Sair da conta" aria-label="Sair da conta"
+                className="hidden size-10 place-items-center rounded-full border border-linha-forte text-texto-2 transition hover:border-alerta hover:text-alerta disabled:opacity-60 sm:grid">
+                <LogOut className="size-[18px]" />
+              </button>
+            )}
           </div>
         </header>
 
@@ -266,6 +326,12 @@ export default function AppShell({
                 </Link>
               );
             })}
+            {usuario && (
+              <button type="button" onClick={sair} disabled={saindo}
+                className="mt-1 flex w-full items-center gap-3 rounded-[10px] border-t border-linha px-3.5 py-3 font-display text-base font-semibold text-alerta disabled:opacity-60">
+                <LogOut className="size-5" /> {saindo ? "Saindo…" : "Sair da conta"}
+              </button>
+            )}
           </nav>
         )}
 
