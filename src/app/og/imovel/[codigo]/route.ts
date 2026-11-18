@@ -3,6 +3,10 @@ import { bbox } from "@turf/turf";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { mosaicoEsri } from "@/lib/relatorio/pdf-area";
 import { MARCA_CAMINHOS, MARCA_VIEWBOX } from "@/lib/relatorio/marca-pdf";
+import { OG_IMAGEM_PADRAO, urlDoSite } from "@/lib/compartilhar";
+
+// atrás do proxy o req.url é o endereço interno (localhost:3000): o desvio usa o endereço público
+const padrao = () => Response.redirect(new URL(OG_IMAGEM_PADRAO, urlDoSite()), 302);
 
 export const runtime = "nodejs";
 
@@ -27,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ codigo:
   const { data } = await supabaseAdmin().rpc("fn_property_public", { p_codigo: codigo });
   const im = data as { status: string; geometry: GeoJSON.Geometry | null } | null;
   if (!im?.geometry || !["publicado", "em_negociacao", "vendido"].includes(im.status)) {
-    return Response.redirect(new URL("/img/hero-fazenda.jpg", _req.url), 302);
+    return padrao();
   }
   try {
     // janela: a área com folga, no formato 1200×630
@@ -60,6 +64,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ codigo:
     });
   } catch (e) {
     console.error("[og/imovel]", codigo, e);
-    return Response.redirect(new URL("/img/hero-fazenda.jpg", _req.url), 302);
+    return padrao();
   }
 }
