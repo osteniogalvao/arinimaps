@@ -50,6 +50,9 @@ export type ResultadoDxf = {
     ignoradasSemGeometria: number;
     blocosExpandidos: number;
     blocosNaoResolvidos: number;
+    entidadesDaFolha: number;
+    unidade: string;
+    parcelaTerreno: number;
     pontosDescartados: number;
     layers: { nome: string; linhas: number }[];
     segundos: number;
@@ -120,12 +123,34 @@ type Entidade = {
   escalaY: number;
   rotacao: number;
   nomeBloco: string | null;
+  /** código 67 = 1: desenhada na folha de impressão (carimbo, moldura), não no terreno */
+  folha: boolean;
+  /** código 230 < 0: sistema de coordenadas do objeto espelhado (X invertido) */
+  espelhada: boolean;
 };
 
 const novaEntidade = (tipo: string): Entidade => ({
   tipo, layer: "0", xs: [], ys: [], x2: null, y2: null,
   raio: 0, ang0: 0, ang1: 360, flags: 0, escalaX: 1, escalaY: 1, rotacao: 0, nomeBloco: null,
+  folha: false, espelhada: false,
 });
+
+/** Tipos cujas coordenadas ficam no sistema do objeto (OCS) e espelham com extrusão Z negativa. */
+const TIPOS_OCS = new Set(["LWPOLYLINE", "CIRCLE", "ARC", "INSERT", "SOLID"]);
+
+/** Fatores de unidade a tentar quando a mediana não cai em UTM (desenho em mm, cm ou km). */
+const UNIDADES: { fator: number; nome: string }[] = [
+  { fator: 0.001, nome: "milímetros" },
+  { fator: 0.01, nome: "centímetros" },
+  { fator: 1000, nome: "quilômetros" },
+];
+
+type Bloco = { base: [number, number]; polis: Poli[]; insercoes: Entidade[] };
+type Transf = (p: [number, number]) => [number, number];
+
+/** Teto de pontos gerados pela expansão de blocos, para um bloco aninhado não estourar a memória. */
+const TETO_PONTOS_BLOCOS = 4_000_000;
+const PROFUNDIDADE_BLOCOS = 8;
 
 function tesselarArco(cx: number, cy: number, r: number, a0: number, a1: number): [number, number][] {
   const varre = ((a1 - a0 + 360) % 360) || 360;
@@ -145,8 +170,9 @@ export async function converterDxf(
   const inicio = Date.now();
 
   const saida: Poli[] = [];
-  const blocos = new Map<string, { base: [number, number]; polis: Poli[] }>();
+  const blocos = new Map<string, Bloco>();
   const insercoes: Entidade[] = [];
+  let entidadesDaFolha = 0;
 
   const porTipo: Record<string, number> = {};
   const geometriasPorTipo: Record<string, number> = {};
@@ -154,7 +180,7 @@ export async function converterDxf(
 
   let secao: string | null = null;
   let esperandoNomeSecao = false;
-  let blocoAtual: { nome: string; base: [number, number]; polis: Poli[] } | null = null;
+  let blocoAtual: { nome: string; base: [number, number]; polis: Poli[]; insercoes: Entidade[] } | null = null;
   let esperandoNomeBloco = false;
   let ent: Entidade | null = null;
   let polylineAberta: Poli | null = null;
@@ -173,6 +199,16 @@ export async function converterDxf(
     const e = ent;
     ent = null;
     if (!TIPOS_GEOMETRICOS.has(e.tipo)) { ignoradasSemGeometria++; return; }
+    // Carimbo, moldura e legenda desenhados na folha (paper space) têm
+    // coordenada em milímetros da prancha: misturados ao terreno, puxam a
+    // mediana para longe da UTM e o arquivo inteiro era recusado.
+    if (e.folha && !blocoAtual) { entidadesDaFolha++; return; }
+    if (e.espelhada && TIPOS_OCS.has(e.tipo)) {
+      // OCS com Z para baixo: o X do objeto é o X do desenho com sinal trocado.
+      e.xs = e.xs.map((x) => -x);
+      if (e.tipo === "ARC") { const a0 = e.ang0; e.ang0 = 180 - e.ang1; e.ang1 = 180 - a0; }
+      if (e.tipo === "INSERT") { e.rotacao = -e.rotacao; e.escalaX = -e.escalaX; }
+    }
 
     const pares = (): [number, number][] => {
       const n = Math.min(e.xs.length, e.ys.length);
@@ -235,7 +271,9 @@ export async function converterDxf(
         break;
       }
       case "INSERT": {
-        if (e.nomeBloco && e.xs.length && e.ys.length) insercoes.push(e);
+        // INSERT dentro de um bloco é parte do bloco (coordenada local dele),
+        // não do terreno: só é posicionado quando o bloco pai for inserido.
+        if (e.nomeBloco && e.xs.length && e.ys.length) (blocoAtual ? blocoAtual.insercoes : insercoes).push(e);
         break;
       }
     }
@@ -251,9 +289,9 @@ export async function converterDxf(
       if (val === "SECTION") { esperandoNomeSecao = true; continue; }
       if (val === "ENDSEC") { secao = null; blocoAtual = null; continue; }
       if (secao === "BLOCKS") {
-        if (val === "BLOCK") { esperandoNomeBloco = true; blocoAtual = { nome: "", base: [0, 0], polis: [] }; continue; }
+        if (val === "BLOCK") { esperandoNomeBloco = true; blocoAtual = { nome: "", base: [0, 0], polis: [], insercoes: [] }; continue; }
         if (val === "ENDBLK") {
-          if (blocoAtual?.nome) blocos.set(blocoAtual.nome, { base: blocoAtual.base, polis: blocoAtual.polis });
+          if (blocoAtual?.nome) blocos.set(blocoAtual.nome, { base: blocoAtual.base, polis: blocoAtual.polis, insercoes: blocoAtual.insercoes });
           blocoAtual = null;
           continue;
         }
@@ -288,28 +326,46 @@ export async function converterDxf(
       case "50": { const v = Number(val); if (Number.isFinite(v)) { if (ent.tipo === "INSERT") ent.rotacao = v; else ent.ang0 = v; } break; }
       case "51": { const v = Number(val); if (Number.isFinite(v)) ent.ang1 = v; break; }
       case "70": { const v = Number(val); if (Number.isFinite(v)) ent.flags = v; break; }
+      case "67": ent.folha = val === "1"; break;
+      case "230": { const v = Number(val); if (Number.isFinite(v)) ent.espelhada = v < 0; break; }
     }
   }
   fecharEntidade();
 
   // ---- blocos posicionados (INSERT): desenho do bloco levado ao lugar dele ----
-  let blocosExpandidos = 0;
-  for (const ins of insercoes) {
-    const b = blocos.get(ins.nomeBloco as string);
-    if (!b) { blocosNaoResolvidos++; continue; }
+  // Blocos podem conter outros INSERT (bloco dentro de bloco): a expansão é
+  // recursiva, compondo as transformações, com teto de profundidade e pontos.
+  let blocosExpandidos = 0, pontosBlocos = 0;
+  const transfInsert = (ins: Entidade, b: Bloco): Transf => {
     const cos = Math.cos((ins.rotacao * Math.PI) / 180);
     const sen = Math.sin((ins.rotacao * Math.PI) / 180);
     const ix = ins.xs[0], iy = ins.ys[0];
+    return ([x, y]) => {
+      const dx = (x - b.base[0]) * ins.escalaX;
+      const dy = (y - b.base[1]) * ins.escalaY;
+      return [ix + dx * cos - dy * sen, iy + dx * sen + dy * cos];
+    };
+  };
+  const expandir = (ins: Entidade, externa: Transf | null, profundidade: number, pilha: Set<string>) => {
+    const nome = ins.nomeBloco as string;
+    const b = blocos.get(nome);
+    if (!b) { blocosNaoResolvidos++; return; }
+    if (pilha.has(nome) || profundidade > PROFUNDIDADE_BLOCOS) return;
+    const local = transfInsert(ins, b);
+    const t: Transf = externa ? (p) => externa(local(p)) : local;
     for (const p of b.polis) {
-      const pts = p.pts.map(([x, y]): [number, number] => {
-        const dx = (x - b.base[0]) * ins.escalaX;
-        const dy = (y - b.base[1]) * ins.escalaY;
-        return [ix + dx * cos - dy * sen, iy + dx * sen + dy * cos];
-      });
-      saida.push({ layer: p.layer, pts });
+      if (pontosBlocos > TETO_PONTOS_BLOCOS) return;
+      pontosBlocos += p.pts.length;
+      saida.push({ layer: p.layer, pts: p.pts.map(t) });
     }
     if (b.polis.length) blocosExpandidos++;
-  }
+    if (b.insercoes.length) {
+      pilha.add(nome);
+      for (const filho of b.insercoes) expandir(filho, t, profundidade + 1, pilha);
+      pilha.delete(nome);
+    }
+  };
+  for (const ins of insercoes) expandir(ins, null, 0, new Set());
 
   if (!saida.length) {
     const dominantes = Object.entries(porTipo).sort((a, b) => b[1] - a[1]).slice(0, 3)
@@ -329,7 +385,33 @@ export async function converterDxf(
     const p = saida[i].pts[0];
     if (p) { amostraX.push(p[0]); amostraY.push(p[1]); }
   }
-  const medX = mediana(amostraX), medY = mediana(amostraY);
+  let medX = mediana(amostraX), medY = mediana(amostraY);
+  const medianaOriginal = { x: medX, y: medY };
+
+  // Unidade do desenho: planta em mm/cm/km tem a mesma forma, só a escala muda.
+  let unidade = "metros";
+  if (!ehGrausBrasil(medX, medY) && !ehUtmPlausivel(medX, medY)) {
+    const u = UNIDADES.find(({ fator }) => ehUtmPlausivel(medX * fator, medY * fator));
+    if (u) {
+      unidade = u.nome;
+      for (const poli of saida) poli.pts = poli.pts.map(([x, y]) => [x * u.fator, y * u.fator]);
+      for (let i = 0; i < amostraX.length; i++) { amostraX[i] *= u.fator; amostraY[i] *= u.fator; }
+      medX *= u.fator; medY *= u.fator;
+    }
+  }
+
+  // Parte do desenho em terreno, parte em coordenada local (legenda, detalhe,
+  // carimbo copiado no model space): se a parcela em UTM é expressiva, a
+  // mediana passa a ser só dela e o resto cai no filtro de plausibilidade.
+  let parcelaTerreno = 1;
+  if (!ehGrausBrasil(medX, medY) && !ehUtmPlausivel(medX, medY)) {
+    const ix: number[] = [], iy: number[] = [];
+    for (let i = 0; i < amostraX.length; i++) {
+      if (ehUtmPlausivel(amostraX[i], amostraY[i])) { ix.push(amostraX[i]); iy.push(amostraY[i]); }
+    }
+    parcelaTerreno = amostraX.length ? ix.length / amostraX.length : 0;
+    if (ix.length >= 20 && parcelaTerreno >= 0.05) { medX = mediana(ix); medY = mediana(iy); }
+  }
 
   let zona: number | "graus";
   let transformar: (p: [number, number]) => [number, number];
@@ -356,8 +438,8 @@ export async function converterDxf(
     throw new ErroDxf(
       "O desenho não está em coordenadas de terreno.",
       `A mediana das coordenadas é X ${medX.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} / Y ${medY.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} — fora de UTM (100.000 a 900.000 / 6 a 10 milhões) e fora de graus.`,
-      "O arquivo provavelmente está em coordenadas locais do CAD. Georreferencie o desenho (ou use a planta original georreferenciada) e exporte o DXF de novo.",
-      { medianaX: medX, medianaY: medY, geometrias: saida.length }
+      "O arquivo provavelmente está em coordenadas locais do CAD. Georreferencie o desenho (ou use a planta original georreferenciada) e exporte o DXF de novo. Se no CAD o desenho aparece nas coordenadas certas, confira se ele está no Model (e não só no Layout) e se não foi exportado com ponto-base deslocado.",
+      { medianaX: medianaOriginal.x, medianaY: medianaOriginal.y, geometrias: saida.length, entidadesDaFolha, porTipo }
     );
   }
 
@@ -414,6 +496,9 @@ export async function converterDxf(
       ignoradasSemGeometria,
       blocosExpandidos,
       blocosNaoResolvidos,
+      entidadesDaFolha,
+      unidade,
+      parcelaTerreno: Math.round(parcelaTerreno * 1000) / 1000,
       pontosDescartados,
       layers: [...porLayer.entries()]
         .map(([nome, l]) => ({ nome, linhas: l.length }))
