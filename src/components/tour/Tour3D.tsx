@@ -261,6 +261,9 @@ export default function Tour3D(dados: TourData) {
       }
       mapa = map;
       map.getCanvas().addEventListener("webglcontextlost", () => setSemWebgl(true));
+      // como a barra do Google Earth (vídeo do Carlos, 17/11, 22h12): + / − e bússola
+      // no canto do próprio mapa; arrastar a bússola inclina e gira, clicar volta ao norte
+      if (!dados.record) map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showCompass: true, showZoom: true }), "bottom-right");
       mapRef.current = map;
       map.on("error", (e: MLErrorEvent) => console.error("[tour] erro do mapa:", e.error?.message ?? e));
 
@@ -384,7 +387,7 @@ export default function Tour3D(dados: TourData) {
   const brl = dados.valor?.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }) ?? "Sob consulta";
 
   return (
-    <div className="relative h-[100dvh] w-full bg-black">
+    <div className="relative h-[100dvh] w-full bg-black [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(4.5rem+env(safe-area-inset-bottom))]">
       {/* inline: o CSS do maplibre força position:relative na classe e colapsaria a altura */}
       <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
 
@@ -413,18 +416,8 @@ export default function Tour3D(dados: TourData) {
                 onChange={e => { const v = Number(e.target.value); setRelevo(v); mapRef.current?.setTerrain(v > 0 ? { source: "dem", exaggeration: v } : null); }} />
               <span className="tabular-nums text-xs">{relevo.toLocaleString("pt-BR")}×</span>
             </label>
-            {dados.consulta && <label className="mt-2 block text-sm">Raio <select className="ml-1 rounded bg-[#123b2a] px-1" value={raio}
-              onChange={e => setRaio(Number(e.target.value))}>
-              {raios.map(m => <option key={m} value={m}>{m === 0 ? "só a área" : `até ${m < 1000 ? m + " m" : m / 1000 + " km"}`}</option>)}
-            </select>{raio > 0 && <small className="block text-[#B3C3B8]">As camadas abaixo mostram o que há até {raio < 1000 ? raio + " m" : raio / 1000 + " km"} da área.</small>}</label>}
-            {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
-              && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
-              && <CamadasDoTour mapa={mapaPronto} geometria={(anel?.geometry ?? dados.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon} permitidas={dados.camadas} aoGerente={aoGerente} />}
-            {mapaPronto && dados.consulta?.car && !!dados.camadas?.ambiente.length && <>
-              <label className="mt-2 block text-sm"><input type="checkbox" checked={ambienteCar} onChange={e => setAmbienteCar(e.target.checked)} /> Ambiente do CAR</label>
-              {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={dados.consulta.car} mapa={mapaPronto} tour /></div>}
-            </>}
-            {mapaPronto && <div className="mt-3 space-y-1.5 text-sm">
+            {/* áudio do Carlos (18/11, 11h15): inclinação e direção logo abaixo do relevo, à vista */}
+            {mapaPronto && <div className="mt-2 space-y-1.5 text-sm">
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D3DCD2]">Ajustes da vista</p>
               <label className="flex items-center gap-2">Inclinar
                 <input type="range" min={0} max={75} step={1} value={camera.pitch} className="w-28 accent-[#D9BD6F]"
@@ -447,6 +440,17 @@ export default function Tour3D(dados: TourData) {
                 </button>
               </div>
             </div>}
+            {dados.consulta && <label className="mt-2 block text-sm">Raio <select className="ml-1 rounded bg-[#123b2a] px-1" value={raio}
+              onChange={e => setRaio(Number(e.target.value))}>
+              {raios.map(m => <option key={m} value={m}>{m === 0 ? "só a área" : `até ${m < 1000 ? m + " m" : m / 1000 + " km"}`}</option>)}
+            </select>{raio > 0 && <small className="block text-[#B3C3B8]">As camadas abaixo mostram o que há até {raio < 1000 ? raio + " m" : raio / 1000 + " km"} da área.</small>}</label>}
+            {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
+              && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
+              && <CamadasDoTour mapa={mapaPronto} geometria={(anel?.geometry ?? dados.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon} permitidas={dados.camadas} aoGerente={aoGerente} />}
+            {mapaPronto && dados.consulta?.car && !!dados.camadas?.ambiente.length && <>
+              <label className="mt-2 block text-sm"><input type="checkbox" checked={ambienteCar} onChange={e => setAmbienteCar(e.target.checked)} /> Ambiente do CAR</label>
+              {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={dados.consulta.car} mapa={mapaPronto} tour /></div>}
+            </>}
             {mapaPronto && <MedicaoMapa mapa={mapaPronto} escuro liberado={dados.medir !== false} />}
             </div>
             {dados.consulta && <a className="mt-2 block text-sm underline" href={voltarConsulta}>Voltar à consulta</a>}
