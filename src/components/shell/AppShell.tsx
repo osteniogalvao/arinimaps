@@ -16,8 +16,9 @@ import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight, Building2, ChevronRight, CreditCard, FileText, House,
-  LayoutDashboard, Map as Mapa, Menu, Plus, Search, X,
+  LayoutDashboard, LogOut, Map as Mapa, Menu, Plus, Search, X,
 } from "lucide-react";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import BotaoTema from "./BotaoTema";
 import MarcaArini from "@/components/marca/MarcaArini";
 import ChatIA, { abrirAssistente } from "@/components/ia/ChatIA";
@@ -115,6 +116,18 @@ export default function AppShell({
   // a busca do topo era só desenho: digitava e nada acontecia (QA 19/10/2026).
   // Coordenada → mapa no ponto (o mapa segue o #pos= da URL, inclusive já aberto);
   // o resto → busca de imóveis, que procura em título, código e município.
+  // Áudio do Carlos (18/11/2026, 16h29): "sou proprietário, quero sair, deslogar, e não consigo".
+  // O site e o painel não tinham "Sair"; só a Central e a tela de segurança.
+  const [saindo, setSaindo] = useState(false);
+  async function sair() {
+    setSaindo(true);
+    await fetch("/api/auth/evento", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evento: "logout" }),
+    }).catch(() => undefined);
+    await supabaseBrowser().auth.signOut().catch(() => undefined);
+    router.push("/entrar");
+    router.refresh();
+  }
   async function buscar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const termo = String(new FormData(e.currentTarget).get("q") ?? "").trim();
@@ -288,6 +301,12 @@ export default function AppShell({
             ) : (
               <Link href="/entrar" className="lp-btn lp-btn-ouro !px-4 !py-2.5 text-sm">Entrar</Link>
             )}
+            {usuario && (
+              <button type="button" onClick={sair} disabled={saindo} title="Sair da conta" aria-label="Sair da conta"
+                className="hidden size-10 place-items-center rounded-full border border-linha-forte text-texto-2 transition hover:border-alerta hover:text-alerta disabled:opacity-60 sm:grid">
+                <LogOut className="size-[18px]" />
+              </button>
+            )}
           </div>
         </header>
 
@@ -307,6 +326,12 @@ export default function AppShell({
                 </Link>
               );
             })}
+            {usuario && (
+              <button type="button" onClick={sair} disabled={saindo}
+                className="mt-1 flex w-full items-center gap-3 rounded-[10px] border-t border-linha px-3.5 py-3 font-display text-base font-semibold text-alerta disabled:opacity-60">
+                <LogOut className="size-5" /> {saindo ? "Saindo…" : "Sair da conta"}
+              </button>
+            )}
           </nav>
         )}
 
