@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 import { limiteMunicipio, municipiosIbge } from "@/lib/geo/carImportacao";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * Busca de município no Brasil inteiro para a caixa de busca do mapa (item 23).
@@ -65,8 +66,15 @@ export async function GET(request: Request): Promise<Response> {
 
   const q = norm((url.searchParams.get("q") ?? "").slice(0, 80));
   if (q.length < 3) return NextResponse.json({ municipios: [] });
-  const lista = await municipiosIbge();
-  if (!lista) return NextResponse.json({ municipios: [], error: "O IBGE não respondeu agora." }, { status: 502 });
+  let lista = await municipiosIbge();
+  // IBGE fora do ar: a tabela ibge_municipios do banco responde a busca (18/11/2026)
+  if (!lista) {
+    const termo = (url.searchParams.get("q") ?? "").trim().slice(0, 80).replace(/[%_,()]/g, " ");
+    const { data } = await supabaseAdmin().from("ibge_municipios").select("cod_ibge, nome, uf")
+      .or(`nome.ilike.%${termo}%,nome.ilike.%${q}%`).limit(40);
+    lista = (data ?? []).map((m) => ({ cod_ibge: Number(m.cod_ibge), nome: String(m.nome), uf: String(m.uf) }));
+    if (!lista.length) return NextResponse.json({ municipios: [], error: "O IBGE não respondeu agora." }, { status: 502 });
+  }
   const achados = lista
     .map((m) => ({ ...m, chave: norm(m.nome) }))
     .filter((m) => m.chave.includes(q))
