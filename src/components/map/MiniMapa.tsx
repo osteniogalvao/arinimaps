@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AmbienteCar from "./AmbienteCar";
 import AlertasDaArea from "./AlertasDaArea";
 import { buffer } from "@turf/turf";
@@ -11,6 +11,14 @@ import { carregarMaplibre } from "@/lib/map/maplibre";
 import { adicionarPinosPoi, type PoiNoMapa } from "@/lib/map/pinosPoi";
 import { visualPoi } from "@/lib/geo/poiVisual";
 import { SeloPoi } from "./UiMapa";
+import type { CamadasTour } from "@/lib/map/acesso-tour";
+import type { RelevoId } from "./camadasRelevo";
+import type { GerenciadorCamadasOficiais } from "./camadasOficiaisMapa";
+import CamadasDoTour from "@/components/tour/CamadasDoTour";
+import { CartaoNoPonto } from "./InfoNoPonto";
+import MedicaoMapa from "./MedicaoMapa";
+import Link from "next/link";
+import { Lock } from "lucide-react";
 
 type Props = {
   geometry: GeoJSON.Geometry;
@@ -23,10 +31,18 @@ type Props = {
   raioM?: number;
   /** pontos do entorno com coordenadas: viram pinos coloridos com ícone */
   pois?: PoiNoMapa[];
+  /**
+   * Camadas que o perfil pode ligar no Tour 3D. Vídeo do Carlos (17/11/2026,
+   * 22h00): a consulta mostra no próprio mapa o que o tour mostra (camadas da
+   * área, o clique "Neste ponto" e a régua), "as pessoas não querem abrir o tour".
+   */
+  camadasTour?: CamadasTour | null;
+  /** plano com "Medir área e distância" */
+  podeMedir?: boolean;
 };
 
 /** Mapa satélite com a geometria do imóvel destacada (página do imóvel e admin). */
-export default function MiniMapa({ geometry, status, className, carAmbiental, areaHa, raioM = 0, pois }: Props) {
+export default function MiniMapa({ geometry, status, className, carAmbiental, areaHa, raioM = 0, pois, camadasTour, podeMedir = true }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const [mapaCar, setMapaCar] = useState<MLMap | null>(null);
@@ -127,6 +143,20 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
     return () => { mapaCar.off("load", atualizar); };
   }, [mapaCar, ambiental]);
 
+  // camadas do tour no mapa da consulta: a área com o raio, como no tour
+  const areaCamadas = useMemo(() => {
+    if (!camadasTour || (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon")) return null;
+    const anel = raioM > 0 ? buffer({ type: "Feature", geometry, properties: {} } as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>, raioM / 1000, { units: "kilometers" }) : null;
+    return (anel?.geometry ?? geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  }, [camadasTour, geometry, raioM]);
+  const gerente = useRef<GerenciadorCamadasOficiais | null>(null);
+  const relevoLigado = useRef(false);
+  const aoGerente = useCallback((g: GerenciadorCamadasOficiais | null) => { gerente.current = g; }, []);
+  const aoRelevo = useCallback((a: ReadonlySet<RelevoId>) => { relevoLigado.current = [...a].some((id) => id !== "hidrografia"); }, []);
+  const oficiaisNoPonto = useCallback((e: import("maplibre-gl").MapMouseEvent) => gerente.current?.noPonto(e.point) ?? [], []);
+  const relevoNoClique = useCallback(() => relevoLigado.current, []);
+  const comCamadas = !!(carregado && areaCamadas && camadasTour);
+
   const categorias = [...new Set((pois ?? []).map((p) => p.categoria))];
   const mapa = (
     <div className="relative h-full">
@@ -143,8 +173,23 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
       )}
     </div>
   );
-  if (!carAmbiental) return mapa;
+  const extras = comCamadas ? <>
+    <CartaoNoPonto mapa={carregado!} oficiais={oficiaisNoPonto} relevo={relevoNoClique} lado="esquerda" />
+    {(camadasTour!.oficiais.length > 0 || camadasTour!.relevo.length > 0) &&
+      <CamadasDoTour mapa={carregado!} geometria={areaCamadas!} permitidas={camadasTour!} aoGerente={aoGerente} aoRelevo={aoRelevo} claro />}
+    <MedicaoMapa mapa={carregado!} liberado={podeMedir} />
+    <p className="text-xs text-texto-2">Clique no mapa para ver o que as camadas ligadas têm no ponto: altitude, solo, clima, crédito rural, reserva legal e o resto.</p>
+  </> : null;
+  // sem o recurso no plano: o mesmo painel aparece bloqueado (áudio do Carlos, 17/11, 22h14)
+  const bloqueado = camadasTour === null && geometry.type !== "Point" ? (
+    <p className="flex items-start gap-2 rounded-xl border border-linha bg-superficie-2/60 px-3 py-2.5 text-xs text-texto-2">
+      <Lock className="mt-0.5 size-3.5 shrink-0" />
+      <span>Camadas da área (solo, clima, relevo, crédito rural…), o clique &quot;Neste ponto&quot; e a medição no mapa fazem parte dos planos com consulta de área. <Link href="/planos" className="font-semibold text-verde underline">Ver planos</Link></span>
+    </p>
+  ) : null;
+  if (!carAmbiental) return comCamadas || bloqueado ? <div className="space-y-3">{mapa}{extras}{bloqueado}</div> : mapa;
   return <div className="space-y-3">{mapa}
+    {extras}{bloqueado}
     <button className="btn-contorno px-4 py-2 text-sm disabled:opacity-60" type="button" disabled={!mapaCar}
       onClick={() => setAmbiental(v => !v)} aria-expanded={ambiental}>
       {ambiental ? "Ocultar camadas ambientais" : "Mostrar APP, reserva e camadas ambientais"}

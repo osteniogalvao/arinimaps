@@ -1,5 +1,5 @@
 import { raioConsulta } from "@/lib/rural/raios";
-import { tourDaArea } from "@/components/tour/tourDaArea";
+import { camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
 import GeradorRelatorio from "@/components/rural/GeradorRelatorio";
 import { whatsappConfigurado } from "@/lib/meta";
 import { notFound } from "next/navigation";
@@ -85,6 +85,7 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
   const abrir = (await searchParams).tour === "1";
   const tour = await tourDaArea(consulta, { abrir, geometria: car.geometry, caminho: "/consulta/car/" + encodeURIComponent(p.cod), raio: raioM, titulo: "Área do CAR", area, car:p.cod });
   if (abrir) return tour;
+  const camadasTour = await camadasDaSessao(consulta);
   const atualizado = p.atualizado_sicar ? new Date(p.atualizado_sicar).toLocaleDateString("pt-BR") : "—";
   // 17/11 (áudio do Carlos, 11h49): a ficha mostra quanto é APP e reserva, em hectares
   let ambiente: LinhaQuadro[] = [];
@@ -136,7 +137,7 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
         <Secao eyebrow="02 · Cadastro no mapa" titulo="Dados do cadastro">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           <MiniMapa geometry={car.geometry} status="publicado"
-            carAmbiental={consulta.acesso.recursos.has("camadas_oficiais") ? p.cod : undefined} areaHa={p.area_ha != null ? Number(p.area_ha) : null} raioM={raioM}
+            carAmbiental={consulta.acesso.recursos.has("camadas_oficiais") ? p.cod : undefined} areaHa={p.area_ha != null ? Number(p.area_ha) : null} raioM={raioM} camadasTour={camadasTour} podeMedir={consulta.acesso.recursos.has("ferramenta_medir")}
             className="h-80 lg:h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{area}</p>

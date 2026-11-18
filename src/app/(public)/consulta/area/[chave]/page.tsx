@@ -1,5 +1,5 @@
 import { raioConsulta } from "@/lib/rural/raios";
-import { tourDaArea } from "@/components/tour/tourDaArea";
+import { camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
 import GeradorRelatorio from "@/components/rural/GeradorRelatorio";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -51,6 +51,7 @@ export default async function ConsultaAreaDesenhada({ params, searchParams }: Pa
   const abrir = (await searchParams).tour === "1";
   const tour = await tourDaArea(consulta, { abrir, geometria: area.geometry, caminho: "/consulta/area/" + chave.slice(4), raio: raioM, titulo: "Área desenhada", area: tamanho });
   if (abrir) return tour;
+  const camadasTour = await camadasDaSessao(consulta);
   const municipio = area.municipio ?? "fora da região cadastrada";
   const relatorio = "/api/consulta/area/" + chave.slice(4) + "/relatorio";
   const relatorioCompleto = consulta.acesso.recursos.has("relatorio_territorial");
@@ -78,7 +79,7 @@ export default async function ConsultaAreaDesenhada({ params, searchParams }: Pa
       <Conteudo className="py-12 md:py-16 space-y-12 md:space-y-16">
         <Secao eyebrow="02 · Divisa no mapa" titulo="Dados da área">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <MiniMapa geometry={area.geometry} status="publicado" raioM={raioM}
+          <MiniMapa geometry={area.geometry} status="publicado" raioM={raioM} camadasTour={camadasTour} podeMedir={consulta.acesso.recursos.has("ferramenta_medir")}
             className="h-80 lg:h-full lg:min-h-80 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{tamanho}</p>

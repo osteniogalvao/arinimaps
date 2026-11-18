@@ -1,5 +1,5 @@
 import { raioConsulta } from "@/lib/rural/raios";
-import { tourDaArea } from "@/components/tour/tourDaArea";
+import { camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
@@ -54,6 +54,7 @@ export default async function ConsultaLote({ params, searchParams }: PageProps<"
   const abrir = (await searchParams).tour === "1";
   const tour = await tourDaArea(consulta, { abrir, geometria: lote.geometry, caminho: "/consulta/lote/" + id, raio: raioM, titulo: p.numero ? "Lote " + p.numero : "Lote urbano", area: m2(p.area_m2) + " m²" });
   if (abrir) return tour;
+  const camadasTour = await camadasDaSessao(consulta);
 
   const raio = Number(raioCfg?.valor ?? 4000) || 4000;
   const { data: poisRaw } = await admin.rpc("fn_pois_proximos", { p_lng: p.lng, p_lat: p.lat, p_raio_m: raio, p_por_categoria: 2 });
@@ -93,7 +94,7 @@ export default async function ConsultaLote({ params, searchParams }: PageProps<"
       <Conteudo className="py-12 md:py-16 space-y-12 md:space-y-16">
         <Secao eyebrow="02 · Lote no mapa" titulo="Dados da planta">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <MiniMapa geometry={lote.geometry} status="publicado" raioM={raioM} pois={pois as PoiNoMapa[]}
+          <MiniMapa geometry={lote.geometry} status="publicado" raioM={raioM} camadasTour={camadasTour} podeMedir={consulta.acesso.recursos.has("ferramenta_medir")} pois={pois as PoiNoMapa[]}
             className="h-80 lg:h-full lg:min-h-96 w-full rounded-[20px] overflow-hidden border border-linha" />
           <div className="cartao p-6 space-y-5">
             <p className="lp-display text-5xl leading-none text-verde">{m2(p.area_m2)} m²</p>

@@ -42,6 +42,7 @@ export default async function TourPage({ params, searchParams }: PageProps<"/imo
   const {data:prop} = await supabaseAdmin().from("properties").select("id").eq("codigo",codigo).maybeSingle();
   if (prop?.id) void registrarEventoImovel({ propertyId: prop.id, tipo: "tour", userId: user?.id, detalhe: { codigo, record } });
 
+  const acesso = user && !record ? await acessoDe(user.id) : null;
   return (
     <Tour3D
       codigo={tour.codigo}
@@ -54,7 +55,8 @@ export default async function TourPage({ params, searchParams }: PageProps<"/imo
       municipio={tour.municipio}
       pois={tour.pois ?? []}
       record={record}
-      camadas={user && !record ? await direitosDoTour(await acessoDe(user.id), user.entradaAtiva, true) : null}
+      camadas={user && acesso ? await direitosDoTour(acesso, user.entradaAtiva, true) : null}
+      medir={!acesso || acesso.recursos.has("ferramenta_medir")}
     />
   );
 }
