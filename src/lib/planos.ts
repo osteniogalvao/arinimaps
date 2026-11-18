@@ -25,7 +25,7 @@ export type RecursoId =
   | "camadas_oficiais" | "consulta_area" | "relatorio_territorial" | "ferramenta_kml" | "ferramenta_exportar"
   | "historico_imovel" | "pre_avaliacao" | "chat_ia" | "monitoramento_territorial"
   | "anunciar" | "painel_parceiro" | "oportunidades" | "crm_privado" | "crm_setorial"
-  | "multiusuario" | "api_dados" | "territorio";
+  | "multiusuario" | "api_dados" | "territorio" | "dados_terceiros";
 
 export type Recurso = {
   id: RecursoId;
@@ -46,6 +46,7 @@ export const RECURSOS: Recurso[] = [
   { id: "interesse", nome: "Demonstrar interesse", descricao: "Pedir informação ou visita; vira lead na central da Arini.", grupo: "consulta" },
   { id: "camada_car", nome: "Divisas do CAR", descricao: "Malha dos imóveis rurais (SICAR) sobre o satélite.", grupo: "consulta" },
   { id: "camada_lotes", nome: "Lotes urbanos", descricao: "Lotes clicáveis das plantas das cidades, com metragens.", grupo: "consulta" },
+  { id: "dados_terceiros", nome: "Dados de imóveis que não estão à venda", descricao: "Área, matrícula, quadro ambiental e medidas das áreas do CAR e dos lotes urbanos sem anúncio na Arini. Sem este recurso a conta vê só os imóveis à venda (pedido de 18/11/2026).", grupo: "consulta" },
   { id: "ferramenta_medir", nome: "Medir área e distância", descricao: "Medição geodésica direto no mapa.", grupo: "ferramentas" },
   { id: "solicitacao_cartografica", nome: "Informar imóvel ausente ou divergente", descricao: "Abrir protocolo para a equipe de cartografia incluir ou corrigir uma área.", grupo: "consulta" },
   // consulta profissional

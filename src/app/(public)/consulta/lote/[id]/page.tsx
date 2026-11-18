@@ -1,6 +1,8 @@
 import { raioConsulta } from "@/lib/rural/raios";
 import { camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { podeVerArea } from "@/lib/dados-terceiros";
+import BloqueioTerceiros from "@/components/conta/BloqueioTerceiros";
 import type { Metadata } from "next";
 import Moldura from "@/components/shell/Moldura";
 import MiniMapa from "@/components/map/MiniMapa";
@@ -41,6 +43,10 @@ export default async function ConsultaLote({ params, searchParams }: PageProps<"
   if (raioM === null) notFound();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+  // 18/11/2026: visitante e conta gratuita veem só imóveis à venda
+  const direito = await podeVerArea({ lote: id });
+  if (!direito.pode) return <BloqueioTerceiros tipo="lote" anunciar={`/painel/novo?lote=${id}`} />;
+  if (direito.anuncio && !direito.acesso.equipe && !direito.acesso.recursos.has("dados_terceiros")) redirect(`/imovel/${direito.anuncio}`);
   const admin = supabaseAdmin();
   const [{ data: loteRaw }, { data: raioCfg }, consulta] = await Promise.all([
     admin.rpc("fn_lote", { p_id: id }),

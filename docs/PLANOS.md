@@ -261,3 +261,27 @@ membro ao próprio plano — não ao acesso de visitante.
 - Cota por organização (consultas somadas de todos os membros) — hoje a cota
   continua sendo contada por conta.
 - Cobrança do plano da organização (`plan_subscriptions` é por conta).
+
+## Visitante e conta gratuita: só imóveis à venda (18/11/2026)
+
+Pedido do Stenio: o visitante se encanta com o imóvel à venda e cria a conta
+("como o Mercado Pago"); a conta gratuita vê só os imóveis à venda; imóvel de
+terceiro não mostra nada.
+
+- **Ficha do imóvel sem login** (`src/components/imovel/FichaVisitante.tsx`):
+  fotos, vídeos, valor, ficha técnica, diferenciais e descrição até o limite de
+  fichas por navegador (`settings.fichas_visitante`, padrão 2, cookie assinado
+  em `/api/vitrine/abrir`). Localização exata, tour 3D, arredores,
+  documentação, financiamento, relatório e contato ficam atrás da parede "Criar
+  conta grátis". Passado o limite, só a capa desfocada e a parede.
+- **Recurso `dados_terceiros`** (migration `0151_dados_terceiros.sql`): área do
+  CAR ou lote urbano sem anúncio. Está nos planos pagos e nos testes de 3 dias.
+  Sem ele: o cartão do CAR e do lote no mapa aparecem trancados, as medidas e a
+  numeração dos lotes somem do mapa, `/consulta/car/…` e `/consulta/lote/…`
+  mostram a página de bloqueio (ou levam ao anúncio, se a área estiver à venda)
+  e as rotas `/api/geo/car/[cod]/matricula`, `/api/geo/car/[cod]/ambiente` e
+  `/api/geo/lotes/[id]` negam o dado. Regra em `src/lib/dados-terceiros.ts`.
+- Exceções: a área à venda (o dado do anúncio é público), o CAR guardado no
+  cofre da própria conta e o CAR de um imóvel que a conta anunciou.
+- Continuam abertos, porque o dono precisa deles para anunciar a própria área:
+  `/api/geo/car/[cod]` (divisa para o cadastro) e `/api/geo/lotes?ids=`.

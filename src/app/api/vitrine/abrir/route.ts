@@ -22,3 +22,26 @@ export async function GET(request: Request) {
   if (podeAbrir) await registrarEventoImovel({propertyId:imovel.id,tipo:"ficha",detalhe:{codigo,visao:"resumo"}});
   return res;
 }
+
+/**
+ * 18/11/2026: a ficha do visitante registra a abertura sozinha (sem o botão
+ * "Abrir resumo"). Grava a ficha no cookie enquanto houver vaga no limite.
+ */
+export async function POST(request: Request) {
+  const corpo = await request.json().catch(() => null) as { codigo?: unknown } | null;
+  const codigo = typeof corpo?.codigo === "string" ? corpo.codigo.toUpperCase() : "";
+  if (!/^AIB-[0-9]{6,12}$/.test(codigo)) return new Response(null, { status: 400 });
+  const uso = await limitar("vitrine:" + ipDoPedido(request), 90, 60);
+  if (!uso.permitido) return respostaLimite(uso, "abertura de ficha");
+  const { lista, limite } = await visitasDoNavegador();
+  if (lista.includes(codigo)) return NextResponse.json({ liberado: true, vistos: lista.length, limite });
+  if (lista.length >= limite) return NextResponse.json({ liberado: false, vistos: lista.length, limite });
+  const { data: imovel } = await supabaseAdmin().from("properties").select("id").eq("codigo", codigo).in("status", ["publicado", "em_negociacao"]).maybeSingle();
+  if (!imovel) return new Response(null, { status: 404 });
+  const nova = [...lista, codigo];
+  const res = NextResponse.json({ liberado: true, vistos: nova.length, limite }, { headers: { "Cache-Control": "private, no-store" } });
+  res.cookies.set(COOKIE_VISITAS, assinarVisitas(nova),
+    { path: "/", sameSite: "lax", httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 86400 * 30 });
+  await registrarEventoImovel({ propertyId: imovel.id, tipo: "ficha", detalhe: { codigo, visao: "vitrine_visitante" } });
+  return res;
+}
