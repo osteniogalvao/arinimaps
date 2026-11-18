@@ -5,6 +5,7 @@ import {
 } from "@/lib/seguranca/bloqueio";
 import { conferirOrigem, respostaOrigemNegada } from "@/lib/seguranca/origem";
 import { opcoesCookieSessao } from "@/lib/seguranca/cookies";
+import { fetchComLimite } from "@/lib/supabase/fetchComLimite";
 
 // Trava o site com a senha de bloqueio (SITE_SENHA) e mantém a sessão do
 // Supabase viva (refresh de token via cookies).
@@ -39,6 +40,8 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookieOptions: opcoesCookieSessao(),
+      // banco travado não pode segurar toda navegação
+      global: { fetch: fetchComLimite(6_000) },
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -54,7 +57,11 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Supabase fora do ar: segue sem renovar a sessão em vez de travar a página
+  }
   return response;
 }
 

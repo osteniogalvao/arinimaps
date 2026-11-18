@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { opcoesCookieSessao } from "@/lib/seguranca/cookies";
+import { fetchComLimite } from "./fetchComLimite";
 
 export async function supabaseServer() {
   const cookieStore = await cookies();
@@ -9,6 +10,7 @@ export async function supabaseServer() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookieOptions: opcoesCookieSessao(),
+      global: { fetch: fetchComLimite(15_000) },
       cookies: {
         getAll() {
           return cookieStore.getAll();
