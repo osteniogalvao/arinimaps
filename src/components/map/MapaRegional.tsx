@@ -20,6 +20,8 @@ import { transformarGeoJSON, centroDe, removerLinhasExcluidas, aplicarEdicoesGeo
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
+import PainelPredio, { type Predio } from "@/components/map/PainelPredio";
+import type { SubtipoUnidade } from "@/lib/imovel/unidade";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
 import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, ResumoCamadas, ALTURA_FAIXA, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
 import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, Map as MapaIcone, MapPin, Satellite, ScanSearch, Search } from "lucide-react";
@@ -61,6 +63,13 @@ type ImovelProps = {
   lat: number;
   municipio: string | null;
   capa: string | null;
+  // apartamento/sala em prédio (18/11/2026), vindos de /api/geo/imoveis
+  pai?: string;
+  pai_codigo?: string;
+  pai_titulo?: string;
+  subtipo?: SubtipoUnidade;
+  andar?: number;
+  unidade?: string;
 };
 
 type Camada = {
@@ -412,6 +421,8 @@ export default function MapaRegional({
   const [mosaicoAnual, setMosaicoAnual] = useState(false);
   const [base, setBase] = useState<"ruas" | "satelite">("satelite");
   const [selecionado, setSelecionado] = useState<ImovelProps | null>(null);
+  // prédio com apartamentos à venda: o clique abre a lista por andar (Carlos, 18/11 16h57)
+  const [predio, setPredio] = useState<Predio | null>(null);
   const imovelAberto = selecionado?.id;
   useEffect(() => {
     if (imovelAberto) {
@@ -869,6 +880,7 @@ export default function MapaRegional({
   const voarPara = useCallback((p: ImovelProps) => {
     setPainelMapa(null);
     setPainelAberto(false);
+    setPredio(null);
     setSelecionado(p);
     mapRef.current?.flyTo({
       center: [p.lng, p.lat],
@@ -877,6 +889,43 @@ export default function MapaRegional({
       duration: 1400,
       essential: true,
     });
+  }, []);
+
+  /**
+   * Prédio do anúncio clicado: as unidades (apartamento/sala) do mesmo imóvel
+   * pai, mais as que estão no mesmo ponto do mapa (`vizinhos`), para o caso de
+   * o anunciante não ter ligado a unidade ao prédio. Só vira "prédio" com duas
+   * unidades ou mais, ou quando o próprio prédio foi clicado. Lotes de
+   * loteamento não têm andar nem subtipo, então seguem abrindo o lote.
+   */
+  const predioDe = useCallback((id: string, vizinhos: string[]): Predio | null => {
+    const todos = (dadosRef.current?.features ?? []).map((f) => f.properties as ImovelProps);
+    const porId = new Map(todos.map((p) => [p.id, p]));
+    const clicado = porId.get(id);
+    if (!clicado) return null;
+    const ehUnidade = (p: ImovelProps) => p.andar != null || !!p.subtipo;
+    const chave = clicado.pai ?? (todos.some((p) => p.pai === clicado.id && ehUnidade(p)) ? clicado.id : null);
+    const grupo = new Map<string, ImovelProps>();
+    if (chave) for (const p of todos) if (p.pai === chave && ehUnidade(p)) grupo.set(p.id, p);
+    if (ehUnidade(clicado)) {
+      grupo.set(clicado.id, clicado);
+      for (const v of vizinhos) {
+        const p = porId.get(v);
+        if (p && ehUnidade(p)) grupo.set(p.id, p);
+      }
+    }
+    const unidades = [...grupo.values()];
+    const clicouNoPredio = chave === clicado.id;
+    if (unidades.length < 2 && !(clicouNoPredio && unidades.length)) return null;
+    const comPai = unidades.find((u) => u.pai_codigo);
+    return {
+      codigo: clicouNoPredio ? clicado.codigo : comPai?.pai_codigo ?? null,
+      titulo: clicouNoPredio ? clicado.titulo : comPai?.pai_titulo ?? "Prédio",
+      unidades: unidades.map((u) => ({
+        id: u.id, codigo: u.codigo, titulo: u.titulo, status: u.status, valor: u.valor, area_m2: u.area_m2,
+        capa: u.capa, andar: u.andar ?? null, unidade: u.unidade ?? null, subtipo: u.subtipo ?? null,
+      })),
+    };
   }, []);
 
   const destacar = useCallback((id: string | null) => {
@@ -1209,7 +1258,22 @@ export default function MapaRegional({
         const aoClicar = (e: MapLayerMouseEvent) => {
           if (desenhandoRef.current) return;
           const f = e.features?.[0];
-          if (f) voarPara(f.properties as unknown as ImovelProps);
+          if (!f) return;
+          const p = f.properties as unknown as ImovelProps;
+          // tudo o que está sob o dedo (folga de 10 px: no celular o toque é largo)
+          const { x, y } = e.point;
+          const camadas = ["imoveis-fill", "imoveis-ponto", "imoveis-marcador"].filter((l) => map.getLayer(l));
+          const vizinhos = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: camadas })
+            .map((v) => String((v.properties as { id?: string })?.id ?? ""));
+          const pr = predioDe(p.id, vizinhos);
+          if (pr) {
+            setPainelMapa(null);
+            setPainelAberto(false);
+            setSelecionado(null);
+            setPredio(pr);
+            return;
+          }
+          voarPara(p);
         };
         const aoMover = (e: MapLayerMouseEvent) => {
           const f = e.features?.[0];
@@ -2210,6 +2274,9 @@ export default function MapaRegional({
           }}
         />
       </div>
+
+      {/* ---------- unidades do prédio, por andar ---------- */}
+      {predio && !selecionado && <PainelPredio predio={predio} onFechar={() => setPredio(null)} />}
 
       {/* ---------- inteligência territorial do imóvel ---------- */}
       {selecionado && (

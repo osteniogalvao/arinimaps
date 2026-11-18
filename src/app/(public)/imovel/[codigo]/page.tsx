@@ -1,4 +1,5 @@
 import HabilitacaoLeilao from "@/components/imovel/HabilitacaoLeilao";
+import { agruparPorAndar, lerUnidade, rotuloAndar, rotuloUnidade } from "@/lib/imovel/unidade";
 import AcoesInteresse from "@/components/imovel/AcoesInteresse";
 import FichaVisitante, { type DadosVitrine } from "@/components/imovel/FichaVisitante";
 import { visitasDoNavegador } from "@/lib/imovel/visitas";
@@ -102,6 +103,9 @@ function fichaTecnica(
     const v = c[chave];
     if (v != null && v !== "" && num(v) > 0) itens.push({ rotulo, valor: String(num(v)), icone });
   };
+  const un = lerUnidade(c);
+  if (un.subtipo) itens.push({ rotulo: un.subtipo === "sala" ? "Sala" : "Apartamento", valor: un.unidade ?? "—", icone: DoorOpen });
+  if (un.andar != null) itens.push({ rotulo: "Andar", valor: rotuloAndar(un.andar), icone: Building });
   add("quartos", "Quartos", BedDouble);
   add("suites", "Suítes", DoorOpen);
   add("banheiros", "Banheiros", Bath);
@@ -161,7 +165,7 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
       // order+limit: antes da 0063 podia haver vídeo duplicado (maybeSingle quebrava)
       .eq("property_id", propId?.id ?? "").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     admin.from("properties")
-      .select("codigo, titulo, valor, status")
+      .select("codigo, titulo, valor, status, caracteristicas")
       .eq("parent_property_id", propId?.id ?? "")
       .in("status", ["publicado", "em_negociacao", "vendido"])
       .order("titulo"),
@@ -180,6 +184,7 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
     propId ? admin.from("espelho_config").select("pre_lancamento").eq("empreendimento_id",propId.id).maybeSingle() : {data:null},
   ]);
 
+  const unidadesLidas = (unidades ?? []).map((u) => ({ ...u, ...lerUnidade(u.caracteristicas as Record<string, unknown> | null) }));
   const pois = poisOrdenados((tourData as { pois?: { nome: string | null; categoria: string; distancia_m: number; lng: number; lat: number }[] } | null)?.pois ?? [])
     .slice(0, 10);
   const centroid = (tourData as { centroid?: { lng: number; lat: number } } | null)?.centroid;
@@ -356,6 +361,28 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
             {!!unidades?.length && (
               <Secao eyebrow="04 · Empreendimento" titulo="Unidades deste empreendimento">
                 {configEspelho.data?.pre_lancamento && <Etiqueta tom="ouro">Pré-lançamento</Etiqueta>}
+                {/* prédio com andares (18/11/2026): as unidades vêm separadas por andar */}
+                {unidadesLidas.some((u) => u.andar != null) ? (
+                  <div className="space-y-4">
+                    {agruparPorAndar(unidadesLidas).map((g) => (
+                      <div key={String(g.andar)}>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-texto-2">{rotuloAndar(g.andar)}</p>
+                        <div className="cartao divide-y divide-linha overflow-hidden !p-0">
+                          {g.unidades.map((u) => (
+                            <Link key={u.codigo} href={`/imovel/${u.codigo}`}
+                              className="group flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-4 transition hover:bg-superficie-2">
+                              <span className="min-w-0 flex-1 font-semibold text-texto transition group-hover:text-verde">
+                                {rotuloUnidade(u) ? <>{rotuloUnidade(u)} <span className="font-normal text-texto-2">· {u.titulo}</span></> : u.titulo}
+                              </span>
+                              <span className="lp-display text-lg tabular-nums text-verde">{formatBRL(u.valor)}</span>
+                              <Etiqueta tom={u.status === "vendido" ? "neutro" : "verde"}>{STATUS_LABEL[u.status]}</Etiqueta>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div className="cartao divide-y divide-linha overflow-hidden !p-0">
                   {unidades.map((u) => (
                     <Link key={u.codigo} href={`/imovel/${u.codigo}`}
@@ -366,10 +393,13 @@ export default async function PaginaImovel({ params }: PageProps<"/imovel/[codig
                     </Link>
                   ))}
                 </div>
+                )}
+                {!unidadesLidas.some((u) => u.andar != null) && (
                 <Link href={`/imovel/${imovel.codigo}/espelho`}
                   className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-verde underline-offset-4 hover:underline">
                   Ver lotes disponíveis no espelho
                 </Link>
+                )}
               </Secao>
             )}
 
