@@ -359,6 +359,21 @@ const norm = (s: string) =>
 
 // Na primeira pintura o HTML pode chegar antes dos controles interativos.
 const assinarHidratacao = () => () => {};
+// Áudio do Carlos (18/11/2026, 17h01 e 17h03): o município buscado ganha o contorno da base
+// do IBGE (tracejado vermelho e branco, como no Google Maps), só como ponto de referência;
+// ao aproximar (nível 14+) o contorno some e não fica por cima de lotes e áreas.
+function marcarMunicipio(map: MLMap, geometria: GeoJSON.Geometry | null) {
+  const dado: GeoJSON.FeatureCollection = { type: "FeatureCollection",
+    features: geometria ? [{ type: "Feature", geometry: geometria, properties: {} }] : [] };
+  const fonte = map.getSource("municipio-buscado") as GeoJSONSource | undefined;
+  if (fonte) { fonte.setData(dado); return; }
+  map.addSource("municipio-buscado", { type: "geojson", data: dado });
+  map.addLayer({ id: "municipio-buscado-base", type: "line", source: "municipio-buscado", maxzoom: 14,
+    paint: { "line-color": "#FFFFFF", "line-width": 4.5, "line-opacity": 0.9 } });
+  map.addLayer({ id: "municipio-buscado-tracejado", type: "line", source: "municipio-buscado", maxzoom: 14,
+    paint: { "line-color": "#D80B0B", "line-width": 4.5, "line-dasharray": [1.2, 1.2] } });
+}
+
 export default function MapaRegional({
   recursos, logado = false, versaoLotes = "",
 }: {
@@ -1500,11 +1515,14 @@ export default function MapaRegional({
 
   const irParaMunicipioIbge = useCallback(async (cod: number) => {
     setBuscaAviso("");
-    const j = await fetch(`/api/geo/municipio-busca?cod=${cod}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as
-      { bbox?: [number, number, number, number] } | null;
+    const j = await fetch(`/api/geo/municipio-busca?cod=${cod}&malha=1`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as
+      { bbox?: [number, number, number, number]; geometria?: GeoJSON.Geometry | null } | null;
     if (!j?.bbox) { setBuscaAviso("O IBGE não respondeu agora. Tente de novo em instantes."); return; }
     const [w, s, e, n] = j.bbox;
-    mapRef.current?.fitBounds([[w, s], [e, n]], { padding: 60, duration: 1200 });
+    const map = mapRef.current;
+    if (!map) return;
+    marcarMunicipio(map, j.geometria ?? null);
+    map.fitBounds([[w, s], [e, n]], { padding: 60, duration: 1200 });
   }, []);
 
   // Busca do topo do site (áudio do Carlos, 18/11/2026, 16h20): "/mapa?municipio=<IBGE>&nome=…"
@@ -1636,6 +1654,7 @@ export default function MapaRegional({
       else if (Array.isArray(c)) c.forEach(walk);
     };
     walk((municipioSugerido.geometry as GeoJSON.Polygon).coordinates);
+    if (mapRef.current) marcarMunicipio(mapRef.current, municipioSugerido.geometry as GeoJSON.Geometry);
     if (coords.length && mapRef.current) {
       const lngs = coords.map((c) => c[0]);
       const lats = coords.map((c) => c[1]);

@@ -19,6 +19,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
 const retangulos = new Map<number, [number, number, number, number]>();
+// contorno do município para o mapa desenhar (áudio do Carlos, 18/11/2026, 17h01); guarda os últimos 300
+const malhas = new Map<number, GeoJSON.Geometry>();
 // cache negativo: o IBGE não deu a malha deste código; não pergunta de novo por 10 min
 const falhas = new Map<number, number>();
 const ESPERA_FALHA = 10 * 60_000;
@@ -57,10 +59,22 @@ export async function GET(request: Request): Promise<Response> {
       }
       const g = await limiteMunicipio(cod);
       bbox = g ? retanguloDe(g) : null;
+      if (g && bbox) {
+        malhas.set(cod, g);
+        if (malhas.size > 300) malhas.delete(malhas.keys().next().value as number);
+      }
       if (bbox) { retangulos.set(cod, bbox); falhas.delete(cod); }
       else falhas.set(cod, Date.now());
     }
     if (!bbox) return NextResponse.json({ error: "O IBGE não respondeu agora." }, { status: 502 });
+    if (url.searchParams.get("malha") === "1") {
+      let geometria = malhas.get(cod) ?? null;
+      if (!geometria) {
+        geometria = await limiteMunicipio(cod);
+        if (geometria) malhas.set(cod, geometria);
+      }
+      return NextResponse.json({ cod, bbox, geometria }, { headers: cache });
+    }
     return NextResponse.json({ cod, bbox }, { headers: cache });
   }
 
