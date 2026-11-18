@@ -54,6 +54,7 @@ const EXCECOES_AUTH = {
   "/api/leads": "formulário público de interesse (limite por IP)",
   "/api/vitrine/visualizacao": "seleção de anúncio público no mapa, com consentimento vigente, deduplicação e limite por IP",
   "/api/vitrine/abrir": "ficha pública do visitante: só grava o cookie assinado do limite de fichas de anúncio publicado, com limite por IP",
+  "/api/links-exclusivos/[token]/abrir": "link exclusivo do tour: quem recebe não tem conta; o token (uuid) prende o link ao primeiro aparelho, com limite por IP",
   "/api/car/janela": "mapa público: só garante o CAR (dado aberto) da janela no Brasil, com limite por IP",
   "/api/saude": "monitoramento: sem o SAUDE_TOKEN só responde ok/erro, sem detalhe",
   "/api/interno/comunicados": "worker autenticado por x-saude-token, com segredo não vazio e comparação em tempo constante",

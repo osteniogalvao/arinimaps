@@ -24,6 +24,7 @@ const LIVRES = [
   "/api/interno/assinaturas",
   "/api/interno/publicar", // worker; confere o SAUDE_TOKEN
   "/api/feeds/portais", // portais imobiliários lendo o feed XML
+  "/og", // imagem do card do link (só imóveis anunciados); a prévia do WhatsApp precisa dela
 ];
 
 export function bloqueioAtivo() {

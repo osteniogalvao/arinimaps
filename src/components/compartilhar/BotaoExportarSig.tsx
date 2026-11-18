@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Download, FileArchive, FileCode2, FileText, Globe2, LoaderCircle, PencilRuler } from "lucide-react";
+import { ChevronDown, Download, FileArchive, FileCode2, FileText, Globe2, LoaderCircle, PencilRuler, Send } from "lucide-react";
 import type { Atributos, CamadaSig } from "@/lib/geo/exportarSig";
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
   className?: string;
 };
 
-type Formato = "kml" | "kmz" | "geojson" | "shp" | "dxf" | "memorial";
+type Formato = "kml" | "kmz" | "geojson" | "shp" | "dxf" | "memorial" | "enviar";
 
 const BOTAO_PADRAO =
   "btn-verde flex w-full items-center justify-center gap-2 py-3 text-sm font-bold";
@@ -83,10 +83,10 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
       const base = nomeArquivo(nomeBase);
       if (formato === "geojson") lib.baixar(lib.paraGeoJSON(camadas), `${base}.geojson`, "application/geo+json");
       else if (formato === "kml") lib.baixar(lib.paraKML(camadas, nomeBase), `${base}.kml`, "application/vnd.google-earth.kml+xml");
-      else if (formato === "kmz") {
-        const { default: JSZip } = await import("jszip");
-        const zip = new JSZip().file("doc.kml", lib.paraKML(camadas, nomeBase));
-        lib.baixar(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), `${base}.kmz`, "application/vnd.google-earth.kmz");
+      else if (formato === "kmz") lib.baixar(await lib.paraKMZ(camadas, nomeBase), `${base}.kmz`, "application/vnd.google-earth.kmz");
+      else if (formato === "enviar") {
+        // 18/11/2026 (áudio do Carlos): encaminhar a área direto pelo WhatsApp/e-mail
+        await lib.encaminhar(await lib.paraKMZ(camadas, nomeBase), `${base}.kmz`, "application/vnd.google-earth.kmz", `Área ${nomeBase} (KMZ)`);
       }
       else if (formato === "shp") lib.baixar(await lib.paraShapefileZip(camadas), `${base}-shapefile.zip`, "application/zip");
       else if (formato === "dxf") {
@@ -118,6 +118,7 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
   }
 
   const opcoes: { id: Formato; rotulo: string; ajuda: string; icone: typeof Globe2 }[] = [
+    { id: "enviar", rotulo: "Encaminhar (KMZ)", ajuda: "Manda o arquivo pelo WhatsApp, e-mail ou Drive do aparelho; no computador, baixa", icone: Send },
     { id: "kml", rotulo: "KML", ajuda: "Google Earth e a maioria dos apps de mapa", icone: Globe2 },
     { id: "kmz", rotulo: "KMZ", ajuda: "KML compactado para compartilhar ou importar no projeto", icone: FileArchive },
     { id: "geojson", rotulo: "GeoJSON", ajuda: "QGIS, web e sistemas próprios", icone: FileCode2 },

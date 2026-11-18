@@ -1430,6 +1430,17 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     }
   }
 
+  /** "Mais e menos" do mapa (áudio do Carlos, 18/11): tamanho em % da peça ativa ou da planta inteira. */
+  function escalarPasso(d: number) {
+    const lim = (v: number) => Math.min(2, Math.max(0.5, Math.round(v * 1e5) / 1e5));
+    if (parteAtual) aplicarParte((pt) => ({ ...pt, escala: lim((pt.escala || 1) + d / 100) }));
+    else aplicar({ ...tRef.current, escala: lim(tRef.current.escala + d / 100) });
+  }
+  function girarAtual(d: number) {
+    if (parteAtual) aplicarParte((pt) => ({ ...pt, rotacaoGraus: girarPasso(pt.rotacaoGraus, d) }));
+    else aplicar({ ...tRef.current, rotacaoGraus: girarPasso(tRef.current.rotacaoGraus, d) });
+  }
+
   function cancelarDesenho() {
     setLaco(false);
     desenhoRef.current = [];
@@ -1504,6 +1515,13 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       else if (e.key === "ArrowRight") { e.preventDefault(); mover(p, 0); }
       else if (e.key === "z" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); desfazer(); }
       else if (e.key === "Enter" && modo === "parte") { e.preventDefault(); fecharAreaRef.current(); }
+      else if (e.key === "Backspace" && modo === "parte" && desenhoRef.current.length) {
+        e.preventDefault(); const v = desenhoRef.current.slice(0, -1); desenhoRef.current = v; setDesenho(v);
+      }
+      else if ((e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") && modo === "mover" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault(); escalarPasso((e.key === "+" || e.key === "=" ? 1 : -1) * (e.shiftKey ? 0.1 : 1));
+      }
+      else if ((e.key === "[" || e.key === "]") && modo === "mover") { e.preventDefault(); girarAtual(e.key === "[" ? 1 : -1); }
       else if ((e.key === "Delete" || e.key === "Backspace") && selecaoRef.current.size) { e.preventDefault(); apagarSelecionadas(); }
       // no desenho da área, Esc desiste da área; não fecha a calibração
       else if (e.key === "Escape") {
@@ -1940,7 +1958,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
             <button className={chip(modo === "parte" && novoPoligono)} onClick={() => { setNovoPoligono(true); setLaco(false); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}>
               <PenLine className="size-4" /> Desenhar polígono</button>
             <button className={chip(modo === "parte" && !novoPoligono && !laco)} onClick={() => { setNovoPoligono(false); setLaco(false); desenhoRef.current = []; setDesenho([]); setModo("parte"); }}
-              title="Clique em volta de um lote, quadra ou bairro para mover, girar e esticar só aquele trecho"><PenLine className="size-4" /> Desenhar perímetro</button>
+              title="Clique em volta de um lote, quadra ou bairro, com quantos pontos quiser (curvas também), para mover, girar e aumentar ou diminuir só aquele trecho"><PenLine className="size-4" /> Desenhar perímetro livre</button>
             <button className={chip(modo === "apagar")} onClick={() => { if (modo === "parte") cancelarDesenho(); setMsg(""); setModo("apagar"); }}
               title="Clique numa linha para apagá-la da planta (o arquivo original não muda)"><Eraser className="size-4" /> Apagar linhas</button>
             <button className={chip(modo === "lote")} disabled={carregando || salvando || haMudancaNaoSalva}
@@ -2066,6 +2084,33 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           <div ref={containerRef} className="flex-1 min-h-0 w-full" />
           {/* retângulo da seleção em caixa, desenhado por cima do mapa */}
           <div ref={caixaRef} aria-hidden className="pointer-events-none absolute hidden border-2 border-dashed border-[#FF8A3D] bg-[#FF8A3D]/10" />
+          {/* Áudio do Carlos (18/11/2026, 9h26): o perímetro aceita quantos pontos
+              quiser (curvas inclusive) e, depois de fechado, "um mais e menos" no
+              próprio mapa para aumentar ou diminuir a peça até encaixar. */}
+          {modo === "parte" && (
+            <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-linha bg-superficie/95 px-3 py-2 text-sm shadow-lg">
+              <span className="text-texto-2"><strong className="text-texto tabular-nums">{desenho.length}</strong> {desenho.length === 1 ? "ponto" : "pontos"} · sem limite, contorne as curvas com vários cliques</span>
+              <button type="button" disabled={!desenho.length} className="rounded-lg btn-contorno px-2.5 py-1 text-xs disabled:opacity-50"
+                onClick={() => { const v = desenhoRef.current.slice(0, -1); desenhoRef.current = v; setDesenho(v); }}>Desfazer ponto</button>
+              <button type="button" disabled={desenho.length < 3} onClick={() => fecharAreaRef.current()}
+                className="btn-verde px-3 py-1 text-xs disabled:opacity-50">Fechar a área</button>
+            </div>
+          )}
+          {modo === "mover" && (
+            <div role="group" aria-label="Tamanho e giro" className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-xl border border-linha bg-superficie/95 px-2 py-1.5 text-sm shadow-lg">
+              <span className="px-1 text-xs text-texto-2 max-w-28 truncate">{parteAtual ? parteAtual.nome : "Planta inteira"}</span>
+              <button type="button" title="Diminuir 1% (tecla −; Shift = 0,1%)" aria-label="Diminuir"
+                className="grid size-9 place-items-center rounded-lg btn-contorno text-lg font-bold" onClick={() => escalarPasso(-1)}>−</button>
+              <span className="w-14 text-center tabular-nums text-xs font-semibold">{(((parteAtual ? parteAtual.t.escala : t.escala) || 1) * 100).toFixed(1)}%</span>
+              <button type="button" title="Aumentar 1% (tecla +; Shift = 0,1%)" aria-label="Aumentar"
+                className="grid size-9 place-items-center rounded-lg btn-contorno text-lg font-bold" onClick={() => escalarPasso(1)}>+</button>
+              <span className="mx-1 h-6 w-px bg-linha" aria-hidden />
+              <button type="button" title="Girar 1° para a esquerda (tecla [)" aria-label="Girar para a esquerda"
+                className="grid size-9 place-items-center rounded-lg btn-contorno text-base" onClick={() => girarAtual(1)}>↺</button>
+              <button type="button" title="Girar 1° para a direita (tecla ])" aria-label="Girar para a direita"
+                className="grid size-9 place-items-center rounded-lg btn-contorno text-base" onClick={() => girarAtual(-1)}>↻</button>
+            </div>
+          )}
         </div>
 
         <div className={`shrink-0 border-t border-linha ${painelAberto ? "max-h-[34vh] overflow-auto" : ""}`}>

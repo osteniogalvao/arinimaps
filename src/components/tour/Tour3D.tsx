@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buffer } from "@turf/turf";
-import { Compass, RotateCcw, RotateCw } from "lucide-react";
+import { ChevronDown, ChevronUp, Compass, RotateCcw, RotateCw, SlidersHorizontal } from "lucide-react";
 import type { Map as MLMap, ErrorEvent as MLErrorEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { adicionarPinosPoi } from "@/lib/map/pinosPoi";
@@ -205,6 +205,11 @@ export default function Tour3D(dados: TourData) {
   const relevoSempre = useCallback(() => true, []);
   const voltarConsulta = dados.consulta?.caminho ? `${dados.consulta.caminho}?raio_m=${raio}` : dados.consulta?.voltar;
   const [fase, setFase] = useState<"carregando" | "tocando" | "pausado" | "fim">("carregando");
+  // Áudio do Carlos (18/11/2026, 9h25): no celular o painel cobria o mapa e o
+  // tour "não funcionava". No celular ele abre recolhido; um toque mostra os ajustes.
+  const [painel, setPainel] = useState(true);
+  useEffect(() => { if (window.matchMedia("(max-width: 639px)").matches) setPainel(false); }, []);
+  const [semWebgl, setSemWebgl] = useState(false);
   const [etapa, setEtapa] = useState("Carregando o mapa…");
   const faseRef = useRef(fase);
 
@@ -218,8 +223,14 @@ export default function Tour3D(dados: TourData) {
       const maplibregl = await carregarMaplibre();
       if (cancelado || !containerRef.current) return;
 
-      const map = new maplibregl.Map({
+      // celular: densidade de pixel 3 com relevo estoura a memória de vídeo do
+      // Safari, que derruba o WebGL e a página fica cinza. Teto de 2 (18/11/2026).
+      const celular = window.matchMedia("(max-width: 767px), (pointer: coarse)").matches;
+      let map: MLMap;
+      try {
+      map = new maplibregl.Map({
         container: containerRef.current,
+        ...(celular ? { pixelRatio: Math.min(2, window.devicePixelRatio || 1), maxTileCacheSize: 120 } : {}),
         style: {
           version: 8,
           glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
@@ -243,11 +254,22 @@ export default function Tour3D(dados: TourData) {
         maxPitch: 75,
         attributionControl: { compact: true },
       });
+      } catch (e) {
+        console.error("[tour] sem WebGL:", e);
+        setSemWebgl(true);
+        return;
+      }
       mapa = map;
+      map.getCanvas().addEventListener("webglcontextlost", () => setSemWebgl(true));
+      // como a barra do Google Earth (vídeo do Carlos, 17/11, 22h12): + / − e bússola
+      // no canto do próprio mapa; arrastar a bússola inclina e gira, clicar volta ao norte
+      if (!dados.record) map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showCompass: true, showZoom: true }), "bottom-right");
       mapRef.current = map;
       map.on("error", (e: MLErrorEvent) => console.error("[tour] erro do mapa:", e.error?.message ?? e));
 
       map.on("load", async () => {
+        // a atribuição compacta abre expandida e tampava os botões do celular
+        containerRef.current?.querySelector(".maplibregl-compact-show")?.classList.remove("maplibregl-compact-show");
         const b = dados.consulta?.limites;
         const zoomArea = b && map.cameraForBounds([[b[0], b[1]], [b[2], b[3]]], {padding: 48, maxZoom: 18})?.zoom;
         const { keys, orbit } = buildKeyframes(dados, dados.record ? 1 : RITMO_AO_VIVO, zoomArea);
@@ -365,18 +387,25 @@ export default function Tour3D(dados: TourData) {
   const brl = dados.valor?.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }) ?? "Sob consulta";
 
   return (
-    <div className="relative h-screen w-full bg-black">
+    <div className="relative h-[100dvh] w-full bg-black [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(4.5rem+env(safe-area-inset-bottom))]">
       {/* inline: o CSS do maplibre força position:relative na classe e colapsaria a altura */}
       <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
 
       {!dados.record && (
         <>
-          <div className="absolute top-4 left-4 max-h-[calc(100vh-7rem)] max-w-[min(22rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-[20px] bg-[#0A2219]/92 px-5 py-4 text-[#F2F2EC]">
+          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 max-h-[calc(100dvh-8rem)] max-w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-[20px] bg-[#0A2219]/92 px-4 py-3 sm:px-5 sm:py-4 text-[#F2F2EC]">
             <span className="block h-0.5 w-7 rounded bg-[#D9BD6F]" aria-hidden />
             <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D3DCD2]">Tour 3D · {dados.codigo}</p>
-            <p className="lp-display mt-1.5 text-3xl text-[#F2F2EC]">{dados.titulo}</p>
-            {!dados.consulta && <p className="lp-display mt-2 text-2xl text-[#FFE299]">{brl}</p>}
+            <p className="lp-display mt-1.5 text-2xl sm:text-3xl text-[#F2F2EC]">{dados.titulo}</p>
+            {!dados.consulta && <p className="lp-display mt-1 sm:mt-2 text-xl sm:text-2xl text-[#FFE299]">{brl}</p>}
             <p className="mt-1 text-xs text-[#B3C3B8]">{dados.areaLabel}{dados.municipio ? ` · ${dados.municipio.nome}` : ""}</p>
+            <button type="button" onClick={() => setPainel(v => !v)} aria-expanded={painel}
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-[#F2F2EC]/40 px-3 py-1.5 text-xs font-semibold hover:border-[#D9BD6F]">
+              <SlidersHorizontal className="size-3.5" /> {painel ? "Esconder ajustes" : "Ajustes, camadas e medição"}
+              {painel ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+            </button>
+            {/* recolhido continua montado: as camadas ligadas não se perdem */}
+            <div className={painel ? "" : "hidden"}>
             <label className="mt-3 block text-sm">Velocidade <select className="ml-1 rounded bg-[#123b2a] px-1" defaultValue={1}
               onChange={e => { velocidade.current = Number(e.target.value); }}>
               {[0.25, 0.5, 0.75, 1, 1.5, 2, 3].map(v => <option key={v} value={v}>{v.toLocaleString("pt-BR")}×</option>)}
@@ -387,18 +416,8 @@ export default function Tour3D(dados: TourData) {
                 onChange={e => { const v = Number(e.target.value); setRelevo(v); mapRef.current?.setTerrain(v > 0 ? { source: "dem", exaggeration: v } : null); }} />
               <span className="tabular-nums text-xs">{relevo.toLocaleString("pt-BR")}×</span>
             </label>
-            {dados.consulta && <label className="mt-2 block text-sm">Raio <select className="ml-1 rounded bg-[#123b2a] px-1" value={raio}
-              onChange={e => setRaio(Number(e.target.value))}>
-              {raios.map(m => <option key={m} value={m}>{m === 0 ? "só a área" : `até ${m < 1000 ? m + " m" : m / 1000 + " km"}`}</option>)}
-            </select>{raio > 0 && <small className="block text-[#B3C3B8]">As camadas abaixo mostram o que há até {raio < 1000 ? raio + " m" : raio / 1000 + " km"} da área.</small>}</label>}
-            {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
-              && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
-              && <CamadasDoTour mapa={mapaPronto} geometria={(anel?.geometry ?? dados.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon} permitidas={dados.camadas} aoGerente={aoGerente} />}
-            {mapaPronto && dados.consulta?.car && !!dados.camadas?.ambiente.length && <>
-              <label className="mt-2 block text-sm"><input type="checkbox" checked={ambienteCar} onChange={e => setAmbienteCar(e.target.checked)} /> Ambiente do CAR</label>
-              {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={dados.consulta.car} mapa={mapaPronto} tour /></div>}
-            </>}
-            {mapaPronto && <div className="mt-3 space-y-1.5 text-sm">
+            {/* áudio do Carlos (18/11, 11h15): inclinação e direção logo abaixo do relevo, à vista */}
+            {mapaPronto && <div className="mt-2 space-y-1.5 text-sm">
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D3DCD2]">Ajustes da vista</p>
               <label className="flex items-center gap-2">Inclinar
                 <input type="range" min={0} max={75} step={1} value={camera.pitch} className="w-28 accent-[#D9BD6F]"
@@ -421,13 +440,25 @@ export default function Tour3D(dados: TourData) {
                 </button>
               </div>
             </div>}
+            {dados.consulta && <label className="mt-2 block text-sm">Raio <select className="ml-1 rounded bg-[#123b2a] px-1" value={raio}
+              onChange={e => setRaio(Number(e.target.value))}>
+              {raios.map(m => <option key={m} value={m}>{m === 0 ? "só a área" : `até ${m < 1000 ? m + " m" : m / 1000 + " km"}`}</option>)}
+            </select>{raio > 0 && <small className="block text-[#B3C3B8]">As camadas abaixo mostram o que há até {raio < 1000 ? raio + " m" : raio / 1000 + " km"} da área.</small>}</label>}
+            {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
+              && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
+              && <CamadasDoTour mapa={mapaPronto} geometria={(anel?.geometry ?? dados.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon} permitidas={dados.camadas} aoGerente={aoGerente} />}
+            {mapaPronto && dados.consulta?.car && !!dados.camadas?.ambiente.length && <>
+              <label className="mt-2 block text-sm"><input type="checkbox" checked={ambienteCar} onChange={e => setAmbienteCar(e.target.checked)} /> Ambiente do CAR</label>
+              {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={dados.consulta.car} mapa={mapaPronto} tour /></div>}
+            </>}
             {mapaPronto && <MedicaoMapa mapa={mapaPronto} escuro liberado={dados.medir !== false} />}
+            </div>
             {dados.consulta && <a className="mt-2 block text-sm underline" href={voltarConsulta}>Voltar à consulta</a>}
           </div>
           {mapaPronto && <CartaoNoPonto mapa={mapaPronto} oficiais={oficiaisNoPonto} relevo={relevoSempre} />}
 
           {(fase === "pausado" || fase === "fim") && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+            <div className="absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-10 -translate-x-1/2 flex w-max max-w-[calc(100vw-1.5rem)] flex-wrap justify-center gap-2">
               <button
                 className="rounded-full border-[1.5px] border-[#F2F2EC]/80 bg-[#0A2219]/85 text-[#F2F2EC] font-semibold px-5 py-2.5 hover:bg-[#F2F2EC] hover:text-[#124431]"
                 onClick={() => controlar.current(fase === "fim")}>
@@ -439,6 +470,15 @@ export default function Tour3D(dados: TourData) {
               </a>
             </div>
           )}
+          {semWebgl && (
+            <div className="absolute inset-0 z-20 grid place-items-center bg-[#0A2219]/90 p-6 text-center text-[#F2F2EC]">
+              <div className="max-w-xs space-y-3">
+                <p className="text-sm">O 3D parou neste aparelho (falta de memória de vídeo). Feche outras abas e tente de novo.</p>
+                <button type="button" onClick={() => window.location.reload()} className="rounded-full bg-[#D9BD6F] px-5 py-2 text-sm font-bold text-[#124431]">Abrir de novo</button>
+                <a href={voltarConsulta ?? `/imovel/${dados.codigo}`} className="block text-sm underline">{dados.consulta ? "Voltar à consulta" : "Voltar ao imóvel"}</a>
+              </div>
+            </div>
+          )}
           {fase === "carregando" && (
             <div className="absolute inset-0 grid place-items-center bg-[#0A2219]/80">
               <div className="text-center text-white space-y-3">
@@ -448,7 +488,7 @@ export default function Tour3D(dados: TourData) {
             </div>
           )}
           {fase === "tocando" && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2">
+            <div className="absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-10 -translate-x-1/2 flex w-max max-w-[calc(100vw-1.5rem)] items-center gap-2">
               <button onClick={() => pausar.current()}
                 className="rounded-full border-[1.5px] border-[#F2F2EC]/80 bg-[#0A2219]/85 px-4 py-1.5 text-xs font-semibold text-[#F2F2EC] hover:bg-[#F2F2EC] hover:text-[#124431]">
                 Pausar

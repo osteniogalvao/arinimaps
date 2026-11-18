@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Map as MLMap, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import type { RecursoId } from "@/lib/planos";
-import { ArrowRight, Camera, Download, Lock, MoveHorizontal, Printer, ScanSearch, Triangle, Upload, X } from "lucide-react";
+import { ArrowRight, Camera, Check, Download, Lock, MoveHorizontal, Printer, ScanSearch, Send, Triangle, Upload, X } from "lucide-react";
 import { abrirAssistente } from "@/components/ia/ChatIA";
 import MarcaArini from "@/components/marca/MarcaArini";
 import { VIDRO, BotaoFechar } from "@/components/map/UiMapa";
@@ -25,6 +25,9 @@ import { areaPoligonoM2 } from "@/lib/geo/areaGeodesica";
 import { kinks } from "@turf/turf";
 
 type Modo = null | "area" | "distancia" | "consulta" | "recorte";
+type FormatoArea = "enviar" | "kml" | "kmz" | "dxf" | "memorial";
+/** Áudio do Carlos (18/11/2026): fechou a área, já dá para encaminhar ou baixar (KMZ/KML). */
+const FORMATOS_AREA: [FormatoArea, string][] = [["enviar", "Encaminhar"], ["kmz", "KMZ"], ["kml", "KML"], ["dxf", "DXF (UTM)"], ["memorial", "Memorial descritivo"]];
 
 /** Teto da área desenhada para consulta — o mesmo do servidor (src/lib/geo/consultaArea.ts). */
 const CONSULTA_MAX_HA = 50_000;
@@ -59,6 +62,9 @@ export default function Ferramentas({
   const [erroConsulta, setErroConsulta] = useState<{ msg: string; planos: boolean } | null>(null);
   const liberado = (r: RecursoId) => !recursos || recursos.includes(r);
   const pontosRef = useRef<[number, number][]>([]);
+  // contagem de vértices na tela: no celular o duplo toque não fecha o desenho
+  // (o navegador não manda "dblclick"), então há o botão "Concluir" (18/11/2026)
+  const [nPontos, setNPontos] = useState(0);
   const modoRef = useRef<Modo>(null);
   modoRef.current = modo;
 
@@ -173,6 +179,26 @@ export default function Ferramentas({
     onDelimitar(geometria);
   };
 
+  /** Encerra o desenho: duplo clique no computador, botão "Concluir" no celular. */
+  const concluirRef = useRef(() => {});
+  concluirRef.current = () => {
+    if (!modoRef.current) return;
+    if (modoRef.current === "recorte") { concluirRecorte(); return; }
+    if (modoRef.current === "consulta" && pontosRef.current.length >= 3) {
+      const pts = pontosRef.current;
+      setConsultaPronta({ pontos: pts, ha: areaPoligonoM2([[...pts, pts[0]]]) / 10000 });
+    }
+    if (modoRef.current === "area" && pontosRef.current.length >= 3) setAreaMedida(pontosRef.current);
+    setModo(null);
+    if (mapa) mapa.getCanvas().style.cursor = "";
+  };
+  const desfazerPonto = () => {
+    pontosRef.current = pontosRef.current.slice(0, -1);
+    setNPontos(pontosRef.current.length);
+    desenhar(pontosRef.current, modoRef.current !== "distancia");
+    if (pontosRef.current.length >= 2) void calcular(pontosRef.current, modoRef.current); else setResultado("");
+  };
+
   // clique adiciona vértice; duplo clique encerra a medição
   useEffect(() => {
     if (!mapa) return;
@@ -184,20 +210,11 @@ export default function Ferramentas({
       if (ult && Math.abs(ult[0] - p[0]) < 1e-7 && Math.abs(ult[1] - p[1]) < 1e-7) return;
       setErroRecorte("");
       pontosRef.current = [...pontosRef.current, p];
+      setNPontos(pontosRef.current.length);
       desenhar(pontosRef.current, modoRef.current !== "distancia");
       calcular(pontosRef.current, modoRef.current);
     };
-    const aoDuploClique = async () => {
-      if (!modoRef.current) return;
-      if (modoRef.current === "recorte") { concluirRecorte(); return; }
-      if (modoRef.current === "consulta" && pontosRef.current.length >= 3) {
-        const pts = pontosRef.current;
-        setConsultaPronta({ pontos: pts, ha: areaPoligonoM2([[...pts, pts[0]]]) / 10000 });
-      }
-      if (modoRef.current === "area" && pontosRef.current.length >= 3) setAreaMedida(pontosRef.current);
-      setModo(null);
-      if (mapa) mapa.getCanvas().style.cursor = "";
-    };
+    const aoDuploClique = () => concluirRef.current();
     mapa.on("click", aoClicar);
     mapa.on("dblclick", aoDuploClique);
     return () => {
@@ -209,6 +226,7 @@ export default function Ferramentas({
 
   const iniciar = (novo: Modo) => {
     pontosRef.current = [];
+    setNPontos(0);
     setResultado("");
     setAreaMedida(null);
     setConsultaPronta(null);
@@ -222,6 +240,7 @@ export default function Ferramentas({
 
   const limpar = () => {
     pontosRef.current = [];
+    setNPontos(0);
     setResultado("");
     setAreaMedida(null);
     setConsultaPronta(null);
@@ -270,17 +289,19 @@ export default function Ferramentas({
   };
 
   /** Baixa a área medida: KML, DXF (UTM SIRGAS 2000) ou memorial descritivo (.doc). */
-  const baixarArea = async (formato: "kml" | "dxf" | "memorial") => {
-    if (!areaMedida) return;
+  const baixarArea = async (formato: FormatoArea, pontosArea: [number, number][] | null = areaMedida) => {
+    if (!pontosArea) return;
     if (!liberado("ferramenta_exportar")) { avisarBloqueio("Baixar a área"); return; }
     setBaixando(formato);
     try {
       const lib = await import("@/lib/geo/exportarSig");
-      const geometry: GeoJSON.Polygon = { type: "Polygon", coordinates: [[...areaMedida, areaMedida[0]]] };
-      const ha = areaPoligonoM2([[...areaMedida, areaMedida[0]]]) / 10000;
-      const camada = { nome: "divisa", rotulo: "Área medida", geometry, atributos: { area_ha: Math.round(ha * 10000) / 10000, fonte: "Área desenhada no mapa da Arini" } };
+      const geometry: GeoJSON.Polygon = { type: "Polygon", coordinates: [[...pontosArea, pontosArea[0]]] };
+      const ha = areaPoligonoM2([[...pontosArea, pontosArea[0]]]) / 10000;
+      const camada = { nome: "divisa", rotulo: "Área desenhada", geometry, atributos: { area_ha: Math.round(ha * 10000) / 10000, fonte: "Área desenhada no mapa da Arini" } };
       const base = `area-${ha.toFixed(2).replace(".", "-")}ha`;
-      if (formato === "kml") lib.baixar(lib.paraKML([camada], "Área medida"), `${base}.kml`, "application/vnd.google-earth.kml+xml");
+      if (formato === "enviar") await lib.encaminhar(await lib.paraKMZ([camada], "Área desenhada"), `${base}.kmz`, "application/vnd.google-earth.kmz", `Área de ${ha.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ha (KMZ)`);
+      else if (formato === "kmz") lib.baixar(await lib.paraKMZ([camada], "Área desenhada"), `${base}.kmz`, "application/vnd.google-earth.kmz");
+      else if (formato === "kml") lib.baixar(lib.paraKML([camada], "Área desenhada"), `${base}.kml`, "application/vnd.google-earth.kml+xml");
       else if (formato === "dxf") {
         const dxf = await lib.paraDXF([camada]);
         lib.baixar(dxf.texto, `${base}-utm${dxf.fuso}${dxf.sul ? "s" : "n"}.dxf`, "application/dxf");
@@ -367,31 +388,44 @@ export default function Ferramentas({
               {erroConsulta.msg}{erroConsulta.planos && <> <Link href="/planos" className="text-verde underline">Ver planos</Link></>}
             </p>
           )}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-texto-2">Ou leve a área:</span>
+            {FORMATOS_AREA.filter(([id]) => id !== "memorial").map(([id, rotulo]) => (
+              <button key={id} onClick={() => baixarArea(id, consultaPronta.pontos)} disabled={!!baixando}
+                className="inline-flex items-center gap-1 rounded-full border border-linha-forte px-2.5 py-1 font-semibold text-texto transition hover:border-verde hover:text-verde disabled:opacity-60">
+                {id === "enviar" && <Send className="size-3" />}{baixando === id ? "Gerando…" : rotulo}
+              </button>
+            ))}
+          </div>
           <p className="text-[11px] text-texto-2">Leva de 10 a 40 segundos e conta uma consulta do seu plano.</p>
         </div>
       )}
       {(modo || (resultado && !consultaPronta)) && (
-        <div className={`flex items-center gap-3 px-4 py-3 text-sm ${VIDRO}`}>
+        <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm ${VIDRO}`}>
           <span className="text-texto-3">
-            {modo === "area" ? "Clique nos vértices; duplo clique encerra."
-              : modo === "distancia" ? "Clique nos pontos; duplo clique encerra."
-              : modo === "consulta" ? "Desenhe a área a consultar (qualquer lugar do Brasil); duplo clique fecha."
+            {modo === "area" ? "Toque nos vértices; Concluir (ou duplo clique) fecha."
+              : modo === "distancia" ? "Toque nos pontos; Concluir (ou duplo clique) encerra."
+              : modo === "consulta" ? "Desenhe a área a consultar (qualquer lugar do Brasil); Concluir fecha."
               : modo === "recorte" ? (erroRecorte || "Marque os vértices da área para aplicar as camadas.")
               : "Medição"}
           </span>
           {resultado && <span className="ml-auto lp-display text-2xl text-verde tabular-nums">{resultado}</span>}
           {modo === "recorte" && <button type="button" onClick={concluirRecorte}
             className="btn-verde shrink-0 px-3 py-1.5 text-xs">Concluir área</button>}
+          {modo && modo !== "recorte" && nPontos > 0 && <button type="button" onClick={desfazerPonto}
+            className="shrink-0 rounded-full px-2.5 py-1.5 text-xs font-semibold text-texto-2 hover:bg-superficie-2">Desfazer</button>}
+          {modo && modo !== "recorte" && nPontos >= (modo === "distancia" ? 2 : 3) && <button type="button" onClick={() => concluirRef.current()}
+            className="btn-verde inline-flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs"><Check className="size-3.5" /> Concluir</button>}
           {botaoLimpar}
         </div>
       )}
       {areaMedida && !modo && (
         <div className={`flex flex-wrap items-center gap-2 px-4 py-2.5 text-xs ${VIDRO}`}>
           <span className="inline-flex items-center gap-1.5 text-texto-2"><Download className="size-3.5 text-ouro" /> Baixar a área:</span>
-          {([["kml", "KML"], ["dxf", "DXF (UTM)"], ["memorial", "Memorial descritivo"]] as const).map(([id, rotulo]) => (
+          {FORMATOS_AREA.map(([id, rotulo]) => (
             <button key={id} onClick={() => baixarArea(id)} disabled={!!baixando}
-              className="rounded-full border border-linha-forte px-3 py-1.5 font-semibold text-texto transition hover:border-verde hover:text-verde disabled:opacity-60">
-              {baixando === id ? "Gerando…" : rotulo}
+              className={(id === "enviar" ? "inline-flex items-center gap-1 border-verde text-verde " : "") + "rounded-full border border-linha-forte px-3 py-1.5 font-semibold text-texto transition hover:border-verde hover:text-verde disabled:opacity-60"}>
+              {id === "enviar" && <Send className="size-3.5" />}{baixando === id ? "Gerando…" : rotulo}
             </button>
           ))}
         </div>

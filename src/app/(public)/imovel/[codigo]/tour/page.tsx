@@ -9,6 +9,7 @@ import { currentUser } from "@/lib/supabase/server";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
 import { acessoDe } from "@/lib/planos-servidor";
 import { direitosDoTour } from "@/lib/map/acesso-tour";
+import { conferirPasse, cookiePasse } from "@/lib/links/exclusivo";
 
 export const metadata: Metadata = { title: "Tour 3D" };
 
@@ -17,7 +18,14 @@ export default async function TourPage({ params, searchParams }: PageProps<"/imo
   const sp = await searchParams;
   const record = sp.record === "1";
   const user = await currentUser();
-  if (!user) {
+  // Link exclusivo (áudio do Carlos, 18/11/2026): o aparelho que abriu o /x/… tem um passe só dele
+  const tokenExclusivo = !user && !record ? conferirPasse(codigo, (await cookies()).get(cookiePasse(codigo))?.value) : null;
+  let exclusivoValido = false;
+  if (tokenExclusivo) {
+    const { data: l } = await supabaseAdmin().from("links_exclusivos").select("revogado_em").eq("token", tokenExclusivo).maybeSingle();
+    exclusivoValido = !!l && !l.revogado_em;
+  }
+  if (!user && !exclusivoValido) {
     // O worker recebe um ingresso curto e exclusivo deste tour. A URL compartilhável não contém segredo.
     const ingresso = (await cookies()).get("arini_render")?.value ?? "";
     const [exp,mac] = ingresso.split(".");
@@ -40,7 +48,7 @@ export default async function TourPage({ params, searchParams }: PageProps<"/imo
 
   // §1.1: tour aberto vira evento do imóvel
   const {data:prop} = await supabaseAdmin().from("properties").select("id").eq("codigo",codigo).maybeSingle();
-  if (prop?.id) void registrarEventoImovel({ propertyId: prop.id, tipo: "tour", userId: user?.id, detalhe: { codigo, record } });
+  if (prop?.id) void registrarEventoImovel({ propertyId: prop.id, tipo: "tour", userId: user?.id, detalhe: { codigo, record, ...(exclusivoValido ? { link_exclusivo: tokenExclusivo } : {}) } });
 
   const acesso = user && !record ? await acessoDe(user.id) : null;
   return (
