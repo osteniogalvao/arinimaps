@@ -11,15 +11,18 @@ export default function Simular({codigo,valor,linhas}:{codigo:string;valor:numbe
   const [ocupado,setOcupado] = useState(false);
   const [erro,setErro] = useState("");
   const [enviado,setEnviado] = useState(false);
+  const [chamado,setChamado] = useState("");
   const tentativa = useRef({chave:"",id:""});
   const linha = linhas.find(l=>l.id===linhaId)!;
-  async function enviar(evento:FormEvent<HTMLFormElement>,repasse:boolean) {
+  async function enviar(evento:FormEvent<HTMLFormElement>,repasse:boolean|"arini") {
     evento.preventDefault();
     if (ocupado) return;
     setOcupado(true); setErro("");
     const f=new FormData(evento.currentTarget);
     try {
-      const dados = repasse ? {acao:"repassar",id:resultado?.id,vaga:resultado?.vaga?.id,aceite:f.get("aceite")==="on",
+      const dados = repasse === "arini" ? {acao:"arini",id:resultado?.id,aceite:f.get("aceite")==="on",
+        telefone:String(f.get("telefone")??"").trim() || null,renda:f.get("renda") ? Number(f.get("renda")) : null} :
+        repasse ? {acao:"repassar",id:resultado?.id,vaga:resultado?.vaga?.id,aceite:f.get("aceite")==="on",
         renda:f.get("renda") ? Number(f.get("renda")) : null,nascimento:f.get("nascimento")||null} :
         {acao:"simular",codigo,linha:linhaId,entrada:Number(f.get("entrada")),prazo:Number(f.get("prazo")),sistema:f.get("sistema")};
       const chave=JSON.stringify(dados);
@@ -28,7 +31,7 @@ export default function Simular({codigo,valor,linhas}:{codigo:string;valor:numbe
         body:JSON.stringify(repasse ? dados : {...dados,id:tentativa.current.id})});
       const j=await r.json();
       if(!r.ok) throw Error(j.error || "Falha ao processar a solicitação.");
-      if(repasse) setEnviado(true); else { setResultado(j); setEnviado(false); }
+      if(repasse) { setEnviado(true); setChamado(j.codigo ?? ""); } else { setResultado(j); setEnviado(false); setChamado(""); }
     } catch (e) { setErro(e instanceof Error ? e.message : "Confira sua conexão."); }
     finally { setOcupado(false); }
   }
@@ -51,14 +54,22 @@ export default function Simular({codigo,valor,linhas}:{codigo:string;valor:numbe
       <h2 className="lp-display text-2xl">Resultado da simulação</h2>
       <p>Primeira parcela com seguro <strong>{formatBRL(resultado.espelho.parcela_inicial)}</strong></p>
       <p>Total com entrada, seguro e tarifa <strong>{formatBRL(resultado.espelho.total)}</strong></p>
-      {enviado ? <p>Repasse autorizado. <Link className="text-verde" href={`/painel/financiamento/${resultado.id}`}>Acompanhar atendimento</Link></p> :
+      {enviado ? chamado ? <p>Simulação enviada para a ARINI (chamado {chamado}). A equipe analisa e fala com você; a resposta também chega em <Link className="text-verde" href="/suporte">Meus chamados</Link>.</p>
+        : <p>Repasse autorizado. <Link className="text-verde" href={`/painel/financiamento/${resultado.id}`}>Acompanhar atendimento</Link></p> :
         resultado.vaga ? <form className="space-y-4" onSubmit={e=>enviar(e,true)}>
           <h3 className="font-semibold">Solicitar atendimento</h3>
           <label className={ROTULO}>Renda mensal (opcional)<input type="number" name="renda" min=".01" step=".01" className={CAMPO}/></label>
           <label className={ROTULO}>Nascimento (opcional)<input type="date" name="nascimento" className={CAMPO}/></label>
           <label className="flex items-start gap-2 text-sm"><input name="aceite" type="checkbox" required/>{termoCredito(resultado.vaga)}</label>
           <button disabled={ocupado} className="btn-primario p-3">Autorizar e solicitar atendimento</button>
-        </form> : <p>Em breve haverá atendimento para esta linha na região. <Link className="text-verde" href={"/contato-perfil?perfil=comprar&oferta="+encodeURIComponent(resultado.espelho.banco+" · Financiamento · "+codigo)}>Avise-me</Link></p>}
+        </form> : <form className="space-y-4" onSubmit={e=>enviar(e,"arini")}>
+          <h3 className="font-semibold">Enviar a simulação para a ARINI</h3>
+          <p className="text-sm text-texto-2">A equipe da ARINI analisa a simulação e entra em contato para seguir com o financiamento.</p>
+          <label className={ROTULO}>Telefone ou WhatsApp (opcional)<input type="tel" name="telefone" maxLength={30} className={CAMPO}/></label>
+          <label className={ROTULO}>Renda mensal (opcional)<input type="number" name="renda" min=".01" step=".01" className={CAMPO}/></label>
+          <label className="flex items-start gap-2 text-sm"><input name="aceite" type="checkbox" required/>Autorizo a ARINI a usar meu contato, esta simulação e os dados opcionais informados para me atender sobre este financiamento.</label>
+          <button disabled={ocupado} className="btn-primario p-3">Enviar para a ARINI</button>
+        </form>}
     </section>}
     {erro && <p role="alert" className="text-critico">{erro}</p>}
   </div>;
