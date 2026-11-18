@@ -109,9 +109,10 @@ export default function AjudaTour({ perfil, className = "fixed bottom-5 right-5 
             </Link>
           </div>
         )}
-        <button type="button" data-tour="ajuda" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-haspopup="menu"
-          className="inline-flex h-10 items-center gap-1.5 rounded-full border border-linha-forte bg-superficie/95 px-3.5 text-sm font-semibold text-texto shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md transition hover:border-verde">
-          <CircleHelp className="size-4" /> Ajuda
+        <button type="button" data-tour="ajuda" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-haspopup="menu" aria-label="Ajuda"
+          // auditoria mobile 18/11: no celular vira só o "?" (a pílula tampava cartões e campos)
+          className="inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-full border border-linha-forte bg-superficie/95 px-0 sm:px-3.5 text-sm font-semibold text-texto shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md transition hover:border-verde">
+          <CircleHelp className="size-4" /> <span className="max-sm:hidden">Ajuda</span>
         </button>
       </div>
       {aberto && <TourOverlay passos={PASSOS_TOUR[perfil]} onFim={fim} />}

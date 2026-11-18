@@ -6,6 +6,7 @@
  */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import {
   Building2, Handshake, PlusCircle, Map as MapIcon, Users, LifeBuoy, UserRound, ShieldCheck, Grid3x3, ContactRound,
   Calculator, type LucideIcon,
@@ -39,9 +40,18 @@ export default function AbasPainel({ territorio = false, crm = false, anunciar =
     .filter((a) => caminho === a.href || caminho.startsWith(a.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
+  // auditoria mobile 18/11: no celular só cabiam 2 abas e a ativa podia ficar
+  // fora da tela; ela agora rola para a vista, e a borda direita esmaece para
+  // mostrar que há mais abas
+  const trilho = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = trilho.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (el && trilho.current) trilho.current.scrollTo({ left: el.offsetLeft - 16, behavior: "smooth" });
+  }, [ativa]);
+
   return (
     <nav aria-label="Área do cliente" data-tour="abas-painel">
-      <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div ref={trilho} className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:pr-10 max-md:[mask-image:linear-gradient(to_right,black_82%,transparent)]">
         {abas.map(({ href, rotulo, icone: Icone }) => {
           const ativo = href === ativa;
           return (

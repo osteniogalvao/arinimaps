@@ -22,7 +22,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import PainelImovel from "@/components/map/PainelImovel";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
 import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, ResumoCamadas, ALTURA_FAIXA, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
-import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, MapPin, ScanSearch, Search } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, Map as MapaIcone, MapPin, Satellite, ScanSearch, Search } from "lucide-react";
 import CompararParcelasRurais from "@/components/map/CompararParcelasRurais";
 import BuscaUrbana from "@/components/map/BuscaUrbana";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
@@ -626,7 +626,10 @@ export default function MapaRegional({
   }, [camadaPedida, alternarCamada, alternarRelevo]);
   // desenho em curso (medir / consultar área): o clique é vértice, não abre cartão
   const desenhandoRef = useRef(false);
-  const aoDesenhar = useCallback((ativo: boolean) => { desenhandoRef.current = ativo; }, []);
+  // auditoria mobile 18/11: no celular, enquanto a pessoa desenha, a barra de chips,
+  // o aviso do CAR e a aba da lista saem da frente (sobrava ~110 px de mapa para tocar)
+  const [desenhando, setDesenhando] = useState(false);
+  const aoDesenhar = useCallback((ativo: boolean) => { desenhandoRef.current = ativo; setDesenhando(ativo); }, []);
   // Imagem do ano (roadmap 3.8): satélite histórico no lugar do atual, ou lado a lado
   const [imagemAno, setImagemAno] = useState<string | null>(null);
   const [comparar, setComparar] = useState(false);
@@ -921,6 +924,13 @@ export default function MapaRegional({
         trackUserLocation: true,
       }), "top-right");
       map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+      // auditoria mobile 18/11: o crédito das fontes nascia aberto e cobria uma faixa
+      // de ~70 px logo acima das ferramentas; no celular ele começa fechado (o "i" abre)
+      if (window.matchMedia("(max-width: 639px)").matches) {
+        const fecharCredito = () => map.getContainer().querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+        map.once("load", fecharCredito);
+        map.once("idle", fecharCredito);
+      }
 
       const popup = new maplibregl.Popup({
         closeButton: false, closeOnClick: false, offset: 14, maxWidth: "260px",
@@ -1654,10 +1664,17 @@ export default function MapaRegional({
   };
 
   // chips sobre o satélite: vidro do tema com desfoque (o ativo continua verde pelo data-ativo do .chip)
-  const chipBase = "chip inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium whitespace-nowrap shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md";
+  const chipBase = "chip inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-medium whitespace-nowrap shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md";
 
+  const mosaicoAtivo = base === "satelite" && mosaicoAnual;
+  const escolherMosaico = () => { setBase("satelite"); setMosaicoAnual(true); setImagemAno(null); setComparar(false); };
   const chipsSecundarios = (
     <>
+      {/* no celular o mosaico sai da barra (eram 4 linhas de chips) e vem para o Mais */}
+      <button type="button" className={`${chipBase} sm:hidden`} data-ativo={mosaicoAtivo} aria-pressed={mosaicoAtivo}
+        onClick={() => { escolherMosaico(); setPainelMapa(null); }}>
+        Mosaico com menos nuvens
+      </button>
       <button onClick={() => setPainelMapa("imagem")} data-ativo={buscaImagem} className={chipBase}
         title="Encontre o local por uma foto com GPS, um print de mapa, um croqui ou um documento">
         <ImageUp className="size-3.5" /> Buscar por imagem
@@ -1856,7 +1873,8 @@ export default function MapaRegional({
         onClick={() => { setPainelMapa(null); setPainelAberto(!painelAberto); }}
         title={painelAberto ? "Recolher lista" : "Mostrar lista"}
         className={
-          "absolute z-30 top-1/2 -translate-y-1/2 bg-superficie border border-l-0 border-linha-forte shadow-lg rounded-r-[10px] w-7 h-14 flex items-center justify-center text-texto-2 hover:text-verde transition-all duration-300 " +
+          (painelAberto ? "z-30 " : "z-30 max-sm:z-[5] ") + (desenhando ? "max-sm:hidden " : "") +
+          "absolute top-1/2 -translate-y-1/2 bg-superficie border border-l-0 border-linha-forte shadow-lg rounded-r-[10px] w-7 h-14 flex items-center justify-center text-texto-2 hover:text-verde transition-all duration-300 " +
           (painelAberto ? "left-[85%] sm:left-[320px]" : "left-0")
         }>
         {painelAberto ? <ChevronLeft className="size-4" /> : <ChevronRight className="size-4" />}
@@ -1874,7 +1892,7 @@ export default function MapaRegional({
             QUEBRA em linhas; no celular o resto vai para o menu "Mais". A altura real
             da barra vira --abaixo-chips, e os painéis abrem logo abaixo dela. */}
         <fieldset ref={chipsRef} aria-label="Controles do mapa" disabled={!interativo} aria-busy={!interativo}
-          className="absolute top-3 left-3 right-14 z-20 flex min-w-0 flex-wrap items-start gap-2 disabled:opacity-60">
+          className={`absolute top-3 left-3 right-14 z-20 flex min-w-0 flex-wrap items-start gap-2 disabled:opacity-60 ${desenhando || painelAberto ? "max-sm:hidden" : ""}`}>
           {/* requisitos cartográficos §2.1 + Revisão do Carlos (29/10): "Não encontrei
               meu imóvel" precisa ser fácil de achar — fica em dourado, logo no começo */}
           <button
@@ -1884,24 +1902,30 @@ export default function MapaRegional({
             <Flag className="size-3.5" /> Não encontrei meu imóvel
           </button>
           {(["satelite", "ruas"] as const).map((b) => (
-            <button key={b} onClick={() => { setMosaicoAnual(false); setBase(b); void salvarPrefs({ mapa_base: b === "ruas" ? "mapa" : "satelite" }); }} data-ativo={base === b && (b === "ruas" || !mosaicoAnual)} className={chipBase}>
+            <button key={b} onClick={() => { setMosaicoAnual(false); setBase(b); void salvarPrefs({ mapa_base: b === "ruas" ? "mapa" : "satelite" }); }} data-ativo={base === b && (b === "ruas" || !mosaicoAnual)} className={`${chipBase} max-sm:hidden`}>
               {b === "ruas" ? "Mapa" : "Satélite"}
             </button>
           ))}
-          <button type="button" className={chipBase} data-ativo={base === "satelite" && mosaicoAnual}
-            aria-pressed={base === "satelite" && mosaicoAnual}
+          {/* celular: um chip só, que troca entre satélite e mapa de ruas */}
+          <button type="button" className={`${chipBase} sm:hidden`}
+            aria-label={base === "ruas" ? "Trocar para satélite" : "Trocar para mapa de ruas"}
+            onClick={() => { const b = base === "ruas" ? "satelite" : "ruas"; setMosaicoAnual(false); setBase(b); void salvarPrefs({ mapa_base: b === "ruas" ? "mapa" : "satelite" }); }}>
+            {base === "ruas" ? <><Satellite className="size-3.5" /> Satélite</> : <><MapaIcone className="size-3.5" /> Mapa</>}
+          </button>
+          <button type="button" className={`${chipBase} max-sm:hidden`} data-ativo={mosaicoAtivo}
+            aria-pressed={mosaicoAtivo}
             title="Mosaico Sentinel-2 sem nuvens (2016, 10 m) na visão regional. Do zoom de bairro para perto, a fotografia de detalhe normal."
-            onClick={() => { setBase("satelite"); setMosaicoAnual(true); setImagemAno(null); setComparar(false); }}>
+            onClick={escolherMosaico}>
             Mosaico com menos nuvens
           </button>
           <button onClick={() => { setPainelMapa(camadasAbertas ? null : "camadas"); setAvisoPlano(""); }}
             aria-controls="catalogo-camadas" aria-expanded={camadasAbertas} data-ativo={camadasAbertas}
             className={`${chipBase} sm:hidden`} data-tour="camadas">
-            <Layers className="size-3.5" /> Camadas e Dados
+            <Layers className="size-3.5" /> Camadas
           </button>
           <button onClick={() => { setPainelMapa(null); setPainelAberto(true); setTimeout(() => buscaInputRef.current?.focus(), 320); }}
         className={chipBase} title="Abrir a lista com a busca e os filtros de imóveis">
-        <Search className="size-3.5" /> Buscar imóveis
+        <Search className="size-3.5" /> Buscar<span className="max-sm:hidden"> imóveis</span>
       </button>
           <div ref={botaoMaisRef} className="relative">
           <button onClick={() => { setPainelMapa(maisAberto ? null : "mais"); setAvisoPlano(""); }} data-ativo={maisAberto} aria-expanded={maisAberto} aria-controls="mais-do-mapa" className={chipBase} data-tour="mais">
@@ -1916,7 +1940,7 @@ export default function MapaRegional({
         </fieldset>
 
         {carAtivo && carAviso && !carSel && !camadasAbertas && (
-          <p className={`absolute top-[var(--abaixo-chips,4rem)] left-3 right-14 sm:right-auto px-3.5 py-2 text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>
+          <p className={`${desenhando || painelAberto ? "max-sm:hidden " : ""}absolute top-[var(--abaixo-chips,4rem)] left-3 right-14 sm:right-auto px-3 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>
             {carAviso}
           </p>
         )}

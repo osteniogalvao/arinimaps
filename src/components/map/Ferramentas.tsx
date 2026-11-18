@@ -318,12 +318,12 @@ export default function Ferramentas({
   // cada ferramenta pertence a um recurso do plano (src/lib/planos.ts); a trava
   // de verdade é no servidor — aqui o botão só avisa e aponta para os planos
   const FERRAMENTAS = [
-    { id: "area", icone: Triangle, rotulo: "Medir Área", recurso: "ferramenta_medir", acao: () => iniciar("area") },
-    { id: "distancia", icone: MoveHorizontal, rotulo: "Medir Distância", recurso: "ferramenta_medir", acao: () => iniciar("distancia") },
-    { id: "consulta", icone: ScanSearch, rotulo: "Consultar Área", recurso: "consulta_area", acao: () => iniciar("consulta") },
-    { id: "kml", icone: Upload, rotulo: "Importar arquivo", recurso: "ferramenta_kml", acao: null },
-    { id: "imprimir", icone: Printer, rotulo: "Imprimir", recurso: "ferramenta_exportar", acao: () => window.print() },
-    { id: "captura", icone: Camera, rotulo: "Capturar Imagem", recurso: "ferramenta_exportar", acao: onCapturar },
+    { id: "area", icone: Triangle, rotulo: "Medir Área", curto: "Área", recurso: "ferramenta_medir", acao: () => iniciar("area") },
+    { id: "distancia", icone: MoveHorizontal, rotulo: "Medir Distância", curto: "Distância", recurso: "ferramenta_medir", acao: () => iniciar("distancia") },
+    { id: "consulta", icone: ScanSearch, rotulo: "Consultar Área", curto: "Consultar", recurso: "consulta_area", acao: () => iniciar("consulta") },
+    { id: "kml", icone: Upload, rotulo: "Importar arquivo", curto: "Importar", recurso: "ferramenta_kml", acao: null },
+    { id: "imprimir", icone: Printer, rotulo: "Imprimir", curto: "Imprimir", recurso: "ferramenta_exportar", acao: () => window.print() },
+    { id: "captura", icone: Camera, rotulo: "Capturar Imagem", curto: "Foto", recurso: "ferramenta_exportar", acao: onCapturar },
   ] as const;
 
   const avisarBloqueio = (rotulo: string) =>
@@ -353,8 +353,9 @@ export default function Ferramentas({
   );
 
   return (
-    // no celular a barra fica compacta (só ícones, sem o título): antes ela e a
-    // legenda tampavam ~40 % do mapa e Imprimir, Capturar e a Ari ficavam fora (QA 09/11)
+    // no celular a barra fica compacta (ícone + nome curto, sem o título): antes ela e a
+    // legenda tampavam ~40 % do mapa e Imprimir, Capturar e a Ari ficavam fora (QA 09/11).
+    // Auditoria 18/11: só ícone, ninguém sabia o que cada botão fazia; voltou o nome curto.
     <div hidden={recolhida && !modo} className="absolute bottom-3 sm:bottom-[calc(1.5rem+var(--faixa,0px))] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-[min(92%,760px)] space-y-2">
       {bloqueio && (
         <div className={`flex items-center gap-3 px-4 py-3 text-sm ${VIDRO}`}>
@@ -439,10 +440,10 @@ export default function Ferramentas({
             const pode = liberado(f.recurso);
             const Icone = pode ? f.icone : Lock;
             const classe =
-              "flex flex-col items-center gap-1.5 rounded-full px-2 sm:px-3 py-2 min-w-[40px] sm:min-w-[76px] text-[11px] font-medium transition " +
+              "flex flex-col items-center gap-1 sm:gap-1.5 rounded-xl sm:rounded-full px-1 sm:px-3 py-1.5 sm:py-2 min-w-[44px] sm:min-w-[76px] text-[11px] font-medium transition " +
               (ativo ? "bg-verde/15 text-verde ring-1 ring-verde/40" : "text-texto-2 hover:text-texto hover:bg-superficie-2") +
               (pode ? "" : " opacity-60");
-            const miolo = <><Icone className="size-[18px]" strokeWidth={1.9} /><span className="hidden sm:block">{f.rotulo}</span></>;
+            const miolo = <><Icone className="size-[18px]" strokeWidth={1.9} /><span className="hidden sm:block">{f.rotulo}</span><span className="text-[10px] leading-none sm:hidden">{f.curto}</span></>;
             const tour = f.id === "area" ? { "data-tour": "medir" } : {};
             if (!pode) {
               return (
