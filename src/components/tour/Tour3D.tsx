@@ -39,6 +39,8 @@ export type TourData = {
   /** plano com "Medir área e distância"; sem ele a régua aparece bloqueada (áudio do Carlos, 17/11, 22h14) */
   medir?: boolean;
   consulta?: { voltar: string; limites: [number, number, number, number]; car?: string; raio?: number; caminho?: string };
+  /** CAR do imóvel anunciado: o tour da ficha também mostra APP, reserva e o resto (áudio do Carlos, 18/11, 12h36) */
+  car?: string | null;
 };
 
 type Cam = { lng: number; lat: number; zoom: number; pitch: number; bearing: number };
@@ -141,7 +143,8 @@ export default function Tour3D(dados: TourData) {
   const [relevo, setRelevo] = useState(1.4);
   const [esperandoTiles, setEsperandoTiles] = useState(false);
   // 17/11 (vídeo do Carlos, 16h37): a camada ambiental já abre ligada no tour
-  const [ambienteCar, setAmbienteCar] = useState(!!dados.consulta?.car);
+  const carAmbiente = dados.consulta?.car ?? dados.car ?? null;
+  const [ambienteCar, setAmbienteCar] = useState(!!carAmbiente);
   const [raio, setRaio] = useState(dados.consulta?.raio ?? 0);
   const raios = RAIOS_TOUR.includes(raio) ? RAIOS_TOUR : [...RAIOS_TOUR, raio].sort((a, b) => a - b);
   // com raio, as camadas oficiais (usinas, linhas de energia, aeródromos...) valem para todo o entorno
@@ -447,9 +450,9 @@ export default function Tour3D(dados: TourData) {
             {mapaPronto && dados.camadas && (dados.camadas.oficiais.length > 0 || dados.camadas.relevo.length > 0)
               && (dados.geometry.type === "Polygon" || dados.geometry.type === "MultiPolygon")
               && <CamadasDoTour mapa={mapaPronto} geometria={(anel?.geometry ?? dados.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon} permitidas={dados.camadas} aoGerente={aoGerente} />}
-            {mapaPronto && dados.consulta?.car && !!dados.camadas?.ambiente.length && <>
+            {mapaPronto && carAmbiente && !!dados.camadas?.ambiente.length && <>
               <label className="mt-2 block text-sm"><input type="checkbox" checked={ambienteCar} onChange={e => setAmbienteCar(e.target.checked)} /> Ambiente do CAR</label>
-              {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={dados.consulta.car} mapa={mapaPronto} tour /></div>}
+              {ambienteCar && <div className="mt-2 max-h-[24vh] overflow-auto"><AmbienteCar cod={carAmbiente} mapa={mapaPronto} tour /></div>}
             </>}
             {mapaPronto && <MedicaoMapa mapa={mapaPronto} escuro liberado={dados.medir !== false} />}
             </div>

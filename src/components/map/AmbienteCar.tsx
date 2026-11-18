@@ -6,7 +6,8 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import area from "@turf/area";
 import { CORES_AMBIENTE as CORES, NOME_CURTO, TEMAS_AMBIENTE as TEMAS, formatarHa, quadroAmbiental, type TemaAmbiente as Tema } from "@/lib/geo/ambienteCar";
 import { registrarAmbiente } from "./InfoNoPonto";
-type Dados = GeoJSON.FeatureCollection<GeoJSON.Geometry, { tema: Tema; fonte: string; data: string | null }>;
+type Dados = GeoJSON.FeatureCollection<GeoJSON.Geometry, { tema: Tema; fonte: string; data: string | null }>
+  & { base_municipio?: boolean | null; ocultos_pelo_plano?: number };
 const IDS = ["car-ambiental-poligono", "car-ambiental-linha", "car-ambiental-ponto"];
 const FONTE = "car-ambiental-imovel";
 
@@ -87,7 +88,11 @@ export default function AmbienteCar({ cod, mapa, tour = false, quadro = false, a
   return <div className="space-y-3">
     <fieldset>
       <legend className="mb-2 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-texto-2">Camadas deste imóvel · toque para ligar ou desligar</legend>
-      {!linhas.length && <p className="text-sm text-texto-2">O SICAR não traz APP, reserva ou outras camadas para este imóvel na base carregada.</p>}
+      {!linhas.length && <p className="text-sm text-texto-2">{dados.ocultos_pelo_plano
+        ? "APP, reserva e as outras camadas deste imóvel não estão incluídas no seu plano."
+        : dados.base_municipio === false
+          ? "A base de APP e reserva legal do SICAR ainda não foi carregada para este município. Ela entra na próxima atualização do CAR."
+          : "O SICAR não traz APP, reserva ou outras camadas declaradas para este imóvel."}</p>}
       <div className="flex flex-wrap gap-2">
         {linhas.map(l => {
           const ligado = !ocultos.includes(l.tema);

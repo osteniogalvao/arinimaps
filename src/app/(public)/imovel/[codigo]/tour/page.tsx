@@ -47,7 +47,7 @@ export default async function TourPage({ params, searchParams }: PageProps<"/imo
   if (!tour?.geometry || !tour.centroid) notFound();
 
   // §1.1: tour aberto vira evento do imóvel
-  const {data:prop} = await supabaseAdmin().from("properties").select("id").eq("codigo",codigo).maybeSingle();
+  const {data:prop} = await supabaseAdmin().from("properties").select("id, car_codigo").eq("codigo",codigo).maybeSingle();
   if (prop?.id) void registrarEventoImovel({ propertyId: prop.id, tipo: "tour", userId: user?.id, detalhe: { codigo, record, ...(exclusivoValido ? { link_exclusivo: tokenExclusivo } : {}) } });
 
   const acesso = user && !record ? await acessoDe(user.id) : null;
@@ -65,6 +65,7 @@ export default async function TourPage({ params, searchParams }: PageProps<"/imo
       record={record}
       camadas={user && acesso ? await direitosDoTour(acesso, user.entradaAtiva, true) : null}
       medir={!acesso || acesso.recursos.has("ferramenta_medir")}
+      car={user ? (prop?.car_codigo as string | null | undefined) ?? null : null}
     />
   );
 }
