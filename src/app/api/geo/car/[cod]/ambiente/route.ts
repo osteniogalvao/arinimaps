@@ -32,6 +32,22 @@ export async function GET(request: Request, ctx: RouteContext<"/api/geo/car/[cod
   }
   if (ambiente.error) return Response.json({ error: "A base ambiental está indisponível. Tente novamente." }, { status: 503 });
   if (!ambiente.data?.features?.length) return Response.json({ error: "Perímetro não encontrado no cadastro rural." }, { status: 404 });
-  const dados = temas ? {type:"FeatureCollection", features:(ambiente.data.features as GeoJSON.Feature[]).filter(f => temas.has(f.properties?.tema))} : ambiente.data;
-  return Response.json(dados, { headers: { "Cache-Control": "private, no-store" } });
+  const todas = ambiente.data.features as GeoJSON.Feature[];
+  const features = temas ? todas.filter(f => temas.has(f.properties?.tema)) : todas;
+  // Áudio do Carlos (18/11/2026, 12h36): "eu sei que ela tem APP e reserva, mas não aparece".
+  // Só o perímetro voltou? Diz se o SICAR deste município ainda não foi carregado
+  // ou se o plano esconde os temas, em vez de um "sem dados" genérico.
+  const temasDeclarados = (fs: GeoJSON.Feature[]) => fs.filter(f => f.properties?.tema !== "area_imovel").length;
+  let baseMunicipio: boolean | null = null;
+  if (!temasDeclarados(todas)) {
+    const admin = supabaseAdmin();
+    const { data: im } = await admin.from("car_imoveis").select("cod_ibge").eq("cod_imovel", cod.toUpperCase()).limit(1).maybeSingle();
+    if (im?.cod_ibge != null) {
+      const { data: t } = await admin.from("car_temas").select("id").eq("cod_ibge", im.cod_ibge).eq("vigente", true).neq("tema", "area_imovel").limit(1);
+      baseMunicipio = !!t?.length;
+    }
+  }
+  const ocultosPeloPlano = temasDeclarados(todas) - temasDeclarados(features);
+  return Response.json({ type: "FeatureCollection", features, base_municipio: baseMunicipio, ocultos_pelo_plano: ocultosPeloPlano },
+    { headers: { "Cache-Control": "private, no-store" } });
 }
