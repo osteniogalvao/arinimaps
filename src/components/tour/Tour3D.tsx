@@ -60,14 +60,22 @@ const RITMO_AO_VIVO = 1.7;
 /** Raios do painel do tour (17/11/2026, vídeo do Carlos: "o raio aqui, até X km, e navegar vendo os pontos"). */
 const RAIOS_TOUR = [0, 1000, 2000, 5000, 10000];
 
-/** Espera o mapa terminar de baixar e desenhar o que está na tela, com teto. */
+/** Espera o satélite e o relevo do que está na tela, com teto. */
 function esperarMapa(map: MLMap, tetoMs: number) {
   return new Promise<void>((ok) => {
-    if (map.loaded() && map.areTilesLoaded()) { ok(); return; }
-    const fim = () => { clearTimeout(timer); map.off("idle", fim); ok(); };
-    const timer = setTimeout(fim, tetoMs);
-    map.on("idle", fim);
+    const inicio = performance.now();
+    const ver = () => {
+      if (baseCarregada(map) || performance.now() - inicio >= tetoMs) ok();
+      else setTimeout(ver, 250);
+    };
+    // o seek recém-feito ainda não pediu os tiles novos: um quadro antes de conferir
+    requestAnimationFrame(() => setTimeout(ver, 100));
   });
+}
+
+/** Satélite e relevo já na tela; as camadas por cima não seguram o voo. */
+function baseCarregada(map: MLMap) {
+  try { return map.isSourceLoaded("satelite") && map.isSourceLoaded("dem"); } catch { return map.areTilesLoaded(); }
 }
 
 function buildKeyframes(d: TourData, ritmo = 1, zoomArea?: number): { keys: Key[]; orbit: { start: number; end: number; base: Cam } } {
@@ -317,9 +325,16 @@ export default function Tour3D(dados: TourData) {
         // (é onde o tour passa mais tempo e onde a imagem pesa), depois a vista
         // de abertura. Sem isso o tour começava sobre uma tela cinza e chegava
         // ao imóvel antes do satélite — queixa do Carlos em 01/10/2026.
+        // Áudio do Carlos (18/11/2026, 17h07): no celular, pela conta da Central,
+        // "as camadas não estão ativas". Elas só apareciam depois de todo o
+        // pré-carregamento, que no 4G passa de um minuto. Agora o painel de
+        // camadas e a medição ficam prontos assim que o mapa abre.
+        setMapaPronto(map);
+        // no celular a espera de cada parada é mais curta: a imagem termina de chegar durante o voo
+        const teto = (ms: number) => celular ? Math.round(ms / 2) : ms;
         setEtapa("Carregando a imagem do imóvel…");
         seek(orbit.start);
-        await esperarMapa(map, 12_000);
+        await esperarMapa(map, teto(12_000));
         if (cancelado) return;
         // Pré-carrega cada parada do roteiro (PDF do Carlos, 17/11/2026: "alguns
         // elementos não estão sendo carregados a tempo durante a apresentação").
@@ -328,27 +343,31 @@ export default function Tour3D(dados: TourData) {
         for (let i = 0; i < paradas.length; i++) {
           setEtapa(`Carregando o percurso (${i + 1} de ${paradas.length})…`);
           seek(paradas[i].t);
-          await esperarMapa(map, 5_000);
+          await esperarMapa(map, teto(5_000));
           if (cancelado) return;
         }
         setEtapa("Preparando o sobrevoo…");
         seek(0);
-        await esperarMapa(map, 8_000);
+        await esperarMapa(map, teto(8_000));
         if (cancelado) return;
 
-        setMapaPronto(map);
-        let t = 0, ultimo = 0, verificarEm = 0, aguardarAte = 0;
+        let t = 0, ultimo = 0, verificarEm = 0, aguardarAte = 0, proximaEspera = 0;
         let aguardando = false;
         const tick = (agora: number) => {
           if (cancelado || faseRef.current !== "tocando") return;
           const passo = Math.min(120, Math.max(0, agora - ultimo)) / 1000;
           ultimo = agora;
-          // Com conexão lenta, conserva a câmera até o tile chegar. Um órgão
-          // indisponível não pode suspender o roteiro indefinidamente.
+          // Com conexão lenta, conserva a câmera até o tile chegar. Só contam o
+          // satélite e o relevo: camada de órgão (ambiente do CAR, IBAMA...) lenta
+          // fazia o tour parar e voltar sem fim no 4G do celular (Carlos, 18/11, 17h07).
+          // Depois de uma espera, o voo segue ao menos 15 s antes de esperar de novo.
           if (agora >= verificarEm) {
             verificarEm = agora + 400;
-            if (map.areTilesLoaded()) aguardarAte = 0;
-            else if (!aguardarAte || agora > aguardarAte + 5000) aguardarAte = agora + 6000;
+            if (baseCarregada(map)) aguardarAte = 0;
+            else if (agora >= proximaEspera) {
+              aguardarAte = agora + (celular ? 3000 : 5000);
+              proximaEspera = aguardarAte + 15_000;
+            }
             const esperar = agora < aguardarAte;
             if (esperar !== aguardando) { aguardando = esperar; setEsperandoTiles(esperar); }
           }
@@ -396,7 +415,7 @@ export default function Tour3D(dados: TourData) {
 
       {!dados.record && (
         <>
-          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 max-h-[calc(100dvh-8rem)] max-w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-[20px] bg-[#0A2219]/92 px-4 py-3 sm:px-5 sm:py-4 text-[#F2F2EC]">
+          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 max-h-[48dvh] sm:max-h-[calc(100dvh-8rem)] max-w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-[20px] bg-[#0A2219]/92 px-4 py-3 sm:px-5 sm:py-4 text-[#F2F2EC]">
             <span className="block h-0.5 w-7 rounded bg-[#D9BD6F]" aria-hidden />
             <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D3DCD2]">Tour 3D · {dados.codigo}</p>
             <p className="lp-display mt-1.5 text-2xl sm:text-3xl text-[#F2F2EC]">{dados.titulo}</p>
