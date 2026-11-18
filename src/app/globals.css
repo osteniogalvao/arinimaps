@@ -471,6 +471,8 @@ button:disabled,
 .poi-pino-etiqueta b { font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .poi-pino-etiqueta span { font-size: 10px; color: #FFE299; }
 .poi-pino:hover, .poi-pino:focus-visible, .poi-pino-aberto { z-index: 5; }
+/* o invólucro é o elemento do marcador (o MapLibre o posiciona); o pino em foco sobe sobre os vizinhos */
+.poi-pino-marcador:hover, .poi-pino-marcador:focus-within, .poi-pino-marcador:has(.poi-pino-aberto) { z-index: 5; }
 .poi-pino:hover .poi-pino-bola, .poi-pino:focus-visible .poi-pino-bola, .poi-pino-aberto .poi-pino-bola {
   transform: scale(1.14); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45), 0 0 0 4px color-mix(in srgb, var(--poi-cor) 35%, transparent);
 }

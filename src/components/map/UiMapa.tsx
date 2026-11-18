@@ -415,7 +415,10 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
           aberto={lista === g} onAbrir={() => setLista(lista === g ? null : g)} />
         {lista === g && (
           <div className={caixa}>
-            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">{g}</p>
+            <div className="-mt-1 -mr-1 flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-texto-2">{g}</p>
+              <BotaoFechar onClick={() => setLista(null)} rotulo={`Fechar ${g}`} />
+            </div>
             {itens.map((i) => <ItemFiltro key={i.id} cor={i.cor} nome={i.nome} ponto={i.ponto} ligada={i.ligada} alternar={i.alternar}
               detalhe={i.ligada && i.carregando ? <LoaderCircle className="size-3 animate-spin text-texto-2" aria-label="Carregando" /> : undefined} />)}
             {ligadas.some((i) => i.aviso) && (
@@ -426,10 +429,15 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
       </Fragment>
     );
   };
+  // 18/11/2026 (Stenio: "não consigo fechar esses itens após abrir"): a coluna tem altura
+  // máxima e os itens encolhiam (flex-shrink) quando a lista abria, espremendo as pílulas
+  // umas sobre as outras e escondendo a seta que fecha. Agora nada encolhe (a coluna rola),
+  // a lista tem um X e o Esc fecha.
   const caixa = "w-64 rounded-2xl border border-linha bg-superficie/97 p-3 shadow-[0_14px_32px_-18px_rgb(0_0_0/0.8)] backdrop-blur-md";
   return (
     <div role="group" aria-label="Filtros rápidos de camadas" data-tour="camadas"
-      className="absolute top-[var(--abaixo-chips,4rem)] right-14 z-10 hidden max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto sm:flex flex-col items-end gap-1.5 p-0.5">
+      className="absolute top-[var(--abaixo-chips,4rem)] right-14 z-10 hidden max-h-[calc(100%-var(--abaixo-chips,4rem)-1rem)] overflow-y-auto sm:flex flex-col items-end gap-1.5 p-0.5 [&>*]:shrink-0"
+      onKeyDown={(e) => { if (e.key === "Escape" && lista) { e.stopPropagation(); setLista(null); } }}>
       {onDelimitar && (
         <button type="button" onClick={onDelimitar} title="Desenhe uma área no mapa e escolha as camadas só para ela"
           className="chip inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-xs font-medium shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md">
@@ -455,7 +463,10 @@ export function FiltrosRapidos({ car, alternarCar, avisoCar, situacoes, alternar
           aviso={!!avisoCar} onClick={alternarCar} aberto={lista === "car"} onAbrir={() => setLista(lista === "car" ? null : "car")} />
         {lista === "car" && (
           <div className={caixa}>
-            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-texto-2">Situação do CAR</p>
+            <div className="-mt-1 -mr-1 flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-texto-2">Situação do CAR</p>
+              <BotaoFechar onClick={() => setLista(null)} rotulo="Fechar situação do CAR" />
+            </div>
             {SITUACOES_CAR.map((s) => (
               <ItemFiltro key={s.id} cor={s.cor} nome={s.nome} ligada={car && situacoes.has(s.id)}
                 alternar={() => { if (!car) alternarCar(); alternarSituacao(s.id); }} />
