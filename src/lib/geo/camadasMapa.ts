@@ -77,32 +77,6 @@ async function arcgis(base: string, camada: number, env: Env, campos: string, ma
   return (j.features ?? []) as { geometry: GeoJSON.Geometry; properties: Record<string, unknown> }[];
 }
 
-/**
- * i3geo do INCRA: só GML 2 (`gml:coordinates` "x,y x,y"), um tema por UF.
- * O bbox vai SEM sufixo EPSG (com ele o WFS inverte os eixos — ver adaptadores.ts).
- */
-async function i3geo(tema: string, env: Env, max = 2000) {
-  const url = `https://acervofundiario.incra.gov.br/i3geo/ogc.php?tema=${tema}&service=WFS&version=1.0.0&request=GetFeature` +
-    `&typeName=${tema}&maxFeatures=${max}&bbox=${env.xmin},${env.ymin},${env.xmax},${env.ymax}`;
-  const xml = await (await pedir(url, "application/xml")).text();
-  if (!/<(?:[\\w.-]+:)?FeatureCollection\\b/.test(xml) || xml.includes("ServiceException")) throw new Error("o INCRA não devolveu uma coleção de feições");
-  const anel = (s: string) => s.trim().split(/\s+/).map((par) => par.split(",").map(Number).slice(0, 2));
-  return xml.split("<gml:featureMember>").slice(1).flatMap((bloco) => {
-    const props: Record<string, unknown> = {};
-    for (const m of bloco.matchAll(/<ms:([A-Za-z0-9_]+)>([^<]*)<\/ms:\1>/g)) props[m[1]] = m[2];
-    const poligonos = [...bloco.matchAll(/<gml:Polygon[^>]*>([\s\S]*?)<\/gml:Polygon>/g)].map((p) => {
-      const ext = p[1].match(/<gml:outerBoundaryIs>[\s\S]*?<gml:coordinates>([^<]+)<\/gml:coordinates>/)?.[1];
-      const ints = [...p[1].matchAll(/<gml:innerBoundaryIs>[\s\S]*?<gml:coordinates>([^<]+)<\/gml:coordinates>/g)].map((i) => anel(i[1]));
-      return ext ? [anel(ext), ...ints] : null;
-    }).filter((p): p is number[][][] => !!p);
-    if (!poligonos.length) return [];
-    const geometry: GeoJSON.Geometry = poligonos.length === 1
-      ? { type: "Polygon", coordinates: poligonos[0] }
-      : { type: "MultiPolygon", coordinates: poligonos };
-    return [{ geometry, properties: props }];
-  });
-}
-
 const s = (v: unknown) => (v == null ? null : String(v).trim() || null);
 const n = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const dataBr = (v: unknown) => {
@@ -434,13 +408,9 @@ const DEFS: Record<CamadaOficialId, Def> = {
         }))));
         return listas.flat();
       }
-      const temas = ufs.flatMap(uf => ["privado", "publico"].map(tipo => `imoveiscertificados_${tipo}_${uf}`));
-      const listas = await Promise.all(temas.map(async tema => (await i3geo(tema, env)).map(f => feicao(f.geometry, {
-        id: s(f.properties.num_certificacao) ?? s(f.properties.cod_imovel_rural),
-        nome: s(f.properties.nome_imovel), natureza: tema.includes("publico") ? "Imóvel público" : "Imóvel particular",
-        certificacao: s(f.properties.num_certificacao), area_ha: n(f.properties.qtd_area_peca_tecnica),
-      }))));
-      return listas.flat();
+      // O i3geo do INCRA (acervofundiario.incra.gov.br) saiu do ar em nov/2026 e
+      // o Geoportal não publica o SNCI. Fora do Paraná não há fonte pública.
+      throw new Error("O INCRA desativou o serviço do SNCI. Só o Paraná tem cópia pública (IAT). As parcelas certificadas atuais estão na camada SIGEF.");
     },
   },
   credito_rural: {
