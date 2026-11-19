@@ -11,6 +11,12 @@ import { buscarFonte } from "./tlsOrgaos.mjs";
 const UA = "AriniImoveisBrasil/1.0 (contato@arinibrasil.com.br)";
 /** acima disso a fonte conta como fora: o relatório não espera mais que 40 s */
 export const LIMITE_MS = 30_000;
+/**
+ * O Overpass público (pois_osm) tem respondido em 32–37 s mesmo quando está de
+ * pé (18/11/2026). Com 30 s ele aparecia sempre como instável.
+ */
+const LIMITE_POR_FONTE_MS = { pois_osm: 50_000 };
+const limiteDe = (id) => LIMITE_POR_FONTE_MS[id] ?? LIMITE_MS;
 
 /**
  * Serviço geográfico costuma responder 200 com a falha no corpo (WFS devolve
@@ -28,7 +34,7 @@ export async function sondarFonte(fonte) {
   try {
     const r = await buscarFonte(fonte.sonda_url, {
       headers: { "User-Agent": UA },
-      signal: AbortSignal.timeout(LIMITE_MS),
+      signal: AbortSignal.timeout(limiteDe(fonte.id)),
     });
     const corpo = (await r.text()).slice(0, 4000);
     const ms = Date.now() - t0;
@@ -40,7 +46,7 @@ export async function sondarFonte(fonte) {
     return { fonte_id: fonte.id, ok: !falhaNoCorpo, status_http: r.status, ms, erro: falhaNoCorpo };
   } catch (e) {
     const ms = Date.now() - t0;
-    const erro = e?.name === "TimeoutError" ? `sem resposta em ${LIMITE_MS / 1000} s`
+    const erro = e?.name === "TimeoutError" ? `sem resposta em ${limiteDe(fonte.id) / 1000} s`
       : (e?.cause?.code ?? e?.message ?? "falha desconhecida");
     return { fonte_id: fonte.id, ok: false, status_http: null, ms, erro: String(erro) };
   }
