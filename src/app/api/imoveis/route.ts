@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { normalizarUnidade } from "@/lib/imovel/unidade";
 import { camposQuadro, validarQuadro } from "@/lib/juridico/quadro-exclusividade";
 import { clausulasDestacadas, prazoExclusividade } from "@/lib/juridico/versoes";
 import { validarDocumento } from "@/lib/br/documentos";
@@ -265,7 +266,8 @@ export async function POST(request: Request) {
   // tour virtual 360 / vídeo imersivo (item 9): só links dos domínios aceitos
   const tour = validarCampoTour(dados.tour_virtual_url);
   if (!tour.ok) return NextResponse.json({ error: tour.erro }, { status: 400 });
-  const caracteristicas = { ...((dados.caracteristicas ?? {}) as Record<string, unknown>) };
+  // apartamento/sala: subtipo, andar e número da unidade só entram limpos
+  const caracteristicas = normalizarUnidade({ ...((dados.caracteristicas ?? {}) as Record<string, unknown>) });
   delete caracteristicas.tour_virtual_url;
   if (tour.url) caracteristicas.tour_virtual_url = tour.url;
 

@@ -15,6 +15,7 @@ import { ehEquipe as papelEhEquipe, ehParceiro as papelEhParceiro } from "@/lib/
 import { enviarVideo, VIDEO_ACEITA, VIDEO_MAX_MB } from "@/lib/midia/enviarVideo";
 import { comprimirFotos } from "@/lib/midia/comprimirFoto";
 import { lerTour, PROVEDOR_TOUR_LABEL, TOUR_AJUDA } from "@/lib/imovel/tour";
+import { SUBTIPOS_UNIDADE } from "@/lib/imovel/unidade";
 import {
   Check, CheckCircle2, Gavel, FileText, MapPin, Trees, LandPlot, Image as ImageIcon, ShieldCheck,
   Handshake, Camera, AlertTriangle, Send, type LucideIcon,
@@ -62,6 +63,8 @@ export default function NovoImovel() {
     matricula_numero: "", matricula_cartorio: "",
     medidas: "",
     tour_virtual_url: "",
+    // apartamento/sala em prédio (Carlos, 18/11 16h57)
+    subtipo: "", andar: "", unidade: "",
   });
   const [papel, setPapel] = useState<string | null>(null);
   // revisão do Carlos (29/10): venda pela plataforma só com exclusividade Arini
@@ -313,6 +316,11 @@ export default function NovoImovel() {
         ...caracIa,
         unidade_area: form.tipo === "rural" ? "ha" : "m2",
         ...(form.medidas.trim() && { medidas_informadas: form.medidas.trim().slice(0, 2000) }),
+        ...(form.tipo === "urbano" && form.subtipo && {
+          subtipo: form.subtipo,
+          ...(form.andar.trim() && { andar: form.andar.trim() }),
+          ...(form.unidade.trim() && { unidade: form.unidade.trim() }),
+        }),
       },
       condicao,
       prazo_exclusividade_meses: prazoMeses,
@@ -532,6 +540,32 @@ export default function NovoImovel() {
         )}
 
         {form.tipo === "urbano" && !loteamento && (
+          <div className="space-y-4 rounded-2xl border border-linha bg-superficie-2/50 p-4">
+            <div>
+              <label className={label} htmlFor="subtipo-unidade">É apartamento ou sala num prédio?</label>
+              <select id="subtipo-unidade" className={input} value={form.subtipo}
+                onChange={(e) => setForm({ ...form, subtipo: e.target.value })}>
+                <option value="">Não (casa, lote, terreno, galpão…)</option>
+                {SUBTIPOS_UNIDADE.map((s) => <option key={s.valor} value={s.valor}>{s.rotulo}</option>)}
+              </select>
+            </div>
+            {form.subtipo && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={label} htmlFor="andar-unidade">Andar</label>
+                  <input id="andar-unidade" className={input} inputMode="numeric" placeholder="Ex.: 3 (0 = térreo)"
+                    value={form.andar} onChange={(e) => setForm({ ...form, andar: e.target.value.replace(/[^0-9-]/g, "").slice(0, 4) })} />
+                </div>
+                <div>
+                  <label className={label} htmlFor="numero-unidade">Número da unidade</label>
+                  <input id="numero-unidade" className={input} maxLength={20} placeholder="Ex.: 302"
+                    value={form.unidade} onChange={(e) => setForm({ ...form, unidade: e.target.value })} />
+                </div>
+                <p className={ajuda + " col-span-2"}>
+                  Marque no mapa o mesmo prédio das outras unidades. Quem clicar no prédio vê todas as unidades à venda, separadas por andar.
+                </p>
+              </div>
+            )}
           <div>
             <label className={label}>Faz parte de um empreendimento? (opcional)</label>
             <input className={input} placeholder="Código do imóvel principal — ex.: AIB-000010"
@@ -540,6 +574,7 @@ export default function NovoImovel() {
               Para apartamentos em bloco ou lotes de um loteamento: cadastre o empreendimento uma vez e
               aponte cada unidade para ele — a página do empreendimento lista todas as unidades à venda.
             </p>
+          </div>
           </div>
         )}
 
