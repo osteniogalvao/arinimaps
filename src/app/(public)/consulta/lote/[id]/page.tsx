@@ -1,5 +1,5 @@
 import { raioConsulta } from "@/lib/rural/raios";
-import { camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
+import { atalhoTour, camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
 import { notFound, redirect } from "next/navigation";
 import { podeVerArea } from "@/lib/dados-terceiros";
 import BloqueioTerceiros from "@/components/conta/BloqueioTerceiros";
@@ -88,11 +88,14 @@ export default async function ConsultaLote({ params, searchParams }: PageProps<"
         subtitulo={identificacao
           ? `Lote urbano · ${m2(p.area_m2)} m² pela planta da cidade`
           : "Lote urbano · consulta de área"}
-        acoes={p.anuncio ? (
-          <BotaoLink href={`/imovel/${p.anuncio}`}>Este lote está à venda — ver o anúncio</BotaoLink>
-        ) : (
-          <BotaoLink href={`/painel/novo?lote=${p.id}`} variante="ouro">Este lote é meu — anunciar</BotaoLink>
-        )}
+        acoes={<>
+          {atalhoTour(camadasTour, lote.geometry, "/consulta/lote/" + id, raioM)}
+          {p.anuncio ? (
+            <BotaoLink href={`/imovel/${p.anuncio}`}>Este lote está à venda — ver o anúncio</BotaoLink>
+          ) : (
+            <BotaoLink href={`/painel/novo?lote=${p.id}`}>Este lote é meu — anunciar</BotaoLink>
+          )}
+        </>}
       >
         <PilulaPonto>Lote urbano</PilulaPonto>
       </CabecalhoPagina>

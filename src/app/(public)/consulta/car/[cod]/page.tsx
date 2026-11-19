@@ -1,5 +1,5 @@
 import { raioConsulta } from "@/lib/rural/raios";
-import { camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
+import { atalhoTour, camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
 import GeradorRelatorio from "@/components/rural/GeradorRelatorio";
 import { whatsappConfigurado } from "@/lib/meta";
 import { notFound, redirect } from "next/navigation";
@@ -127,13 +127,16 @@ export default async function ConsultaCar({ params, searchParams }: PageProps<"/
         titulo={p.area_ha ? formatArea(Number(p.area_ha) * 10_000, "rural") : "Área rural"}
         destaque={p.municipio ? `em ${p.municipio}` : undefined}
         subtitulo="Cadastro Ambiental Rural · consulta de área"
-        acoes={anuncio ? (
-          <BotaoLink href={`/imovel/${anuncio.codigo}`}>Esta área está à venda — ver o anúncio</BotaoLink>
-        ) : foraDaArea ? (
-          <BotaoLink href="/expansao">Anúncio ainda não disponível neste município · quero a Arini aqui</BotaoLink>
-        ) : (
-          <BotaoLink href={`/painel/novo?car=${encodeURIComponent(p.cod)}`} variante="ouro">Esta área é minha — anunciar</BotaoLink>
-        )}
+        acoes={<>
+          {atalhoTour(camadasTour, car.geometry, "/consulta/car/" + encodeURIComponent(p.cod), raioM)}
+          {anuncio ? (
+            <BotaoLink href={`/imovel/${anuncio.codigo}`}>Esta área está à venda — ver o anúncio</BotaoLink>
+          ) : foraDaArea ? (
+            <BotaoLink href="/expansao">Anúncio ainda não disponível neste município · quero a Arini aqui</BotaoLink>
+          ) : (
+            <BotaoLink href={`/painel/novo?car=${encodeURIComponent(p.cod)}`}>Esta área é minha — anunciar</BotaoLink>
+          )}
+        </>}
       >
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <PilulaPonto>{situacao}</PilulaPonto>

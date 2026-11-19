@@ -1,5 +1,5 @@
 import { raioConsulta } from "@/lib/rural/raios";
-import { camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
+import { atalhoTour, camadasDaSessao, tourDaArea } from "@/components/tour/tourDaArea";
 import GeradorRelatorio from "@/components/rural/GeradorRelatorio";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -72,6 +72,7 @@ export default async function ConsultaAreaDesenhada({ params, searchParams }: Pa
         titulo={tamanho}
         destaque={area.municipio ? `em ${area.municipio}` : undefined}
         subtitulo="Área desenhada no mapa · consulta de área"
+        acoes={atalhoTour(camadasTour, area.geometry, "/consulta/area/" + chave.slice(4), raioM)}
       >
         <PilulaPonto>Área aproximada</PilulaPonto>
       </CabecalhoPagina>
