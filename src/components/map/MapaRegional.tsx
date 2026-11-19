@@ -1699,12 +1699,27 @@ export default function MapaRegional({
   const chipBase = "chip inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-medium whitespace-nowrap shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md";
 
   const mosaicoAtivo = base === "satelite" && mosaicoAnual;
-  const escolherMosaico = () => { setBase("satelite"); setMosaicoAnual(true); setImagemAno(null); setComparar(false); };
+  // 18/11/2026 (Stenio: "não consigo ativar ou desativar"): o chip agora liga E desliga.
+  // Antes o segundo clique repetia o "ligar" e nada mudava; e, de perto (z14+), o mosaico
+  // não aparece por desenho, então ligar ali parecia não fazer nada. Agora avisa.
+  const AVISO_MOSAICO_PERTO = "O mosaico com menos nuvens aparece na visão regional. Afaste o zoom para vê-lo.";
+  const alternarMosaico = () => {
+    if (mosaicoAtivo) {
+      setMosaicoAnual(false);
+      setAvisoCarga((a) => (a === AVISO_MOSAICO_PERTO ? "" : a));
+      return;
+    }
+    setBase("satelite"); setMosaicoAnual(true); setImagemAno(null); setComparar(false);
+    if ((mapRef.current?.getZoom() ?? 0) >= ZOOM_MOSAICO_ATE) {
+      setAvisoCarga(AVISO_MOSAICO_PERTO);
+      setTimeout(() => setAvisoCarga((a) => (a === AVISO_MOSAICO_PERTO ? "" : a)), 6000);
+    }
+  };
   const chipsSecundarios = (
     <>
       {/* no celular o mosaico sai da barra (eram 4 linhas de chips) e vem para o Mais */}
       <button type="button" className={`${chipBase} sm:hidden`} data-ativo={mosaicoAtivo} aria-pressed={mosaicoAtivo}
-        onClick={() => { escolherMosaico(); setPainelMapa(null); }}>
+        onClick={() => { alternarMosaico(); setPainelMapa(null); }}>
         Mosaico com menos nuvens
       </button>
       <button onClick={() => setPainelMapa("imagem")} data-ativo={buscaImagem} className={chipBase}
@@ -1947,7 +1962,7 @@ export default function MapaRegional({
           <button type="button" className={`${chipBase} max-sm:hidden`} data-ativo={mosaicoAtivo}
             aria-pressed={mosaicoAtivo}
             title="Mosaico Sentinel-2 sem nuvens (2016, 10 m) na visão regional. Do zoom de bairro para perto, a fotografia de detalhe normal."
-            onClick={escolherMosaico}>
+            onClick={alternarMosaico}>
             Mosaico com menos nuvens
           </button>
           <button onClick={() => { setPainelMapa(camadasAbertas ? null : "camadas"); setAvisoPlano(""); }}

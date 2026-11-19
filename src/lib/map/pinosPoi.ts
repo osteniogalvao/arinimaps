@@ -28,6 +28,9 @@ export type PoiNoMapa = {
 };
 
 
+/** Abaixo deste zoom os pinos do entorno ficam escondidos (de longe se amontoam). */
+export const ZOOM_MIN_PINOS_POI = 12;
+
 /** Elemento do pino. `etiqueta`: "fixa" (sempre à mostra) ou "hover". */
 export function elementoPinoPoi(p: PoiNoMapa, { etiqueta = "hover", ordem = 0 }: { etiqueta?: "fixa" | "hover"; ordem?: number } = {}): HTMLElement {
   const v = visualPoi(p.categoria);
@@ -62,9 +65,28 @@ export async function adicionarPinosPoi(map: MLMap, pois: PoiNoMapa[], { fixos =
   const ordenados = [...pois]
     .filter((p) => Number.isFinite(p.lng) && Number.isFinite(p.lat))
     .sort((a, b) => Number(!!b.destaque) - Number(!!a.destaque) || Number(a.distancia_m ?? 0) - Number(b.distancia_m ?? 0));
-  const marcadores: Marker[] = ordenados.map((p, i) =>
-    new maplibregl.Marker({ element: elementoPinoPoi(p, { etiqueta: i < fixos ? "fixa" : "hover", ordem: i }), anchor: "bottom" })
+  // 18/11/2026 (Stenio: "ícones grandes quando afasto o zoom"): o pino vai DENTRO de um
+  // invólucro. O MapLibre posiciona o marcador com `transform` e `position: absolute` no
+  // próprio elemento; o .poi-pino tinha `position: relative` e a animação de entrada
+  // (`transform`, preenchimento "both"), que passavam por cima disso e empilhavam os
+  // pinos numa coluna fora do lugar. Agora o invólucro é do MapLibre e o pino só anima.
+  const marcadores: Marker[] = ordenados.map((p, i) => {
+    const involucro = document.createElement("div");
+    involucro.className = "poi-pino-marcador";
+    involucro.appendChild(elementoPinoPoi(p, { etiqueta: i < fixos ? "fixa" : "hover", ordem: i }));
+    return new maplibregl.Marker({ element: involucro, anchor: "bottom" })
       .setLngLat([p.lng, p.lat])
-      .addTo(map));
-  return () => { for (const m of marcadores) m.remove(); };
+      .addTo(map);
+  });
+  // de longe (visão regional) os pinos do entorno saem: viram um borrão sobre o imóvel
+  const conferirZoom = () => {
+    const longe = map.getZoom() < ZOOM_MIN_PINOS_POI;
+    for (const m of marcadores) m.getElement().style.visibility = longe ? "hidden" : "";
+  };
+  conferirZoom();
+  map.on("zoom", conferirZoom);
+  return () => {
+    map.off("zoom", conferirZoom);
+    for (const m of marcadores) m.remove();
+  };
 }
