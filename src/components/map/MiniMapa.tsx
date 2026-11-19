@@ -72,6 +72,8 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
       map.on("load", () => {
+        // os créditos abriam expandidos e tampavam metade do mapa no celular (o "i" abre)
+        containerRef.current?.querySelector(".maplibregl-compact-show")?.classList.remove("maplibregl-compact-show");
         setCarregado(map);
         const cor = STATUS_MAPA[status] ?? STATUS_MAPA.publicado;
         map.addSource("imovel", { type: "geojson", data: { type: "Feature", geometry, properties: {} } });
@@ -158,8 +160,12 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
   const comCamadas = !!(carregado && areaCamadas && camadasTour);
 
   const categorias = [...new Set((pois ?? []).map((p) => p.categoria))];
-  const mapa = (
-    <div className="relative h-full">
+  // Áudio do Carlos (18/11/2026, 23h15): no celular "não consigo ver as camadas".
+  // Com camadas embaixo, o h-full esticava o mapa até a altura de todo o bloco
+  // (~2.200 px de vazio no iPhone) e a lista de camadas ia parar atrás do cartão
+  // ao lado. O h-full só vale quando o mapa é o único conteúdo.
+  const mapa = (cheio: boolean) => (
+    <div className={cheio ? "relative h-full" : "relative"}>
       <div ref={containerRef} className={className ?? "h-80 w-full rounded-2xl overflow-hidden border border-linha"} />
       {categorias.length > 0 && (
         <ul aria-label="Legenda do entorno" className="pointer-events-none absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] flex-wrap gap-1">
@@ -187,8 +193,10 @@ export default function MiniMapa({ geometry, status, className, carAmbiental, ar
       <span>Camadas da área (solo, clima, relevo, crédito rural…), o clique &quot;Neste ponto&quot; e a medição no mapa fazem parte dos planos com consulta de área. <Link href="/planos" className="font-semibold text-verde underline">Ver planos</Link></span>
     </p>
   ) : null;
-  if (!carAmbiental) return comCamadas || bloqueado ? <div className="space-y-3">{mapa}{extras}{bloqueado}</div> : mapa;
-  return <div className="space-y-3">{mapa}
+  // A estrutura não muda quando o mapa termina de carregar: trocar o mapa solto pelo
+  // bloco com camadas remontava o contêiner e o maplibre ficava preso no antigo.
+  if (!carAmbiental) return (areaCamadas && camadasTour) || bloqueado ? <div className="space-y-3">{mapa(false)}{extras}{bloqueado}</div> : mapa(true);
+  return <div className="space-y-3">{mapa(false)}
     {extras}{bloqueado}
     <button className="btn-contorno px-4 py-2 text-sm disabled:opacity-60" type="button" disabled={!mapaCar}
       onClick={() => setAmbiental(v => !v)} aria-expanded={ambiental}>

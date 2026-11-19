@@ -12,6 +12,16 @@ export async function camadasDaSessao(sessao: { user: { entradaAtiva: string | n
 }
 
 /**
+ * Atalho do Tour 3D no topo da consulta. Áudio do Carlos (18/11/2026, 23h15):
+ * no celular o botão do tour ficava cinco telas abaixo, depois do mapa e das
+ * camadas, e ele não achava o tour. Agora aparece também junto do título.
+ */
+export function atalhoTour(camadas: Awaited<ReturnType<typeof camadasDaSessao>>, geometria: GeoJSON.Geometry, caminho: string, raio: number) {
+  if (!camadas || (geometria.type !== "Polygon" && geometria.type !== "MultiPolygon")) return null;
+  return <BotaoLink href={caminho + "?raio_m=" + raio + "&tour=1"} variante="ouro">Tour 3D da área</BotaoLink>;
+}
+
+/**
  * Botão do Tour 3D da consulta, com o raio da pesquisa ao lado, ou o próprio
  * tour quando `abrir`. 17/11/2026 (vídeo do Carlos, 16h37): o Tour 3D fica no
  * dourado do "anunciar" para aparecer, e o raio fica à vista junto dele.
