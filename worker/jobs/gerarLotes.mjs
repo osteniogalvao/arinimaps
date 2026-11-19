@@ -77,6 +77,10 @@ export async function gerarLotes(payload, db) {
   const base = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) throw new Error("SUPABASE_URL não configurada");
   const client = await db.connect();
+  // Conexão em uso derrubada pelo banco: a query em andamento já rejeita; o
+  // ouvinte só impede que o 'error' do client derrube o worker.
+  const aoCair = (e) => console.error("[lotes] conexão caiu:", e.message);
+  client.on("error", aoCair);
   try {
 
     const { rows: [cam] } = await client.query(
@@ -218,6 +222,7 @@ export async function gerarLotes(payload, db) {
     await client.query("rollback").catch(() => undefined);
     throw e;
   } finally {
+    client.off("error", aoCair);
     client.release();
   }
 }

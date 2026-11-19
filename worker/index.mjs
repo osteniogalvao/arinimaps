@@ -33,6 +33,10 @@ export const db = new pg.Pool({
   keepAlive: true,
   keepAliveInitialDelayMillis: 15000,
 });
+// O Supabase às vezes encerra conexões ociosas ("terminating connection due to
+// administrator command"). Sem este ouvinte o pg emite 'error' sem tratamento e
+// o processo inteiro cai, deixando jobs presos em "processando" (18/11/2026).
+db.on("error", (e) => console.error("[db] conexão do pool caiu:", e.message));
 
 const HANDLERS = {
   render_video: renderVideo,
