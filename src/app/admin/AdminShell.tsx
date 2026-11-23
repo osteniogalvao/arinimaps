@@ -38,6 +38,7 @@ const GERAL: ItemMenu[] = [
   { href: "/admin/tarefas", rotulo: "Tarefas", icone: "☑" },
   { href: "/admin/ponto", rotulo: "Meu ponto", icone: "◷" },
   { href: "/admin/crm", rotulo: "CRMs dos setores", icone: "⇉" },
+  { href: "/admin/equipe", rotulo: "Equipe e funções", icone: "☺" },
 ];
 
 /**
@@ -52,6 +53,7 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/eu": UserRound,
   "/admin/ponto": Clock,
   "/admin/crm": Kanban,
+  "/admin/equipe": Contact,
   "/admin/ponto/equipe": CalendarClock,
   "/admin/capacidade": Gauge,
   "/admin/busca": Search,

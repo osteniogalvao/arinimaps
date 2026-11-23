@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { enviarJson } from "@/lib/api/enviar";
 import { SETORES } from "@/lib/setores";
@@ -41,6 +42,9 @@ export default function GestaoUsuarios({
         <div>
           <p className="lp-eyebrow text-xs">Equipe</p>
           <h2 className="lp-display mt-2 text-2xl md:text-[1.75rem] text-texto">Equipe Arini ({equipe.length})</h2>
+          <p className="mt-1.5 text-sm text-texto-2">
+            Função, gestor de cada setor e acessos organizados por setor: <Link href="/admin/equipe" className="font-semibold text-verde underline">Equipe e funções</Link>.
+          </p>
         </div>
         {ehDiretoria && (
           <button onClick={() => setCriando(!criando)}
