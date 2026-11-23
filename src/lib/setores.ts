@@ -131,6 +131,7 @@ export const SETORES: Setor[] = [
     itens: [
       { href: "/admin/relatorios", rotulo: "Relatórios", icone: "▤" },
       { href: "/admin/usuarios", rotulo: "Equipe e usuários", icone: "☺" },
+      { href: "/admin/atendimento/configurar", rotulo: "Menu do WhatsApp e recepção", icone: "☰" },
       { href: "/admin/automacoes", rotulo: "Automações", icone: "⚙" },
       { href: "/admin/capacidade", rotulo: "Capacidade da equipe", icone: "◔" },
       { href: "/admin/ponto/equipe", rotulo: "Ponto da equipe", icone: "◷" },

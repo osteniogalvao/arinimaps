@@ -6,6 +6,7 @@ import { confirmarMensagemWhatsapp, dataWhatsapp } from "@/lib/confirmacao-whats
 import { receberOptIn } from "@/lib/retomada-cadastro";
 import { notificar } from "@/lib/notificacoes";
 import { atenderPedidoConsulta, respostaConsultaWhatsapp } from "@/lib/rural/pedido-whatsapp";
+import { entradaAtendimento } from "@/lib/atendimento";
 import { pedidoAtendimento, pedidoLinhaCotacoes, respostaAtendimento } from "@/lib/rural/atendimento-whatsapp";
 
 /**
@@ -69,16 +70,21 @@ export async function processarValorWhatsapp(v: ValorWhatsapp, canal: CanalWhats
         .in("lead_id", correspondentes.map((l) => l.id)).not("etapa", "in", "(fechado,pos_venda,perdido)").order("updated_at", { ascending: false }).limit(1).maybeSingle();
       opp = data;
     }
-    const { error } = await admin.from("whatsapp_mensagens").insert({
+    const { data: gravada, error } = await admin.from("whatsapp_mensagens").insert({
       wa_id: m.id, telefone: m.from, recebida_em:recebida, direcao: "entrada", tipo: m.type, texto, opportunity_id: opp?.id ?? null,
-    });
+    }).select("id").single();
     if (error && error.code !== "23505") return false;
-    if (error?.code === "23505") continue; // o provedor reenviou
+    if (error?.code === "23505" || !gravada) continue; // o provedor reenviou
     const nome = v.contacts?.find((c) => c.wa_id === m.from)?.profile?.name ?? m.from;
+    // Atendimento por setores (0156): conversa do telefone, menu automático e fila do setor.
+    // Sem a migration, segue o caminho antigo (tarefa do Comercial).
+    const noAtendimento = canal.principal && await entradaAtendimento({
+      telefone: m.from, nome: remetente, texto, mensagemId: gravada.id, opp, canal: phoneId,
+    }).catch((e) => { console.error("atendimento:", e); return false; });
     if (opp) {
       await admin.from("opportunity_events").insert({ opportunity_id: opp.id, tipo: "contato", descricao: `WhatsApp do cliente: ${texto.slice(0, 500)}` });
       await notificar(opp.responsavel_user_id, "atencao", `WhatsApp de ${nome} (${opp.codigo})`, texto.slice(0, 200), `/admin/oportunidades/${opp.id}`);
-    } else {
+    } else if (!noAtendimento) {
       await admin.rpc("fn_tarefa_automatica", {
         p_chave: `whatsapp_sem_lead:${m.from}:${new Date().toISOString().slice(0, 10)}`, p_regra: "whatsapp_sem_lead", p_setor: "comercial",
         p_titulo: `WhatsApp de ${nome} sem oportunidade`, p_descricao: `Telefone ${m.from}: ${texto.slice(0, 500)}`,
