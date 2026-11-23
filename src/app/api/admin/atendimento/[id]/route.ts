@@ -3,12 +3,13 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ator, temSetor, type Ator } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 import { notificar } from "@/lib/notificacoes";
-import { enviarWhatsapp, MetaErro, whatsappConfigurado } from "@/lib/meta";
+import { MetaErro, whatsappConfigurado } from "@/lib/meta";
+import { canalDoContato, contatoSocial, enviarPeloCanal, mensagensSociaisConfiguradas } from "@/lib/meta-mensagens";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { prazoDaEtapa, type Etapa } from "@/lib/crmSetores";
 import { setoresDe, type SetorId } from "@/lib/setores";
 import {
-  eventoAtendimento, falta0156, nomeSetor, papelAtendimento, podeTriar, podeVer, SETORES_ATENDIMENTO,
+  canalDoContatoRotulo, contatoRotulo, eventoAtendimento, falta0156, nomeSetor, papelAtendimento, podeTriar, podeVer, SETORES_ATENDIMENTO,
   type Conversa,
 } from "@/lib/atendimento";
 
@@ -67,7 +68,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/admin/atend
     if (c.nao_lidas) await admin.from("atendimento_conversas").update({ nao_lidas: 0 }).eq("id", c.id);
     const pessoas = (equipe.data ?? []).map((p) => ({ user_id: p.user_id as string, nome: (p.nome as string) || "Sem nome", setores: setoresDe(p.role as string, p.setores as string[] | null) }));
     return NextResponse.json({
-      conversa: c, papel, eu: a!.userId, configurado: whatsappConfigurado(),
+      conversa: c, papel, eu: a!.userId, configurado: contatoSocial(c.telefone) ? mensagensSociaisConfiguradas() : whatsappConfigurado(),
       mensagens: (msgs.data ?? []).reverse(), eventos: (evs.data ?? []).reverse(),
       equipe: pessoas,
       respostas: (respostas.data ?? []).filter((r) => !r.setor || r.setor === c.setor),
@@ -100,20 +101,23 @@ export async function POST(request: Request, ctx: RouteContext<"/api/admin/atend
         if (!c.setor && !c.responsavel && !podeTriar(papel)) throw new Erro("Conversa ainda na caixa central.", 403);
         const limite = await limitar("atendimento:" + eu, 60, 600);
         if (!limite.permitido) return respostaLimite(limite, "mensagens");
-        const waId = await enviarWhatsapp(c.telefone, texto);
+        const waId = await enviarPeloCanal(c.telefone, texto);
         const agora = new Date().toISOString();
-        const { data: saida, error } = await admin.from("whatsapp_mensagens").insert({
+        const social = contatoSocial(c.telefone);
+        const linha: Record<string, unknown> = {
           wa_id: waId || null, telefone: c.telefone, direcao: "saida", texto, conversa_id: c.id,
           opportunity_id: c.opportunity_id, enviado_por: eu, status: "sent",
-        }).select("id").single();
-        if (error || !saida) throw new Erro("O WhatsApp aceitou a mensagem, mas o registro local falhou. Confira antes de reenviar.", 503);
+        };
+        const { data: saida, error } = await admin.from("whatsapp_mensagens")
+          .insert(social ? { ...linha, canal: canalDoContato(c.telefone) } : linha).select("id").single();
+        if (error || !saida) throw new Erro(`O ${canalDoContatoRotulo(c.telefone)} aceitou a mensagem, mas o registro local falhou. Confira antes de reenviar.`, 503);
         const mud: Record<string, unknown> = { ultima_saida_em: agora, ultima_mensagem_em: agora, ultimo_texto: texto.slice(0, 300), nao_lidas: 0 };
         if (!c.responsavel) mud.responsavel = eu;
         if (c.status === "resolvida") { mud.status = "aberta"; mud.resolvida_em = null; }
         await atualizar(mud);
         if (!c.responsavel) await eventoAtendimento({ conversa_id: c.id, acao: "assumir", autor: eu, para_user: eu, de_setor: c.setor, para_setor: c.setor, texto: "Assumiu ao responder." });
         if (c.opportunity_id) {
-          await admin.from("opportunity_events").insert({ opportunity_id: c.opportunity_id, tipo: "contato", descricao: "WhatsApp enviado: " + texto.slice(0, 500), autor: eu });
+          await admin.from("opportunity_events").insert({ opportunity_id: c.opportunity_id, tipo: "contato", descricao: `${canalDoContatoRotulo(c.telefone)} enviado: ` + texto.slice(0, 500), autor: eu });
         }
         await logAudit({ user_id: eu, acao: "atendimento_resposta", entidade: "atendimento_conversas", entidade_id: c.id });
         break;
@@ -137,7 +141,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/admin/atend
         await atualizar({ setor: setor || null, responsavel, triada_em: setor ? new Date().toISOString() : null, status: c.status === "resolvida" ? "aberta" : c.status });
         await eventoAtendimento({ conversa_id: c.id, acao, autor: eu, de_setor: c.setor, para_setor: setor || null, de_user: c.responsavel, para_user: responsavel, texto: motivo || null });
         if (responsavel && responsavel !== eu) {
-          await notificar(responsavel, "atencao", `Atendimento ${c.codigo} encaminhado para você`, `${c.nome || "+" + c.telefone}${motivo ? " · " + motivo : ""}`.slice(0, 200), `/admin/atendimento?conversa=${c.id}`);
+          await notificar(responsavel, "atencao", `Atendimento ${c.codigo} encaminhado para você`, `${c.nome || contatoRotulo(c.telefone)}${motivo ? " · " + motivo : ""}`.slice(0, 200), `/admin/atendimento?conversa=${c.id}`);
         }
         await logAudit({ user_id: eu, acao: "atendimento_" + acao, entidade: "atendimento_conversas", entidade_id: c.id, dados_depois: { de: c.setor, para: setor || null, responsavel } });
         break;
@@ -181,6 +185,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/admin/atend
       case "criar_lead": {
         if (!temSetor(a, "comercial", "diretoria")) throw new Erro("Só o Comercial cria leads.", 403);
         if (c.opportunity_id) throw new Erro("Esta conversa já está ligada a uma negociação.");
+        if (contatoSocial(c.telefone)) throw new Erro(`Contato do ${canalDoContatoRotulo(c.telefone)} não tem telefone: peça o WhatsApp do cliente e crie o lead por lá, ou abra no funil.`);
         const codigo = String(b.codigo_imovel ?? "").trim().toUpperCase();
         if (!codigo) throw new Erro("Informe o código do imóvel de interesse.");
         const rodizio = b.rodizio !== false;
@@ -206,11 +211,11 @@ export async function POST(request: Request, ctx: RouteContext<"/api/admin/atend
         const { data: etapas } = await admin.from("crm_etapas").select("*").eq("pipeline_id", p.id).order("ordem");
         const primeira = (etapas as Etapa[] | null)?.[0];
         if (!primeira) throw new Erro("O funil não tem etapas.");
-        const titulo = (String(b.titulo ?? "").trim() || `WhatsApp · ${c.nome || "+" + c.telefone}`).slice(0, 200);
+        const titulo = (String(b.titulo ?? "").trim() || `${canalDoContatoRotulo(c.telefone)} · ${c.nome || contatoRotulo(c.telefone)}`).slice(0, 200);
         const { data: item, error } = await admin.from("crm_itens").insert({
           pipeline_id: p.id, etapa_id: primeira.id, titulo, responsavel: c.responsavel ?? eu, criado_por: eu,
-          descricao: `Aberto pelo Atendimento (${c.codigo}). Telefone: +${c.telefone}.\nÚltima mensagem: ${c.ultimo_texto ?? ""}`.slice(0, 5000),
-          dados: { telefone: "+" + c.telefone, atendimento: c.codigo }, prazo_etapa: prazoDaEtapa(primeira), opportunity_id: c.opportunity_id,
+          descricao: `Aberto pelo Atendimento (${c.codigo}). Contato: ${contatoRotulo(c.telefone)}.\nÚltima mensagem: ${c.ultimo_texto ?? ""}`.slice(0, 5000),
+          dados: contatoSocial(c.telefone) ? { contato: c.telefone, canal: canalDoContato(c.telefone), atendimento: c.codigo } : { telefone: "+" + c.telefone, atendimento: c.codigo }, prazo_etapa: prazoDaEtapa(primeira), opportunity_id: c.opportunity_id,
         }).select("id, codigo").single();
         if (error || !item) throw new Erro("Não foi possível criar o item no funil.", 503);
         await admin.from("crm_item_eventos").insert({ item_id: item.id, tipo: "criado", autor: eu, texto: `Criado em "${primeira.nome}" pelo Atendimento ${c.codigo}` });

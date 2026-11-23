@@ -56,6 +56,20 @@ export async function POST(request: Request) {
     // Comprovação de propriedade: nada é aprovado nem publicado sem a Arini
     // ter conferido a matrícula (e, em imóvel de parceiro, a autorização do
     // proprietário). Regra do Carlos: o site não publica imóvel sem prova.
+    // Fluxo captação → marketing → aprovação (0157): quando a Diretoria liga
+    // "publicação exige marketing", só publica com o material aprovado.
+    if (acao === "publicado") {
+      const { data: regra } = await admin.from("settings").select("valor").eq("chave", "publicacao_exige_marketing").maybeSingle();
+      if (regra && (regra.valor === true || regra.valor === "true")) {
+        const { data: mk, error: errMk } = await admin.from("properties").select("marketing_status").eq("id", id).maybeSingle();
+        if (!errMk && mk && mk.marketing_status !== "aprovado") {
+          return NextResponse.json({
+            error: "A Diretoria ainda não aprovou o material de divulgação deste imóvel (Marketing > Imóveis para divulgar).",
+          }, { status: 409 });
+        }
+      }
+    }
+
     if (["aprovado", "publicado"].includes(acao)) {
       const { data: conferidos } = await admin.from("property_documents")
         .select("tipo").in("property_id", antes.modalidade==="leilao" && antes.parent_property_id ? [id,antes.parent_property_id] : [id]).eq("verificado", true).is("substituido_por", null); // só a versão vigente (5.8)
