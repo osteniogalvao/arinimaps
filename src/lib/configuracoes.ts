@@ -252,6 +252,11 @@ export const GRUPOS: Grupo[] = [
         ajuda: "Uma por linha. Vale para os próximos imóveis publicados." },
       { chave: "poi_atualizar_dias", rotulo: "Atualizar pontos de interesse a cada", tipo: "numero", padrao: 90, min: 7, max: 730, sufixo: "dias",
         ajuda: "Anúncios ativos com pontos de interesse mais antigos que isso voltam para a fila de atualização (OpenStreetMap)." },
+      { chave: "aviso_cartografia_ativo", rotulo: "Mostrar aviso de cartografia em manutenção", tipo: "sim_nao", padrao: true,
+        ajuda: "Faixa no topo do mapa para todo mundo que acessar. Desligue quando quadras e lotes estiverem alinhados." },
+      { chave: "aviso_cartografia_texto", rotulo: "Texto do aviso de cartografia", tipo: "textarea",
+        padrao: "Cartografia urbana em manutenção: em até 10 dias úteis quadras e lotes estarão todos alinhados e prontos para uso. Até lá, use-a como base comparativa de quadra e lote.",
+        ajuda: "Aparece na faixa do topo do mapa enquanto o aviso estiver ligado." },
     ],
   },
 ];
