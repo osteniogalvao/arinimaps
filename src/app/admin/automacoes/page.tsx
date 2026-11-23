@@ -7,14 +7,18 @@ import { setorPorId } from "@/lib/setores";
 import { CabecalhoPagina, Etiqueta } from "@/components/ui/Pagina";
 import { LISTA, LINHA_LISTA } from "@/components/admin/estilos";
 import RodarAutomacoes from "@/components/admin/RodarAutomacoes";
+import PrazosMatriz from "@/components/admin/PrazosMatriz";
+import { lerPrazos } from "@/lib/matriz-servidor";
+import { removerExcecao, salvarPrazo } from "./acoes";
 
 /**
  * Regras automáticas da Central (bloco 1). Cada regra observa um evento e cria
  * no máximo uma tarefa por ocorrência; toda ação automática vai para a
  * auditoria. O worker roda a cada 10 min; aqui a Diretoria roda na hora.
  */
-export default async function Automacoes() {
+export default async function Automacoes({ searchParams }: PageProps<"/admin/automacoes">) {
   await exigirSetor("diretoria");
+  const avisoPrazos = (await searchParams).prazos;
   const cfg = await lerConfiguracoes();
   const n = (k: string, alt: number) => numero(cfg, k, alt);
 
@@ -49,7 +53,20 @@ export default async function Automacoes() {
     { nome: "Prazo da etapa do CRM do setor", setor: "diretoria",
       quando: "Item de um CRM de setor passou do prazo definido para a etapa em que está.",
       faz: "Cria tarefa no setor do funil para o responsável do item. Fecha sozinha quando o item avança." },
+    { nome: "Cobrança por níveis", setor: "diretoria",
+      quando: "Toda tarefa aberta, pelo prazo dela (quem não dá prazo recebe o padrão do setor, abaixo).",
+      faz: "Nível 1 na metade do prazo: lembrete ao responsável. Nível 2 no vencimento: aviso ao gestor do setor (sem gestor, à Diretoria). Nível 3 além do limite do setor: fila de gargalos da Matriz e um aviso por dia à Diretoria. Prazo novo e mais longo zera a cobrança." },
+    { nome: "Resumo diário da Ari", setor: "diretoria",
+      quando: "Uma vez por dia, a partir das 7 h (e sempre que você clica em Rodar agora).",
+      faz: "Mostra na Matriz o que está aberto, vencido e concluído em cada setor, e aponta o setor com déficit (mais demanda do que a equipe consegue entregar). Gestores recebem o resumo do próprio setor quando há algo vencido." },
+    { nome: "Saída da equipe", setor: "diretoria",
+      quando: "Pessoa desativada, que deixou a equipe ou que saiu de um setor.",
+      faz: "As tarefas abertas dela naquele setor vão para o gestor do setor; sem gestor, voltam para a fila do setor e o aviso vai para quem responde por ele." },
   ];
+  const prazos = await lerPrazos();
+  const { data: regrasUsadas } = await supabaseAdmin().from("tasks").select("regra").not("regra", "is", null)
+    .order("created_at", { ascending: false }).limit(500);
+  const tipos = [...new Set((regrasUsadas ?? []).map((r) => String(r.regra)))].filter((r) => /^[a-z0-9_]+$/.test(r)).sort();
 
   const { data: recentes, error } = await supabaseAdmin().from("tasks")
     .select("id, codigo, titulo, setor, regra, status, created_at")
@@ -75,6 +92,21 @@ export default async function Automacoes() {
           </div>
         ))}
       </div>
+
+      <section id="prazos" className="scroll-mt-24 space-y-3">
+        <h2 className="lp-display text-xl text-texto">Prazos e limites por setor</h2>
+        <p className="text-sm text-texto-2">
+          Prazo: dias que uma tarefa sem prazo recebe ao nascer. Limite: dias de atraso até a tarefa ir para a fila de gargalos (nível 3).
+          Atenção e crítico: quantas vencidas mudam a cor do bloco do setor na Matriz.
+        </p>
+        {avisoPrazos === "salvo" && <p className="rounded-lg border border-verde/40 bg-verde/10 px-4 py-2 text-sm text-verde">Salvo. Vale na próxima rodada do motor.</p>}
+        {avisoPrazos === "erro" && <p className="rounded-lg border border-critico/40 bg-critico/10 px-4 py-2 text-sm text-critico">Não foi possível salvar. Confira os números.</p>}
+        {!prazos.pronto ? (
+          <p className="text-sm text-texto-2">Disponível depois da migration 0162.</p>
+        ) : (
+          <PrazosMatriz linhas={prazos.linhas} tipos={tipos} salvar={salvarPrazo} remover={removerExcecao} />
+        )}
+      </section>
 
       <section className="space-y-3">
         <h2 className="lp-display text-xl text-texto">Últimas tarefas criadas pelas regras</h2>

@@ -9,6 +9,8 @@ const ROTULO: Record<string, string> = {
   visitas_sem_relatorio: "visitas sem relatório", encaminhamentos_sem_aceite: "encaminhamentos escalonados", cadastros_parados: "cadastros parados",
   despesas_cobradas: "despesas cobradas", avisos_de_ponto: "avisos de ponto", marketing_e_whatsapp: "cobranças de marketing e WhatsApp",
   prazos_de_crm: "prazos de CRM vencidos",
+  cobranca_n1: "lembretes de metade do prazo", cobranca_n2: "vencidas avisadas ao gestor", cobranca_n3: "tarefas na fila de gargalos",
+  resumo_ari: "resumo da Ari atualizado",
 };
 
 /** Botão "Rodar agora" das automações, com o resumo do que foi feito. */

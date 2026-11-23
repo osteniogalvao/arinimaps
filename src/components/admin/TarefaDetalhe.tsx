@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRightLeft, Bot, Check, CheckCircle2, Inbox, MessageSquare, Paperclip, Send, ShieldAlert, UserRound, X } from "lucide-react";
+import { ArrowRightLeft, BellRing, Bot, Check, CheckCircle2, Inbox, MessageSquare, Paperclip, Send, ShieldAlert, UserRound, X } from "lucide-react";
 import { TAREFA_STATUS_LABEL } from "@/lib/setores";
 import { CAMPO_COMPACTO } from "./estilos";
 import type { Membro } from "./Tarefas";
@@ -15,6 +15,7 @@ export type EventoLinha = {
 const ICONE: Record<string, typeof Check> = {
   criada: Inbox, encaminhada: ArrowRightLeft, aceita: Check, recusada: X, status: CheckCircle2,
   responsavel: UserRound, comentario: MessageSquare, evidencia: Paperclip, escalonada: ShieldAlert, prazo: CheckCircle2,
+  cobranca: BellRing, reatribuida: UserRound,
 };
 
 function descrever(e: EventoLinha): string {
@@ -32,6 +33,11 @@ function descrever(e: EventoLinha): string {
     case "comentario": return `${e.autor} comentou`;
     case "evidencia": return `${e.autor} registrou o que foi feito`;
     case "escalonada": return "Ninguém aceitou no prazo: subiu para a Diretoria";
+    case "cobranca": {
+      const n = Number(e.dados.nivel ?? 0);
+      return n >= 3 ? "Ari: vencida além do limite, foi para a fila de gargalos" : n === 2 ? "Ari: prazo vencido, avisou o gestor do setor" : "Ari: lembrete de metade do prazo";
+    }
+    case "reatribuida": return "Responsável saiu do setor: tarefa repassada";
     default: return e.tipo;
   }
 }
