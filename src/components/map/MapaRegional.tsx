@@ -24,7 +24,7 @@ import PainelPredio, { type Predio } from "@/components/map/PainelPredio";
 import type { SubtipoUnidade } from "@/lib/imovel/unidade";
 import { RADAR_ANEL, STATUS_MAPA } from "@/components/map/statusMapa";
 import { PainelCamadas, Legenda, VIDRO, BotaoFechar, FiltrosRapidos, ResumoCamadas, ALTURA_FAIXA, SITUACOES_CAR, type GrupoCamadas, type SituacaoCar } from "@/components/map/UiMapa";
-import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, Map as MapaIcone, MapPin, Satellite, ScanSearch, Search } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Crosshair, Ellipsis, Flag, History, ImageUp, Layers, Lock, Tag, Map as MapaIcone, MapPin, Satellite, ScanSearch, Search } from "lucide-react";
 import CompararParcelasRurais from "@/components/map/CompararParcelasRurais";
 import BuscaUrbana from "@/components/map/BuscaUrbana";
 import BuscaPorImagem from "@/components/map/BuscaPorImagem";
@@ -45,7 +45,7 @@ import { ListaNoPonto, LinhaRelevo, LinhaAmbiente, ambienteNoPonto, type Ambient
 import { exibirCarNasAreas } from "@/components/map/vetoresNasAreas";
 import RelevoNasAreas from "@/components/map/RelevoNasAreas";
 import { CAMADAS_OFICIAIS, CORES_RURAIS, camadaOficialPorId, descreverFeicao, type CamadaOficialId } from "@/lib/map/camadasOficiais";
-import { CAMADAS_RELEVO, ESTILO_RUAS, GerenciadorRelevo, type EstadoRelevo, type RelevoId } from "@/components/map/camadasRelevo";
+import { CAMADAS_RELEVO, ESTILO_RUAS, GerenciadorRelevo, camadasDeRelevo, type EstadoRelevo, type RelevoId } from "@/components/map/camadasRelevo";
 import { FORMATOS_BUSCA, interpretarBusca } from "@/lib/map/buscaRural";
 import BotaoCompartilharPonto, { MarcadorDaUrl } from "@/components/map/CompartilharPonto";
 import CartaoPonto, { usePressaoLonga, type PontoLivre } from "@/components/map/CartaoPonto";
@@ -324,6 +324,14 @@ const FUNDO_SATELITE: StyleSpecification = {
  */
 let hashDaSaida: { hash: string; quando: number } | null = null;
 
+/**
+ * Camadas que o "só à venda" esconde: a cartografia rural (malha do CAR e o
+ * recorte dela nas áreas, camadas oficiais, relevo e água, parcela SIGEF
+ * achada na busca, divisas das áreas de camadas). Planta urbana, lotes,
+ * municípios, satélite e os anúncios ficam.
+ */
+const PREFIXOS_CARTO_RURAL = ["car-", "of-", "relevo-", "areas-camadas", "busca-sigef"];
+
 /** Abaixo deste zoom o imóvel aparece como marcador; acima, pela divisa. */
 const ZOOM_MARCADOR = 12.5;
 
@@ -348,7 +356,7 @@ const CORES_MATCH: unknown[] = [
   "publicado", STATUS_MAPA.publicado,
   "em_negociacao", STATUS_MAPA.em_negociacao,
   "vendido", STATUS_MAPA.vendido,
-  "#6FB08F",
+  STATUS_MAPA.publicado,
 ];
 
 const FAIXAS_PRECO: { label: string; min: number; max: number | null }[] = [
@@ -450,6 +458,12 @@ export default function MapaRegional({
   const [mapaPronto, setMapaPronto] = useState<MLMap | null>(null);
   const [carAtivo, setCarAtivo] = useState(true);
   const carEscolhido = useRef(false);
+  // Áudio do Carlos (23/11/2026, 13h42): em qualquer plano, alternar entre a
+  // cartografia geral e "só à venda", que esconde a cartografia RURAL (CAR,
+  // camadas oficiais, relevo e água) e deixa só os imóveis anunciados. A
+  // planta urbana continua completa ("no urbano, por enquanto, deixa tudo").
+  const [soVenda, setSoVenda] = useState(false);
+  const soVendaRef = useRef(false);
   // Subfiltro do CAR pela situação no SICAR (filtros rápidos, 17/11/2026)
   const [situacoesCar, setSituacoesCar] = useState<ReadonlySet<SituacaoCar>>(() => new Set(SITUACOES_CAR.map((c) => c.id)));
   // 5.10: base do mapa e camada do CAR vêm das preferências da conta (ou do navegador)
@@ -487,6 +501,8 @@ export default function MapaRegional({
     setGrupoCamadas("Fundiário");
     setPainelMapa("camadas");
   }, []);
+  const areasCamadasRef = useRef(areasCamadas);
+  useEffect(() => { areasCamadasRef.current = areasCamadas; }, [areasCamadas]);
   const camadasVisiveis = useMemo(() => new Set([...camadasAtivas, ...areasCamadas.flatMap(a => [...a.camadas])]), [camadasAtivas, areasCamadas]);
   const areasComCar = areasCamadas.filter(a => a.car).map(a => a.id).join(",");
   const geometriasCar = useEffectEvent(() => areasCamadas.filter(a => a.car).map(a => a.geometria));
@@ -496,6 +512,13 @@ export default function MapaRegional({
   // onde foi o último clique: o cartão "Neste ponto" oferece compartilhar esse ponto
   const [pontoClicado, setPontoClicado] = useState<{ lng: number; lat: number; zoom: number } | null>(null);
   const [extrasPonto, setExtrasPonto] = useState<ExtrasNoPonto | null>(null);
+  const alternarSoVenda = useCallback((ligar: boolean) => {
+    soVendaRef.current = ligar;
+    setSoVenda(ligar);
+    // cartões da cartografia rural fecham junto com ela
+    if (ligar) { setCarSel(null); setNoPonto([]); setExtrasPonto(null); }
+    try { localStorage.setItem("arini:mapa-so-venda", ligar ? "1" : "0"); } catch { /* sem armazenamento */ }
+  }, []);
   // pressão longa / botão direito em qualquer ponto: cartão mínimo "Neste ponto" (QA 09/11)
   const [pontoLivre, setPontoLivre] = useState<PontoLivre | null>(null);
   const alternarCamada = useCallback((id: CamadaOficialId) => {
@@ -1183,15 +1206,34 @@ export default function MapaRegional({
           filter: ["==", ["geometry-type"], "Polygon"],
           paint: {
             "fill-color": CORES_MATCH as never,
-            "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.55, 0.32] as never,
+            "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.5, 0.24] as never,
+          },
+        });
+        // 23/11 (Carlos): a divisa do imóvel à venda precisa ter presença sobre a
+        // malha verde. Traço cheio e grosso, com um contorno escuro por baixo
+        // (como na planta urbana), que segura o contraste em qualquer fundo.
+        map.addLayer({
+          id: "imoveis-contorno", type: "line", source: "imoveis",
+          filter: ["==", ["geometry-type"], "Polygon"],
+          layout: { "line-join": "round" },
+          paint: {
+            "line-color": "#14060F",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4.5, 14, 6.5, 17, 8.5] as never,
+            "line-opacity": 0.6,
+            "line-blur": 0.5,
           },
         });
         map.addLayer({
           id: "imoveis-linha", type: "line", source: "imoveis",
           filter: ["==", ["geometry-type"], "Polygon"],
+          layout: { "line-join": "round" },
           paint: {
             "line-color": CORES_MATCH as never,
-            "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 4.5, 2.5] as never,
+            "line-width": ["interpolate", ["linear"], ["zoom"],
+              10, ["case", ["boolean", ["feature-state", "hover"], false], 4, 2.6],
+              14, ["case", ["boolean", ["feature-state", "hover"], false], 5.5, 3.6],
+              17, ["case", ["boolean", ["feature-state", "hover"], false], 6.5, 4.6]] as never,
+            "line-opacity": 1,
           },
         });
         map.addLayer({
@@ -1367,6 +1409,8 @@ export default function MapaRegional({
         });
 
         setLista((imoveis.features ?? []).map((f: GeoJSON.Feature) => f.properties as ImovelProps));
+        // a escolha "só à venda" fica lembrada neste navegador
+        try { if (localStorage.getItem("arini:mapa-so-venda") === "1") setSoVenda(true); } catch { /* sem armazenamento */ }
         setPronto(true);
 
         // planta urbana entra sob demanda: uma vez agora (o link pode já vir no
@@ -1529,10 +1573,46 @@ export default function MapaRegional({
     carAtivoRef.current = carVisivel;
     const map = mapRef.current;
     if (!map || !pronto || !map.getLayer("car-fill")) return;
-    for (const id of ["car-fill", "car-linha", "car-selecao"]) map.setLayoutProperty(id, "visibility", carAtivo ? "visible" : "none");
-    if (carVisivel) { conferirZoomCar(); garantirCarSobDemanda(); }
+    for (const id of ["car-fill", "car-linha", "car-selecao"]) map.setLayoutProperty(id, "visibility", carAtivo && !soVenda ? "visible" : "none");
+    if (carVisivel && !soVenda) { conferirZoomCar(); garantirCarSobDemanda(); }
     else { setCarSel(null); setCarAviso(""); }
-  }, [carAtivo, carVisivel, pronto, conferirZoomCar, garantirCarSobDemanda]);
+  }, [carAtivo, carVisivel, soVenda, pronto, conferirZoomCar, garantirCarSobDemanda]);
+
+  // "Só à venda": esconde toda camada rural, inclusive as que forem ligadas
+  // depois (o gerenciador de camadas e o de relevo criam as deles sob demanda),
+  // e devolve ao voltar para a cartografia geral.
+  useEffect(() => {
+    soVendaRef.current = soVenda;
+    const map = mapRef.current;
+    if (!map || !pronto) return;
+    const escondidas = new Set<string>();
+    const ocultar = () => {
+      for (const l of map.getStyle()?.layers ?? []) {
+        // as camadas "-leitura" são transparentes: só servem para ler os tiles
+        if (l.id.endsWith("-leitura") || !PREFIXOS_CARTO_RURAL.some((p) => l.id.startsWith(p))) continue;
+        if (map.getLayoutProperty(l.id, "visibility") === "none") continue;
+        map.setLayoutProperty(l.id, "visibility", "none");
+        escondidas.add(l.id);
+      }
+    };
+    if (!soVenda) return;
+    ocultar();
+    map.on("styledata", ocultar);
+    return () => {
+      map.off("styledata", ocultar);
+      // Volta só o que continua ligado: quem foi desligado no painel durante o
+      // "só à venda" fica desligado. A malha do CAR volta pelo efeito dela.
+      const oficiais = new Set([...camadasAtivasRef.current, ...areasCamadasRef.current.flatMap((a) => [...a.camadas])]);
+      const relevoLigado = new Set([...relevoAtivasRef.current].flatMap(camadasDeRelevo));
+      for (const id of escondidas) {
+        if (!map.getLayer(id) || id === "car-fill" || id === "car-linha" || id === "car-selecao") continue;
+        const oficial = /^of-(.+)-(fill|linha|ponto|traco)$/.exec(id)?.[1];
+        if (oficial && !oficiais.has(oficial as CamadaOficialId)) continue;
+        if (id.startsWith("relevo-") && !id.endsWith("-local") && !relevoLigado.has(id)) continue;
+        map.setLayoutProperty(id, "visibility", "visible");
+      }
+    };
+  }, [soVenda, pronto]);
 
   useEffect(() => {
     if (pronto && mapRef.current && !carAtivo && areasComCar) return exibirCarNasAreas(mapRef.current, geometriasCar(), setCarAviso);
@@ -1760,6 +1840,17 @@ export default function MapaRegional({
   };
 
   // chips sobre o satélite: vidro do tema com desfoque (o ativo continua verde pelo data-ativo do .chip)
+  // Com "só à venda", os controles mostram a cartografia rural desligada. Ligar
+  // qualquer item dela volta para a cartografia geral (sem desligar o que já
+  // estava ligado por baixo).
+  const SEM_OFICIAIS = useMemo(() => new Set<CamadaOficialId>(), []);
+  const SEM_RELEVO = useMemo(() => new Set<RelevoId>(), []);
+  const ligarCarNoSoVenda = () => { alternarSoVenda(false); if (!carAtivo) { carEscolhido.current = true; setCarAtivo(true); void salvarPrefs({ camada_car: true }); } };
+  function naCartografia<T>(id: T, ligada: boolean, alternar: (id: T) => void) {
+    if (!soVenda) return alternar(id);
+    alternarSoVenda(false);
+    if (!ligada) alternar(id);
+  }
   const chipBase = "chip inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-medium whitespace-nowrap shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)] backdrop-blur-md";
 
   const mosaicoAtivo = base === "satelite" && mosaicoAnual;
@@ -2023,6 +2114,17 @@ export default function MapaRegional({
             onClick={() => { const b = base === "ruas" ? "satelite" : "ruas"; setMosaicoAnual(false); setBase(b); void salvarPrefs({ mapa_base: b === "ruas" ? "mapa" : "satelite" }); }}>
             {base === "ruas" ? <><Satellite className="size-3.5" /> Satélite</> : <><MapaIcone className="size-3.5" /> Mapa</>}
           </button>
+          {/* 23/11 (Carlos): alternar cartografia geral × só imóveis à venda, em qualquer plano */}
+          <div role="group" aria-label="O que mostrar no mapa" className="inline-flex overflow-hidden rounded-full shadow-[0_8px_24px_-12px_rgb(0_0_0/0.7)]">
+            <button type="button" onClick={() => alternarSoVenda(false)} data-ativo={!soVenda} aria-pressed={!soVenda}
+              className={`${chipBase} rounded-r-none! shadow-none!`} title="Mostrar toda a cartografia: CAR, camadas oficiais, relevo e a planta urbana">
+              <Layers className="size-3.5 max-sm:hidden" /> Cartografia<span className="max-sm:hidden"> geral</span>
+            </button>
+            <button type="button" onClick={() => alternarSoVenda(true)} data-ativo={soVenda} aria-pressed={soVenda}
+              className={`${chipBase} rounded-l-none! shadow-none!`} title="Esconder a cartografia rural e deixar só os imóveis à venda (a planta urbana continua)">
+              <Tag className="size-3.5" /> Só à venda
+            </button>
+          </div>
           <button type="button" className={`${chipBase} max-sm:hidden`} data-ativo={mosaicoAtivo}
             aria-pressed={mosaicoAtivo}
             title="Mosaico Sentinel-2 sem nuvens (2016, 10 m) na visão regional. Do zoom de bairro para perto, a fotografia de detalhe normal."
@@ -2050,7 +2152,7 @@ export default function MapaRegional({
           </div>
         </fieldset>
 
-        {carAtivo && carAviso && !carSel && !camadasAbertas && (
+        {carAtivo && !soVenda && carAviso && !carSel && !camadasAbertas && (
           <p className={`${desenhando || painelAberto ? "max-sm:hidden " : ""}absolute top-[var(--abaixo-chips,4rem)] left-3 right-14 sm:right-auto px-3 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs text-texto-3 ${VIDRO} rounded-[10px]!`}>
             {carAviso}
           </p>
@@ -2159,7 +2261,8 @@ export default function MapaRegional({
         {pronto && !camadasAbertas && (
           <FiltrosRapidos onDelimitar={() => { setPainelMapa(null); setPedidoRecorte(n => n + 1); }}
             areas={areasCamadas.length} onAreas={() => { if (!areaId) setAreaId(areasCamadas[0].id); setPainelMapa("camadas"); setAvisoPlano(""); }}
-            car={carAtivo} avisoCar={carAviso} alternarCar={() => {
+            car={carAtivo && !soVenda} avisoCar={carAviso} alternarCar={() => {
+              if (soVenda) return ligarCarNoSoVenda();
               carEscolhido.current = true;
               setCarAtivo(!carAtivo);
               void salvarPrefs({ camada_car: !carAtivo });
@@ -2169,31 +2272,37 @@ export default function MapaRegional({
               if (nova.has(id)) nova.delete(id); else nova.add(id);
               return nova;
             })}
-            ativas={camadasAtivas} estado={estadoCamadas} onAlternar={alternarCamada}
+            ativas={soVenda ? SEM_OFICIAIS : camadasAtivas} estado={estadoCamadas}
+            onAlternar={(id: CamadaOficialId) => naCartografia(id, camadasAtivas.has(id), alternarCamada)}
             planta={plantaAtiva} corUrbana={CARTO_CORES[base].linha} alternarPlanta={() => setPlantaAtiva(!plantaAtiva)}
-            relevoAtivas={relevoAtivas} estadoRelevo={estadoRelevo} onAlternarRelevo={alternarRelevo} />
+            relevoAtivas={soVenda ? SEM_RELEVO : relevoAtivas} estadoRelevo={estadoRelevo}
+            onAlternarRelevo={(id: RelevoId) => naCartografia(id, relevoAtivas.has(id), alternarRelevo)} />
         )}
         {camadasAbertas && (
           <PainelCamadas onFechar={() => setPainelMapa(null)}
-            globais={{ car: carAtivo, oficiais: camadasAtivas, relevo: relevoAtivas }}
+            globais={soVenda ? { car: false, oficiais: SEM_OFICIAIS, relevo: SEM_RELEVO } : { car: carAtivo, oficiais: camadasAtivas, relevo: relevoAtivas }}
             grupo={grupoCamadas} selecionarGrupo={setGrupoCamadas}
             areas={areasCamadas} areaId={areaId} escolherArea={setAreaId}
             pronto={pronto} desenharArea={() => { setPainelMapa(null); setPedidoRecorte(n => n + 1); }}
             excluirArea={() => { setAreasCamadas(antes => antes.filter(a => a.id !== areaId)); setAreaId(""); }}
-            car={areaEscolhida?.car ?? carAtivo} avisoCar={carAviso} alternarCar={() => {
+            car={!soVenda && (areaEscolhida?.car ?? carAtivo)} avisoCar={carAviso} alternarCar={() => {
+              if (soVenda && !areaId) return ligarCarNoSoVenda();
+              if (soVenda) { alternarSoVenda(false); if (areaEscolhida?.car) return; }
               if (areaId) { setAreasCamadas(antes => antes.map(a => a.id === areaId ? { ...a, car: !a.car } : a)); return; }
               carEscolhido.current = true;
               setCarAtivo(!carAtivo);
               void salvarPrefs({ camada_car: !carAtivo });
             }}
             planta={plantaAtiva} corUrbana={CARTO_CORES[base].linha} alternarPlanta={() => setPlantaAtiva(!plantaAtiva)}
-            ativas={areaEscolhida?.camadas ?? camadasAtivas} estado={estadoCamadas} onAlternar={alternarNaArea}
-            relevoAtivas={areaEscolhida?.relevo ?? relevoAtivas} estadoRelevo={areaEscolhida ? avisosRelevoLocal : estadoRelevo} onAlternarRelevo={alternarRelevoNaArea} />
+            ativas={soVenda ? SEM_OFICIAIS : areaEscolhida?.camadas ?? camadasAtivas} estado={estadoCamadas}
+            onAlternar={(id: CamadaOficialId) => naCartografia(id, (areaEscolhida?.camadas ?? camadasAtivas).has(id), alternarNaArea)}
+            relevoAtivas={soVenda ? SEM_RELEVO : areaEscolhida?.relevo ?? relevoAtivas} estadoRelevo={areaEscolhida ? avisosRelevoLocal : estadoRelevo}
+            onAlternarRelevo={(id: RelevoId) => naCartografia(id, (areaEscolhida?.relevo ?? relevoAtivas).has(id), alternarRelevoNaArea)} />
         )}
         {mapaPronto && gerenteRelevo && recortesRelevo.map(({id, areas}) => <RelevoNasAreas
           key={id + "-" + areas.map(a => a.id).join(",")} id={id} areas={areas.map(a => a.geometria)}
           mapa={mapaPronto} gerente={gerenteRelevo} aoErro={avisarRelevoLocal} />)}
-        {!painelMapa && !carSel && !loteSel && !varios && !pontoLivre && !noPonto.length && !temExtras(extrasPonto) && !selecionado && <Legenda car={carVisivel} corUrbana={CARTO_CORES[base].linha} relevo={[...relevoAtivas, ...recortesRelevo.map(c => c.id)]} extras={CAMADAS_OFICIAIS.filter((c) => camadasVisiveis.has(c.id))
+        {!painelMapa && !carSel && !loteSel && !varios && !pontoLivre && !noPonto.length && !temExtras(extrasPonto) && !selecionado && <Legenda car={carVisivel && !soVenda} corUrbana={CARTO_CORES[base].linha} relevo={soVenda ? [] : [...relevoAtivas, ...recortesRelevo.map(c => c.id)]} extras={CAMADAS_OFICIAIS.filter((c) => !soVenda && camadasVisiveis.has(c.id))
           // camada com cor por valor (biomas): uma linha por valor na legenda
           .flatMap((c) => (c.cores ? Object.entries(c.cores).map(([nome, cor]) => ({ nome, cor })) : [c]))} />}
 
