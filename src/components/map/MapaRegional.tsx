@@ -1212,15 +1212,17 @@ export default function MapaRegional({
         // 23/11 (Carlos): a divisa do imóvel à venda precisa ter presença sobre a
         // malha verde. Traço cheio e grosso, com um contorno escuro por baixo
         // (como na planta urbana), que segura o contraste em qualquer fundo.
+        // 14h35: com o dourado, pediu "bordas mais destacadas": contorno escuro
+        // mais largo e mais opaco.
         map.addLayer({
           id: "imoveis-contorno", type: "line", source: "imoveis",
           filter: ["==", ["geometry-type"], "Polygon"],
           layout: { "line-join": "round" },
           paint: {
-            "line-color": "#14060F",
-            "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4.5, 14, 6.5, 17, 8.5] as never,
-            "line-opacity": 0.6,
-            "line-blur": 0.5,
+            "line-color": "#1A1200",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5.5, 14, 7.5, 17, 9.5] as never,
+            "line-opacity": 0.85,
+            "line-blur": 0.3,
           },
         });
         map.addLayer({
@@ -1230,9 +1232,9 @@ export default function MapaRegional({
           paint: {
             "line-color": CORES_MATCH as never,
             "line-width": ["interpolate", ["linear"], ["zoom"],
-              10, ["case", ["boolean", ["feature-state", "hover"], false], 4, 2.6],
-              14, ["case", ["boolean", ["feature-state", "hover"], false], 5.5, 3.6],
-              17, ["case", ["boolean", ["feature-state", "hover"], false], 6.5, 4.6]] as never,
+              10, ["case", ["boolean", ["feature-state", "hover"], false], 4.2, 3],
+              14, ["case", ["boolean", ["feature-state", "hover"], false], 5.8, 4],
+              17, ["case", ["boolean", ["feature-state", "hover"], false], 6.8, 5]] as never,
             "line-opacity": 1,
           },
         });
