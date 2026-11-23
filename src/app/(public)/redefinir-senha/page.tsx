@@ -9,6 +9,7 @@ import { ArrowRight, CircleCheck, KeyRound, LoaderCircle, LogOut, ShieldCheck } 
 import TelaDividida from "@/components/publico/TelaDividida";
 import { CAMPO, ROTULO } from "@/components/ui/Pagina";
 import { BTN_ACAO } from "@/components/landing/Titulo";
+import CampoSenha from "@/components/ui/CampoSenha";
 
 const INPUT = CAMPO;
 
@@ -120,13 +121,13 @@ export default function RedefinirSenha() {
             <form onSubmit={salvar} className="space-y-5">
               <div>
                 <label className={ROTULO} htmlFor="nova">Senha nova</label>
-                <input id="nova" type="password" required autoComplete="new-password" className={INPUT}
+                <CampoSenha id="nova" required autoComplete="new-password" className={INPUT}
                   placeholder={`Mínimo ${SENHA_MIN} caracteres, com letras e números`}
                   value={senha} onChange={(e) => setSenha(e.target.value)} />
               </div>
               <div>
                 <label className={ROTULO} htmlFor="conf">Repita a senha</label>
-                <input id="conf" type="password" required autoComplete="new-password" className={INPUT}
+                <CampoSenha id="conf" required autoComplete="new-password" className={INPUT}
                   value={confirma} onChange={(e) => setConfirma(e.target.value)} />
               </div>
               {etapa && (

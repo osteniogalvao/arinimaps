@@ -7,6 +7,7 @@ import { SETORES } from "@/lib/setores";
 import { SENHA_MIN } from "@/lib/seguranca/senha";
 import { CAMPO, Etiqueta, ROTULO } from "@/components/ui/Pagina";
 import { Plus, UserCheck, UserX, X } from "lucide-react";
+import CampoSenha from "@/components/ui/CampoSenha";
 
 type Membro = { user_id: string; nome: string; role: string; ativo: boolean; email: string; setores: string[] };
 
@@ -66,7 +67,7 @@ export default function GestaoUsuarios({
             </label>
             <label className="block">
               <span className={ROTULO}>Senha provisória</span>
-              <input className={input} type="password" placeholder={`Mínimo ${SENHA_MIN} caracteres, letras e números`}
+              <CampoSenha className={input} autoComplete="new-password" placeholder={`Mínimo ${SENHA_MIN} caracteres, letras e números`}
                 value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} />
             </label>
             <label className="block">

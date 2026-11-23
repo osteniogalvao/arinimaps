@@ -17,6 +17,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import TelaDividida from "@/components/publico/TelaDividida";
 import { CAMPO, ROTULO as ROTULO_KIT } from "@/components/ui/Pagina";
 import { BTN_ACAO } from "@/components/landing/Titulo";
+import CampoSenha from "@/components/ui/CampoSenha";
 
 const PERFIS = [
   { value: "comprador", label: "Quero comprar / procurar imóvel" },
@@ -300,7 +301,7 @@ export default function Entrar() {
           {(modo === "login" || modo === "cadastro") && (
             <div>
               <label className={ROTULO} htmlFor="senha">Senha *</label>
-              <input id="senha" required type="password" className={INPUT}
+              <CampoSenha id="senha" required className={INPUT}
                 autoComplete={modo === "login" ? "current-password" : "new-password"}
                 placeholder={modo === "login" ? "Sua senha" : `Mínimo ${SENHA_MIN} caracteres, com letras e números`}
                 value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} />
