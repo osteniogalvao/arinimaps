@@ -191,7 +191,7 @@ export default function MapaVitrine({ onCena, onPronto, cena, ativo = true }: Pr
           {
             id: "imoveis-linha", type: "line", source: "imoveis",
             filter: ["==", ["geometry-type"], "Polygon"],
-            paint: { "line-color": CORES_STATUS as never, "line-width": 2 },
+            paint: { "line-color": CORES_STATUS as never, "line-width": 3 },
           },
           {
             id: "imoveis-ponto", type: "circle", source: "imoveis",
