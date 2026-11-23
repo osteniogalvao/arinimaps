@@ -3,6 +3,7 @@ import AvisoPlanoAnual from "./AvisoPlanoAnual";
 
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Check, MessageCircle, Minus, Plus } from "lucide-react";
 import {
   COMPLEMENTOS_CATALOGO, DISPONIBILIDADE_CATALOGO, PLANOS_CATALOGO, PROFISSOES_TECNICAS,
@@ -13,7 +14,9 @@ import { CAMPO } from "@/components/ui/Pagina";
 
 const reais = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 type Parametros = Record<string, string | string[] | undefined>;
-type Props = { personaId: PersonaCatalogoId; perfil: string; autenticado: boolean; cadastro: string; whatsapp: string; parametros: Parametros; precos: PrecoVigente[] };
+type Props = { personaId: PersonaCatalogoId; perfil: string; autenticado: boolean; cadastro: string; whatsapp: string; parametros: Parametros; precos: PrecoVigente[];
+  /** Asaas ligado: o plano pago é contratado e pago na hora (23/11/2026). */
+  pagamentoDireto?: boolean };
 
 function recursosDoPacote(plano: PlanoCatalogo) {
   const recursos = new Set(plano.recursos);
@@ -38,12 +41,14 @@ function limitesDoPacote({ limites }: PlanoCatalogo) {
   return itens;
 }
 
-export default function EscolherPlano({ personaId, perfil, autenticado, cadastro, whatsapp, parametros, precos }: Props) {
+export default function EscolherPlano({ personaId, perfil, autenticado, cadastro, whatsapp, parametros, precos, pagamentoDireto = false }: Props) {
+  const router = useRouter();
   const planos = PLANOS_CATALOGO.filter((p) => p.personaId === personaId).flatMap((p) => {
     const preco = precos.find((v) => v.id === p.id);
     return preco ? [comPrecoVigente(p, preco)] : [];
   });
-  const inicial = planos.find((p) => p.id === parametros.pacote) ?? planos[0];
+  // Quem chega para comprar cai no primeiro plano pago, não no teste (áudio do Carlos, 23/11/2026).
+  const inicial = planos.find((p) => p.id === parametros.pacote) ?? planos.find((p) => p.mensalCentavos > 0 && !p.teste) ?? planos[0];
   const [planoId, setPlanoId] = useState(inicial.id);
   const plano = planos.find((p) => p.id === planoId)!;
   const [periodo, setPeriodo] = useState<CicloCatalogo>(parametros.ciclo === "anual" ? "anual" : "mensal");
@@ -62,6 +67,8 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
   const [erro, setErro] = useState("");
   const [protocolo, setProtocolo] = useState("");
   const [ativacao, setAtivacao] = useState("");
+  const [aceite, setAceite] = useState(false);
+  const [aviso, setAviso] = useState("");
   const tentativa = useRef({ selecao: "", chave: "" });
   const complementos = COMPLEMENTOS_CATALOGO.filter((c) => planos.some((p) => c.planos.includes(p.id)) && c.id !== "drone");
   const adicionais = complementos.filter((c) => c.planos.includes(planoId) && qtd[c.id] > 0).map((c) => ({ id: c.id, quantidade: qtd[c.id] }));
@@ -79,6 +86,8 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
     setErro("");
     setProtocolo("");
     setAtivacao("");
+    setAviso("");
+    setAceite(false);
   }
   function alterar(id: string, n: number) {
     setErro("");
@@ -110,16 +119,20 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
     } catch (e) { setErro(e instanceof Error ? e.message : "Falha de conexão."); }
     finally { setEnviando(false); }
   }
+  const direto = pagamentoDireto && autenticado && !!cotacao && !cotacao.sobOrcamento && !podeAtivar;
   async function enviar() {
-    if (!cotacao || enviando) return;
+    if (!cotacao || enviando || (direto && !aceite)) return;
     setErro("");
+    setAviso("");
     setEnviando(true);
     const corpo = JSON.stringify(selecao);
     if (tentativa.current.selecao !== corpo) tentativa.current = { selecao: corpo, chave: crypto.randomUUID() };
     try {
-      const r = await fetch("/api/planos/solicitacoes", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": tentativa.current.chave }, body: corpo });
+      const r = await fetch("/api/planos/solicitacoes", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": tentativa.current.chave }, body: direto ? JSON.stringify({ ...selecao, contratar: true, aceito: true }) : corpo });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Falha ao registrar o pedido.");
+      if (d.direta) { router.push("/planos/solicitacoes?pedido=" + d.solicitacao.id + "#pagamento"); return; }
+      if (d.aviso) setAviso(d.aviso);
       setProtocolo(d.solicitacao.id);
     } catch (e) { setErro(e instanceof Error ? e.message : "Falha de conexão. Tente novamente."); }
     finally { setEnviando(false); }
@@ -219,14 +232,17 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
           {!cotacao.sobOrcamento && ciclo === "anual" && cotacao.adicionaisMensaisCentavos > 0 && <p>Complementos de {reais(cotacao.adicionaisMensaisCentavos)}/mês. Total estimado em 12 meses de {reais(cotacao.totalCentavos!)}.</p>}</>}
         {cotacao && !cotacao.sobOrcamento && ciclo === "anual" && cotacao.baseCicloCentavos > 0 && <AvisoPlanoAnual />}
         {validacao && <p>{validacao}</p>}
-        <p className="mt-2 text-sm text-texto-2">{podeAtivar ? plano.teste ? "Experimente os recursos disponíveis por 72 horas. Ao terminar o teste, a conta continua sem cobrança." : "O cofre gratuito permite cadastrar até três propriedades." : "A Central confere o escopo e os valores. Quando sua proposta estiver liberada, abra Meus pedidos para aceitar e pagar a fatura. O envio do pedido é gratuito."}</p>
+        <p className="mt-2 text-sm text-texto-2">{podeAtivar ? plano.teste ? "Experimente os recursos disponíveis por 72 horas. Ao terminar o teste, a conta continua sem cobrança." : "O cofre gratuito permite cadastrar até três propriedades." : direto ? "Pagamento pelo Asaas, por Pix, boleto ou cartão. O plano libera na conta assim que o pagamento é confirmado. Planos de escritório e complementos especiais passam antes pela Central."
+          : "A Central confere o escopo e os valores. Quando sua proposta estiver liberada, abra Meus pedidos para aceitar e pagar a fatura. O envio do pedido é gratuito."}</p>
+        {direto && <label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={aceite} onChange={(e) => setAceite(e.target.checked)} />
+          <span>Aceito o plano {plano.nome}, os valores e a renovação {ciclo === "anual" ? "anual" : "mensal"} apresentados. Posso cancelar a renovação quando quiser e pedir estorno em até 7 dias.</span></label>}
       </div>
       {erro && <p role="alert" className="text-alerta">{erro}</p>}
       {ativacao && podeAtivar ? <p role="status">{ativacao} <Link href={plano.id === "corretor_teste" ? "/painel/crm" : plano.id === "tecnico_teste" ? "/painel/crm/demonstracao" : "/painel/cofre"} className="font-semibold text-verde underline">Abrir recurso</Link></p> :
-        protocolo ? <p role="status">Pedido registrado. <Link className="font-semibold text-verde underline" href="/planos/solicitacoes">Acompanhar meus pedidos</Link></p> :
+        protocolo ? <p role="status">{aviso || "Pedido registrado."} <Link className="font-semibold text-verde underline" href="/planos/solicitacoes">Acompanhar meus pedidos</Link></p> :
         autenticado && podeAtivar ? <button type="button" className="lp-btn lp-btn-verde" disabled={enviando || !cotacao} onClick={ativar}>{enviando ? "Ativando…" : plano.teste ? "Iniciar teste de 3 dias" : "Ativar cofre gratuito"} <ArrowRight /></button> :
-        autenticado ? <button type="button" className="lp-btn lp-btn-verde disabled:opacity-50" disabled={!cotacao || enviando} onClick={enviar}>{enviando ? "Enviando…" : "Solicitar à Central"} <ArrowRight /></button> :
-        <div className="flex flex-wrap gap-3"><Link className="lp-btn lp-btn-verde" href={"/entrar?volta=" + volta}>Entrar para solicitar <ArrowRight /></Link>
+        autenticado ? <button type="button" className="lp-btn lp-btn-verde disabled:opacity-50" disabled={!cotacao || enviando || (direto && !aceite)} onClick={enviar}>{enviando ? (direto ? "Gerando a fatura…" : "Enviando…") : direto ? "Contratar e pagar" : "Solicitar à Central"} <ArrowRight /></button> :
+        <div className="flex flex-wrap gap-3"><Link className="lp-btn lp-btn-verde" href={"/entrar?volta=" + volta}>{pagamentoDireto ? "Entrar para contratar" : "Entrar para solicitar"} <ArrowRight /></Link>
           <Link className="lp-btn lp-btn-contorno" href={(plano.alcance === "global" ? "/entrar?cadastro=1&papel=consulta&nicho=consulta" : cadastro) + "&volta=" + volta}>Criar conta</Link></div>}
     </fieldset>
     <section aria-labelledby="comparar-pacotes">

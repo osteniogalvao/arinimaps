@@ -111,4 +111,18 @@ assert.equal(pontos.length,4);
 for (const {planta,satelite} of pontos) {
   assert(Math.abs(satelite[0]-planta[0]-5)<3 && Math.abs(satelite[1]-planta[1]-7)<3);
 }
+// 23/11/2026: encaixe de "milésimos" entre peças vizinhas não conta como sobreposição
+{
+  const q = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const esquerda = { area: q(0, 0, 0.001, 0.001) };
+  assert.equal(partesSobrepostas(esquerda, { area: q(0.000999999, 0, 0.002, 0.001) }), false, "encaixe fino não sobrepõe");
+  assert.equal(partesSobrepostas(esquerda, { area: q(0.0007, 0, 0.002, 0.001) }), true, "30% por cima sobrepõe");
+  assert.equal(partesSobrepostas(esquerda, { area: q(0.002, 0, 0.003, 0.001) }), false);
+  // perímetro editado (pivô fixo, sem encaixe): o contorno entra na assinatura, igual no worker
+  const base = { id: "peca-1", nome: "P", area: q(0, 0, 1, 1), t: { ...TRANSFORM_ZERO } };
+  const editada = { ...base, pivo: [0.5, 0.5], area: [[0, 0], [1.2, 0], [1, 1], [0, 1]] };
+  assert.equal(assinaturaAjustes([base]), assinaturaWorker([base]), "peça sem pivô mantém a assinatura antiga");
+  assert.notEqual(assinaturaAjustes([editada]), assinaturaAjustes([{ ...editada, area: q(0, 0, 1, 1) }]));
+  assert.equal(assinaturaAjustes([editada]), assinaturaWorker([editada]));
+}
 console.log("Recortes, quadras, seleção descontínua, agrupamento, separação, giro de 360°, escala, sugestão de pontos e paridade com o worker conferidos.");

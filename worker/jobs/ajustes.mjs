@@ -93,6 +93,14 @@ export function pedacosComMatriz(geometry, matrizDe, temPartes) {
   return [...grupos].map(([m, linhas]) => ({ geometry: { type: "MultiLineString", coordinates: linhas }, m }));
 }
 
+/** Igual a contornoResumo() de src/lib/geo/deslocar.ts. */
+export function contornoResumo(a) {
+  const r = (n) => Math.round(n * 1e7) / 1e7;
+  let n = 0, sx = 0, sy = 0;
+  for (const anel of [a.area, ...(a.areasExtras ?? [])]) for (const [x, y] of anel) { n++; sx += x * n; sy += y * n; }
+  return [...(a.pivo ?? []).map(r), n, r(sx), r(sy)].join(",");
+}
+
 /** Igual a assinaturaAjustes() de src/lib/geo/deslocar.ts. */
 export function assinaturaAjustes(ajustes) {
   if (!ajustes?.length) return "";
@@ -100,7 +108,8 @@ export function assinaturaAjustes(ajustes) {
   const esc = (a) => (a.t.escala && Math.abs(a.t.escala - 1) > 1e-9 ? `,x${r(a.t.escala)}` : "");
   const base = a => {
     const m = a.encaixe;
-    return m ? `,b${[m.a, m.b, m.d, m.e, m.xoff, m.yoff, ...(a.pivo ?? [])].join(",")}` : "";
+    if (m) return `,b${[m.a, m.b, m.d, m.e, m.xoff, m.yoff, ...(a.pivo ?? [])].join(",")}`;
+    return a.pivo ? `,c${contornoResumo(a)}` : "";
   };
   return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}${esc(a)}${base(a)}`).join("|");
 }

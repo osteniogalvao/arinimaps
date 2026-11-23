@@ -27,7 +27,7 @@ export default async function FunilDoSetor({ params, searchParams }: PageProps<"
     admin.from("crm_etapas").select("*").eq("pipeline_id", id).order("ordem"),
     admin.from("crm_campos").select("*").eq("pipeline_id", id).order("ordem"),
     admin.from("crm_itens").select("*").eq("pipeline_id", id).eq("status", "aberto").order("entrou_etapa_em").limit(500),
-    admin.from("profiles").select("user_id, nome").in("role", ["admin_central", "analista_arini"]).order("nome"),
+    admin.from("profiles").select("user_id, nome").in("role", ["admin_central", "analista_arini"]).not("ativo", "is", false).order("nome"),
   ]);
   const [{ data: fechados }, extras] = await Promise.all([
     admin.from("crm_itens").select("id, codigo, titulo, status, updated_at").eq("pipeline_id", id).neq("status", "aberto")

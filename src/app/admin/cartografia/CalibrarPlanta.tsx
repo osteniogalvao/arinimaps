@@ -33,7 +33,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, Spline, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
 import type { Map as MLMap, GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { sugerirParesVisuais } from "@/lib/geo/pontosVisuais";
@@ -64,7 +64,7 @@ type Camada = {
   offset: { leste_m: number; norte_m: number };
 };
 
-type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar" | "objeto" | "vertices" | "selecao" | "lote";
+type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar" | "objeto" | "vertices" | "selecao" | "lote" | "perimetro";
 type LinhaSelecionada = { feature: number; linha: number };
 /** O que o clique faz na linha escolhida em "Ajustar linha". */
 type FerramentaLinha = "vertices" | "dividir" | "trecho";
@@ -322,6 +322,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   // o clique do mapa é registrado uma vez; fechar a área usa o estado do momento
   const fecharAreaRef = useRef<() => void>(() => undefined);
   const criarParteDaLinhaRef = useRef<(s: LinhaSelecionada) => void>(() => undefined);
+  /** grava o anel editado de uma peça (editar perímetro, 23/11/2026) */
+  const gravarPerimetroRef = useRef<(id: string, k: number, anel: [number, number][]) => void>(() => undefined);
 
   const layersCad = useMemo(() => camada.layers_cad ?? [], [camada.layers_cad]);
   const totalLinhas = useMemo(() => layersCad.reduce((s, l) => s + l.linhas, 0), [layersCad]);
@@ -563,6 +565,25 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           paint: { "circle-radius": 6, "circle-color": "#FFF4D6", "circle-stroke-width": 2.5, "circle-stroke-color": "#FF6B1A" },
         });
 
+        // editar perímetro de uma peça (áudio do Carlos, 23/11/2026): contorno,
+        // vértices para arrastar e pontos do meio de cada lado para criar vértice
+        map.addSource("perimetro", { type: "geojson", data: VAZIO });
+        map.addLayer({
+          id: "perimetro-linha", type: "line", source: "perimetro",
+          filter: ["==", ["geometry-type"], "LineString"],
+          paint: { "line-color": "#FFD400", "line-width": 2.5 },
+        });
+        map.addLayer({
+          id: "perimetro-meio", type: "circle", source: "perimetro",
+          filter: ["==", ["get", "tipo"], "m"],
+          paint: { "circle-radius": 4, "circle-color": "#FFD400", "circle-opacity": 0.55, "circle-stroke-width": 1, "circle-stroke-color": "#120C02" },
+        });
+        map.addLayer({
+          id: "perimetro-vertice", type: "circle", source: "perimetro",
+          filter: ["==", ["get", "tipo"], "v"],
+          paint: { "circle-radius": 6, "circle-color": "#FFF4D6", "circle-stroke-width": 2.5, "circle-stroke-color": "#FFB000" },
+        });
+
         // linhas pegas pela seleção em caixa
         map.addSource("selecao", { type: "geojson", data: VAZIO });
         map.addLayer({
@@ -621,6 +642,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         s: LinhaSelecionada; i: number; coords: [number, number][]; inversa: ReturnType<typeof inverter>;
         base?: [number, number][]; inicio?: [number, number];
       } | null = null;
+      // vértice do perímetro de uma peça sendo arrastado (anel k, vértice j)
+      let perimetroArrastando: { id: string; k: number; j: number; anel: [number, number][]; inversa: ReturnType<typeof inverter>; matriz: ReturnType<typeof compor>; mexeu: boolean } | null = null;
       // seleção em caixa: canto onde o arraste começou (pixels do mapa)
       let caixa: { x: number; y: number; somar: boolean } | null = null;
       const canvas = map.getCanvas();
@@ -636,6 +659,23 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       };
 
       map.on("mousedown", (e: MapMouseEvent) => {
+        if (modoRef.current === "perimetro") {
+          const parte = ajustesRef.current.find((a) => a.id === ativaRef.current);
+          if (!parte) return;
+          const hit = map.queryRenderedFeatures([[e.point.x - 9, e.point.y - 9], [e.point.x + 9, e.point.y + 9]], { layers: ["perimetro-vertice", "perimetro-meio"] })
+            .sort((x, y) => (x.properties?.tipo === "v" ? 0 : 1) - (y.properties?.tipo === "v" ? 0 : 1))[0];
+          if (!hit) return;
+          const k = Number(hit.properties?.k), j = Number(hit.properties?.j);
+          const anel = aneisParte(parte)[k]?.map((p) => [...p] as [number, number]);
+          if (!anel || !Number.isInteger(j)) return;
+          const matriz = compor(afim(centroRef.current, tRef.current), matrizParte(parte));
+          const inversa = inverter(matriz);
+          // ponto do meio: cria o vértice novo entre j e j+1 e já arrasta ele
+          if (hit.properties?.tipo === "m") anel.splice(j + 1, 0, aplicarMatrizPonto(inversa, [e.lngLat.lng, e.lngLat.lat]));
+          perimetroArrastando = { id: parte.id, k, j: hit.properties?.tipo === "m" ? j + 1 : j, anel, inversa, matriz, mexeu: hit.properties?.tipo === "m" };
+          map.dragPan.disable(); e.preventDefault(); canvas.style.cursor = "grabbing";
+          return;
+        }
         if (modoRef.current === "selecao") {
           e.preventDefault();
           caixa = { x: e.point.x, y: e.point.y, somar: e.originalEvent.shiftKey };
@@ -678,6 +718,18 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       });
 
       const aoMover = (ev: MouseEvent) => {
+        if (perimetroArrastando) {
+          const r = canvas.getBoundingClientRect();
+          const ll = map.unproject([ev.clientX - r.left, ev.clientY - r.top]);
+          perimetroArrastando.anel[perimetroArrastando.j] = aplicarMatrizPonto(perimetroArrastando.inversa, [ll.lng, ll.lat]);
+          perimetroArrastando.mexeu = true;
+          const tela = perimetroArrastando.anel.map((p) => aplicarMatrizPonto(perimetroArrastando!.matriz, p));
+          (map.getSource("perimetro") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [
+            { type: "Feature", geometry: { type: "LineString", coordinates: [...tela, tela[0]] }, properties: {} },
+            ...tela.map((c, j) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: c }, properties: { tipo: "v", k: perimetroArrastando!.k, j } })),
+          ] });
+          return;
+        }
         if (caixa) {
           const r = canvas.getBoundingClientRect();
           const x = Math.max(0, Math.min(r.width, ev.clientX - r.left)), y = Math.max(0, Math.min(r.height, ev.clientY - r.top));
@@ -725,6 +777,14 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       };
 
       const aoSoltar = (ev: MouseEvent) => {
+        if (perimetroArrastando) {
+          const { id, k, anel, mexeu } = perimetroArrastando;
+          perimetroArrastando = null;
+          canvas.style.cursor = "crosshair";
+          if (modoRef.current === "perimetro") map.dragPan.enable();
+          if (mexeu) gravarPerimetroRef.current(id, k, anel);
+          return;
+        }
         if (caixa) {
           const r = canvas.getBoundingClientRect();
           const x = Math.max(0, Math.min(r.width, ev.clientX - r.left)), y = Math.max(0, Math.min(r.height, ev.clientY - r.top));
@@ -854,6 +914,19 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
         fecharAreaRef.current();
       });
 
+      // ---- editar perímetro: botão direito num vértice tira o ponto ----
+      map.on("contextmenu", (e: MapMouseEvent) => {
+        if (modoRef.current !== "perimetro") return;
+        const parte = ajustesRef.current.find((a) => a.id === ativaRef.current);
+        const hit = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ["perimetro-vertice"] })[0];
+        if (!parte || !hit) return;
+        e.preventDefault();
+        const k = Number(hit.properties?.k), j = Number(hit.properties?.j);
+        const anel = aneisParte(parte)[k];
+        if (!anel || anel.length <= 3) { setMsg("O perímetro precisa de pelo menos três pontos."); return; }
+        gravarPerimetroRef.current(parte.id, k, anel.filter((_, i) => i !== j));
+      });
+
       // ---- apagar linha ----
       map.on("click", (e: MapMouseEvent) => {
         if (modoRef.current !== "apagar") return;
@@ -891,7 +964,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (modo === "mover" || modo === "vertices" || modo === "selecao") {
+    if (modo === "perimetro") {
+      // o mapa ainda anda arrastando fora dos pontos; o ponto pego trava o pan no mousedown
+      map.dragPan.enable(); map.getCanvas().style.cursor = "crosshair";
+    } else if (modo === "mover" || modo === "vertices" || modo === "selecao") {
       map.dragPan.disable(); map.getCanvas().style.cursor = modo === "mover" ? "grab" : "crosshair";
     } else {
       map.dragPan.enable(); map.getCanvas().style.cursor = modo === "pontos" || modo === "parte" || modo === "objeto" || modo === "apagar" ? "crosshair" : "";
@@ -923,6 +999,47 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const temSelecao = selecao.size > 0;
   useEffect(() => { mapRef.current?.resize(); }, [painelAberto, modo, temSelecao, erro, ajustes.length]);
   useEffect(() => { desenharLinhaSelecionada(modo === "vertices" ? linhaSelecionada : null); }, [linhaSelecionada, modo, carregando, desenharLinhaSelecionada]);
+
+  /** Contorno da peça ativa com vértices e pontos do meio (modo "Editar perímetro"). */
+  const desenharPerimetro = useCallback(() => {
+    const fonte = mapRef.current?.getSource("perimetro") as GeoJSONSource | undefined;
+    if (!fonte) return;
+    const parte = modoRef.current === "perimetro" ? ajustesRef.current.find((a) => a.id === ativaRef.current) : null;
+    if (!parte) { fonte.setData(VAZIO); return; }
+    const m = compor(afim(centroRef.current, tRef.current), matrizParte(parte));
+    const feats: GeoJSON.Feature[] = [];
+    aneisParte(parte).forEach((anel, k) => {
+      const tela = anel.map((p) => aplicarMatrizPonto(m, p));
+      feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: [...tela, tela[0]] }, properties: { k } });
+      tela.forEach((c, j) => {
+        const d = tela[(j + 1) % tela.length];
+        feats.push({ type: "Feature", geometry: { type: "Point", coordinates: c }, properties: { tipo: "v", k, j } });
+        feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [(c[0] + d[0]) / 2, (c[1] + d[1]) / 2] }, properties: { tipo: "m", k, j } });
+      });
+    });
+    fonte.setData({ type: "FeatureCollection", features: feats });
+  }, []);
+  useEffect(() => { desenharPerimetro(); }, [modo, ativa, ajustes, t, carregando, desenharPerimetro]);
+  // sem peça escolhida não há perímetro para editar
+  useEffect(() => { if (modo === "perimetro" && !ativa) setModo("mover"); }, [modo, ativa]);
+
+  gravarPerimetroRef.current = (id, k, anel) => {
+    const lista = ajustesRef.current;
+    const parte = lista.find((a) => a.id === id);
+    if (!parte || anel.length < 3) return;
+    // o pivô fica onde estava: sem isso a peça inteira "pularia" junto com o centro do contorno novo
+    const pivo = parte.pivo ?? centroParte(parte);
+    const editada: AjusteLocal = k === 0 ? { ...parte, pivo, area: anel }
+      : { ...parte, pivo, areasExtras: (parte.areasExtras ?? []).map((x, i) => (i === k - 1 ? anel : x)) };
+    const novos = lista.map((a) => (a.id === id ? editada : a));
+    // as linhas da planta são redistribuídas entre as peças pelo contorno novo
+    membrosRef.current = { chave: "", m: [] };
+    definir(tRef.current, novos);
+    const vizinha = novos.find((a) => !mesmaPeca(a, editada) && partesSobrepostas(a, editada));
+    setErro(null);
+    setMsg(vizinha ? `Contorno ajustado, mas ainda passa por cima de “${vizinha.nome}”. Puxe os pontos para dentro antes de salvar.`
+      : "Contorno ajustado. Ctrl+Z desfaz.");
+  };
 
   criarParteDaLinhaRef.current = (s) => {
     const bruto = brutoRef.current;
@@ -1895,6 +2012,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               {modo === "parte" && !novoPoligono && !laco && (desenho.length < 3
                 ? "Clique em volta da quadra ou do trecho que quer mover separado — um clique por canto."
                 : "Feche a área clicando no primeiro ponto, com duplo clique ou Enter. Esc desiste.")}
+              {modo === "perimetro" && parteAtual && `Editando o contorno de “${parteAtual.nome}”. Arraste um ponto para movê-lo; arraste um ponto do meio de um lado para criar um vértice novo; botão direito num ponto o remove. Ctrl+Z desfaz.`}
               {modo === "objeto" && "Clique diretamente numa quadra, lote ou polilinha fechada. Ela vira uma peça independente e já fica pronta para arrastar."}
               {modo === "vertices" && !linhaSelecionada && "Clique na linha que quer reajustar."}
               {modo === "vertices" && linhaSelecionada && ferramentaLinha === "vertices" && "Arraste um ponto laranja para mover só aquele vértice, ou arraste a linha laranja para mover a linha inteira."}
@@ -2198,6 +2316,11 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
                     {parteAtual.grupo ? "As peças giram e mudam de tamanho em torno do centro do conjunto. " : "A peça gira e muda de tamanho em torno do próprio centro. "}
                     Ao salvar, os lotes acompanham a escala e conservam a numeração.
                   </p>
+                  <button type="button" className={"inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm " + (modo === "perimetro" ? "btn-ouro" : "btn-contorno")}
+                    onClick={() => { setMsg(""); setModo(modo === "perimetro" ? "mover" : "perimetro"); }}
+                    title="Arraste os pontos do contorno desta peça, crie pontos novos e tire pontos que sobram">
+                    <Spline className="size-4" /> {modo === "perimetro" ? "Terminar edição do perímetro" : "Editar perímetro (arrastar pontos)"}
+                  </button>
                   {ajustes.some(a => !mesmaPeca(a, parteAtual)) && <label className="block space-y-1 text-sm text-texto-2">
                     Reunir com outra peça
                     <select value="" className="w-full rounded-md border border-linha bg-superficie p-2 text-texto" onChange={e => {

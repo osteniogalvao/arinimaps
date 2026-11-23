@@ -547,7 +547,21 @@ export function recortarFora(aneis: AnelParte[], ocupadas: AnelParte[]): AnelPar
   return resto.flatMap(p => semBuraco(p, 0)).filter(a => a.length >= 3);
 }
 
-export function areasSeSobrepoem(a: [number, number][], b: [number, number][]): boolean {
+/** Área de um anel (unidade ao quadrado das coordenadas), pela fórmula do laço. */
+export function areaDoAnel(anel: [number, number][]): number {
+  let soma = 0;
+  for (let i = 0, j = anel.length - 1; i < anel.length; j = i++) soma += (anel[j][0] + anel[i][0]) * (anel[j][1] - anel[i][1]);
+  return Math.abs(soma) / 2;
+}
+
+/**
+ * Sobreposição que conta: até 1% da área da peça menor é encaixe, não
+ * sobreposição. Áudio do Carlos (23/11/2026): peças encaixadinhas não salvavam
+ * por "milésimos" de contorno passando por cima do vizinho.
+ */
+export const TOLERANCIA_SOBREPOSICAO = 0.01;
+
+export function areasSeSobrepoem(a: [number, number][], b: [number, number][], tolerancia = TOLERANCIA_SOBREPOSICAO): boolean {
   const limites = (anel: [number, number][]) => {
     let oeste = Infinity, leste = -Infinity, sul = Infinity, norte = -Infinity;
     for (const [x, y] of anel) {
@@ -558,7 +572,13 @@ export function areasSeSobrepoem(a: [number, number][], b: [number, number][]): 
   };
   const p = limites(a), q = limites(b);
   if (p.oeste >= q.leste || q.oeste >= p.leste || p.sul >= q.norte || q.sul >= p.norte) return false;
-  return intersection([a], [b]).length > 0;
+  const comum = intersection([a], [b]);
+  if (!comum.length) return false;
+  if (tolerancia <= 0) return true;
+  const sobra = comum.reduce((soma, pol) => soma + areaDoAnel(pol[0] as [number, number][])
+    - pol.slice(1).reduce((furos, anel) => furos + areaDoAnel(anel as [number, number][]), 0), 0);
+  const menor = Math.min(areaDoAnel(a), areaDoAnel(b));
+  return !(menor > 0 && sobra <= menor * tolerancia);
 }
 
 /**
@@ -566,6 +586,14 @@ export function areasSeSobrepoem(a: [number, number][], b: [number, number][]): 
  * alguma parte muda. Vazia sem partes, para as assinaturas antigas continuarem
  * valendo. A mesma conta está em worker/jobs/ajustes.mjs.
  */
+/** Resumo do contorno da peça (pivô + vértices). A mesma conta está em worker/jobs/ajustes.mjs. */
+export function contornoResumo(a: Pick<AjusteLocal, "pivo" | "area" | "areasExtras">): string {
+  const r = (n: number) => Math.round(n * 1e7) / 1e7;
+  let n = 0, sx = 0, sy = 0;
+  for (const anel of [a.area, ...(a.areasExtras ?? [])]) for (const [x, y] of anel) { n++; sx += x * n; sy += y * n; }
+  return [...(a.pivo ?? []).map(r), n, r(sx), r(sy)].join(",");
+}
+
 export function assinaturaAjustes(ajustes: AjusteLocal[]): string {
   if (!ajustes.length) return "";
   const r = (n: number) => Math.round(n * 1e4) / 1e4;
@@ -573,7 +601,10 @@ export function assinaturaAjustes(ajustes: AjusteLocal[]): string {
   const esc = (a: AjusteLocal) => (a.t.escala && Math.abs(a.t.escala - 1) > 1e-9 ? `,x${r(a.t.escala)}` : "");
   const base = (a: AjusteLocal) => {
     const m = a.encaixe;
-    return m ? `,b${[m.a, m.b, m.d, m.e, m.xoff, m.yoff, ...(a.pivo ?? [])].join(",")}` : "";
+    if (m) return `,b${[m.a, m.b, m.d, m.e, m.xoff, m.yoff, ...(a.pivo ?? [])].join(",")}`;
+    // Perímetro editado à mão (23/11/2026) fixa o pivô: o contorno entra na assinatura
+    // para os lotes serem refeitos. Peças antigas, sem pivô, mantêm a assinatura.
+    return a.pivo ? `,c${contornoResumo(a)}` : "";
   };
   return ";aj:" + ajustes.map((a) => `${a.id}=${r(a.t.offsetLesteM)},${r(a.t.offsetNorteM)},${r(a.t.rotacaoGraus)}${esc(a)}${base(a)}`).join("|");
 }

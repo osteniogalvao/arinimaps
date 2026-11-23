@@ -34,11 +34,13 @@ export default async function MeusPedidos({ searchParams }: PageProps<"/planos/s
       <Link className="text-verde underline" href="/privacidade/preferencias">Configurar lembretes e avisos da assinatura pelo WhatsApp</Link>
       {error ? <p role="alert">O histórico está indisponível. Atualize a página para tentar novamente.</p> :
         !pedidos.length && <p>Nenhum pedido nesta página.</p>}
-      {pedidos.slice(0,20).map((p) => <article key={p.id} className="cartao space-y-3 p-5">
+      {pedidos.slice(0,20).map((p) => <article key={p.id} id={individual ? "pagamento" : undefined} className="cartao scroll-mt-24 space-y-3 p-5">
         <p className="text-sm text-texto-2">{new Date(p.created_at).toLocaleDateString("pt-BR", { timeZone:"America/Sao_Paulo" })} · {SITUACOES_PEDIDO[p.status]}</p>
         <h2 className="lp-display text-2xl">{p.cotacao.rotulo}</h2>
         <p>Plano {p.cotacao.ciclo} · {p.cotacao.totalCentavos === null ? "Sob orçamento" : (p.cotacao.totalCentavos/100).toLocaleString("pt-BR",{style:"currency", currency:"BRL"}) + (p.cotacao.ciclo === "anual" ? " em 12 meses" : " no primeiro mês")}</p>
         {p.cotacao.itens.length > 0 && <p>{p.cotacao.itens.map((i) => i.quantidade + " × " + i.nome).join(" · ")}</p>}
+        {individual && p.assinatura?.aceite && !p.assinatura.cancelado && p.assinatura.faturas_cotadas.some(f=>["aberta","vencida","nova","emitindo"].includes(f.status)) &&
+          <p className="rounded-lg border border-verde/40 bg-verde/10 px-4 py-3 text-sm">Falta só o pagamento. Use o Pix abaixo ou abra a fatura no Asaas para pagar com boleto ou cartão. O plano libera na conta assim que o Asaas confirmar. Se a fatura ainda estiver em emissão, toque em Atualizar faturas.</p>}
         {p.assinatura && p.status!=="cancelado" && <Contratacao s={p.assinatura} ativo={checkoutAtivo()}
           temPlano={!!ativas?.some(s=>s.id!==p.id && s.nicho===(p.cotacao.personaId==="profissional_tecnico"?"engenheiro":p.cotacao.personaId))}
           trocas={(trocas??[]).filter(t=>t.assinatura===p.id || t.oferta===p.id)}/>}
