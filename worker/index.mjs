@@ -196,7 +196,12 @@ async function rodarCentral() {
       if (e.code === "42883" && e.message.includes("divulgacao_rotinas")) return { rows: [] };
       throw e;
     });
-    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0, divulgacao: divulgacao.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
+    // atendimento por setores (0156): conversa sem resposta no prazo vira tarefa
+    const atendimento = await db.query("select fn_atendimento_regras() as total").catch(e => {
+      if (e.code === "42883" && e.message.includes("fn_atendimento_regras")) return { rows: [] };
+      throw e;
+    });
+    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0, divulgacao: divulgacao.rows[0]?.total ?? 0, atendimento: atendimento.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
     if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
     await emailsCriticos();
     // publicações agendadas que chegaram na hora (Central de publicação)

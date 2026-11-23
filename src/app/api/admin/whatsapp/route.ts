@@ -6,6 +6,7 @@ import { logAudit } from "@/lib/audit";
 import { marcarPrimeiroAtendimento, concluirTarefaDoEvento } from "@/lib/central";
 import { enviarWhatsapp, MetaErro, telefoneWhatsapp, whatsappConfigurado } from "@/lib/meta";
 import { limitar,respostaLimite } from "@/lib/seguranca/limite";
+import { saidaAtendimento } from "@/lib/atendimento";
 
 const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 async function conversa(opp:string|null,entrada:string|null){
@@ -49,6 +50,7 @@ export async function POST(request:Request) {
     const waId=await enviarWhatsapp(c.tel,texto);
     const {data:saida,error}=await db.from("whatsapp_mensagens").insert({wa_id:waId||null,telefone:c.tel,direcao:"saida",texto,opportunity_id:c.opp,enviado_por:a!.userId,status:"sent"}).select("id, created_at").single();
     if(error||!saida)return NextResponse.json({error:"O WhatsApp aceitou a mensagem, mas o registro local falhou. Confira o envio antes de tentar de novo."},{status:503});
+    await saidaAtendimento(c.tel,saida.id,texto,a!.userId);
     if(c.opp){
       await db.from("opportunity_events").insert({opportunity_id:c.opp,tipo:"contato",descricao:"WhatsApp enviado: "+texto.slice(0,500),autor:a!.userId});
       await marcarPrimeiroAtendimento(c.opp,a!.userId);

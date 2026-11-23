@@ -48,7 +48,7 @@ export default async function PainelComercial() {
 
   return (
     <div className="space-y-10 md:space-y-12">
-      <CabecalhoSetor setor="comercial"><LinkAcao href="/admin/leads/novo">Novo lead</LinkAcao><LinkAcao href="/admin/agenda">Agenda</LinkAcao><LinkAcao href="/admin/comercial/whatsapp">WhatsApp do Comercial</LinkAcao><LinkAcao href="/admin/planos/contatos">Recuperação de assinaturas</LinkAcao></CabecalhoSetor>
+      <CabecalhoSetor setor="comercial"><LinkAcao href="/admin/leads/novo">Novo lead</LinkAcao><LinkAcao href="/admin/agenda">Agenda</LinkAcao><LinkAcao href="/admin/atendimento?caixa=setor%3Acomercial">WhatsApp do Comercial</LinkAcao><LinkAcao href="/admin/planos/contatos">Recuperação de assinaturas</LinkAcao></CabecalhoSetor>
 
       <Indicadores itens={[
         { rotulo: "Leads novos sem contato", icone: UserPlus, valor: novos, href: "/admin/leads", destaque: novos > 0 },

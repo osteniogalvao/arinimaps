@@ -9,7 +9,7 @@ export default async function ConexaoWhatsappPagina() {
     <div className="space-y-5">
       <CabecalhoPagina titulo="Conexão do WhatsApp" eyebrow="Central" />
       <ConexaoWhatsapp />
-      <Link href="/admin/comercial/whatsapp" className="underline">Voltar às mensagens</Link>
+      <Link href="/admin/atendimento" className="underline">Voltar ao atendimento</Link>
     </div>
   );
 }
