@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ator, temSetor, type Ator } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 import { concluirTarefaDoEvento } from "@/lib/central";
+import { notificar } from "@/lib/notificacoes";
 import { SETORES, SETOR_IDS, type SetorId } from "@/lib/setores";
 import { camposFaltando, extrasDoItem, normalizarDados, prazoDaEtapa, type CampoCrm, type Etapa } from "@/lib/crmSetores";
 
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
       }
       case "delegar_item": {
         // Só troca o responsável: não exige os campos da etapa, que travavam a delegação pela ficha.
-        const { data: item, error } = await admin.from("crm_itens").select("id, pipeline_id, responsavel, titulo, updated_at").eq("id", id(b.id)).maybeSingle();
+        const { data: item, error } = await admin.from("crm_itens").select("id, codigo, pipeline_id, responsavel, titulo, updated_at").eq("id", id(b.id)).maybeSingle();
         if (error) throw new Erro("Falha ao consultar o item.", 503);
         if (!item) throw new Erro("Item não encontrado.", 404);
         await acessoAoItem(a, item);
@@ -171,6 +172,11 @@ export async function POST(request: Request) {
         const nota = String(b.nota ?? "").trim().slice(0, 1000);
         await evento(item.id, "responsavel", a.userId, (pessoa ? `Delegou para ${pessoa.nome || "colega"}` : "Deixou sem responsável") + (nota ? `: ${nota}` : ""),
           { de: item.responsavel, para: novo });
+        // a tela promete o aviso: quem recebe vê na Central (sino) e acha em "Comigo"
+        if (novo && novo !== a.userId) {
+          await notificar(novo, "atencao", `CRM ${item.codigo ?? ""} delegado para você`,
+            `${item.titulo}${nota ? " · " + nota : ""}`.slice(0, 200), `/admin/crm/item/${item.id}`);
+        }
         await logAudit({ user_id: a.userId, acao: "crm_item_delegado", entidade: "crm_itens", entidade_id: item.id, dados_antes: { responsavel: item.responsavel }, dados_depois: { responsavel: novo } });
         return NextResponse.json({ ok: true });
       }
@@ -206,6 +212,10 @@ export async function POST(request: Request) {
         await evento(item.id, "encaminhado", a.userId,
           `Encaminhado de ${setorDe(origem?.setor)} (${origem?.nome ?? "—"}) para ${setorDe(destino.setor)} (${destino.nome})${pessoa ? `, aos cuidados de ${pessoa.nome || "colega"}` : ""}: ${motivo}`,
           { de_pipeline: item.pipeline_id, para_pipeline: destino.id, responsavel_anterior: item.responsavel, etapa_anterior: item.etapa_id });
+        if (novo && novo !== a.userId) {
+          await notificar(novo, "atencao", `CRM ${item.codigo ?? ""} encaminhado para você`,
+            `${item.titulo} · ${motivo}`.slice(0, 200), `/admin/crm/item/${item.id}`);
+        }
         await logAudit({ user_id: a.userId, acao: "crm_item_encaminhado", entidade: "crm_itens", entidade_id: item.id, dados_antes: item, dados_depois: { pipeline_id: destino.id, responsavel: novo } });
         return NextResponse.json({ ok: true, pipeline_id: destino.id });
       }
@@ -246,13 +256,20 @@ export async function POST(request: Request) {
           if (typeof b.titulo === "string" && b.titulo.trim()) mud.titulo = b.titulo.trim().slice(0, 200);
           if (typeof b.descricao === "string") mud.descricao = b.descricao.slice(0, 5000) || null;
           if (b.responsavel !== undefined) mud.responsavel = b.responsavel ? id(b.responsavel) : null;
+          // o responsável escolhido na ficha também precisa ser da equipe ativa (como em "Delegar")
+          if (mud.responsavel && mud.responsavel !== item.responsavel) await membroDaEquipe(mud.responsavel as string);
           const extras = extrasDoItem(b);
           if (extras && "prioridade" in item) Object.assign(mud, extras);
           await atualizar(mud);
           if (extras?.prioridade && extras.prioridade !== item.prioridade && "prioridade" in item) await evento(item.id, "campo", a.userId, `Prioridade: ${extras.prioridade}`);
           const mudou = campos.filter((c) => JSON.stringify(item.dados?.[c.chave] ?? null) !== JSON.stringify(dados[c.chave] ?? null)).map((c) => c.rotulo);
           if (mudou.length) await evento(item.id, "campo", a.userId, `Atualizou: ${mudou.join(", ")}`);
-          if (mud.responsavel !== undefined && mud.responsavel !== item.responsavel) await evento(item.id, "responsavel", a.userId, "Trocou o responsável");
+          if (mud.responsavel !== undefined && mud.responsavel !== item.responsavel) {
+            await evento(item.id, "responsavel", a.userId, "Trocou o responsável");
+            if (mud.responsavel && mud.responsavel !== a.userId) {
+              await notificar(mud.responsavel as string, "atencao", `CRM ${item.codigo ?? ""} com você`, String(mud.titulo ?? item.titulo).slice(0, 200), `/admin/crm/item/${item.id}`);
+            }
+          }
         } else {
           const status = String(b.status ?? "");
           if (!["aberto", "concluido", "cancelado"].includes(status)) throw new Erro("Situação inválida.");
