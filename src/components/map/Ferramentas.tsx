@@ -318,12 +318,12 @@ export default function Ferramentas({
   // cada ferramenta pertence a um recurso do plano (src/lib/planos.ts); a trava
   // de verdade é no servidor — aqui o botão só avisa e aponta para os planos
   const FERRAMENTAS = [
-    { id: "area", icone: Triangle, rotulo: "Medir Área", curto: "Área", recurso: "ferramenta_medir", acao: () => iniciar("area") },
-    { id: "distancia", icone: MoveHorizontal, rotulo: "Medir Distância", curto: "Distância", recurso: "ferramenta_medir", acao: () => iniciar("distancia") },
-    { id: "consulta", icone: ScanSearch, rotulo: "Consultar Área", curto: "Consultar", recurso: "consulta_area", acao: () => iniciar("consulta") },
-    { id: "kml", icone: Upload, rotulo: "Importar arquivo", curto: "Importar", recurso: "ferramenta_kml", acao: null },
-    { id: "imprimir", icone: Printer, rotulo: "Imprimir", curto: "Imprimir", recurso: "ferramenta_exportar", acao: () => window.print() },
-    { id: "captura", icone: Camera, rotulo: "Capturar Imagem", curto: "Foto", recurso: "ferramenta_exportar", acao: onCapturar },
+    { id: "area", icone: Triangle, rotulo: "Medir Área", curto: "Área", medio: "Medir área", recurso: "ferramenta_medir", acao: () => iniciar("area") },
+    { id: "distancia", icone: MoveHorizontal, rotulo: "Medir Distância", curto: "Distância", medio: "Distância", recurso: "ferramenta_medir", acao: () => iniciar("distancia") },
+    { id: "consulta", icone: ScanSearch, rotulo: "Consultar Área", curto: "Consultar", medio: "Consultar", recurso: "consulta_area", acao: () => iniciar("consulta") },
+    { id: "kml", icone: Upload, rotulo: "Importar arquivo", curto: "Importar", medio: "Importar", recurso: "ferramenta_kml", acao: null },
+    { id: "imprimir", icone: Printer, rotulo: "Imprimir", curto: "Imprimir", medio: "Imprimir", recurso: "ferramenta_exportar", acao: () => window.print() },
+    { id: "captura", icone: Camera, rotulo: "Capturar Imagem", curto: "Foto", medio: "Capturar", recurso: "ferramenta_exportar", acao: onCapturar },
   ] as const;
 
   const avisarBloqueio = (rotulo: string) =>
@@ -356,7 +356,10 @@ export default function Ferramentas({
     // no celular a barra fica compacta (ícone + nome curto, sem o título): antes ela e a
     // legenda tampavam ~40 % do mapa e Imprimir, Capturar e a Ari ficavam fora (QA 09/11).
     // Auditoria 18/11: só ícone, ninguém sabia o que cada botão fazia; voltou o nome curto.
-    <div hidden={recolhida && !modo} className="absolute bottom-3 sm:bottom-[calc(1.5rem+var(--faixa,0px))] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-[min(92%,760px)] space-y-2">
+    // Vídeo do Carlos (23/11/2026, 14h49): no computador a barra ainda tampava informação
+    // (ocupava 760 px, quase a tela toda, por cima dos painéis do canto). Agora ela só tem
+    // a largura dos botões, sem o título "Ferramentas", botões mais baixos e centralizada.
+    <div hidden={recolhida && !modo} className="absolute bottom-3 sm:bottom-[calc(1.25rem+var(--faixa,0px))] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-max sm:max-w-[min(92%,620px)] space-y-2">
       {bloqueio && (
         <div className={`flex items-center gap-3 px-4 py-3 text-sm ${VIDRO}`}>
           <Lock className="size-4 shrink-0 text-ouro" />
@@ -432,18 +435,17 @@ export default function Ferramentas({
         </div>
       )}
 
-      <div className={`px-1.5 py-1.5 sm:px-2.5 sm:py-2 ${VIDRO}`}>
-        <p className="hidden sm:block lp-eyebrow !text-[10px] !tracking-[0.2em] !text-ouro px-2 pt-0.5 mb-2">Ferramentas</p>
-        <div className="flex items-center justify-between gap-0.5 sm:gap-1 overflow-x-auto">
+      <div className={`px-1.5 py-1.5 sm:px-1.5 sm:py-1 ${VIDRO}`} role="toolbar" aria-label="Ferramentas do mapa">
+        <div className="flex items-center justify-between sm:justify-center gap-0.5 overflow-x-auto">
           {FERRAMENTAS.map((f) => {
             const ativo = modo === f.id;
             const pode = liberado(f.recurso);
             const Icone = pode ? f.icone : Lock;
             const classe =
-              "flex flex-col items-center gap-1 sm:gap-1.5 rounded-xl sm:rounded-full px-1 sm:px-3 py-1.5 sm:py-2 min-w-[44px] sm:min-w-[76px] text-[11px] font-medium transition " +
+              "flex flex-col items-center gap-1 rounded-xl px-1 sm:px-2 py-1.5 sm:py-1 min-w-[44px] sm:min-w-[62px] text-[10.5px] leading-tight font-medium transition " +
               (ativo ? "bg-verde/15 text-verde ring-1 ring-verde/40" : "text-texto-2 hover:text-texto hover:bg-superficie-2") +
               (pode ? "" : " opacity-60");
-            const miolo = <><Icone className="size-[18px]" strokeWidth={1.9} /><span className="hidden sm:block">{f.rotulo}</span><span className="text-[10px] leading-none sm:hidden">{f.curto}</span></>;
+            const miolo = <><Icone className="size-[17px]" strokeWidth={1.9} /><span className="hidden sm:block whitespace-nowrap">{f.medio}</span><span className="text-[10px] leading-none sm:hidden">{f.curto}</span></>;
             const tour = f.id === "area" ? { "data-tour": "medir" } : {};
             if (!pode) {
               return (
@@ -470,15 +472,14 @@ export default function Ferramentas({
             );
           })}
           {/* assistente de IA: no mapa fica aqui, não flutuando sobre a escala */}
-          <span className="mx-0.5 sm:mx-1 h-10 w-px shrink-0 bg-linha" aria-hidden />
+          <span className="mx-0.5 sm:mx-1 h-8 w-px shrink-0 bg-linha" aria-hidden />
           <button onClick={abrirAssistente} title="Pergunte à Ari, a assistente de IA da Arini" data-tour="ari" aria-label="Ari, assistente de IA"
-            className="flex shrink-0 items-center gap-2 rounded-full bg-[#124431] p-1.5 sm:pr-4 text-left text-[#F2F2EC] ring-2 ring-[#D9BD6F]/70 transition hover:ring-[#D9BD6F]">
-            <span className="relative grid size-9 place-items-center rounded-full bg-[#0B2A1E]" aria-hidden>
+            className="flex shrink-0 items-center gap-2 rounded-full bg-[#124431] p-1 sm:pr-3.5 text-left text-[#F2F2EC] ring-2 ring-[#D9BD6F]/70 transition hover:ring-[#D9BD6F]">
+            <span className="relative grid size-8 place-items-center rounded-full bg-[#0B2A1E]" aria-hidden>
               <MarcaArini variante="radar" titulo="" className="relative size-5" />
             </span>
             <span className="hidden sm:block leading-tight">
               <span className="block text-sm font-bold">Ari</span>
-              <span className="block text-[10px] text-[#F2F2EC]/70 whitespace-nowrap">pergunte à IA</span>
             </span>
           </button>
         </div>

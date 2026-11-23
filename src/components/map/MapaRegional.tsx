@@ -1217,10 +1217,10 @@ export default function MapaRegional({
           filter: ["==", ["geometry-type"], "Polygon"],
           layout: { "line-join": "round" },
           paint: {
-            "line-color": "#14060F",
-            "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4.5, 14, 6.5, 17, 8.5] as never,
-            "line-opacity": 0.6,
-            "line-blur": 0.5,
+            "line-color": "#1A1405",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5.5, 14, 7.5, 17, 9.5] as never,
+            "line-opacity": 0.9,
+            "line-blur": 0.3,
           },
         });
         map.addLayer({
