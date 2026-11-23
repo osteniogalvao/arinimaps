@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, formatArea, STATUS_LABEL, plural } from "@/lib/format";
 import MiniMapa from "@/components/map/MiniMapa";
 import DecisaoBotoes from "./DecisaoBotoes";
+import PainelFluxoImovel from "@/components/fluxo-imovel/PainelFluxoImovel";
 import RevisaoBotoes from "./RevisaoBotoes";
 import MatriculaAdmin from "./MatriculaAdmin";
 import MatriculaSigef from "@/components/rural/MatriculaSigef";
@@ -342,6 +343,8 @@ export default async function AnaliseImovel
       <Bloco titulo="Minha área do anunciante">
         <MinhaAreaCliente propertyId={p.id} somenteLeitura />
       </Bloco>
+
+      <PainelFluxoImovel propertyId={p.id} />
 
       <Bloco titulo="Decisão" className="border-l-4 border-l-verde">
         <DecisaoBotoes propertyId={p.id} />

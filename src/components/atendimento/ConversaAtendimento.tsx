@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Lock, MessageCircle, Send } from "lucide-react";
 import { CAMPO_COMPACTO } from "@/components/admin/estilos";
-import { nomeSetor, PERFIL_LABEL, STATUS_LABEL } from "@/lib/atendimento-rotulos";
+import { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL, STATUS_LABEL } from "@/lib/atendimento-rotulos";
 
 type Msg = { id: string; direcao: "entrada" | "saida"; tipo: string; texto: string | null; status: string | null; erro: string | null; enviado_por: string | null; created_at: string };
 type Ev = { id: string; acao: string; de_setor: string | null; para_setor: string | null; de_user: string | null; para_user: string | null; texto: string | null; autor: string | null; created_at: string };
@@ -103,9 +103,9 @@ export default function ConversaAtendimento({ id, voltar }: { id: string; voltar
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Link href={voltar} className="mb-1 inline-flex items-center gap-1 text-xs text-texto-2 lg:hidden"><ArrowLeft className="size-3" /> Conversas</Link>
-            <p className="flex items-center gap-2 text-lg font-semibold text-texto"><MessageCircle className="size-4 text-verde" />{c.nome || "+" + c.telefone}</p>
+            <p className="flex items-center gap-2 text-lg font-semibold text-texto"><MessageCircle className="size-4 text-verde" />{c.nome || contatoRotulo(c.telefone)}</p>
             <p className="text-xs text-texto-2">
-              +{c.telefone} · {c.codigo} · {STATUS_LABEL[c.status] ?? c.status}
+              {canalDoContatoRotulo(c.telefone) === "WhatsApp" ? "+" + c.telefone : canalDoContatoRotulo(c.telefone)} · {c.codigo} · {STATUS_LABEL[c.status] ?? c.status}
               {c.perfil_tipo && ` · ${PERFIL_LABEL[c.perfil_tipo] ?? c.perfil_tipo}`}
               {d.perfil && ` (${d.perfil.nome}${d.perfil.email ? ", " + d.perfil.email : ""})`}
             </p>
@@ -246,7 +246,7 @@ export default function ConversaAtendimento({ id, voltar }: { id: string; voltar
         <div className="flex gap-2">
           <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={2}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
-            placeholder={nota ? "Nota interna (o cliente não vê)…" : d.configurado ? "Responder pelo WhatsApp… (digite / para respostas prontas)" : "WhatsApp não configurado: só notas internas"}
+            placeholder={nota ? "Nota interna (o cliente não vê)…" : d.configurado ? `Responder pelo ${canalDoContatoRotulo(c.telefone)}… (digite / para respostas prontas)` : `${canalDoContatoRotulo(c.telefone)} não configurado: só notas internas`}
             className={CAMPO_COMPACTO + " flex-1 resize-y " + (nota ? "border-ouro" : "")} />
           <button disabled={ocupado || (!nota && !d.configurado)} aria-label="Enviar" className="btn-verde self-end px-3 py-2 disabled:opacity-60"><Send className="size-4" /></button>
         </div>

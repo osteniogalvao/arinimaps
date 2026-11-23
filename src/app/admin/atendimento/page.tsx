@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CabecalhoPagina } from "@/components/ui/Pagina";
 import { CAMPO_COMPACTO } from "@/components/admin/estilos";
 import {
-  falta0156, nomeSetor, papelAtendimento, podeVer, PERFIL_LABEL, SETORES_ATENDIMENTO, STATUS_LABEL, type Conversa,
+  canalDoContatoRotulo, contatoRotulo, falta0156, nomeSetor, papelAtendimento, podeVer, PERFIL_LABEL, SETORES_ATENDIMENTO, STATUS_LABEL, type Conversa,
 } from "@/lib/atendimento";
 import ConversaAtendimento from "@/components/atendimento/ConversaAtendimento";
 
@@ -117,11 +117,12 @@ export default async function Atendimento({ searchParams }: PageProps<"/admin/at
                 <Link href={link({ conversa: c.id })}
                   className={"block px-4 py-3 transition-colors " + (c.id === aberta ? "bg-verde/12" : "hover:bg-superficie-2")}>
                   <span className="flex items-center justify-between gap-2">
-                    <span className={"truncate " + (c.nao_lidas ? "font-bold text-texto" : "font-semibold text-texto")}>{c.nome || "+" + c.telefone}</span>
+                    <span className={"truncate " + (c.nao_lidas ? "font-bold text-texto" : "font-semibold text-texto")}>{c.nome || contatoRotulo(c.telefone)}</span>
                     <span className="shrink-0 text-[11px] text-texto-2">{quando(c.ultima_mensagem_em)}</span>
                   </span>
                   <span className="mt-0.5 block truncate text-sm text-texto-2">{c.ultimo_texto}</span>
                   <span className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-texto-2">
+                    {canalDoContatoRotulo(c.telefone) !== "WhatsApp" && <span className="rounded-full bg-verde/15 px-2 font-semibold text-verde">{canalDoContatoRotulo(c.telefone)}</span>}
                     <span className="rounded-full border border-linha px-2">{nomeSetor(c.setor)}</span>
                     {c.responsavel && <span className="rounded-full border border-linha px-2">{nomeDe.get(c.responsavel) ?? "Responsável"}</span>}
                     {c.perfil_tipo && <span className="rounded-full border border-linha px-2">{PERFIL_LABEL[c.perfil_tipo] ?? c.perfil_tipo}</span>}

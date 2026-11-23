@@ -75,6 +75,6 @@ export const config = {
   // do token (uma ida ao Supabase Auth) era parte da lentidão do zoom.
   matcher: [
     // O webhook autentica a Meta e mede o corpo em fluxo. O proxy copiaria o corpo antes dessa validação.
-    "/((?!api/admin/cartografia|api/webhooks/whatsapp(?:/|$)|api/tiles|api/geo|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|pbf)).*)",
+    "/((?!api/admin/cartografia|api/webhooks/(?:whatsapp|meta-mensagens)(?:/|$)|api/tiles|api/geo|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|pbf)).*)",
   ],
 };

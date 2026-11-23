@@ -1,11 +1,12 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { temSetor, type Ator } from "@/lib/authz";
-import { enviarWhatsapp, telefoneWhatsapp } from "@/lib/meta";
+import { telefoneWhatsapp } from "@/lib/meta";
+import { canalDoContato, contatoSocial, enviarPeloCanal } from "@/lib/meta-mensagens";
 import { notificar } from "@/lib/notificacoes";
 import type { SetorId } from "@/lib/setores";
-import { nomeSetor, PERFIL_LABEL } from "@/lib/atendimento-rotulos";
-export { nomeSetor, PERFIL_LABEL, SETORES_ATENDIMENTO, STATUS_LABEL } from "@/lib/atendimento-rotulos";
+import { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL } from "@/lib/atendimento-rotulos";
+export { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL, SETORES_ATENDIMENTO, STATUS_LABEL } from "@/lib/atendimento-rotulos";
 
 /**
  * Atendimento por setores (migration 0156), no molde do CRM da Arini
@@ -117,10 +118,11 @@ function lerEscolha(texto: string, opcoes: Opcao[]) {
 /** Mensagem enviada pelo robô: entra no histórico da conversa, mas não conta como resposta humana. */
 async function enviarDoRobo(c: Pick<Conversa, "id" | "telefone">, texto: string, canal?: string) {
   try {
-    const waId = await enviarWhatsapp(c.telefone, texto, canal);
-    await supabaseAdmin().from("whatsapp_mensagens").insert({
-      wa_id: waId || null, telefone: c.telefone, direcao: "saida", texto, conversa_id: c.id, status: "sent",
-    });
+    const waId = await enviarPeloCanal(c.telefone, texto, canal);
+    const linha: Record<string, unknown> = { wa_id: waId || null, telefone: c.telefone, direcao: "saida", texto, conversa_id: c.id, status: "sent" };
+    const social = contatoSocial(c.telefone);
+    const { error } = await supabaseAdmin().from("whatsapp_mensagens").insert(social ? { ...linha, canal: canalDoContato(c.telefone) } : linha);
+    if (error) console.error("atendimento: gravar saída do robô", error.message);
   } catch (e) {
     console.error("atendimento: robô não conseguiu enviar", e instanceof Error ? e.message : e);
   }
@@ -132,7 +134,7 @@ async function encaminhar(c: Conversa, setor: string | null, responsavel: string
   await eventoAtendimento({ conversa_id: c.id, acao, texto, autor, de_setor: c.setor, para_setor: setor, de_user: c.responsavel, para_user: responsavel });
   Object.assign(c, mud);
   if (responsavel && responsavel !== autor) {
-    await notificar(responsavel, "atencao", `Atendimento ${c.codigo} com você`, `${c.nome || "+" + c.telefone}: ${c.ultimo_texto ?? ""}`.slice(0, 200), `/admin/atendimento?conversa=${c.id}`);
+    await notificar(responsavel, "atencao", `Atendimento ${c.codigo} com você`, `${c.nome || contatoRotulo(c.telefone)}: ${c.ultimo_texto ?? ""}`.slice(0, 200), `/admin/atendimento?conversa=${c.id}`);
   }
 }
 
@@ -167,7 +169,11 @@ export async function entradaAtendimento(p: {
 }): Promise<boolean> {
   const admin = supabaseAdmin();
   const agora = new Date().toISOString();
-  await admin.from("atendimento_conversas").upsert({ telefone: p.telefone, nome: p.nome || null }, { onConflict: "telefone", ignoreDuplicates: true });
+  const social = contatoSocial(p.telefone);
+  // conversa das redes (Instagram/Messenger) só existe com a 0157; no WhatsApp a coluna canal fica no padrão
+  await admin.from("atendimento_conversas").upsert(
+    social ? { telefone: p.telefone, nome: p.nome || null, canal: canalDoContato(p.telefone) } : { telefone: p.telefone, nome: p.nome || null },
+    { onConflict: "telefone", ignoreDuplicates: true });
   const { data, error } = await admin.from("atendimento_conversas").select("*").eq("telefone", p.telefone).maybeSingle();
   if (error || !data) {
     if (!falta0156(error?.message)) console.error("atendimento: conversa", error?.message);
@@ -204,7 +210,7 @@ export async function entradaAtendimento(p: {
   }
 
   // 2. perfil conhecido pelo telefone (proprietário, corretor parceiro…)
-  if (!c.perfil_user_id) {
+  if (!c.perfil_user_id && !social) {
     const perfil = await perfilPeloTelefone(p.telefone);
     if (perfil) {
       await admin.from("atendimento_conversas").update({ perfil_user_id: perfil.user_id, perfil_tipo: perfil.role, nome: c.nome || perfil.nome }).eq("id", c.id);
@@ -219,7 +225,7 @@ export async function entradaAtendimento(p: {
   }
 
   if (c.setor || c.responsavel) {
-    if (c.responsavel) await notificar(c.responsavel, "info", `WhatsApp de ${c.nome || "+" + c.telefone}`, p.texto.slice(0, 200), `/admin/atendimento?conversa=${c.id}`);
+    if (c.responsavel) await notificar(c.responsavel, "info", `${canalDoContatoRotulo(c.telefone)} de ${c.nome || contatoRotulo(c.telefone)}`, p.texto.slice(0, 200), `/admin/atendimento?conversa=${c.id}`);
     return true;
   }
 

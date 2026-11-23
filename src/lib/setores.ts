@@ -61,6 +61,8 @@ export const SETORES: Setor[] = [
       { href: "/admin/financeiro", rotulo: "Painel do setor", icone: "◫" },
       { href: "/admin/comissoes", rotulo: "Comissões", icone: "％" },
       { href: "/admin/mensalidades", rotulo: "Mensalidades", icone: "$" },
+      { href: "/admin/financeiro/caixa", rotulo: "Caixa e contas", icone: "$" },
+      { href: "/admin/financeiro/alugueis", rotulo: "Aluguéis", icone: "⌂" },
       { href: "/admin/registros/despesas", rotulo: "Despesas", icone: "−" },
       { href: "/admin/financeiro/resultado", rotulo: "Resultado e contabilidade", icone: "▤" },
       { href: "/admin/registros/notas-fiscais", rotulo: "Notas fiscais", icone: "▧" },
@@ -76,6 +78,7 @@ export const SETORES: Setor[] = [
     itens: [
       { href: "/admin/juridico", rotulo: "Painel do setor", icone: "◫" },
       { href: "/admin/juridico/lgpd", rotulo: "Pedidos LGPD", icone: "⛨" },
+      { href: "/admin/registros/contratos-locacao", rotulo: "Contratos de locação", icone: "⌂" },
     ],
   },
   {
@@ -83,6 +86,7 @@ export const SETORES: Setor[] = [
     descricao: "Origem dos leads, imóveis mais procurados, materiais de divulgação e vitrine do site.",
     itens: [
       { href: "/admin/marketing", rotulo: "Painel do setor", icone: "◫" },
+      { href: "/admin/marketing/fluxo", rotulo: "Imóveis para divulgar", icone: "⇢" },
       { href: "/admin/marketing/comunicados", rotulo: "Comunicados da Matriz", icone: "✉" },
       { href: "/admin/marketing/divulgadores", rotulo: "Programa de divulgadores", icone: "◫" },
       { href: "/admin/ranking", rotulo: "Ranking de imóveis", icone: "★" },
