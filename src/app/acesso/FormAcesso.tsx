@@ -5,6 +5,7 @@ import { ArrowRight, Lock } from "lucide-react";
 import { CAMPO } from "@/components/ui/Pagina";
 import { BTN_ACAO } from "@/components/landing/Titulo";
 import { destinoSeguro } from "@/lib/seguranca/destino";
+import CampoSenha from "@/components/ui/CampoSenha";
 
 const INPUT = CAMPO;
 
@@ -44,7 +45,7 @@ export default function FormAcesso() {
           A ARINI está em fase de testes. Digite a senha de acesso para continuar.
         </p>
       </div>
-      <input type="password" autoFocus required autoComplete="current-password"
+      <CampoSenha autoFocus required autoComplete="current-password"
         aria-label="Senha de acesso" placeholder="Senha de acesso" className={INPUT}
         value={senha} onChange={(e) => setSenha(e.target.value)} />
       {erro && <p className="rounded-xl border border-critico/30 bg-critico/10 px-4 py-3 text-sm text-critico" role="alert">{erro}</p>}

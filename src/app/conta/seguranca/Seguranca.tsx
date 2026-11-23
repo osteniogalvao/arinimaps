@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { CAMPO, ROTULO, Etiqueta } from "@/components/ui/Pagina";
 import { formatDataHora } from "@/lib/format";
+import CampoSenha from "@/components/ui/CampoSenha";
 
 type Evento = { id: string; evento: string; ip: string | null; agente: string | null; created_at: string };
 type Fator = { id: string; status: string; friendly_name?: string | null; created_at: string };
@@ -192,11 +193,11 @@ export default function Seguranca({
 
       <Bloco icone={KeyRound} titulo="Trocar a senha">
         <form onSubmit={trocarSenha} className="grid gap-4 sm:grid-cols-3">
-          <input required type="password" autoComplete="current-password" className={input} placeholder="Senha atual"
+          <CampoSenha required autoComplete="current-password" className={input} placeholder="Senha atual"
             value={senha.atual} onChange={(e) => setSenha({ ...senha, atual: e.target.value })} />
-          <input required type="password" autoComplete="new-password" className={input} placeholder={`Nova (mín. ${SENHA_MIN})`}
+          <CampoSenha required autoComplete="new-password" className={input} placeholder={`Nova (mín. ${SENHA_MIN})`}
             value={senha.nova} onChange={(e) => setSenha({ ...senha, nova: e.target.value })} />
-          <input required type="password" autoComplete="new-password" className={input} placeholder="Repita a nova"
+          <CampoSenha required autoComplete="new-password" className={input} placeholder="Repita a nova"
             value={senha.confirma} onChange={(e) => setSenha({ ...senha, confirma: e.target.value })} />
           <button disabled={ocupado} className="btn-contorno justify-self-start px-5 py-3 text-sm disabled:opacity-60 sm:col-span-3">
             Trocar senha
