@@ -56,6 +56,8 @@ export async function POST(request: Request) {
   const q = new URL(request.url).searchParams;
   const municipality_id = q.get("municipality_id") ?? "";
   const nome = (q.get("nome") ?? "").trim();
+  // distrito do município (Carlos, 18/11: Carneirinho › Fátima). Vazio = sede.
+  const distrito = (q.get("distrito") ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
   const nomeArquivo = q.get("arquivo") ?? "";
   const zona = q.get("zona") ? Number(q.get("zona")) : undefined;
   const tamanho = Number(request.headers.get("content-length") ?? 0);
@@ -163,6 +165,7 @@ export async function POST(request: Request) {
     }
     const [x0, y0, x1, y1] = convertido.bbox;
     const {error} = await admin.rpc("fn_publicar_dxf",{
+      ...(distrito ? { p_distrito: distrito } : {}),
       p_layer_id:camada.id,p_municipio:municipality_id,p_nome:nome,p_original:path,p_publico:publico,
       p_bytes:corpo.length,p_centro:centroDe(convertido.geojson as GeoJSON.FeatureCollection),
       p_diagnostico: {
@@ -172,6 +175,7 @@ export async function POST(request: Request) {
         centro: convertido.centro,
         distancia_municipio_km: distanciaKm,
         dentro_do_municipio: conferencia?.intersecta ?? null,
+        ...(distrito ? { distrito } : {}),
         arquivo: arquivo.name,
         bytes_dxf: arquivo.size,
         extensao_km: [
@@ -181,10 +185,19 @@ export async function POST(request: Request) {
       },
     });
     if (error) {
+      // sem a migration 0158 o banco não conhece p_distrito (PostgREST: função não encontrada)
+      if (distrito && (error.code === "PGRST202" || error.code === "42883")) {
+        await media.remove([path,publico]);
+        return falha(503,"migration","Falta atualizar o banco (migration 0158) para publicar plantas de distrito.");
+      }
       if (/^[0-9A-Z]{5}$/.test(error.code) && !error.code.startsWith("08")) {
         await media.remove([path,publico]);
-        if (error.code === "55000") return falha(409,"planta_em_uso","O município já tem uma planta com lotes, ajustes ou conteúdo cadastrado.", {
-          solucao:"Abra Calibrar na planta existente. Para trocar o arquivo preservando esses dados, é preciso conciliar as duas versões.",
+        if (error.code === "55000") return falha(409,"planta_em_uso",
+          distrito ? `O distrito ${distrito} já tem uma planta com lotes, ajustes ou conteúdo cadastrado.`
+            : "A sede do município já tem uma planta com lotes, ajustes ou conteúdo cadastrado.", {
+          solucao: distrito
+            ? "Abra Calibrar na planta existente do distrito. Para trocar o arquivo preservando esses dados, é preciso conciliar as duas versões."
+            : "Se esta planta é de um distrito (ex.: Fátima, em Carneirinho), escolha o distrito no envio: cada distrito tem a sua planta e a da sede fica intacta. Se é a sede mesmo, abra Calibrar na planta existente.",
         });
         return falhaBanco("camada_nao_gravou",error);
       }
@@ -197,7 +210,7 @@ export async function POST(request: Request) {
     await logAudit({
       user_id: a.userId, acao: "cartografia_dxf_publicada",
       entidade: "cartography_layers", entidade_id: camada.id,
-      dados_depois: { nome, linhas: convertido.linhas, zona: convertido.zona, bytes: corpo.length },
+      dados_depois: { nome, distrito: distrito || null, linhas: convertido.linhas, zona: convertido.zona, bytes: corpo.length },
     });
 
     const d = convertido.diagnostico;

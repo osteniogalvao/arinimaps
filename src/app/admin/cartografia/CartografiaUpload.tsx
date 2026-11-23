@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { enviarArquivo, type ErroApi } from "@/lib/api/enviar";
 import { AvisoErro, AvisoOk } from "@/components/ui/Aviso";
@@ -32,10 +32,36 @@ type Resposta = {
 const MB = 1024 * 1024;
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
-export default function CartografiaUpload({ municipios }: { municipios: { id: string; nome: string }[] }) {
+type Municipio = { id: string; nome: string; codigo_ibge?: string | null };
+
+/**
+ * Distritos do município pela API de localidades do IBGE (áudio do Carlos,
+ * 18/11: "Carneirinho tem seis distritos, como Fátima"). O distrito-sede, que
+ * tem o mesmo nome do município, é a sede: fica de fora da lista.
+ */
+function useDistritos(m: Municipio | undefined) {
+  const [lista, setLista] = useState<string[]>([]);
+  useEffect(() => {
+    const cod = m?.codigo_ibge;
+    if (!cod || !/^\d{7}$/.test(cod)) return;
+    let vivo = true;
+    fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/municipios/${cod}/distritos`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d: { nome: string }[]) => {
+        if (vivo) setLista(d.map((x) => x.nome).filter((n) => n.localeCompare(m.nome, "pt-BR", { sensitivity: "base" }) !== 0).sort((a, b) => a.localeCompare(b, "pt-BR")));
+      })
+      .catch(() => { if (vivo) setLista([]); });
+    return () => { vivo = false; setLista([]); };
+  }, [m]);
+  return lista;
+}
+
+export default function CartografiaUpload({ municipios }: { municipios: Municipio[] }) {
   const router = useRouter();
   const [nome, setNome] = useState("");
   const [municipio, setMunicipio] = useState("");
+  const [distrito, setDistrito] = useState("");
+  const distritos = useDistritos(municipios.find((m) => m.id === municipio));
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [fase, setFase] = useState<"parado" | "enviando" | "convertendo">("parado");
   const [pct, setPct] = useState(0);
@@ -50,7 +76,7 @@ export default function CartografiaUpload({ municipios }: { municipios: { id: st
     setErro(null); setOk(null); setPct(0); setFase("enviando");
 
     const r = await enviarArquivo<Resposta>("/api/admin/cartografia", arquivo, {
-      nome, municipality_id: municipio,
+      nome, municipality_id: municipio, ...(distrito.trim() ? { distrito: distrito.trim() } : {}),
     }, (p) => {
       setPct(p);
       if (p >= 100) setFase("convertendo");
@@ -76,10 +102,28 @@ export default function CartografiaUpload({ municipios }: { municipios: { id: st
         </label>
         <label className="block">
           <span className={ROTULO}>Município</span>
-          <select className={CAMPO} value={municipio} onChange={(e) => setMunicipio(e.target.value)}>
+          <select className={CAMPO} value={municipio} onChange={(e) => { setMunicipio(e.target.value); setDistrito(""); }}>
             <option value="">Município…</option>
             {municipios.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
           </select>
+        </label>
+        <label className="block sm:col-span-2">
+          <span className={ROTULO}>Distrito <span className="font-normal text-texto-2">(deixe em branco se for a sede da cidade)</span></span>
+          <input className={CAMPO} list="distritos-ibge" disabled={!municipio} maxLength={80}
+            placeholder={distritos.length ? `Ex.: ${distritos[0]}` : "Digite o nome do distrito"}
+            value={distrito} onChange={(e) => setDistrito(e.target.value)} />
+          <datalist id="distritos-ibge">{distritos.map((d) => <option key={d} value={d} />)}</datalist>
+          {municipio && distritos.length > 0 && (
+            <span className="mt-1.5 flex flex-wrap gap-1.5">
+              {["", ...distritos].map((d) => (
+                <button key={d || "sede"} type="button" onClick={() => setDistrito(d)}
+                  className={`rounded-full border px-2.5 py-1 text-xs ${distrito === d ? "border-verde bg-verde/12 font-semibold text-texto" : "border-linha text-texto-2"}`}>
+                  {d || "Sede"}
+                </button>
+              ))}
+            </span>
+          )}
+          <span className="mt-1 block text-xs text-texto-2">Cada distrito tem a sua planta. Enviar a planta de um distrito não mexe na da sede.</span>
         </label>
       </div>
 

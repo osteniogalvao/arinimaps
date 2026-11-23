@@ -10,7 +10,7 @@ export default async function AdminCartografia() {
   await exigirSetor("cartografia");
   const admin = supabaseAdmin();
   const [{ data: municipios }, { data: divergentes }] = await Promise.all([
-    admin.from("municipalities").select("id, nome").eq("ativo", true).order("nome"),
+    admin.from("municipalities").select("id, nome, codigo_ibge").eq("ativo", true).order("nome"),
     // anúncios de lote que a troca de planta não conseguiu encaixar sozinha
     admin.from("properties").select("id, codigo, titulo, reencaixe_motivo, reencaixe_em")
       .eq("reencaixe_status", "divergente").order("reencaixe_em", { ascending: false }).limit(100),

@@ -56,6 +56,7 @@ export async function GET(request: Request) {
     const diag = (c.diagnostico ?? null) as {
       layers?: { nome: string; linhas: number }[];
       zona?: number | string;
+      distrito?: string;
       bbox?: [number, number, number, number];
     } | null;
     // bbox só vale se vier completo e finito — planta antiga não tem diagnóstico,
@@ -69,6 +70,8 @@ export async function GET(request: Request) {
       id: c.id,
       nome: c.nome,
       municipio: mun?.nome ?? null,
+      // planta de distrito (0158): o nome vai no diagnóstico, que o mapa já lê
+      distrito: typeof diag?.distrito === "string" && diag.distrito ? diag.distrito : null,
       tipo: c.tipo,
       tiles: c.tipo === "raster" ? `${base}/${c.tiles_path}/{z}/{x}/{y}.png` : undefined,
       // equipe: original completo (a calibração lê daqui para reexibir camada
