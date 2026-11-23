@@ -37,6 +37,9 @@ export default async function CrmsDosSetores() {
     ? await admin.from("support_tickets").select("id,codigo,assunto,status",{count:"exact"})
         .neq("status","resolvido").order("updated_at",{ascending:false}).limit(5) : null;
   const setores = SETORES.filter((s) => user.setores.includes(s.id));
+  // itens delegados a mim, em qualquer setor (áudio do Carlos, 23/11/2026)
+  const { data: meus } = await admin.from("crm_itens").select("id, codigo, titulo, prazo_etapa, pipeline:crm_pipelines(nome, setor)")
+    .eq("responsavel", user.id).eq("status", "aberto").order("prazo_etapa", { ascending: true, nullsFirst: false }).limit(30);
 
   return (
     <div className="max-w-6xl space-y-8">
@@ -48,6 +51,18 @@ export default async function CrmsDosSetores() {
           <p>{sac.count??0} em aberto</p>
           <ul>{sac.data?.map(t=><li key={t.id}><Link className="block py-1 hover:underline" href={"/admin/suporte/"+t.id}>{t.codigo} · {t.assunto}</Link></li>)}</ul>
         </>}
+      </section>}
+      {!!meus?.length && <section className="cartao space-y-3 p-5">
+        <h2 className="text-xl font-semibold">Comigo · {meus.length} item{meus.length === 1 ? "" : "s"} em aberto</h2>
+        <ul className="divide-y divide-linha text-sm">{meus.map((i) => {
+          const p = (Array.isArray(i.pipeline) ? i.pipeline[0] : i.pipeline) as { nome: string; setor: string } | null;
+          const vencido = i.prazo_etapa && +new Date(i.prazo_etapa) < agora;
+          return <li key={i.id}><Link href={`/admin/crm/item/${i.id}`} className="flex flex-wrap items-center gap-2 py-2 hover:underline">
+            <span className="font-mono text-texto-2">{i.codigo}</span><span className="font-medium">{i.titulo}</span>
+            <span className="text-texto-2">· {SETORES.find((x) => x.id === p?.setor)?.nome ?? p?.setor} · {p?.nome}</span>
+            {vencido && <Etiqueta tom="critico">Prazo vencido</Etiqueta>}
+          </Link></li>;
+        })}</ul>
       </section>}
       {diretoria && <NovoFunil setores={setores.map((s) => ({ id: s.id, nome: s.nome }))} />}
       {!funis?.length && <Vazio icone={Kanban} titulo="Nenhum funil no seu setor" texto="A Diretoria cria os funis e define as etapas e os campos de cada um." />}

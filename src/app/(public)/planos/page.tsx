@@ -19,6 +19,7 @@ import ModulosDoPerfil from "./ModulosDoPerfil";
 import RolarParaPlanos from "./RolarParaPlanos";
 import { PERFIS_COM_VITRINE, type OfertaPerfil } from "@/lib/ofertas-perfis";
 import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA, type PrecoVigente } from "@/lib/planos-catalogo";
+import { checkoutAtivo } from "@/lib/assinaturas-cotadas";
 import {
   COTAS, GRUPO_RECURSO_LABEL, NICHO_LABEL, PERIODICIDADE_LABEL, PERSONAS_PLANOS, RECURSOS,
   personaPorId, planosDaPersona, type PersonaPlano, type Plano, type Recurso,
@@ -108,7 +109,7 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
             "Validade de " + String(cfg.ari_validade_meses) + " meses"], detalhes: ["Pacote sem mensalidade", "Saldo liberado após a confirmação do pagamento."],
         })} autenticado={!!user} /> : catalogo && !precos.length ? <Vazio titulo="As opções deste perfil estão indisponíveis no momento." /> : persona && catalogo ? (
           <EscolherPlano key={persona.id} precos={precos} personaId={catalogo} perfil={persona.id} cadastro={linkCadastro(persona)}
-            autenticado={!!user} whatsapp={texto(cfg, "whatsapp_central")} parametros={sp} />
+            autenticado={!!user} whatsapp={texto(cfg, "whatsapp_central")} parametros={sp} pagamentoDireto={checkoutAtivo()} />
         ) : !planos.length ? (
           <Vazio icone={CreditCard} titulo="A Central prepara as opções deste perfil."
             acao={<Link href={`/suporte?assunto=${encodeURIComponent(persona.nome)}`} className="lp-btn lp-btn-verde">Consultar a Central</Link>} />

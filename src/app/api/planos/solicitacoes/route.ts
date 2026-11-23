@@ -3,6 +3,7 @@ import { PLANOS_CATALOGO, comPrecoVigente, cotarPlano } from "@/lib/planos-catal
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { corpoPedido, ehUuid, erroPedido, falha, listarPedidos, mudarPedido, selecaoDoCorpo } from "@/lib/solicitacoes-planos-servidor";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { contratarDireto } from "@/lib/contratacao-direta";
 
 export async function GET(req: Request) {
   const a = await ator();
@@ -37,7 +38,14 @@ export async function POST(req: Request) {
   const { data, error } = await supabaseAdmin().rpc("fn_solicitar_plano", {
     p_user_id: a.userId, p_chave: chave, p_selecao: selecao, p_cotacao: cotacao,
   }).select("id,status,selecao,cotacao,created_at,updated_at").single();
-  return error ? erroPedido(error.code) : Response.json({ solicitacao: data });
+  if (error) return erroPedido(error.code);
+  // Contratação direta (23/11/2026): com o aceite marcado na página do plano,
+  // a proposta é liberada e a fatura sai na hora. Senão, segue para a Central.
+  if (body.contratar === true && body.aceito === true && !cotacao.sobOrcamento) {
+    const direto = await contratarDireto(a.userId, data.id);
+    return Response.json({ solicitacao: data, ...direto });
+  }
+  return Response.json({ solicitacao: data });
 }
 
 export async function PATCH(req: Request) {

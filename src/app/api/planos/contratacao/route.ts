@@ -35,6 +35,16 @@ export async function POST(req:Request) {
    try {await conciliarFatura(f.id);return NextResponse.json({ok:true});}
    catch {return falha(503,"conferencia","O Asaas e o pedido ainda não conferem. Consulte a referência da fatura no gateway.");}
  }
+ if(dados.acao==="liberar_direto") {
+   // 23/11/2026: a Central libera com os valores da página de planos (mesma regra da contratação direta, migration 0155)
+   if(!temSetor(a,"financeiro","diretoria")) return falha(403,"acesso","Acesso restrito ao Financeiro.");
+   const {data:ped}=await db.from("solicitacoes_planos").select("user_id").eq("id",dados.id).maybeSingle();
+   if(!ped) return falha(404,"pedido","Pedido não encontrado.");
+   const {error}=await db.rpc("assinatura_contratar_direto",{p_titular:ped.user_id,p_pedido:dados.id});
+   if(error) return error.code==="42883" ? falha(503,"migration","Rode a migration 0155 para liberar pelos valores da página.") : erro(error);
+   await db.from("audit_log").insert({user_id:a.userId,acao:"assinatura.liberada_pela_central",entidade:"solicitacoes_planos",entidade_id:dados.id});
+   return NextResponse.json({ok:true});
+ }
  if(dados.acao==="liberar") {
    if(!temSetor(a,"financeiro")) return falha(403,"acesso","Acesso restrito ao financeiro.");
    if(typeof dados.escopo!=="string") return falha(400,"escopo","Informe o escopo disponível.");

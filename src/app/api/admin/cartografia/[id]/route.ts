@@ -151,7 +151,7 @@ function lerAjustes(v: unknown): { ok: true; ajustes: AjusteLocal[] } | { ok: fa
   for (let i = 0; i < ajustes.length; i++) {
     for (let j = i + 1; j < ajustes.length; j++) {
       if (partesSobrepostas(ajustes[i], ajustes[j])) {
-        return { ok: false, motivo: `as áreas de "${ajustes[i].nome}" e "${ajustes[j].nome}" se sobrepõem` };
+        return { ok: false, motivo: `as áreas de "${ajustes[i].nome}" e "${ajustes[j].nome}" se sobrepõem (use Editar perímetro na peça para puxar os pontos)` };
       }
     }
   }

@@ -8,8 +8,15 @@ import CampoDado from "./CampoDado";
 import { crm } from "./api";
 
 /** Edição do item: campos do funil, responsável, etapa e situação. */
-export default function ItemCrmDetalhe({ item, etapas, campos, equipe }: {
-  item: ItemCrm; etapas: Etapa[]; campos: CampoCrm[]; equipe: { user_id: string; nome: string }[];
+type Membro = { user_id: string; nome: string; setores?: string[] };
+type Funil = { id: string; nome: string; setor: string; setorNome: string };
+
+export default function ItemCrmDetalhe({ item, etapas, campos, equipe, setorDoFunil, funis = [] }: {
+  item: ItemCrm; etapas: Etapa[]; campos: CampoCrm[]; equipe: Membro[];
+  /** setor do funil: quem é dele aparece primeiro na lista de delegação */
+  setorDoFunil?: string;
+  /** funis de outros setores, para encaminhar */
+  funis?: Funil[];
 }) {
   const router = useRouter();
   const comExtras = item.prioridade !== undefined;
@@ -20,6 +27,11 @@ export default function ItemCrmDetalhe({ item, etapas, campos, equipe }: {
   const [erro, setErro] = useState("");
   const [ok, setOk] = useState("");
   const aberto = item.status === "aberto";
+  const [delegar, setDelegar] = useState({ para: "", nota: "" });
+  const [encaminhar, setEncaminhar] = useState({ funil: "", para: "", motivo: "" });
+  const doSetor = (m: Membro, setor?: string) => !setor || !m.setores || m.setores.includes(setor);
+  const ordenar = (setor?: string) => [...equipe].sort((x, y) => Number(doSetor(y, setor)) - Number(doSetor(x, setor)) || x.nome.localeCompare(y.nome, "pt-BR"));
+  const funilDestino = funis.find((x) => x.id === encaminhar.funil);
   const atual = etapas.find((e) => e.id === item.etapa_id);
   const proxima = etapas.find((e) => e.ordem > (atual?.ordem ?? -1));
   const faltaProxima = proxima ? camposFaltando(campos, etapas, proxima.id, f.dados) : [];
@@ -27,8 +39,9 @@ export default function ItemCrmDetalhe({ item, etapas, campos, equipe }: {
   async function chamar(corpo: Record<string, unknown>, aviso: string) {
     setErro(""); setOk("");
     const e = await crm({ id: item.id, ...corpo });
-    if (e) { setErro(e); return; }
+    if (e) { setErro(e); return false; }
     setOk(aviso); router.refresh();
+    return true;
   }
 
   return (
@@ -40,7 +53,7 @@ export default function ItemCrmDetalhe({ item, etapas, campos, equipe }: {
         <label className="text-sm"><span className="mb-1 block font-semibold">Responsável</span>
           <select className={CAMPO_COMPACTO + " w-full"} value={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.value })}>
             <option value="">Sem responsável</option>
-            {equipe.map((m) => <option key={m.user_id} value={m.user_id}>{m.nome}</option>)}
+            {ordenar(setorDoFunil).map((m) => <option key={m.user_id} value={m.user_id}>{m.nome}{doSetor(m, setorDoFunil) ? "" : " (outro setor)"}</option>)}
           </select></label>
         {comExtras ? (
           <label className="text-sm"><span className="mb-1 block font-semibold">Prioridade</span>
@@ -67,6 +80,42 @@ export default function ItemCrmDetalhe({ item, etapas, campos, equipe }: {
           <textarea className={CAMPO_COMPACTO + " min-h-24 w-full"} value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} /></label>
         <div className="sm:col-span-2"><button className="btn-verde px-4 py-2 text-sm">Salvar</button></div>
       </form>
+
+      {aberto && <div className="grid gap-4 md:grid-cols-2">
+        <form className="cartao space-y-3 p-5 text-sm" onSubmit={(e) => {
+          e.preventDefault();
+          void chamar({ acao: "delegar_item", responsavel: delegar.para || null, nota: delegar.nota }, "Item delegado. A pessoa recebe o aviso na Central.")
+            .then((feito) => { if (feito) setDelegar({ para: "", nota: "" }); });
+        }}>
+          <h3 className="font-semibold">Delegar</h3>
+          <p className="text-texto-2">Passa o item para outra pessoa sem precisar preencher os campos da etapa. Quem é de outro setor também recebe e consegue abrir.</p>
+          <select required aria-label="Delegar para" className={CAMPO_COMPACTO + " w-full"} value={delegar.para} onChange={(e) => setDelegar({ ...delegar, para: e.target.value })}>
+            <option value="">Escolha a pessoa</option>
+            {ordenar(setorDoFunil).filter((m) => m.user_id !== item.responsavel).map((m) => <option key={m.user_id} value={m.user_id}>{m.nome}{doSetor(m, setorDoFunil) ? "" : " (outro setor)"}</option>)}
+          </select>
+          <input className={CAMPO_COMPACTO + " w-full"} maxLength={1000} placeholder="Recado para quem recebe (opcional)" value={delegar.nota} onChange={(e) => setDelegar({ ...delegar, nota: e.target.value })} />
+          <button className="btn-verde px-4 py-2" disabled={!delegar.para}>Delegar</button>
+        </form>
+        {funis.length > 0 && <form className="cartao space-y-3 p-5 text-sm" onSubmit={(e) => {
+          e.preventDefault();
+          void chamar({ acao: "encaminhar_item", pipeline_id: encaminhar.funil, responsavel: encaminhar.para || null, motivo: encaminhar.motivo },
+            "Item encaminhado. Código, campos, conversa e histórico seguem com ele.").then((feito) => { if (feito) setEncaminhar({ funil: "", para: "", motivo: "" }); });
+        }}>
+          <h3 className="font-semibold">Encaminhar para outro setor</h3>
+          <p className="text-texto-2">O item muda de funil e entra na primeira etapa do destino, com o mesmo código e todo o histórico.</p>
+          <select required aria-label="Funil de destino" className={CAMPO_COMPACTO + " w-full"} value={encaminhar.funil} onChange={(e) => setEncaminhar({ ...encaminhar, funil: e.target.value, para: "" })}>
+            <option value="">Escolha o setor e o funil</option>
+            {funis.map((x) => <option key={x.id} value={x.id}>{x.setorNome} · {x.nome}</option>)}
+          </select>
+          <select aria-label="Aos cuidados de" className={CAMPO_COMPACTO + " w-full"} value={encaminhar.para} onChange={(e) => setEncaminhar({ ...encaminhar, para: e.target.value })}>
+            <option value="">Sem responsável (o setor distribui)</option>
+            {ordenar(funilDestino?.setor).map((m) => <option key={m.user_id} value={m.user_id}>{m.nome}{doSetor(m, funilDestino?.setor) ? "" : " (outro setor)"}</option>)}
+          </select>
+          <textarea required minLength={5} maxLength={1000} className={CAMPO_COMPACTO + " min-h-16 w-full"} placeholder="O que o outro setor precisa fazer"
+            value={encaminhar.motivo} onChange={(e) => setEncaminhar({ ...encaminhar, motivo: e.target.value })} />
+          <button className="btn-verde px-4 py-2" disabled={!encaminhar.funil || encaminhar.motivo.trim().length < 5}>Encaminhar</button>
+        </form>}
+      </div>}
 
       <div className="cartao flex flex-wrap items-center gap-2 p-5 text-sm">
         {aberto ? (

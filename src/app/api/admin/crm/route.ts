@@ -3,13 +3,14 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ator, temSetor, type Ator } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 import { concluirTarefaDoEvento } from "@/lib/central";
-import { SETOR_IDS, type SetorId } from "@/lib/setores";
+import { SETORES, SETOR_IDS, type SetorId } from "@/lib/setores";
 import { camposFaltando, extrasDoItem, normalizarDados, prazoDaEtapa, type CampoCrm, type Etapa } from "@/lib/crmSetores";
 
 /**
  * Motor de CRM por setor (migration 0069). Configuração (funil, etapas e
  * campos) é da Diretoria; itens são de quem atua no setor do funil.
  */
+const SETOR_NOMES = new Map<string, string>(SETORES.map((s) => [s.id, s.nome]));
 class Erro extends Error { constructor(public msg: string, public status = 400) { super(msg); } }
 const UUID = /^[0-9a-f-]{36}$/i;
 const id = (v: unknown) => { if (typeof v !== "string" || !UUID.test(v)) throw new Erro("Registro inválido."); return v; };
@@ -27,6 +28,24 @@ async function pipelineDoSetor(a: Ator, pipelineId: string) {
   if (!data) throw new Erro("Funil não encontrado.", 404);
   if (!temSetor(a, data.setor as SetorId)) throw new Erro("Você não atua no setor deste funil.", 403);
   return data;
+}
+
+/**
+ * Quem pode mexer no item: quem atua no setor do funil ou o responsável a quem
+ * ele foi delegado, mesmo sendo de outro setor (áudio do Carlos, 23/11/2026:
+ * "não estou conseguindo delegar").
+ */
+async function acessoAoItem(a: Ator, item: { pipeline_id: string; responsavel: string | null }) {
+  if (item.responsavel && item.responsavel === a.userId) return;
+  await pipelineDoSetor(a, item.pipeline_id);
+}
+
+/** Membro ativo da equipe da Matriz (para delegar). */
+async function membroDaEquipe(userId: string) {
+  const { data, error } = await supabaseAdmin().from("profiles").select("user_id, nome, role, setores, ativo").eq("user_id", userId).maybeSingle();
+  if (error) throw new Erro("Falha ao consultar a equipe.", 503);
+  if (!data || data.ativo === false || !["admin_central", "analista_arini"].includes(String(data.role))) throw new Erro("Escolha alguém da equipe ativa.");
+  return data as { user_id: string; nome: string | null; role: string; setores: string[] | null };
 }
 
 async function estrutura(pipelineId: string) {
@@ -139,11 +158,62 @@ export async function POST(request: Request) {
         await logAudit({ user_id: a.userId, acao: "crm_item_criado", entidade: "crm_itens", entidade_id: data.id });
         return NextResponse.json({ ok: true, id: data.id });
       }
+      case "delegar_item": {
+        // Só troca o responsável: não exige os campos da etapa, que travavam a delegação pela ficha.
+        const { data: item, error } = await admin.from("crm_itens").select("id, pipeline_id, responsavel, titulo, updated_at").eq("id", id(b.id)).maybeSingle();
+        if (error) throw new Erro("Falha ao consultar o item.", 503);
+        if (!item) throw new Erro("Item não encontrado.", 404);
+        await acessoAoItem(a, item);
+        const novo = b.responsavel ? id(b.responsavel) : null;
+        const pessoa = novo ? await membroDaEquipe(novo) : null;
+        if (novo === item.responsavel) throw new Erro("Esta pessoa já é a responsável.", 409);
+        conferirGravacao(await admin.from("crm_itens").update({ responsavel: novo }).eq("id", item.id).eq("updated_at", item.updated_at).select("id").maybeSingle());
+        const nota = String(b.nota ?? "").trim().slice(0, 1000);
+        await evento(item.id, "responsavel", a.userId, (pessoa ? `Delegou para ${pessoa.nome || "colega"}` : "Deixou sem responsável") + (nota ? `: ${nota}` : ""),
+          { de: item.responsavel, para: novo });
+        await logAudit({ user_id: a.userId, acao: "crm_item_delegado", entidade: "crm_itens", entidade_id: item.id, dados_antes: { responsavel: item.responsavel }, dados_depois: { responsavel: novo } });
+        return NextResponse.json({ ok: true });
+      }
+      case "encaminhar_item": {
+        // Encaminhamento entre setores (Central de CRMs, item 4): o item muda de funil e
+        // mantém código, campos, conversa e histórico; entra na primeira etapa do destino.
+        const { data: item, error } = await admin.from("crm_itens").select("*").eq("id", id(b.id)).maybeSingle();
+        if (error) throw new Erro("Falha ao consultar o item.", 503);
+        if (!item) throw new Erro("Item não encontrado.", 404);
+        await acessoAoItem(a, item);
+        if (item.status !== "aberto") throw new Erro("Reabra o item antes de encaminhar.");
+        const motivo = String(b.motivo ?? "").trim().slice(0, 1000);
+        if (motivo.length < 5) throw new Erro("Explique em uma frase o que o outro setor precisa fazer.");
+        const destinoId = id(b.pipeline_id);
+        if (destinoId === item.pipeline_id) throw new Erro("O item já está neste funil.", 409);
+        const [{ data: origem }, { data: destino, error: ed }] = await Promise.all([
+          admin.from("crm_pipelines").select("id, setor, nome").eq("id", item.pipeline_id).maybeSingle(),
+          admin.from("crm_pipelines").select("id, setor, nome, ativo").eq("id", destinoId).maybeSingle(),
+        ]);
+        if (ed) throw new Erro("Falha ao consultar o funil de destino.", 503);
+        if (!destino || destino.ativo === false) throw new Erro("Funil de destino indisponível.");
+        const { etapas: etapasDestino } = await estrutura(destino.id);
+        const primeira = etapasDestino[0];
+        if (!primeira) throw new Erro("O funil de destino ainda não tem etapas.");
+        const novo = b.responsavel ? id(b.responsavel) : null;
+        const pessoa = novo ? await membroDaEquipe(novo) : null;
+        conferirGravacao(await admin.from("crm_itens").update({
+          pipeline_id: destino.id, etapa_id: primeira.id, entrou_etapa_em: new Date().toISOString(),
+          prazo_etapa: prazoDaEtapa(primeira), responsavel: novo,
+        }).eq("id", item.id).eq("updated_at", item.updated_at).select("id").maybeSingle());
+        if (item.etapa_id) await concluirTarefaDoEvento(`crm_sla:${item.id}:${item.etapa_id}`, a.userId, `Item encaminhado para ${destino.nome}`, "crm_itens", item.id);
+        const setorDe = (sid?: string) => SETOR_NOMES.get(sid ?? "") ?? sid ?? "—";
+        await evento(item.id, "encaminhado", a.userId,
+          `Encaminhado de ${setorDe(origem?.setor)} (${origem?.nome ?? "—"}) para ${setorDe(destino.setor)} (${destino.nome})${pessoa ? `, aos cuidados de ${pessoa.nome || "colega"}` : ""}: ${motivo}`,
+          { de_pipeline: item.pipeline_id, para_pipeline: destino.id, responsavel_anterior: item.responsavel, etapa_anterior: item.etapa_id });
+        await logAudit({ user_id: a.userId, acao: "crm_item_encaminhado", entidade: "crm_itens", entidade_id: item.id, dados_antes: item, dados_depois: { pipeline_id: destino.id, responsavel: novo } });
+        return NextResponse.json({ ok: true, pipeline_id: destino.id });
+      }
       case "mover_item": case "editar_item": case "status_item": {
         const { data: item, error } = await admin.from("crm_itens").select("*").eq("id", id(b.id)).maybeSingle();
         if (error) throw new Erro("Falha ao consultar o item.", 503);
         if (!item) throw new Erro("Item não encontrado.", 404);
-        await pipelineDoSetor(a, item.pipeline_id);
+        await acessoAoItem(a, item);
         const { etapas, campos } = await estrutura(item.pipeline_id);
         const atualizar = async (mudanca: Record<string, unknown>) => conferirGravacao(
           await admin.from("crm_itens").update(mudanca).eq("id", item.id).eq("updated_at", item.updated_at).select("id").maybeSingle()

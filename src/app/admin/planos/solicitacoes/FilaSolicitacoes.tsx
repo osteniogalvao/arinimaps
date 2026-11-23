@@ -13,8 +13,36 @@ const dataBR = (v: string) => new Date(v).toLocaleString("pt-BR", { timeZone: "A
 const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const dinheiro = (v: number | null) => v === null ? "Sob orçamento" : moeda.format(v / 100);
 
+/** Em que passo o pedido está (painel de acompanhamento, áudio do Carlos de 23/11/2026). */
+const PASSOS = ["Pedido", "Proposta liberada", "Aceite", "Fatura emitida", "Pago"] as const;
+function passoDoPedido(p: PedidoCentral): { indice: number; texto: string; travado?: boolean } {
+  if (p.status === "cancelado") return { indice: -1, texto: "Pedido cancelado" };
+  const a = p.assinatura;
+  if (!a) return p.cotacao.sobOrcamento
+    ? { indice: 0, texto: "Sob orçamento: a Central monta a proposta", travado: true }
+    : { indice: 0, texto: "Aguardando a Central liberar a proposta", travado: true };
+  if (a.cancelado) return { indice: 4, texto: "Renovação cancelada pelo titular" };
+  if (!a.aceite) return { indice: 1, texto: "Aguardando o cliente aceitar em Meus pedidos" };
+  const f = a.faturas_cotadas;
+  if (f.some((x) => x.status === "paga")) return { indice: 4, texto: "Pago · plano liberado na conta" };
+  if (f.some((x) => ["aberta", "vencida"].includes(x.status))) return { indice: 3, texto: f.some((x) => x.status === "vencida") ? "Fatura vencida" : "Fatura emitida · aguardando pagamento" };
+  return { indice: 2, texto: "Aceito · fatura em emissão no Asaas", travado: true };
+}
+
+function LinhaDoTempo({ p }: { p: PedidoCentral }) {
+  const passo = passoDoPedido(p);
+  return <div className="space-y-1">
+    <ol className="flex flex-wrap gap-1 text-xs" aria-label="Andamento do pedido">
+      {PASSOS.map((nome, i) => <li key={nome} className={"rounded-full px-2.5 py-1 " + (i < passo.indice || (i === passo.indice && passo.indice === 4)
+        ? "bg-verde/15 text-verde" : i === passo.indice ? (passo.travado ? "bg-ouro/20 text-ouro font-semibold" : "bg-superficie-2 font-semibold") : "bg-superficie-2 text-texto-2")}>
+        {i + 1}. {nome}</li>)}
+    </ol>
+    <p className="text-sm font-semibold">{passo.texto}</p>
+  </div>;
+}
+
 export default function FilaSolicitacoes() {
-  const [filtro, setFiltro] = useState("pendente");
+  const [filtro, setFiltro] = useState("");
   const [pagina, setPagina] = useState(1);
   const [versao, setVersao] = useState(0);
   const [resultado, setResultado] = useState<{ solicitacoes: PedidoCentral[]; temMais: boolean } | null>(null);
@@ -52,6 +80,15 @@ export default function FilaSolicitacoes() {
       if(!r.ok) throw Error((await r.json()).error??"Falha ao liberar oferta.");
       recarregar();
     } catch(e) {setErro(e instanceof Error?e.message:"Falha de conexão.");} finally {setOcupado(null);}
+  }
+  async function liberarDireto(p: PedidoCentral) {
+    if (!window.confirm("Liberar este pedido com os valores da página de planos? O cliente recebe a proposta em Meus pedidos para aceitar e pagar.")) return;
+    setOcupado(p.id); setErro("");
+    try {
+      const r = await fetch("/api/planos/contratacao", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "liberar_direto", id: p.id }) });
+      if (!r.ok) throw Error((await r.json()).error ?? "Falha ao liberar.");
+      recarregar();
+    } catch (e) { setErro(e instanceof Error ? e.message : "Falha de conexão."); } finally { setOcupado(null); }
   }
   async function conceder(id:string, quantidade:number) {
     if (!window.confirm(`Conceder ${quantidade} vaga(s) de propriedade ao titular deste pedido?`)) return;
@@ -95,6 +132,7 @@ export default function FilaSolicitacoes() {
           <p className="text-sm text-texto-2">{[p.email_contato, p.perfil?.telefone].filter(Boolean).join(" · ") || "Conta " + p.user_id}</p>
         </div><span>{SITUACOES_PEDIDO[p.status]}</span>
       </div>
+      <LinhaDoTempo p={p} />
       <p><strong>Estimativa {p.cotacao.ciclo === "anual" ? "para 12 meses" : "do primeiro mês"}:</strong> {dinheiro(p.cotacao.totalCentavos)}
         {p.cotacao.mensalRecorrenteCentavos !== null && p.cotacao.mensalRecorrenteCentavos !== p.cotacao.totalCentavos &&
           <> · Depois: {dinheiro(p.cotacao.mensalRecorrenteCentavos)}/mês</>}</p>
@@ -111,6 +149,8 @@ export default function FilaSolicitacoes() {
         </div>)}</div> :
         ["em_analise","concluido"].includes(p.status) && p.cotacao.personaId!=="corretor_imobiliaria" && !p.cotacao.sobOrcamento && p.cotacao.baseCicloCentavos>0 &&
         p.cotacao.itens.every(i=>i.id==="propriedade_adicional") && <button type="button" disabled={!!ocupado} className="btn-contorno px-4 py-2" onClick={()=>liberar(p)}>Confirmar escopo disponível e liberar contratação</button>}
+      {!p.assinatura && ["pendente", "em_analise"].includes(p.status) && !p.cotacao.sobOrcamento && p.cotacao.baseCicloCentavos > 0 &&
+        <button type="button" disabled={!!ocupado} className="btn-verde px-4 py-2 text-sm" onClick={() => liberarDireto(p)}>Liberar com os valores da página</button>}
       {!p.assinatura && p.status === "concluido" && p.cotacao.itens.filter(i => i.id === "propriedade_adicional").map(i =>
         p.vagas_cofre ? <p key={i.id}>Cofre ampliado em {p.vagas_cofre.quantidade} vaga(s).</p> :
         <button key={i.id} type="button" className="btn-contorno px-4 py-2" disabled={!!ocupado}
