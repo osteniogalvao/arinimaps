@@ -161,7 +161,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/admin/atend
         const status = b.acao === "resolver" ? "resolvida" : b.acao === "pendente" ? "pendente" : "aberta";
         await atualizar({ status, resolvida_em: status === "resolvida" ? new Date().toISOString() : null, nao_lidas: 0 });
         await eventoAtendimento({ conversa_id: c.id, acao: b.acao === "reabrir" ? "reabrir" : "resolver", autor: eu,
-          texto: status === "pendente" ? "Marcada como aguardando o cliente." : null });
+          texto: status === "pendente" ? "Marcada como aguardando o cliente." : status === "resolvida" ? "Marcada como resolvida." : "Reaberta." });
         break;
       }
       case "nota": {

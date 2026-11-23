@@ -161,17 +161,19 @@ on conflict (atalho) do nothing;
 -- aberta entra no Comercial com o corretor dela; o resto vai para a caixa
 -- central como resolvido (histórico), para não inundar a fila no primeiro dia.
 insert into public.atendimento_conversas (telefone, status, setor, responsavel, opportunity_id, ultima_mensagem_em,
-                                          ultima_entrada_em, ultimo_texto, triada_em, resolvida_em, menu_respondido_em)
+                                          ultima_entrada_em, ultima_saida_em, ultimo_texto, triada_em, resolvida_em, menu_respondido_em)
 select m.telefone,
        case when o.id is not null and o.etapa not in ('fechado', 'pos_venda', 'perdido') then 'aberta' else 'resolvida' end,
        case when o.id is not null then 'comercial' end,
-       o.responsavel_user_id, o.id, m.ultima, m.ultima_entrada, m.texto,
+       o.responsavel_user_id, o.id, m.ultima, m.ultima_entrada, m.ultima_saida, m.texto,
        case when o.id is not null then m.ultima end,
        case when o.id is null or o.etapa in ('fechado', 'pos_venda', 'perdido') then m.ultima end,
        m.ultima
 from (
   select distinct on (telefone) telefone, created_at ultima, texto, opportunity_id,
-         max(created_at) filter (where direcao = 'entrada') over (partition by telefone) ultima_entrada
+         max(created_at) filter (where direcao = 'entrada') over (partition by telefone) ultima_entrada,
+         -- sem isto, toda conversa com negociação aberta parecia "sem resposta" e virava tarefa no 1º ciclo do worker
+         max(created_at) filter (where direcao = 'saida') over (partition by telefone) ultima_saida
   from public.whatsapp_mensagens
   order by telefone, created_at desc
 ) m
