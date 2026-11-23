@@ -39,8 +39,9 @@ export const carregarTileSatelite: AddProtocolAction = async ({ url }, abort) =>
 
   if (sobreposta) return { data: transparente.slice().buffer, cacheControl: imagem.cacheControl };
 
-  // Prefere outra fotografia de detalhe. O mosaico anual é a segunda alternativa.
-  for (const endereco of [urlTileHistorico(z, x, y, "16453"), urlMosaico(z, x, y)]) {
+  // Prefere outra fotografia de detalhe (o release anterior, 2025-10-23, limpo
+  // na região). O mosaico anual é a segunda alternativa.
+  for (const endereco of [urlTileHistorico(z, x, y, "20512"), urlMosaico(z, x, y)]) {
     try {
       const outra = await buscar(endereco, signal, 4000);
       const amostra = await amostrarImagem(outra.data);

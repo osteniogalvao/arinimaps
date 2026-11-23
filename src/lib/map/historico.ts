@@ -50,6 +50,8 @@ const WAYBACK: [number, string, string][] = [
   [2023, "56102", "2023-12-07"],
   [2024, "16453", "2024-12-12"],
   [2025, "13192", "2025-12-18"],
+  // 2026: o último release (18/11) traz a foto de nov/2025, com nuvem sobre Iturama.
+  [2026, "3692", "2026-11-18"],
 ];
 
 const SENTINEL_ANOS = [2016, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
