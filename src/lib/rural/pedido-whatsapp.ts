@@ -14,7 +14,9 @@ export function respostaConsultaWhatsapp(texto: string): string | null {
   return "Escolha a área no mapa da ARINI ou envie CONSULTAR CAR seguido do código completo do imóvel. " + urlDoSite() + "/mapa";
 }
 
-export async function atenderPedidoConsulta(id: string, telefone: string, texto: string, recebida: string, resposta: string, tipo = "text", phoneId?: string, documento?: { link: string; nome: string; legenda: string }) {
+type Anexo = { link: string; nome: string; legenda: string; mimetype?: string };
+
+export async function atenderPedidoConsulta(id: string, telefone: string, texto: string, recebida: string, resposta: string, tipo = "text", phoneId?: string, documento?: Anexo, anexos: Anexo[] = []) {
   const db = supabaseAdmin();
   // Uma reserva por mensagem assinada da Meta. Reentregas não disparam nova resposta.
   const {error: reserva} = await db.from("whatsapp_mensagens").insert({
@@ -29,6 +31,11 @@ export async function atenderPedidoConsulta(id: string, telefone: string, texto:
       // o PDF vai depois do texto; se a Meta recusar, o texto já tem o link da ficha
       const docId = documento ? await enviarDocumentoWhatsapp(telefone, documento.link, documento.nome, documento.legenda, phoneId).catch(() => "") : "";
       if (docId) await db.from("whatsapp_mensagens").upsert({wa_id:docId,telefone,direcao:"saida",tipo:"document",texto:documento!.legenda}, {onConflict:"wa_id",ignoreDuplicates:true});
+      // KMZ/KML do plano (24/11): cada um por conta própria; uma recusa não derruba os outros
+      for (const a of anexos) {
+        const aId = await enviarDocumentoWhatsapp(telefone, a.link, a.nome, a.legenda, phoneId, a.mimetype).catch(() => "");
+        if (aId) await db.from("whatsapp_mensagens").upsert({wa_id:aId,telefone,direcao:"saida",tipo:"document",texto:a.legenda}, {onConflict:"wa_id",ignoreDuplicates:true});
+      }
       const fim = await db.from("whatsapp_mensagens").update({status:"consulta_respondida"}).eq("wa_id",id);
       if (fim.error) throw Error("Falha ao encerrar o pedido territorial.");
       return;

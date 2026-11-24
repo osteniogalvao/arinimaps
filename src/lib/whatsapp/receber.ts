@@ -56,7 +56,7 @@ export async function processarValorWhatsapp(v: ValorWhatsapp, canal: CanalWhats
     const atendimento = dentroDaJanela && pedido ? await respostaAtendimento(pedido, m.from, linhaCotacoes) : null;
     const resposta = dentroDaJanela && (atendimento?.texto || pedidoCar);
     if (resposta && recebida) {
-      try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta, m.type === "location" ? "location" : "text", phoneId, atendimento?.documento); }
+      try { await atenderPedidoConsulta(m.id, m.from, texto, recebida, resposta, m.type === "location" ? "location" : "text", phoneId, atendimento?.documento, atendimento?.anexos); }
       catch { return false; }
       continue;
     }

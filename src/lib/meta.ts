@@ -162,8 +162,8 @@ export async function enviarWhatsapp(telefone: string, texto: string, canal?: st
 }
 
 /** WhatsApp: documento por link (a Meta baixa o arquivo), dentro das 24 h. */
-export async function enviarDocumentoWhatsapp(telefone: string, link: string, nome: string, legenda: string, canal?: string) {
-  if (viaEvolution()) return naEvolution(() => evolutionMidia(telefone, { tipo: "document", midia: link, mimetype: "application/pdf", nome, legenda }, canal));
+export async function enviarDocumentoWhatsapp(telefone: string, link: string, nome: string, legenda: string, canal?: string, mimetype = "application/pdf") {
+  if (viaEvolution()) return naEvolution(() => evolutionMidia(telefone, { tipo: "document", midia: link, mimetype, nome, legenda }, canal));
   const phoneId = canal || process.env.WHATSAPP_PHONE_ID;
   if (!whatsappConfigurado() || !phoneId) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
   const r = await fetch(`${GRAPH}/${phoneId}/messages`, {

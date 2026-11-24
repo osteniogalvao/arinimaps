@@ -31,7 +31,8 @@ export type PedidoAtendimento =
   | { tipo: "car"; cod: string };
 
 /** Resposta do atendimento: texto e, quando o plano permite, o PDF do relatório. */
-export type RespostaAtendimento = { texto: string; documento?: { link: string; nome: string; legenda: string } };
+export type AnexoWhatsapp = { link: string; nome: string; legenda: string; mimetype?: string };
+export type RespostaAtendimento = { texto: string; documento?: AnexoWhatsapp; anexos?: AnexoWhatsapp[] };
 
 type Mensagem = { type: string; text?: { body: string }; location?: { latitude?: number; longitude?: number } };
 
@@ -138,6 +139,7 @@ function textoMenu(conta: Conta | null) {
     "• SAFRA SOJA (ou MILHO, CAFÉ...): produção, área e produtividade da safra pela CONAB",
     "• Envie a sua LOCALIZAÇÃO (clipe › Localização) para receber o imóvel do CAR naquele ponto e o relatório em PDF",
     "• CONSULTAR CAR seguido do código do imóvel, para receber o relatório em PDF",
+    "• Nos planos com exportação, a área vem também em KMZ e KML; com consulta de área, vem o link do Tour 3D",
   ];
   const a = conta?.acesso;
   if (a?.recursos.has("relatorio_territorial")) linhas.push("", "Seu plano inclui o relatório territorial completo com as fontes oficiais.");
@@ -283,14 +285,27 @@ function respostaImovel(imovel: ImovelCar | null, conta: Conta | null, origem: "
       : "Segue o relatório simples da área.",
     `Ficha, mapa e relatório personalizado: ${site}/consulta/car/${imovel.cod}`,
   ].filter((l): l is string => l !== null);
+  // Áudio do Carlos (24/11, 8h05): arquivos KMZ/KML e o Tour 3D conforme o plano do contratante
+  const exporta = !!a?.recursos.has("ferramenta_exportar");
+  const tour = !!a?.recursos.has("consulta_area");
+  if (tour) linhas.push(`Tour 3D da área (entre com a sua conta ARINI): ${site}/consulta/car/${imovel.cod}?tour=1`);
+  if (exporta) linhas.push("Em seguida vão o perímetro em KMZ (Google Earth) e em KML.");
+  else if (conta && (completo || tour)) linhas.push(`Os arquivos KMZ/KML da área não estão no seu plano (${a?.planNome ?? "Gratuito"}). Veja os planos: ${site}/planos`);
   if (!completo) {
     if (a?.recursos.has("consulta_area")) linhas.push("Seu plano inclui a consulta desta área nas fontes oficiais (IBAMA, ICMBio, INPE, ANM, SIGEF...), dentro da cota do mês.");
     else if (conta) linhas.push(`O relatório completo não está no seu plano (${a?.planNome ?? "Gratuito"}). Veja os planos: ${site}/planos`);
     else linhas.push(`Para receber o relatório do seu plano por aqui, confirme este WhatsApp na sua conta: ${site}/conta`);
   }
   const modelo = completo ? "completo" : "simples";
+  const arquivo = (formato: "kmz" | "kml") => ({
+    link: `${site}/api/consulta/car/${encodeURIComponent(imovel.cod)}/arquivo?formato=${formato}${parametrosLinkWhatsapp(imovel.cod, formato)}`,
+    nome: `ARINI-${imovel.cod}.${formato}`,
+    legenda: `Perímetro do CAR em ${formato.toUpperCase()} · ${imovel.cod}`,
+    mimetype: formato === "kmz" ? "application/vnd.google-earth.kmz" : "application/vnd.google-earth.kml+xml",
+  });
   return {
     texto: linhas.join("\n"),
+    anexos: exporta ? [arquivo("kmz"), arquivo("kml")] : [],
     documento: {
       // assinado: o provedor do WhatsApp baixa o PDF sem a sessão do cliente
       link: `${site}/api/consulta/car/${encodeURIComponent(imovel.cod)}/relatorio?modelo=${modelo}${parametrosLinkWhatsapp(imovel.cod, modelo)}`,
