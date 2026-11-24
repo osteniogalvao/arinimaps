@@ -9,7 +9,7 @@ function carregar(arquivo,deps={}) {
   const js=ts.transpileModule(readFileSync(new URL("../src/"+arquivo,import.meta.url),"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const m={};compileFunction(js,["require","exports"])(id=>{assert.ok(Object.hasOwn(deps,id),id);return deps[id];},m);return m;
 }
-const setores=carregar("lib/setores.ts"), regras=carregar("lib/crmSetores.ts"),rotulos=carregar("lib/atendimento-rotulos.ts",{"@/lib/setores":setores});
+const setores=carregar("lib/setores.ts"), regras=carregar("lib/crmSetores.ts"),rotulos=carregar("lib/atendimento-rotulos.ts",{"@/lib/setores":setores}),horario=carregar("lib/atendimento-horario.ts");
 function ambiente() {
   const dono=randomUUID(),vendas=randomUUID(),juridico=randomUUID(),recepcao=randomUUID(),id=randomUUID(),funil=randomUUID();
   const c={id,codigo:"AT-QA",telefone:"5511000000000",nome:"Contato sintético",setor:null,responsavel:null,status:"aberta",crm_item_id:null,opportunity_id:null,nao_lidas:1,etiquetas:[],resolvida_em:null};
@@ -33,7 +33,7 @@ function ambiente() {
   const auth={ator:async()=>ator,temSetor:(a,...s)=>s.some(x=>a.setores.includes(x))};
   const social={canalDoContato:t=>t.startsWith("ig:")?"instagram":"whatsapp",contatoSocial:t=>t.startsWith("ig:"),enviarPeloCanal:async(...v)=>{envios.push(v);return "wa_sintetico";},mensagensSociaisConfiguradas:()=>true};
   const meta={MetaErro:class extends Error {},telefoneWhatsapp:t=>t,whatsappConfigurado:()=>true};
-  const deps={"server-only":{},"@/lib/supabase/admin":{supabaseAdmin:()=>db},"@/lib/authz":auth,"@/lib/meta":meta,"@/lib/meta-mensagens":social,"@/lib/notificacoes":{notificar:async(...v)=>avisos.push(v)},"@/lib/atendimento-rotulos":rotulos};
+  const deps={"server-only":{},"@/lib/supabase/admin":{supabaseAdmin:()=>db},"@/lib/authz":auth,"@/lib/meta":meta,"@/lib/meta-mensagens":social,"@/lib/notificacoes":{notificar:async(...v)=>avisos.push(v)},"@/lib/atendimento-rotulos":rotulos,"@/lib/atendimento-horario":horario};
   const atendimento=carregar("lib/atendimento.ts",deps);
   const api=carregar("app/api/admin/atendimento/[id]/route.ts",{...deps,"next/server":{NextResponse:Response},"@/lib/audit":{logAudit:async()=>{}},"@/lib/seguranca/limite":{limitar:async()=>({permitido:true}),respostaLimite:()=>Response.json({}, {status:429})},"@/lib/crmSetores":regras,"@/lib/setores":setores,"@/lib/atendimento":atendimento});
   return {c,tab,dono,vendas,juridico,recepcao,funil,envios,avisos,como(userId,lista,somenteLeitura=false){ator={userId,ehArini:true,setores:lista,somenteLeitura};},get:()=>api.GET(new Request("https://local.invalid/api/admin/atendimento/"+id),{params:Promise.resolve({id})}),post:b=>api.POST(new Request("https://local.invalid/api/admin/atendimento/"+id,{method:"POST",body:JSON.stringify(b)}),{params:Promise.resolve({id})})};

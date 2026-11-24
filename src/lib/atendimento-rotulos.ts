@@ -15,10 +15,11 @@ export const nomeSetor = (s: string | null | undefined) => (s ? setorPorId(s)?.n
 
 /** Canal do contato pelo prefixo (0157): "ig:" Instagram, "fb:" Messenger, senão WhatsApp. */
 export function canalDoContatoRotulo(telefone: string) {
-  return telefone.startsWith("ig:") ? "Instagram" : telefone.startsWith("fb:") ? "Messenger" : "WhatsApp";
+  return telefone.startsWith("ig:") ? "Instagram" : telefone.startsWith("fb:") ? "Messenger"
+    : telefone.startsWith("site:") ? "Chat do site" : telefone.startsWith("tg:") ? "Telegram" : "WhatsApp";
 }
 
 /** Como mostrar o contato quando não há nome: número com "+" ou o canal da rede. */
 export function contatoRotulo(telefone: string) {
-  return /^(ig|fb):/.test(telefone) ? `Contato do ${canalDoContatoRotulo(telefone)}` : "+" + telefone;
+  return /^(ig|fb|site|tg):/.test(telefone) ? `Contato do ${canalDoContatoRotulo(telefone)}` : "+" + telefone;
 }

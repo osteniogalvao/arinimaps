@@ -6,6 +6,7 @@ import { canalDoContato, contatoSocial, enviarPeloCanal } from "@/lib/meta-mensa
 import { notificar } from "@/lib/notificacoes";
 import type { SetorId } from "@/lib/setores";
 import { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL } from "@/lib/atendimento-rotulos";
+import { dentroDoHorario, type HorarioSetor } from "@/lib/atendimento-horario";
 export { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL, SETORES_ATENDIMENTO, STATUS_LABEL } from "@/lib/atendimento-rotulos";
 
 /**
@@ -66,7 +67,17 @@ export async function eventoAtendimento(e: {
 // ---------------------------------------------------------------------------
 // Expediente (o mesmo do rodízio: settings rodizio_expediente_*)
 // ---------------------------------------------------------------------------
-async function dentroDoExpediente(agora = new Date()) {
+/** Horário próprio do setor (0171). null = setor sem horário próprio ou migration ausente. */
+export async function horarioDoSetor(setor: string | null): Promise<HorarioSetor | null> {
+  if (!setor) return null;
+  const { data, error } = await supabaseAdmin().from("atendimento_setores_horario")
+    .select("setor, dias, inicio, fim, prazo_minutos, mensagem_fora").eq("setor", setor).maybeSingle();
+  if (error || !data) return null;
+  return { ...data, inicio: String(data.inicio).slice(0, 5), fim: String(data.fim).slice(0, 5) } as HorarioSetor;
+}
+
+async function dentroDoExpediente(agora = new Date(), horario?: HorarioSetor | null) {
+  if (horario) return dentroDoHorario(horario, agora);
   const { data } = await supabaseAdmin().from("settings").select("chave, valor")
     .in("chave", ["rodizio_expediente_inicio", "rodizio_expediente_fim", "rodizio_sabado", "rodizio_domingo"]);
   const v = Object.fromEntries((data ?? []).map((l) => [l.chave, l.valor]));
@@ -239,9 +250,12 @@ export async function entradaAtendimento(p: {
     return true;
   }
   const escolha = lerEscolha(p.texto, opcoes);
-  const foraDoHorario = !(await dentroDoExpediente());
+  // horário do setor escolhido (0171); sem horário próprio, vale o expediente geral
   const confirmar = async (setor: string | null, base: string) => {
-    const texto = variaveis(base, c.nome, setor) + (foraDoHorario && menu.fora_expediente ? `\n\n${menu.fora_expediente}` : "");
+    const horario = await horarioDoSetor(setor);
+    const fora = !(await dentroDoExpediente(new Date(), horario));
+    const aviso = (horario?.mensagem_fora || menu.fora_expediente || "").trim();
+    const texto = variaveis(base, c.nome, setor) + (fora && aviso ? `\n\n${aviso}` : "");
     await enviarDoRobo(c, texto, p.canal);
   };
   if (escolha) {

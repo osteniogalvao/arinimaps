@@ -17,14 +17,16 @@ import { enviarWhatsapp, MetaErro } from "@/lib/meta";
  */
 const GRAPH = "https://graph.facebook.com/v23.0";
 
-export type CanalAtendimento = "whatsapp" | "instagram" | "messenger";
+export type CanalAtendimento = "whatsapp" | "instagram" | "messenger" | "site" | "telegram";
 
-export const CANAL_LABEL: Record<CanalAtendimento, string> = { whatsapp: "WhatsApp", instagram: "Instagram", messenger: "Messenger" };
+export const CANAL_LABEL: Record<CanalAtendimento, string> = { whatsapp: "WhatsApp", instagram: "Instagram", messenger: "Messenger", site: "Chat do site", telegram: "Telegram" };
 
 /** Canal de um contato pelo prefixo do identificador. */
 export function canalDoContato(telefone: string): CanalAtendimento {
   if (telefone.startsWith("ig:")) return "instagram";
   if (telefone.startsWith("fb:")) return "messenger";
+  if (telefone.startsWith("site:")) return "site"; // chat do site (0171)
+  if (telefone.startsWith("tg:")) return "telegram"; // Telegram (0171)
   return "whatsapp";
 }
 
@@ -56,7 +58,32 @@ export async function enviarMensagemSocial(telefone: string, texto: string): Pro
   return typeof j?.message_id === "string" ? j.message_id : "";
 }
 
-/** Envia pelo canal certo da conversa: WhatsApp (número) ou redes (ig:/fb:). */
+/**
+ * Envia pelo canal certo da conversa: WhatsApp (número), redes (ig:/fb:),
+ * Telegram (tg:) ou chat do site (site:). No chat do site não há envio
+ * externo: a mensagem gravada em whatsapp_mensagens é o que o visitante lê.
+ */
 export async function enviarPeloCanal(telefone: string, texto: string, canalWhatsapp?: string) {
+  const canal = canalDoContato(telefone);
+  if (canal === "site") return "";
+  if (canal === "telegram") return enviarTelegram(telefone.slice(3), texto);
   return contatoSocial(telefone) ? enviarMensagemSocial(telefone, texto) : enviarWhatsapp(telefone, texto, canalWhatsapp);
+}
+
+export const telegramConfigurado = () => !!process.env.TELEGRAM_BOT_TOKEN?.trim();
+
+/** Responde no Telegram pelo bot da ARINI (TELEGRAM_BOT_TOKEN). */
+export async function enviarTelegram(chatId: string, texto: string): Promise<string> {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) throw new MetaErro("Telegram sem o token do bot (TELEGRAM_BOT_TOKEN).");
+  if (!/^-?\d{1,20}$/.test(chatId)) throw new MetaErro("Conversa do Telegram inválida.");
+  const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text: texto.slice(0, 4000) }),
+    signal: AbortSignal.timeout(20_000),
+  }).catch(() => null);
+  if (!r) throw new MetaErro("O Telegram não respondeu a tempo.", undefined, true);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j?.ok) throw new MetaErro(j?.description || `O Telegram recusou (HTTP ${r.status}).`, undefined, r.status >= 500);
+  return j?.result?.message_id != null ? `tg:${chatId}:${j.result.message_id}` : "";
 }

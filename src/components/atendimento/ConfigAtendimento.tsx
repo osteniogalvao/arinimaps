@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CAMPO_COMPACTO } from "@/components/admin/estilos";
 import { nomeSetor, SETORES_ATENDIMENTO } from "@/lib/atendimento-rotulos";
+import { DIAS_SEMANA, type HorarioSetor } from "@/lib/atendimento-horario";
 
 type Menu = {
   ativo: boolean; saudacao: string; confirmacao: string; nao_entendi: string; fora_expediente: string;
@@ -15,8 +16,9 @@ type Pessoa = { user_id: string; nome: string; diretoria: boolean; recepcao: boo
 
 const CAMPO = CAMPO_COMPACTO + " mt-1 w-full";
 
-export default function ConfigAtendimento({ menu, opcoes, respostas, equipe, prazo }: {
+export default function ConfigAtendimento({ menu, opcoes, respostas, equipe, prazo, horarios, chatSite, telegram }: {
   menu: Menu; opcoes: Opcao[]; respostas: Resposta[]; equipe: Pessoa[]; prazo: number;
+  horarios: HorarioSetor[] | null; chatSite: boolean; telegram: boolean;
 }) {
   const router = useRouter();
   const [m, setM] = useState(menu);
@@ -128,6 +130,44 @@ export default function ConfigAtendimento({ menu, opcoes, respostas, equipe, pra
       </section>
 
       <section className="cartao space-y-3 p-5">
+        <h2 className="text-lg font-semibold">Horário e prazo por setor</h2>
+        {horarios === null ? (
+          <p className="text-sm text-texto-2">Disponível depois da migration 0171.</p>
+        ) : (
+          <>
+            <p className="text-sm text-texto-2">
+              Cada setor pode ter dias, horário e prazo de primeira resposta próprios. A conversa que passa do prazo vira tarefa do setor,
+              e fora do horário o cliente recebe a mensagem do setor. Setor sem horário próprio segue o expediente geral e o prazo de
+              {" "}{prazo} min.
+            </p>
+            <div className="space-y-2">
+              {SETORES_ATENDIMENTO.map((s) => (
+                <LinhaHorario key={s} setor={s} atual={horarios.find((h) => h.setor === s) ?? null} prazoGeral={prazo} ocupado={ocupado} salvar={salvar} />
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="cartao space-y-3 p-5">
+        <h2 className="text-lg font-semibold">Outros canais</h2>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={chatSite} disabled={ocupado || horarios === null}
+            onChange={(e) => salvar({ acao: "chat_site", ativo: e.target.checked }, e.target.checked ? "Chat do site ligado." : "Chat do site desligado.")} />
+          <span>
+            <strong>Chat do site.</strong> Aparece como a aba &quot;Falar com a equipe&quot; no botão da Ari, em todas as páginas do site.
+            As mensagens entram aqui no atendimento, com o mesmo menu e as mesmas filas do WhatsApp.
+          </span>
+        </label>
+        <p className="text-sm">
+          <strong>Telegram.</strong>{" "}
+          {telegram
+            ? "Bot configurado: as conversas com o bot entram no atendimento."
+            : "Ainda sem bot. Crie um bot no @BotFather e coloque TELEGRAM_BOT_TOKEN e TELEGRAM_WEBHOOK_SECRET no servidor; depois aponte o webhook para /api/webhooks/telegram."}
+        </p>
+      </section>
+
+      <section className="cartao space-y-3 p-5">
         <h2 className="text-lg font-semibold">Quem atende</h2>
         <p className="text-sm text-texto-2">
           Cada pessoa vê a fila dos setores em que atua (definidos em Equipe e usuários) e o que foi atribuído a ela. A recepção também
@@ -186,5 +226,55 @@ function LinhaOpcao({ o, equipe, ocupado, salvar }: {
         <button type="button" disabled={ocupado} onClick={() => salvar({ acao: "remover_opcao", id: o.id }, "Opção removida.")} className="text-xs text-critico underline">Remover</button>
       </span>
     </form>
+  );
+}
+
+function LinhaHorario({ setor, atual, prazoGeral, ocupado, salvar }: {
+  setor: string; atual: HorarioSetor | null; prazoGeral: number; ocupado: boolean;
+  salvar: (c: Record<string, unknown>, ok?: string) => Promise<boolean>;
+}) {
+  const [v, setV] = useState<HorarioSetor>(atual ?? { setor, dias: [1, 2, 3, 4, 5], inicio: "08:00", fim: "18:00", prazo_minutos: prazoGeral, mensagem_fora: "" });
+  const [aberto, setAberto] = useState(false);
+  const resumo = atual
+    ? `${DIAS_SEMANA.filter((d) => atual.dias.includes(d.n)).map((d) => d.curto).join(", ")} · ${atual.inicio}–${atual.fim} · responde em ${atual.prazo_minutos} min`
+    : "Expediente geral";
+  return (
+    <div className="rounded-xl border border-linha p-3">
+      <button type="button" onClick={() => setAberto(!aberto)} className="flex w-full flex-wrap items-center justify-between gap-2 text-left text-sm">
+        <strong>{nomeSetor(setor)}</strong>
+        <span className="text-xs text-texto-2">{resumo} · {aberto ? "fechar" : "editar"}</span>
+      </button>
+      {aberto && (
+        <form className="mt-3 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); void salvar({ acao: "horario", ...v }, `Horário de ${nomeSetor(setor)} salvo.`); }}>
+          <fieldset className="md:col-span-2">
+            <legend className="text-[11px]">Dias de atendimento</legend>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {DIAS_SEMANA.map((d) => (
+                <label key={d.n} className="flex items-center gap-1 text-xs">
+                  <input type="checkbox" checked={v.dias.includes(d.n)}
+                    onChange={(e) => setV({ ...v, dias: e.target.checked ? [...v.dias, d.n].sort() : v.dias.filter((x) => x !== d.n) })} />
+                  {d.curto}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className="text-[11px]">Começa<input type="time" value={v.inicio} onChange={(e) => setV({ ...v, inicio: e.target.value })} className={CAMPO} /></label>
+          <label className="text-[11px]">Termina<input type="time" value={v.fim} onChange={(e) => setV({ ...v, fim: e.target.value })} className={CAMPO} /></label>
+          <label className="text-[11px]">Prazo da primeira resposta (minutos de expediente)
+            <input type="number" min={5} max={1440} value={v.prazo_minutos} onChange={(e) => setV({ ...v, prazo_minutos: Number(e.target.value) })} className={CAMPO} />
+          </label>
+          <label className="text-[11px] md:col-span-2">Mensagem fora do horário (vazio = a do menu)
+            <textarea rows={2} maxLength={1000} value={v.mensagem_fora} onChange={(e) => setV({ ...v, mensagem_fora: e.target.value })} className={CAMPO} />
+          </label>
+          <span className="flex items-center gap-3 md:col-span-2">
+            <button disabled={ocupado} className="btn-verde px-3 py-1.5 text-xs">Salvar</button>
+            {atual && (
+              <button type="button" disabled={ocupado} onClick={() => salvar({ acao: "remover_horario", setor }, `${nomeSetor(setor)} voltou ao expediente geral.`)}
+                className="text-xs text-critico underline">Voltar ao expediente geral</button>
+            )}
+          </span>
+        </form>
+      )}
+    </div>
   );
 }
