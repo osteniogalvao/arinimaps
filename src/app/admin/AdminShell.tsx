@@ -15,7 +15,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Kanban, Send, TrendingUp, Target, Clock, CalendarClock, Gauge, Search, LineChart, FileText, BookText, Truck, PieChart, ListTree,
+  Kanban, CodeXml, Send, TrendingUp, Target, Clock, CalendarClock, Gauge, Search, LineChart, FileText, BookText, Truck, PieChart, ListTree,
   BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter, Grid3x3,
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, LogOut, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
@@ -86,6 +86,7 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/registros/despesas": Wallet,
   "/admin/registros/publicacoes": Send,
   "/admin/marketing/trafego": TrendingUp,
+  "/admin/marketing/tags": CodeXml,
   "/admin/registros/campanhas": Target,
   "/admin/financeiro/resultado": LineChart,
   "/admin/registros/notas-fiscais": FileText,

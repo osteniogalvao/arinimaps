@@ -4,6 +4,8 @@ import { OG_IMAGEM_PADRAO, OG_NOME_SITE, urlDoSite } from "@/lib/compartilhar";
 import { Geist_Mono, League_Gothic, Quicksand } from "next/font/google";
 import "./globals.css";
 import { TEMA_SCRIPT } from "@/components/shell/BotaoTema";
+import TagsMarketing from "@/components/TagsMarketing";
+import { tagsMarketingAtivas } from "@/lib/tags-marketing-servidor";
 
 // Tipografia do Manual de Identidade Visual v1.0 (out/2026):
 // Quicksand — textos, interface, legendas e botões (e os subtítulos da interface).
@@ -47,7 +49,9 @@ export const metadata: Metadata = {
     "Marketplace imobiliário regional: fazendas, sítios e imóveis urbanos direto no mapa, com intermediação da Arini Negócios Imobiliários.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Marketing > Tags e pixels: lidos do cache, colocados na página pelo navegador
+  const tags = await tagsMarketingAtivas();
   return (
     <html
       lang="pt-BR"
@@ -64,7 +68,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* servidores dos tiles do satélite: abre a conexão antes do mapa pedir */}
         <link rel="preconnect" href="https://wayback.maptiles.arcgis.com" crossOrigin="" />
       </head>
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {children}
+        {tags.length > 0 && <TagsMarketing tags={tags} />}
+      </body>
     </html>
   );
 }
