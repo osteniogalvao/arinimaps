@@ -21,6 +21,7 @@ const ISENTAS = [
   "/api/asaas/webhook", // token do webhook (ASAAS_WEBHOOK_TOKEN)
   "/api/asaas/nfse-tecnologia", // token próprio da conta fiscal
   "/api/webhooks/whatsapp", // assinatura da Meta (WHATSAPP_APP_SECRET)
+  "/api/webhooks/telegram", // segredo do webhook (TELEGRAM_WEBHOOK_SECRET)
   "/api/interno/comunicados",
   "/api/interno/avisos-imoveis",
   "/api/interno/avisos-territoriais",

@@ -5,6 +5,8 @@ import { CabecalhoPagina } from "@/components/ui/Pagina";
 import { falta0156, lerMenu } from "@/lib/atendimento";
 import { setoresDe } from "@/lib/setores";
 import ConfigAtendimento from "@/components/atendimento/ConfigAtendimento";
+import type { HorarioSetor } from "@/lib/atendimento-horario";
+import { telegramConfigurado } from "@/lib/meta-mensagens";
 
 export const metadata = { title: "Configurar atendimento" };
 
@@ -12,11 +14,13 @@ export const metadata = { title: "Configurar atendimento" };
 export default async function ConfigurarAtendimento() {
   await exigirSetor("diretoria");
   const admin = supabaseAdmin();
-  const [{ menu, opcoes, erro }, respostas, equipe, prazo] = await Promise.all([
+  const [{ menu, opcoes, erro }, respostas, equipe, prazo, horarios, chatSite] = await Promise.all([
     lerMenu(),
     admin.from("atendimento_respostas").select("id, atalho, titulo, texto, setor").order("atalho"),
     admin.from("profiles").select("user_id, nome, role, setores, atendimento_recepcao").in("role", ["admin_central", "analista_arini"]).eq("ativo", true).order("nome"),
     admin.from("settings").select("valor").eq("chave", "atendimento_prazo_minutos").maybeSingle(),
+    admin.from("atendimento_setores_horario").select("setor, dias, inicio, fim, prazo_minutos, mensagem_fora"),
+    admin.from("settings").select("valor").eq("chave", "atendimento_chat_site").maybeSingle(),
   ]);
   if (erro || !menu) {
     return (
@@ -39,6 +43,11 @@ export default async function ConfigurarAtendimento() {
         opcoes={opcoes}
         respostas={respostas.data ?? []}
         prazo={Number(prazo.data?.valor ?? 30) || 30}
+        horarios={horarios.error ? null : (horarios.data ?? []).map((h) => ({
+          ...h, inicio: String(h.inicio).slice(0, 5), fim: String(h.fim).slice(0, 5),
+        })) as HorarioSetor[]}
+        chatSite={chatSite.data?.valor === true}
+        telegram={telegramConfigurado()}
         equipe={(equipe.data ?? []).map((p) => ({
           user_id: p.user_id as string, nome: (p.nome as string) || "Sem nome", diretoria: p.role === "admin_central",
           recepcao: !!p.atendimento_recepcao, setores: setoresDe(p.role as string, p.setores as string[] | null),

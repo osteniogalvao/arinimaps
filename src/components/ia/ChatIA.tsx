@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Database, FileText, Home, LoaderCircle, Lock, SendHorizontal, SquarePen, X } from "lucide-react";
 import MarcaArini from "@/components/marca/MarcaArini";
+import ChatEquipe from "@/components/ia/ChatEquipe";
 
 type Fonte = { tipo: "imovel" | "car" | "conhecimento"; rotulo: string; href?: string };
 /** `aviso`: recado neutro do sistema (assistente ocupado), não falha — aparece sem o vermelho de erro. */
@@ -93,8 +94,10 @@ function eventosDe(bloco: string): Record<string, unknown>[] {
   });
 }
 
-export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
+export default function ChatIA({ flutuante = false, equipe = false }: { flutuante?: boolean; equipe?: boolean }) {
   const [aberto, setAberto] = useState(false);
+  // "Falar com a equipe" (0171): só no site, quando a Diretoria liga o chat do site
+  const [modo, setModo] = useState<"ari" | "equipe">("ari");
   const [estado, setEstado] = useState<Estado | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [conversaId, setConversaId] = useState<string | null>(null);
@@ -262,6 +265,18 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
             </button>
           </div>
 
+          {equipe && (
+            <div role="tablist" aria-label="Com quem falar" className="flex shrink-0 gap-1 border-b border-linha bg-superficie px-3 py-2">
+              {([["ari", "Ari (IA)"], ["equipe", "Falar com a equipe"]] as const).map(([id, rotulo]) => (
+                <button key={id} type="button" role="tab" aria-selected={modo === id} onClick={() => setModo(id)}
+                  className={"rounded-full px-3 py-1.5 text-xs font-semibold transition " + (modo === id ? "bg-verde text-white" : "text-texto-2 hover:text-texto")}>
+                  {rotulo}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {equipe && modo === "equipe" ? <ChatEquipe /> : <>
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-[0.92rem]">
             {!estado && (
               <p className="flex items-center gap-2 text-texto-2"><LoaderCircle className="size-4 animate-spin" /> Carregando…</p>
@@ -373,6 +388,7 @@ export default function ChatIA({ flutuante = false }: { flutuante?: boolean }) {
               </p>
             </form>
           )}
+          </>}
         </div>
       )}
     </>

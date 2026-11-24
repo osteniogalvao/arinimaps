@@ -5,6 +5,7 @@ import { ator } from "@/lib/authz";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CabecalhoPagina, Estatistica, Secao } from "@/components/ui/Pagina";
 import { canalDoContatoRotulo, falta0156, nomeSetor, papelAtendimento } from "@/lib/atendimento";
+import { prazoNoHorario, type HorarioSetor } from "@/lib/atendimento-horario";
 
 export const metadata = { title: "Relatórios do atendimento" };
 
@@ -94,6 +95,29 @@ export default async function RelatoriosAtendimento({ searchParams }: PageProps<
   });
   const resolucao = resolvidas.map((c) => (Date.parse(c.resolvida_em!) - Date.parse(c.created_at)) / 60000).filter((m) => m >= 0);
 
+  // SLA (0171): primeira resposta dentro do prazo do setor, contando só o horário dele.
+  // Setor sem horário próprio usa o expediente geral (rodízio) e o prazo geral.
+  const [{ data: horariosLidos, error: semHorarios }, { data: cfgGeral }] = await Promise.all([
+    admin.from("atendimento_setores_horario").select("setor, dias, inicio, fim, prazo_minutos, mensagem_fora"),
+    admin.from("settings").select("chave, valor").in("chave", ["atendimento_prazo_minutos", "rodizio_expediente_inicio", "rodizio_expediente_fim", "rodizio_sabado", "rodizio_domingo"]),
+  ]);
+  const g = Object.fromEntries((cfgGeral ?? []).map((l) => [l.chave, l.valor]));
+  const hora = (x: unknown, padrao: string) => (typeof x === "string" && /^\d{2}:\d{2}$/.test(x) ? x : padrao);
+  const geral: HorarioSetor = {
+    setor: "", inicio: hora(g.rodizio_expediente_inicio, "08:00"), fim: hora(g.rodizio_expediente_fim, "18:00"), mensagem_fora: "",
+    dias: [1, 2, 3, 4, 5, ...(g.rodizio_sabado === false ? [] : [6]), ...(g.rodizio_domingo === true ? [7] : [])],
+    prazo_minutos: Number(g.atendimento_prazo_minutos ?? 30) || 30,
+  };
+  const horarioDe = new Map(((semHorarios ? [] : horariosLidos) ?? []).map((h) => [h.setor as string, {
+    ...h, inicio: String(h.inicio).slice(0, 5), fim: String(h.fim).slice(0, 5),
+  } as HorarioSetor]));
+  const noPrazo = (t: { c: Conv; min: number }) => {
+    const h = horarioDe.get(t.c.setor ?? "") ?? geral;
+    const p = primeira.get(t.c.id)!;
+    return Date.parse(p.resposta!) <= prazoNoHorario(h, new Date(p.entrada!), h.prazo_minutos).getTime();
+  };
+  const pct = (l: { c: Conv; min: number }[]) => (l.length ? Math.round((l.filter(noPrazo).length / l.length) * 100) : null);
+
   // por setor
   const setores = [...new Set([...novas, ...abertas, ...resolvidas].map((c) => c.setor ?? ""))]
     .sort((x, y) => (x === "" ? -1 : y === "" ? 1 : nomeSetor(x).localeCompare(nomeSetor(y))));
@@ -102,6 +126,8 @@ export default async function RelatoriosAtendimento({ searchParams }: PageProps<
     return {
       s, novas: de(novas).length, resolvidas: de(resolvidas).length, abertas: de(abertas).length, semResposta: de(semResposta).length,
       resposta: mediana(tempos.filter((t) => (t.c.setor ?? "") === s).map((t) => t.min)),
+      sla: pct(tempos.filter((t) => (t.c.setor ?? "") === s)),
+      prazo: (horarioDe.get(s) ?? geral).prazo_minutos,
     };
   });
 
@@ -151,16 +177,17 @@ export default async function RelatoriosAtendimento({ searchParams }: PageProps<
         <Estatistica icone={CheckCircle2} valor={resolvidas.length} rotulo="Resolvidas" />
         <Estatistica icone={Clock} valor={abertas.length} rotulo="Em aberto agora" />
         <Estatistica icone={MessageCircleWarning} valor={semResposta.length} rotulo="Esperando resposta" urgente={semResposta.length > 0} href="/admin/atendimento?caixa=todas" />
-        <Estatistica icone={Timer} valor={<span className="text-3xl">{duracao(mediana(tempos.map((t) => t.min)))}</span>} rotulo="1ª resposta (mediana)" />
+        <Estatistica icone={Timer} valor={<span className="text-3xl">{duracao(mediana(tempos.map((t) => t.min)))}</span>} rotulo={`1ª resposta (mediana)${pct(tempos) == null ? "" : ` · ${pct(tempos)}% no prazo`}`} />
       </div>
 
       <Secao eyebrow="Filas" titulo="Por setor" subtitulo={<>Tempo até resolver (mediana do período): <strong className="text-texto">{duracao(mediana(resolucao))}</strong>.</>}>
         <div className="cartao overflow-x-auto">
-          <table className="w-full min-w-[680px] text-[0.95rem]">
+          <table className="w-full min-w-[760px] text-[0.95rem]">
             <thead className="bg-superficie-2">
               <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-texto-2">
                 <th className="px-5 py-3">Setor</th><th className={th}>Novas</th><th className={th}>Resolvidas</th>
-                <th className={th}>Em aberto</th><th className={th}>Esperando resposta</th><th className="px-5 py-3 text-right">1ª resposta</th>
+                <th className={th}>Em aberto</th><th className={th}>Esperando resposta</th><th className={th}>1ª resposta</th>
+                <th className="px-5 py-3 text-right">No prazo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-linha">
@@ -169,10 +196,12 @@ export default async function RelatoriosAtendimento({ searchParams }: PageProps<
                   <td className="px-5 py-3 font-semibold text-texto">{nomeSetor(l.s || null)}</td>
                   <td className={td}>{l.novas}</td><td className={td}>{l.resolvidas}</td><td className={td}>{l.abertas}</td>
                   <td className={td + (l.semResposta ? " font-semibold text-ouro" : "")}>{l.semResposta}</td>
-                  <td className="px-5 py-3 text-right tabular-nums">{duracao(l.resposta)}</td>
+                  <td className={td}>{duracao(l.resposta)}</td>
+                  <td className={"px-5 py-3 text-right tabular-nums" + (l.sla != null && l.sla < 80 ? " font-semibold text-ouro" : "")}
+                    title={`Prazo do setor: ${l.prazo} min de expediente`}>{l.sla == null ? "—" : `${l.sla}%`}</td>
                 </tr>
               ))}
-              {!porSetor.length && <tr><td colSpan={6} className="px-5 py-6 text-center text-texto-2">Nenhuma conversa no período.</td></tr>}
+              {!porSetor.length && <tr><td colSpan={7} className="px-5 py-6 text-center text-texto-2">Nenhuma conversa no período.</td></tr>}
             </tbody>
           </table>
         </div>

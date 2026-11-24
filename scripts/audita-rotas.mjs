@@ -64,6 +64,8 @@ const EXCECOES_AUTH = {
   "/api/interno/publicar": "chamada só pelo worker, com o SAUDE_TOKEN no cabeçalho x-saude-token",
   "/api/webhooks/whatsapp": "webhook da Meta: GET confere WHATSAPP_VERIFY_TOKEN, POST confere a assinatura HMAC (WHATSAPP_APP_SECRET)",
   "/api/webhooks/whatsapp/evolution": "webhook da Evolution: POST confere EVOLUTION_WEBHOOK_TOKEN (query ou cabeçalho, comparação em tempo constante)",
+  "/api/webhooks/telegram": "webhook do bot do Telegram: POST confere TELEGRAM_WEBHOOK_SECRET no cabeçalho, comparação em tempo constante",
+  "/api/atendimento/site": "chat público do site: visitante sem conta; código aleatório do navegador (hash) prende a conversa, origem conferida, limite por IP e por conversa, desligável pela Diretoria",
   "/api/webhooks/meta-mensagens": "webhook de mensagens da Meta (Instagram/Messenger): GET confere META_VERIFY_TOKEN, POST confere a assinatura HMAC (WHATSAPP_APP_SECRET)",
 };
 // Leituras públicas por natureza (mapa, anúncios publicados).

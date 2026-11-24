@@ -4,6 +4,7 @@ import { ator, temSetor } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 import { falta0156, SETORES_ATENDIMENTO } from "@/lib/atendimento";
 import type { SetorId } from "@/lib/setores";
+import { validarHorario, type HorarioSetor } from "@/lib/atendimento-horario";
 
 /**
  * Configuração do Atendimento (Diretoria):
@@ -13,6 +14,8 @@ import type { SetorId } from "@/lib/setores";
  *   { acao: "resposta", id?, atalho, titulo, texto, setor? } · { acao: "remover_resposta", id }
  *   { acao: "recepcao", user_id, ativo }
  *   { acao: "prazo", minutos }
+ *   { acao: "horario", setor, dias, inicio, fim, prazo_minutos, mensagem_fora }   (0171)
+ *   { acao: "remover_horario", setor } · { acao: "chat_site", ativo }             (0171)
  */
 class Erro extends Error { constructor(public msg: string, public status = 400) { super(msg); } }
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -98,6 +101,30 @@ export async function POST(request: Request) {
       }
       case "prazo":
         conferir(await admin.from("settings").upsert({ chave: "atendimento_prazo_minutos", valor: int(b.minutos, 5, 1440, 30), updated_at: new Date().toISOString() }));
+        break;
+      case "horario": {
+        const setor = setorOuNulo(b.setor);
+        if (!setor) throw new Erro("Escolha o setor.");
+        const h: Partial<HorarioSetor> = {
+          dias: Array.isArray(b.dias) ? [...new Set(b.dias.map(Number))].sort() : [],
+          inicio: String(b.inicio ?? ""), fim: String(b.fim ?? ""),
+          prazo_minutos: Math.trunc(Number(b.prazo_minutos)), mensagem_fora: txt(b.mensagem_fora, 1000),
+        };
+        const problema = validarHorario(h);
+        if (problema) throw new Erro(problema);
+        const r = await admin.from("atendimento_setores_horario").upsert({ setor, ...h, updated_by: a!.userId, updated_at: new Date().toISOString() });
+        if (r.error && /atendimento_setores_horario/.test(r.error.message)) throw new Erro("Falta rodar a migration 0171 (horários do atendimento).", 503);
+        conferir(r);
+        break;
+      }
+      case "remover_horario": {
+        const setor = setorOuNulo(b.setor);
+        if (!setor) throw new Erro("Escolha o setor.");
+        conferir(await admin.from("atendimento_setores_horario").delete().eq("setor", setor));
+        break;
+      }
+      case "chat_site":
+        conferir(await admin.from("settings").upsert({ chave: "atendimento_chat_site", valor: b.ativo === true, updated_at: new Date().toISOString() }));
         break;
       default:
         throw new Erro("Ação desconhecida.");

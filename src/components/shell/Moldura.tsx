@@ -48,7 +48,7 @@ export default async function Moldura({
       <RodapeSite marca={texto(cfg, "nome_sistema", "ARINI")} contato={contato} />
       {/* respiro no fim da página: o botão flutuante do assistente não cobre o rodapé */}
       <div aria-hidden className="h-16 sm:h-0" />
-      <ChatIA flutuante />
+      <ChatIA flutuante equipe={cfg.atendimento_chat_site === true} />
     </div>
   );
 }
