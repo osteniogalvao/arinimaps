@@ -11,7 +11,7 @@ import { Crosshair, LandPlot, Layers, Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Camada = {
-  id: string; nome: string; municipio: string | null; tipo: string;
+  id: string; nome: string; municipio: string | null; distrito?: string | null; tipo: string;
   geojson?: string; opacidade: number; datum: string;
   bytes?: number | null;
   zona?: number | string | null;
@@ -125,7 +125,7 @@ export default function ListaCamadas() {
               <div className="flex-1 min-w-48 space-y-1">
                 <p className="font-semibold text-texto">{c.nome}</p>
                 <p className="text-sm text-texto-2 tabular-nums">
-                  {c.municipio} · {c.tipo === "vector" ? "planta vetorial" : "imagem em tiles"}
+                  {c.municipio}{c.distrito ? ` › distrito ${c.distrito}` : ""} · {c.tipo === "vector" ? "planta vetorial" : "imagem em tiles"}
                   {c.zona ? ` · ${c.zona === "graus" ? "graus" : `UTM ${c.zona}S`}` : ""}
                   {c.datum && ` · ${DATUM_LABEL[c.datum] ?? c.datum}`}
                   {desloc
