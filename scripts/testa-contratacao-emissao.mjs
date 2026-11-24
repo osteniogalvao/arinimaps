@@ -4,14 +4,14 @@ import {readFileSync} from "node:fs";
 import {compileFunction} from "node:vm";
 import ts from "typescript";
 
-function carregar({falhaFaturas=false,falhaEmissao=false,aceite=false}={}) {
+function carregar({falhaFaturas=false,falhaEmissao=false,aceite=false,semFaturas=false,status="nova"}={}) {
   const chamadas=[];
   const db={
     rpc:async(fn)=>{chamadas.push(fn);return {error:null};},
     from:table=>{
       const resultado=table==="assinaturas_cotadas"
         ? {data:{ciclo:"mensal",primeira:6990,recorrente:9990,adicionais:0,aceite:aceite?"2026-11-24":null,cancelado:null},error:null}
-        : {data:falhaFaturas?null:[{id:"fatura-sintetica"}],error:falhaFaturas?{code:"08006"}:null};
+        : {data:falhaFaturas?null:semFaturas?[]:[{id:"fatura-sintetica",status}],error:falhaFaturas?{code:"08006"}:null};
       const query={select:()=>query,eq:()=>query,in:()=>query,maybeSingle:()=>Promise.resolve(resultado),then:(ok,err)=>Promise.resolve(resultado).then(ok,err)};
       return query;
     },
@@ -39,4 +39,9 @@ test("caminho normal aceita e emite; retomada não duplica o aceite",async()=>{
     assert.equal(x.chamadas.filter(c=>c==="assinatura_aceitar").length,aceite?0:1);
     assert.equal(x.chamadas.filter(c=>c.startsWith("emitir:")).length,1);
   }
+});
+test("aceite sem primeira fatura informa pendência; fatura paga não é emitida novamente",async()=>{
+  const vazio=carregar({semFaturas:true});assert.equal((await vazio.contratar()).direta,false);
+  const paga=carregar({aceite:true,status:"paga"});assert.equal((await paga.contratar()).direta,true);
+  assert.ok(!paga.chamadas.some(c=>c.startsWith("emitir:")));
 });

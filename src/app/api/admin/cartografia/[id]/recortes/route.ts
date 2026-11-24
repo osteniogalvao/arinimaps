@@ -9,7 +9,7 @@ async function editar(request: Request, ctx: Contexto, remover: boolean) {
   const origem = conferirOrigem(request);
   if (!origem.ok) return respostaOrigemNegada(origem.motivo);
   const a = await ator();
-  if (!a || !temSetor(a, "cartografia")) return falha(403, "sem_permissao", "Restrito à equipe de Cartografia.");
+  if (!a || a.somenteLeitura || !temSetor(a, "cartografia")) return falha(403, "sem_permissao", "Restrito à equipe de Cartografia.");
   const { id } = await ctx.params;
   const body = await request.json().catch(() => null);
   const db = supabaseAdmin();

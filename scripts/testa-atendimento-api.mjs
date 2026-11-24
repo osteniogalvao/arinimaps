@@ -14,14 +14,15 @@ function ambiente() {
   const dono=randomUUID(),vendas=randomUUID(),juridico=randomUUID(),recepcao=randomUUID(),id=randomUUID(),funil=randomUUID();
   const c={id,codigo:"AT-QA",telefone:"5511000000000",nome:"Contato sintético",setor:null,responsavel:null,status:"aberta",crm_item_id:null,opportunity_id:null,nao_lidas:1,etiquetas:[],resolvida_em:null};
   const tab={atendimento_conversas:[c],profiles:[{user_id:dono,role:"admin_central",ativo:true},{user_id:vendas,role:"analista_arini",setores:["comercial"],ativo:true},{user_id:juridico,role:"analista_arini",setores:["juridico"],ativo:true},{user_id:recepcao,role:"analista_arini",setores:["suporte"],ativo:true,atendimento_recepcao:true}],atendimento_eventos:[],crm_itens:[],crm_item_eventos:[],whatsapp_mensagens:[],opportunity_events:[],
-    crm_pipelines:[{id:funil,nome:"Vendas",setor:"comercial",ativo:true}],crm_etapas:[{id:randomUUID(),pipeline_id:funil,ordem:0,nome:"Entrada",sla_horas:24,final:false}]};
+    atendimento_respostas:[],crm_pipelines:[{id:funil,nome:"Vendas",setor:"comercial",ativo:true}],crm_etapas:[{id:randomUUID(),pipeline_id:funil,ordem:0,nome:"Entrada",sla_horas:24,final:false}]};
   let ator={userId:dono,ehArini:true,setores:setores.SETOR_IDS};const envios=[],avisos=[];
   const db={from(tabela){assert.ok(Object.hasOwn(tab,tabela),tabela);let op="select",dados;const filtros=[];
-    const exec=(single=false)=>{let linhas=tab[tabela].filter(r=>filtros.every(([k,v])=>r[k]===v));
+    const exec=(single=false)=>{let linhas=tab[tabela].filter(r=>filtros.every(([k,v])=>Array.isArray(v)?v.includes(r[k]):r[k]===v));
       if(op==="insert"){const r={id:randomUUID(),codigo:"CRM-QA",...dados};tab[tabela].push(r);linhas=[r];}
       if(op==="update") for(const r of linhas)Object.assign(r,dados);
       return {data:structuredClone(single?linhas[0]??null:linhas),error:null};};
-    const q={select(){return q;},eq(k,v){filtros.push([k,v]);return q;},order(){return q;},insert(v){op="insert";dados=v;return q;},update(v){op="update";dados=v;return q;},maybeSingle:async()=>exec(true),single:async()=>exec(true),then(ok,no){return Promise.resolve().then(()=>exec()).then(ok,no);}};return q;}};
+    const q={select(colunas){if(tabela==='profiles')assert.ok(!colunas.split(',').some(x=>x.trim()==='email'),'email pertence a Auth');return q;},eq(k,v){filtros.push([k,v]);return q;},in(k,v){filtros.push([k,v]);return q;},limit(){return q;},order(){return q;},insert(v){op="insert";dados=v;return q;},update(v){op="update";dados=v;return q;},maybeSingle:async()=>exec(true),single:async()=>exec(true),then(ok,no){return Promise.resolve().then(()=>exec()).then(ok,no);}};return q;}};
+  db.auth={admin:{getUserById:async()=>({data:{user:{email:'contato.sintetico@example.invalid'}}})}};
   // A implementação e atomicidade desta RPC são exercitadas no teste SQL separado.
   db.rpc=async(fn,args)=>{
     assert.equal(fn,"fn_atendimento_abrir_crm");assert.equal(args.p_conversa,id);assert.equal(args.p_autor,ator.userId);
@@ -35,8 +36,14 @@ function ambiente() {
   const deps={"server-only":{},"@/lib/supabase/admin":{supabaseAdmin:()=>db},"@/lib/authz":auth,"@/lib/meta":meta,"@/lib/meta-mensagens":social,"@/lib/notificacoes":{notificar:async(...v)=>avisos.push(v)},"@/lib/atendimento-rotulos":rotulos};
   const atendimento=carregar("lib/atendimento.ts",deps);
   const api=carregar("app/api/admin/atendimento/[id]/route.ts",{...deps,"next/server":{NextResponse:Response},"@/lib/audit":{logAudit:async()=>{}},"@/lib/seguranca/limite":{limitar:async()=>({permitido:true}),respostaLimite:()=>Response.json({}, {status:429})},"@/lib/crmSetores":regras,"@/lib/setores":setores,"@/lib/atendimento":atendimento});
-  return {c,tab,dono,vendas,juridico,recepcao,funil,envios,avisos,como(userId,lista){ator={userId,ehArini:true,setores:lista};},post:b=>api.POST(new Request("https://local.invalid/api/admin/atendimento/"+id,{method:"POST",body:JSON.stringify(b)}),{params:Promise.resolve({id})})};
+  return {c,tab,dono,vendas,juridico,recepcao,funil,envios,avisos,como(userId,lista,somenteLeitura=false){ator={userId,ehArini:true,setores:lista,somenteLeitura};},get:()=>api.GET(new Request("https://local.invalid/api/admin/atendimento/"+id),{params:Promise.resolve({id})}),post:b=>api.POST(new Request("https://local.invalid/api/admin/atendimento/"+id,{method:"POST",body:JSON.stringify(b)}),{params:Promise.resolve({id})})};
 }
+
+test("Consulta mostra perfil vinculado usando Auth e Leitura não zera pendências da equipe",async()=>{
+  const a=ambiente();a.c.setor='comercial';a.c.perfil_user_id=a.vendas;a.como(a.vendas,['comercial'],true);
+  const r=await a.get();assert.equal(r.status,200);assert.equal((await r.json()).perfil.email,'contato.sintetico@example.invalid');assert.equal(a.c.nao_lidas,1);
+  a.como(a.vendas,['comercial']);assert.equal((await a.get()).status,200);assert.equal(a.c.nao_lidas,0);
+});
 test("Recepção tria para Comercial; Jurídico não lê nem altera conversa de outra fila",async()=>{
   const a=ambiente();a.como(a.juridico,["juridico"]);
   assert.equal((await a.post({acao:"nota",texto:"Sem autorização"})).status,403);

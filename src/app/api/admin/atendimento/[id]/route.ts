@@ -59,19 +59,22 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/admin/atend
       admin.from("atendimento_respostas").select("id, atalho, titulo, texto, setor").order("atalho"),
       c.opportunity_id ? admin.from("opportunities").select("id, codigo, etapa").eq("id", c.opportunity_id).maybeSingle() : Promise.resolve({ data: null }),
       c.crm_item_id ? admin.from("crm_itens").select("id, codigo, titulo, status").eq("id", c.crm_item_id).maybeSingle() : Promise.resolve({ data: null }),
-      c.perfil_user_id ? admin.from("profiles").select("user_id, nome, role, email").eq("user_id", c.perfil_user_id).maybeSingle() : Promise.resolve({ data: null }),
+      c.perfil_user_id ? admin.from("profiles").select("user_id, nome, role").eq("user_id", c.perfil_user_id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
     const pipelines = c.setor
       ? (await admin.from("crm_pipelines").select("id, nome").eq("setor", c.setor).order("nome")).data ?? []
       : [];
-    if (c.nao_lidas) await admin.from("atendimento_conversas").update({ nao_lidas: 0 }).eq("id", c.id);
+    if (c.nao_lidas && !a?.somenteLeitura) await admin.from("atendimento_conversas").update({ nao_lidas: 0 }).eq("id", c.id);
+    const contato = perfil.data ? { ...perfil.data,
+      email: (await admin.auth.admin.getUserById(perfil.data.user_id)).data.user?.email ?? null,
+    } : null;
     const pessoas = (equipe.data ?? []).map((p) => ({ user_id: p.user_id as string, nome: (p.nome as string) || "Sem nome", setores: setoresDe(p.role as string, p.setores as string[] | null) }));
     return NextResponse.json({
       conversa: c, papel, eu: a!.userId, configurado: contatoSocial(c.telefone) ? mensagensSociaisConfiguradas() : whatsappConfigurado(),
       mensagens: (msgs.data ?? []).reverse(), eventos: (evs.data ?? []).reverse(),
       equipe: pessoas,
       respostas: (respostas.data ?? []).filter((r) => !r.setor || r.setor === c.setor),
-      oportunidade: opp.data, crm_item: item.data, perfil: perfil.data, pipelines,
+      oportunidade: opp.data, crm_item: item.data, perfil: contato, pipelines,
       setores: SETORES_ATENDIMENTO.map((s) => ({ id: s, nome: nomeSetor(s) })),
       pode: { triar: podeTriar(papel), lead: temSetor(a, "comercial", "diretoria") },
     }, { headers: { "Cache-Control": "private, no-store" } });

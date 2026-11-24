@@ -14,6 +14,8 @@ declare
   v_dados jsonb;
   v_responsavel uuid;
   v_diretoria boolean;
+  f record;
+  v_faltas text[] := '{}';
 begin
   select * into a from profiles where user_id=p_autor and ativo;
   if not found or a.role not in ('admin_central','analista_arini') then
@@ -41,6 +43,21 @@ begin
   v_contato := case when v_canal='WhatsApp' then '+'||c.telefone else 'Contato do '||v_canal end;
   v_dados := case when v_canal='WhatsApp' then jsonb_build_object('telefone','+'||c.telefone,'atendimento',c.codigo)
     else jsonb_build_object('contato',c.telefone,'canal',case when v_canal='Instagram' then 'instagram' else 'messenger' end,'atendimento',c.codigo) end;
+  -- Mesma exigência da criação normal: o Atendimento não contorna os campos da entrada.
+  for f in select cf.chave,cf.rotulo,cf.tipo,cf.opcoes from crm_campos cf
+    join crm_etapas ex on ex.id=cf.exigido_desde and ex.pipeline_id=p.id
+    where cf.pipeline_id=p.id and ex.ordem<=e.ordem
+  loop
+    if v_dados->f.chave is null or v_dados->f.chave='null'::jsonb
+      or btrim(coalesce(v_dados->>f.chave,''))=''
+      or (f.tipo='bool' and v_dados->f.chave <> 'true'::jsonb)
+      or (f.tipo='select' and not (v_dados->>f.chave=any(f.opcoes))) then
+      v_faltas := array_append(v_faltas,f.rotulo);
+    end if;
+  end loop;
+  if cardinality(v_faltas)>0 then
+    raise exception 'Preencha os campos obrigatórios em Novo item no CRM: %.',array_to_string(v_faltas,', ');
+  end if;
   select user_id into v_responsavel from profiles where user_id=c.responsavel and ativo and role in ('admin_central','analista_arini');
   insert into crm_itens(pipeline_id,etapa_id,titulo,responsavel,criado_por,descricao,dados,prazo_etapa,opportunity_id)
     values(p.id,e.id,left(coalesce(nullif(btrim(p_titulo),''),v_canal||' · '||coalesce(c.nome,v_contato)),200),

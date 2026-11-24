@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const origem = conferirOrigem(request);
   if (!origem.ok) return respostaOrigemNegada(origem.motivo);
   const a = await ator();
-  if (!a || !temSetor(a, "cartografia")) return falha(403, "sem_permissao", "Restrito à equipe de Cartografia.");
+  if (!a || a.somenteLeitura || !temSetor(a, "cartografia")) return falha(403, "sem_permissao", "Restrito à equipe de Cartografia.");
   if (Number(request.headers.get("content-length")) > 96_000) return falha(413, "pedido_grande", "Reduza a lista de camadas.");
   const dados = entrada.safeParse(await request.json().catch(() => null));
   if (!dados.success) return falha(400, "pedido_invalido", "Informe o pedido e os nomes das camadas da planta.");

@@ -6,7 +6,7 @@ import CartaoRenovacao from "./CartaoRenovacao";
 import TrocaDePlano from "./TrocaDePlano";
 import {useRouter} from "next/navigation";
 
-export type OfertaAssinatura={id:string;plano:string;ciclo:string;primeira:number;recorrente:number;adicionais:number;escopo_confirmado:string;aceite:string|null;cancelado:string|null;arrependimento:boolean;
+export type OfertaAssinatura={id:string;nicho:string;plano:string;ciclo:string;primeira:number;recorrente:number;adicionais:number;escopo_confirmado:string;aceite:string|null;cancelado:string|null;arrependimento:boolean;
   assinatura_cartao:{final:string;situacao:string}|null;
   assinatura_reajustes:{id:string;vigencia:string;valor:number;condicoes:string;aceito_em:string|null;aplicado_em:string|null;avisado_em:string|null}[];
   faturas_cotadas:{id:string;tentativa_cartao:string|null;status:string;componente:string;inicio:string;fim:string;valor:number;link:string|null;link_estorno:string|null;operacao:string|null;nfse_assinaturas:{estado:string;numero:string|null;pdf_url:string|null;xml_url:string|null}|null}[]};

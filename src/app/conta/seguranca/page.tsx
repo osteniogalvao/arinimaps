@@ -6,6 +6,7 @@ import { lerConfiguracoes } from "@/lib/settings";
 import { CabecalhoPagina } from "@/components/ui/Pagina";
 import TopoConta from "@/components/painel/TopoConta";
 import Seguranca from "./Seguranca";
+import { mfaObrigatoriaEquipe } from "@/lib/seguranca/equipe";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Segurança da conta" };
@@ -37,7 +38,7 @@ export default async function ContaSeguranca({ searchParams }: PageProps<"/conta
         <Seguranca
           eventos={eventos ?? []}
           obrigatorio={obrigatorio}
-          exigidoDaEquipe={daEquipe && cfg.seguranca_mfa_equipe === true}
+          exigidoDaEquipe={mfaObrigatoriaEquipe(user, cfg.seguranca_mfa_equipe === true)}
         />
       </main>
     </div>

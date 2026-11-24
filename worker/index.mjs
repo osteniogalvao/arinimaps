@@ -206,6 +206,19 @@ async function rodarCentral() {
       if (e.code === "42883" && e.message.includes("fn_alugueis_rotina")) return { rows: [] };
       throw e;
     });
+    // Pendências com causa verificável (0166): cria/resolve tarefas, sem decisões externas.
+    await db.query("select fn_matriz_pendencias_origem()").catch(e => {
+      if (!(e.code === "42883" && e.message.includes("fn_matriz_pendencias_origem"))) throw e;
+    });
+    // Regras configuradas pela Diretoria (0168) e lembretes de reunião da agenda (0169).
+    const configuradas = await db.query("select fn_automacoes_configuradas() as r").catch(e => {
+      if (e.code === "42883" && e.message.includes("fn_automacoes_configuradas")) return { rows: [] };
+      throw e;
+    });
+    const lembretes = await db.query("select fn_agenda_lembretes() as r").catch(e => {
+      if (e.code === "42883" && e.message.includes("fn_agenda_lembretes")) return { rows: [] };
+      throw e;
+    });
     // Matriz (0162): cobrança por níveis a cada rodada; resumo da Ari uma vez por dia (a função se controla)
     const cobranca = await db.query("select fn_matriz_cobranca() as r").catch(e => {
       if (e.code === "42883" && e.message.includes("fn_matriz_cobranca")) return { rows: [] };
@@ -214,7 +227,7 @@ async function rodarCentral() {
     await db.query("select fn_matriz_resumo(false)").catch(e => {
       if (!(e.code === "42883" && e.message.includes("fn_matriz_resumo"))) console.error("[matriz] resumo falhou:", e.message);
     });
-    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), ...(cobranca.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0, divulgacao: divulgacao.rows[0]?.total ?? 0, atendimento: atendimento.rows[0]?.total ?? 0, alugueis: alugueis.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
+    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), ...(cobranca.rows[0]?.r ?? {}), ...(configuradas.rows[0]?.r ?? {}), ...(lembretes.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0, divulgacao: divulgacao.rows[0]?.total ?? 0, atendimento: atendimento.rows[0]?.total ?? 0, alugueis: alugueis.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
     if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
     await emailsCriticos();
     // publicações agendadas que chegaram na hora (Central de publicação)

@@ -14,9 +14,11 @@ import { podeOperarTerminal } from "@/lib/ponto-terminal";
 export async function POST(request: Request) {
   const a = await ator();
   if (!a?.ehArini || !(await podeOperarTerminal(a))) return NextResponse.json({ error: "Este computador não está liberado como terminal de ponto." }, { status: 403 });
-  const { user_id, pin } = (await request.json().catch(() => ({}))) as { user_id?: string; pin?: string };
-  if (!user_id || !/^[0-9a-f-]{36}$/i.test(user_id)) return NextResponse.json({ error: "Escolha o seu nome na lista." }, { status: 400 });
-  if (!pin || !/^\d{4,6}$/.test(pin)) return NextResponse.json({ error: "Digite o seu PIN (4 a 6 números)." }, { status: 400 });
+  const corpo = await request.json().catch(() => null);
+  if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return NextResponse.json({ error: "Informe a pessoa e o PIN." }, { status: 400 });
+  const { user_id, pin } = corpo;
+  if (typeof user_id !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(user_id)) return NextResponse.json({ error: "Escolha o seu nome na lista." }, { status: 400 });
+  if (typeof pin !== "string" || !/^\d{4,6}$/.test(pin)) return NextResponse.json({ error: "Digite o seu PIN (4 a 6 números)." }, { status: 400 });
   const lim = await limitar(`ponto-terminal:${user_id}`, 5, 600);
   if (!lim.permitido) return respostaLimite(lim, "PIN");
 

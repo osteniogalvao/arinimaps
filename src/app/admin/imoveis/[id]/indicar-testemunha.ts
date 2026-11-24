@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function indicarTestemunha(_: string, form: FormData) {
   const a = await ator();
-  if (!a || !temSetor(a,"operacoes","juridico")) return "Acesso restrito à equipe responsável.";
+  if (!a || a.somenteLeitura || !temSetor(a,"operacoes","juridico")) return "Acesso restrito à equipe responsável.";
   const id = String(form.get("id")), email=String(form.get("email")).trim();
   const posicao = Number(form.get("posicao"));
   if (!/^[a-f0-9-]{36}$/i.test(id) || ![1,2].includes(posicao) || email.length>254 || !email.includes("@")) return "Confira o e-mail e a posição da testemunha.";

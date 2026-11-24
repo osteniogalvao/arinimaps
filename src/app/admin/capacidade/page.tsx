@@ -5,6 +5,8 @@ import { setoresDe, TAREFA_STATUS_ABERTOS } from "@/lib/setores";
 import { CabecalhoPagina, Vazio } from "@/components/ui/Pagina";
 import { TABELA, TABELA_CAIXA, TBODY, TD, TH, THEAD, TR } from "@/components/admin/estilos";
 import CapacidadeCampo from "@/components/admin/CapacidadeCampo";
+import SugestoesRedistribuicao from "@/components/admin/SugestoesRedistribuicao";
+import { lerRedistribuicao } from "@/lib/redistribuicao-servidor";
 
 const FECHADAS = ["fechado", "pos_venda", "perdido"];
 
@@ -14,7 +16,8 @@ const FECHADAS = ["fechado", "pos_venda", "perdido"];
  * distribuir trabalho antes que alguém afogue.
  */
 export default async function Capacidade() {
-  await exigirSetor("diretoria");
+  const user = await exigirSetor("diretoria");
+  const redistribuicao = await lerRedistribuicao(user.setores);
   const admin = supabaseAdmin();
   const [{ data: equipe, error }, { data: tarefas }, { data: opps }, { data: itens }] = await Promise.all([
     admin.from("profiles").select("user_id, nome, role, setores, capacidade_tarefas").in("role", ["admin_central", "analista_arini"]).eq("ativo", true).order("nome"),
@@ -35,6 +38,7 @@ export default async function Capacidade() {
   return (
     <div className="max-w-5xl space-y-6">
       <CabecalhoPagina eyebrow="Diretoria" titulo="Capacidade da equipe" subtitulo="Carga em aberto de cada pessoa contra a capacidade combinada. Acima de 100%, redistribua antes de cobrar." />
+      <SugestoesRedistribuicao sugestoes={redistribuicao.sugestoes} erro={redistribuicao.erro} />
       <div className={TABELA_CAIXA}>
         <table className={TABELA}>
           <thead className={THEAD}><tr>

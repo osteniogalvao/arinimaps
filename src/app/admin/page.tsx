@@ -73,6 +73,8 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
   const matriz = await dadosMatriz(user.setores, hoje, {
     setor: typeof sp.setor === "string" ? sp.setor : "",
     tipo: typeof sp.tipo === "string" ? sp.tipo : "",
+    de: typeof sp.de === "string" ? sp.de : "",
+    ate: typeof sp.ate === "string" ? sp.ate : "",
   });
 
   const filas: Record<SetorId, Fila[]> = {
@@ -134,6 +136,8 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
           : undefined}
       />
 
+      <Link href="/admin/agenda-setores" className="inline-flex items-center gap-2 text-sm font-semibold text-verde hover:underline"><CalendarClock className="size-4" /> Agenda dos setores</Link>
+
       {semAcesso && (
         <p className="-mt-4 flex items-start gap-3 rounded-xl border border-alerta/40 bg-alerta/10 px-5 py-4 text-[0.95rem] text-alerta">
           <CircleAlert className="size-5 shrink-0 mt-0.5" />
@@ -155,7 +159,7 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
 
       {meus.length > 0 && (
         <FilaGargalos itens={matriz.gargalos} setores={meus.map((s) => ({ id: s.id, nome: s.nome }))}
-          filtro={matriz.filtro} hoje={hoje} pronto={matriz.pronto} />
+          filtro={matriz.filtro} hoje={hoje} pronto={matriz.pronto} erroPeriodo={matriz.erroPeriodo} />
       )}
 
       {meus.length > 0 && <CargaSetores linhas={matriz.carga} />}

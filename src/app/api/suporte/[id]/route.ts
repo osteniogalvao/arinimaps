@@ -24,10 +24,11 @@ export async function GET(request: Request, ctx: RouteContext<"/api/suporte/[id]
   const since = lerSince(request);
   let q = admin.from("support_messages").select(CAMPOS_MSG).eq("ticket_id", id).eq("interno", false).order("created_at").limit(200);
   if (since) q = q.gt("created_at", since);
-  const [{ data: mensagens }, online] = await Promise.all([q, atendenteOnline(), marcarVisto(user.id)]);
+  const [{ data: mensagens }, online, {data:avaliacao,error:erroAvaliacao}] = await Promise.all([q, atendenteOnline(), admin.from("support_avaliacoes").select("nota, comentario, created_at").eq("ticket_id",id).maybeSingle(), marcarVisto(user.id)]);
+  if(erroAvaliacao)return NextResponse.json({error:"Não foi possível consultar o chamado."},{status:503});
 
   return NextResponse.json(
-    { mensagens: mensagens ?? [], status: ticket.status, atendente_online: online },
+    { mensagens: mensagens ?? [], status: ticket.status, atendente_online: online, avaliacao },
     { headers: { "Cache-Control": "private, no-store" } }
   );
 }

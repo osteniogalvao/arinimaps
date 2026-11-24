@@ -10,6 +10,7 @@ import RodarAutomacoes from "@/components/admin/RodarAutomacoes";
 import PrazosMatriz from "@/components/admin/PrazosMatriz";
 import { lerPrazos } from "@/lib/matriz-servidor";
 import { removerExcecao, salvarPrazo } from "./acoes";
+import EditorAutomacoes, { type RegraAutomacao } from "@/components/admin/EditorAutomacoes";
 
 /**
  * Regras automáticas da Central (bloco 1). Cada regra observa um evento e cria
@@ -23,6 +24,15 @@ export default async function Automacoes({ searchParams }: PageProps<"/admin/aut
   const n = (k: string, alt: number) => numero(cfg, k, alt);
 
   const regras = [
+    { nome: "Imóvel publicado com material incompleto", setor: "marketing",
+      quando: "Imóvel publicado ou em negociação sem foto de capa ou sem descrição.",
+      faz: "Abre tarefa de material, com prazo do setor. Confere novamente o imóvel antes de concluir a tarefa; não tira o anúncio do ar." },
+    { nome: "Autorização vencendo", setor: "juridico",
+      quando: "Autorização de imóvel ativo vencida ou que vence nos próximos 30 dias.",
+      faz: "Cria tarefa com a validade registrada como prazo. Renovação, encerramento ou retirada do imóvel da fila encerram a pendência com evidência; nenhuma renovação é automática." },
+    { nome: "Pedido de titular recebido", setor: "juridico",
+      quando: "Pedido LGPD recebido ou em análise.",
+      faz: "Cria tarefa com o prazo já registrado no pedido. Fecha quando a decisão humana é registrada; a Ari não responde nem decide pelo Jurídico." },
     { nome: "Lead novo vai para o próximo corretor", setor: "comercial",
       quando: "Assim que o lead chega pelo site (e, a cada 10 min, os que ficaram sem corretor).",
       faz: "Entrega ao próximo da fila do rodízio e avisa por e-mail." },
@@ -68,6 +78,15 @@ export default async function Automacoes({ searchParams }: PageProps<"/admin/aut
     .order("created_at", { ascending: false }).limit(500);
   const tipos = [...new Set((regrasUsadas ?? []).map((r) => String(r.regra)))].filter((r) => /^[a-z0-9_]+$/.test(r)).sort();
 
+  // Editor de regras da Diretoria (0168). Sem a migration, a seção avisa e some o resto.
+  const [regrasCfg, catalogo] = await Promise.all([
+    supabaseAdmin().from("automacao_regras")
+      .select("id, versao, nome, gatilho, evento, condicao_campo, condicao_valor, setor, titulo, descricao, prazo_dias, prioridade, intervalo_dias, proxima_data, ativa")
+      .order("created_at"),
+    supabaseAdmin().from("automacao_catalogo").select("evento, nome, campos").order("nome"),
+  ]);
+  const editorPronto = !regrasCfg.error && !catalogo.error;
+
   const { data: recentes, error } = await supabaseAdmin().from("tasks")
     .select("id, codigo, titulo, setor, regra, status, created_at")
     .eq("origem", "automatica").order("created_at", { ascending: false }).limit(20);
@@ -92,6 +111,9 @@ export default async function Automacoes({ searchParams }: PageProps<"/admin/aut
           </div>
         ))}
       </div>
+
+      <EditorAutomacoes pronto={editorPronto} regras={(regrasCfg.data ?? []) as RegraAutomacao[]}
+        catalogo={(catalogo.data ?? []) as { evento: string; nome: string; campos: string[] }[]} />
 
       <section id="prazos" className="scroll-mt-24 space-y-3">
         <h2 className="lp-display text-xl text-texto">Prazos e limites por setor</h2>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { OG_IMAGEM_PADRAO, OG_NOME_SITE, urlDoSite } from "@/lib/compartilhar";
 import { Geist_Mono, League_Gothic, Quicksand } from "next/font/google";
 import "./globals.css";
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
+        <Script src="/aguardar-documento.js" strategy="beforeInteractive" />
         {/* aplica o tema salvo antes da pintura, senão a tela pisca escura
             antes de virar clara a cada navegação */}
         <script dangerouslySetInnerHTML={{ __html: TEMA_SCRIPT }} />

@@ -9,7 +9,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/admin/carto
   const origem = conferirOrigem(request);
   if (!origem.ok) return respostaOrigemNegada(origem.motivo);
   const a = await ator();
-  if (!a || !temSetor(a, "cartografia")) return falha(403, "sem_permissao", "Restrito à cartografia.");
+  if (!a || a.somenteLeitura || !temSetor(a, "cartografia")) return falha(403, "sem_permissao", "Restrito à cartografia.");
   const { id } = await ctx.params;
   const b = await request.json().catch(() => null);
   if (!b || !Number.isFinite(b.lng) || Math.abs(b.lng) > 180 || !Number.isFinite(b.lat) || Math.abs(b.lat) > 90) {

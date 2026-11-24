@@ -36,7 +36,7 @@ export async function currentUser() {
   if (!user) return null;
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, nome, setores, nicho, entrada_ativa, plan_id, plan_valido_ate, avatar_url")
+    .select("role, nome, setores, setores_gestor, equipe_acesso, nicho, entrada_ativa, plan_id, plan_valido_ate, avatar_url")
     .eq("user_id", user.id)
     .eq("ativo", true)
     .maybeSingle();
@@ -44,6 +44,8 @@ export async function currentUser() {
     ? {
         id: user.id, email: user.email, role: profile.role as string, nome: profile.nome as string,
         setores: (profile.setores ?? []) as string[],
+        setores_gestor: (profile.setores_gestor ?? []) as string[],
+        equipe_acesso: (profile.equipe_acesso ?? "operador") as string,
         nicho: (profile.nicho ?? null) as string | null,
         entradaAtiva: (profile.entrada_ativa ?? null) as string | null,
         planId: (profile.plan_id ?? null) as string | null,

@@ -37,6 +37,11 @@ test("Atendimento abre CRM de forma atômica, concorrente, autorizada e com uma 
     for(const tabela of ["crm_itens","crm_item_eventos","atendimento_eventos","avisos"])assert.equal(Number((await uma("select count(*) n from "+tabela)).n),1,tabela);
     const item=await uma("select * from crm_itens");assert.equal(item.dados.telefone,"+5511000000000");assert.ok(item.prazo_etapa);
     assert.equal((await uma("select crm_item_id from atendimento_conversas where id=$1",[id])).crm_item_id,item.id);
+    await q("insert into crm_campos(pipeline_id,chave,rotulo,tipo,exigido_desde)values($1,'cpf','CPF conferido','texto',$2)",[funil,item.etapa_id]);
+    const semDados=await conversa();await assert.rejects(abrir(semDados),/campos obrigatórios.*CPF conferido/);
+    assert.equal((await uma("select crm_item_id from atendimento_conversas where id=$1",[semDados])).crm_item_id,null);
+    assert.equal(Number((await uma("select count(*) n from crm_itens")).n),1);
+    await q("delete from crm_campos where pipeline_id=$1",[funil]);
     // Falha depois de criar o item deve reverter item, trigger de aviso e vínculo.
     await q(`create function qa_falha_evento() returns trigger language plpgsql as $$begin raise exception 'falha sintética';end$$;
       create trigger qa_falha before insert on atendimento_eventos for each row execute function qa_falha_evento();`);

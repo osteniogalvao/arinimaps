@@ -23,14 +23,17 @@ export default function RodarAutomacoes() {
       <button disabled={ocupado} className="btn-verde inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-60"
         onClick={async () => {
           setOcupado(true); setMsg("");
+          try {
           const r = await fetch("/api/admin/automacoes", { method: "POST" });
           const j = await r.json().catch(() => ({}));
-          setOcupado(false);
           if (!r.ok) { setMsg(j.error ?? "Não foi possível rodar."); return; }
           const feitos = Object.entries(j.resultado ?? {})
             .filter(([k, v]) => k in ROTULO && Number(v) > 0).map(([k, v]) => `${v} ${ROTULO[k]}`);
           setMsg(feitos.length ? feitos.join(" · ") : "Nada parado agora.");
           router.refresh();
+          } catch {
+            setMsg("Não foi possível confirmar a execução. Confira a conexão e tente novamente.");
+          } finally { setOcupado(false); }
         }}>
         <Play className="size-4" /> {ocupado ? "Rodando…" : "Rodar agora"}
       </button>

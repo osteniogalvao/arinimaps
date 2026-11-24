@@ -45,9 +45,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "E-mail ou senha incorretos." }, { status: 401 });
   }
 
-  const { data: profile } = await supabaseAdmin()
+  const { data: profile, error: profileError } = await supabaseAdmin()
     .from("profiles").select("role, ativo, entrada_ativa").eq("user_id", data.user.id).single();
-  if (profile && profile.ativo === false) {
+  if (profileError || !profile) {
+    // A senha foi validada, mas o perfil ainda não: não inventar um papel nem
+    // manter a sessão criada por esta tentativa quando o banco está indisponível.
+    await supabase.auth.signOut({ scope: "local" });
+    await registrarEvento(request, "login_bloqueado", { userId: data.user.id, email, detalhe: { motivo: "perfil indisponível" } });
+    return NextResponse.json({ error: "Não foi possível consultar sua conta agora. Tente entrar novamente em instantes." }, { status: 503 });
+  }
+  if (profile.ativo === false) {
     await supabase.auth.signOut();
     await registrarEvento(request, "login_bloqueado", { userId: data.user.id, email, detalhe: { motivo: "conta desativada" } });
     return NextResponse.json({ error: "Esta conta está desativada. Fale com a Arini." }, { status: 403 });
@@ -63,5 +70,5 @@ export async function POST(request: Request) {
   await registrarEvento(request, "login_ok", { userId: data.user.id, email, detalhe: { mfa_pendente: precisaMfa } });
   // 5.9: convite pendente de organização para este e-mail vira vínculo (não atrasa o login)
   void vincularConvites(data.user.id, email);
-  return NextResponse.json({ ok: true, role: profile?.role ?? "comprador", entradaAtiva: profile?.entrada_ativa, escolherPerfil: !!profile && !profile.entrada_ativa && !["admin_central","analista_arini","franqueado"].includes(profile.role), mfa: precisaMfa });
+  return NextResponse.json({ ok: true, role: profile.role, entradaAtiva: profile.entrada_ativa, escolherPerfil: !profile.entrada_ativa && !["admin_central","analista_arini","franqueado"].includes(profile.role), mfa: precisaMfa });
 }

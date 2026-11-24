@@ -14,7 +14,7 @@ import { setorPorId, type SetorId } from "@/lib/setores";
  *        { acao: "direta", com }          → { conversa }
  * Direta: só os dois. Canal de setor: quem atua no setor (diretoria, todos).
  */
-const UUID = /^[0-9a-f-]{36}$/i;
+const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const falta0159 = (m?: string) => !!m && /chat_conversas|chat_mensagens|chat_participantes|fn_chat_direta|42P01|PGRST20/.test(m);
 
 type ConversaChat = {
@@ -91,11 +91,12 @@ export async function POST(request: Request) {
   if (!a?.ehArini) return NextResponse.json({ error: "Restrito à equipe." }, { status: 403 });
   const lim = await limitar(`chat:${a.userId}`, 60, 60);
   if (!lim.permitido) return respostaLimite(lim, "mensagens");
-  const corpo = (await request.json().catch(() => ({}))) as { acao?: string; conversa?: string; texto?: string; com?: string };
+  const corpo = await request.json().catch(() => null) as { acao?: unknown; conversa?: unknown; texto?: unknown; com?: unknown } | null;
+  if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return NextResponse.json({ error: "Envie uma ação válida para o chat." }, { status: 400 });
   const db = supabaseAdmin();
 
   if (corpo.acao === "direta") {
-    if (!corpo.com || !UUID.test(corpo.com) || corpo.com === a.userId) return NextResponse.json({ error: "Escolha uma pessoa da equipe." }, { status: 400 });
+    if (typeof corpo.com !== "string" || !UUID.test(corpo.com) || corpo.com === a.userId) return NextResponse.json({ error: "Escolha uma pessoa da equipe." }, { status: 400 });
     const { data: p } = await db.from("profiles").select("role, ativo").eq("user_id", corpo.com).maybeSingle();
     if (!p || p.ativo === false || !["admin_central", "analista_arini"].includes(p.role)) return NextResponse.json({ error: "Essa pessoa não está na equipe." }, { status: 400 });
     const { data, error } = await db.rpc("fn_chat_direta", { p_eu: a.userId, p_outro: corpo.com });
@@ -104,9 +105,11 @@ export async function POST(request: Request) {
   }
 
   if (corpo.acao === "enviar") {
-    const texto = (corpo.texto ?? "").trim().slice(0, 4000);
+    if (typeof corpo.texto !== "string") return NextResponse.json({ error: "Escreva uma mensagem de texto." }, { status: 400 });
+    const texto = corpo.texto.trim();
     if (!texto) return NextResponse.json({ error: "Escreva a mensagem." }, { status: 400 });
-    if (!corpo.conversa || !UUID.test(corpo.conversa)) return NextResponse.json({ error: "Conversa inválida." }, { status: 400 });
+    if (texto.length > 4000) return NextResponse.json({ error: "A mensagem pode ter até 4.000 caracteres." }, { status: 400 });
+    if (typeof corpo.conversa !== "string" || !UUID.test(corpo.conversa)) return NextResponse.json({ error: "Conversa inválida." }, { status: 400 });
     const { data: c, error: e1 } = await db.from("chat_conversas").select("*").eq("id", corpo.conversa).maybeSingle();
     if (e1) return NextResponse.json({ error: falta0159(e1.message) ? "Falta rodar a migration 0159 (Chat interno) no Supabase." : "Falha ao enviar." }, { status: 503 });
     if (!c || !pode(a, c as ConversaChat)) return NextResponse.json({ error: "Conversa não encontrada." }, { status: 404 });

@@ -56,6 +56,7 @@ jobs:
           node scripts/testa-consulta-rural-recorte.mjs
           node scripts/testa-relatorio-area.mjs
           node scripts/testa-limites-rotas.mjs
+          node --test scripts/testa-chat-ponto-entradas.mjs
 
       - name: Conferir recortes urbanos e calibração CAD
         env:
@@ -69,6 +70,12 @@ jobs:
         env:
           ARINI_TESTE_CARTEIRA_DB: postgresql://postgres:teste-local@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres
         run: node --test --test-concurrency=1 scripts/testa-assinaturas-planos.mjs scripts/testa-contratacao-direta.mjs scripts/testa-financeiro.mjs scripts/testa-nfse-assinaturas.mjs scripts/testa-privacidade-publicacao.mjs scripts/testa-divulgadores.mjs scripts/testa-tarefas-automaticas.mjs scripts/testa-crm-comercial.mjs
+
+      # Banco efêmero e provedores substituídos nos handlers; sem cobranças externas.
+      - name: Testar regressões de operação e permissões
+        env:
+          ARINI_TESTE_CARTEIRA_DB: postgresql://postgres:teste-local@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres
+        run: node --test --test-concurrency=1 scripts/testa-alugueis-api.mjs scripts/testa-alugueis-sql.mjs scripts/testa-atendimento-api.mjs scripts/testa-atendimento-crm-sql.mjs scripts/testa-crm-setores-api.mjs scripts/testa-equipe-leitura.mjs scripts/testa-matriz-origens.mjs scripts/testa-automacoes-api.mjs scripts/testa-suporte-avaliacao.mjs scripts/testa-matriz-redistribuicao.mjs scripts/testa-contratacao-emissao.mjs scripts/testa-pedido-perfil.mjs scripts/testa-inicio-hidratacao.mjs scripts/testa-login-perfil.mjs
 
       - name: Lint
         run: npm run lint

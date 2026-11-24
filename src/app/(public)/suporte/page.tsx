@@ -31,7 +31,7 @@ export default async function Suporte({ searchParams }: PageProps<"/suporte">) {
   let chamados: Chamado[] = [];
   if (user) {
     const { data: tickets } = await admin.from("support_tickets")
-      .select("id, codigo, assunto, status, created_at, updated_at")
+      .select("id, codigo, assunto, status, created_at, updated_at, avaliacao:support_avaliacoes(nota,comentario,created_at)")
       .eq("user_id", user.id).order("updated_at", { ascending: false }).limit(30);
     const ids = (tickets ?? []).map((t) => t.id);
     const { data: msgs } = ids.length
@@ -39,7 +39,7 @@ export default async function Suporte({ searchParams }: PageProps<"/suporte">) {
           .select("id, ticket_id, autor_nome, da_equipe, corpo, created_at")
           .in("ticket_id", ids).eq("interno", false).order("created_at")
       : { data: [] };
-    chamados = (tickets ?? []).map((t) => ({ ...t, mensagens: (msgs ?? []).filter((m) => m.ticket_id === t.id) }));
+    chamados = (tickets ?? []).map((t) => ({ ...t, avaliacao:Array.isArray(t.avaliacao)?t.avaliacao[0]??null:t.avaliacao, mensagens: (msgs ?? []).filter((m) => m.ticket_id === t.id) }));
   }
 
   return (

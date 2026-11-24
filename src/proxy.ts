@@ -6,6 +6,7 @@ import {
 import { conferirOrigem, respostaOrigemNegada } from "@/lib/seguranca/origem";
 import { opcoesCookieSessao } from "@/lib/seguranca/cookies";
 import { fetchComLimite } from "@/lib/supabase/fetchComLimite";
+import { somenteLeituraEquipe, escritaLiberadaParaLeitura, mfaObrigatoriaEquipe } from "@/lib/seguranca/equipe";
 
 // Trava o site com a senha de bloqueio (SITE_SENHA) e mantém a sessão do
 // Supabase viva (refresh de token via cookies).
@@ -58,8 +59,18 @@ export async function proxy(request: NextRequest) {
   );
 
   try {
-    await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && !escritaLiberadaParaLeitura(pathname, request.method)) {
+      const { data: perfil, error } = await supabase.from("profiles").select("role,equipe_acesso,setores_gestor").eq("user_id", user.id).maybeSingle();
+      if (error || !perfil) return NextResponse.json({ error: "Não foi possível conferir as permissões." }, { status: 503 });
+      if (somenteLeituraEquipe(perfil)) return NextResponse.json({ error: "Seu acesso é somente de leitura. Peça a alteração à Diretoria." }, { status: 403 });
+      if (mfaObrigatoriaEquipe(perfil)) {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal?.currentLevel !== "aal2") return NextResponse.json({ error: "Confirme o segundo fator para continuar.", solucao: "/conta/seguranca?obrigatorio=1" }, { status: 403 });
+      }
+    }
   } catch {
+    if (!escritaLiberadaParaLeitura(pathname, request.method)) return NextResponse.json({ error: "Não foi possível conferir a sessão." }, { status: 503 });
     // Supabase fora do ar: segue sem renovar a sessão em vez de travar a página
   }
   return response;
@@ -75,6 +86,6 @@ export const config = {
   // do token (uma ida ao Supabase Auth) era parte da lentidão do zoom.
   matcher: [
     // O webhook autentica a Meta e mede o corpo em fluxo. O proxy copiaria o corpo antes dessa validação.
-    "/((?!api/admin/cartografia|api/webhooks/(?:whatsapp|meta-mensagens)(?:/|$)|api/tiles|api/geo|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|pbf)).*)",
+    "/((?!api/admin/cartografia|api/webhooks/(?:whatsapp|meta-mensagens)(?:/|$)|api/tiles|api/geo|_next/static|_next/image|favicon.ico|aguardar-documento\\.js$|.*\\.(?:png|jpg|jpeg|svg|webp|pbf)).*)",
   ],
 };
