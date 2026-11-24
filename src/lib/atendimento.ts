@@ -5,6 +5,8 @@ import { telefoneWhatsapp } from "@/lib/meta";
 import { canalDoContato, contatoSocial, enviarPeloCanal } from "@/lib/meta-mensagens";
 import { notificar } from "@/lib/notificacoes";
 import type { SetorId } from "@/lib/setores";
+import { after } from "next/server";
+import { ariLigada, buscaClaraDeImovel, codigoNoTexto, pedeHumano, responderComAri } from "@/lib/atendimento-ari";
 import { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL } from "@/lib/atendimento-rotulos";
 import { dentroDoHorario, type HorarioSetor } from "@/lib/atendimento-horario";
 export { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL, SETORES_ATENDIMENTO, STATUS_LABEL } from "@/lib/atendimento-rotulos";
@@ -30,6 +32,8 @@ export type Conversa = {
   ultimo_texto: string | null; triada_em: string | null; resolvida_em: string | null;
   menu_enviado_em: string | null; menu_tentativas: number; menu_respondido_em: string | null;
   created_at: string;
+  // 0170: Ari no WhatsApp (ausentes antes da migration)
+  ari_ativa_em?: string | null; ari_dia?: string | null; ari_respostas_dia?: number | null; ari_ultimo_imovel?: string | null;
 };
 
 export type PapelAtendimento = "administrador" | "recepcao" | "atendente";
@@ -98,8 +102,9 @@ async function dentroDoExpediente(agora = new Date(), horario?: HorarioSetor | n
 type Menu = {
   ativo: boolean; saudacao: string; confirmacao: string; nao_entendi: string; fora_expediente: string;
   max_tentativas: number; setor_escape: string | null; expira_minutos: number; reenviar_apos_horas: number;
+  ari_ativo?: boolean; ari_limite_dia?: number;
 };
-type Opcao = { id: string; ordem: number; chave: string; rotulo: string; setor: string | null; responsavel: string | null; etiqueta: string | null; confirmacao: string | null; ativo: boolean };
+type Opcao = { id: string; ordem: number; chave: string; rotulo: string; setor: string | null; responsavel: string | null; etiqueta: string | null; confirmacao: string | null; ativo: boolean; acao?: "setor" | "ari" };
 
 export async function lerMenu() {
   const admin = supabaseAdmin();
@@ -204,6 +209,7 @@ export async function entradaAtendimento(p: {
     const horas = menu?.reenviar_apos_horas ?? 12;
     if (c.status === "resolvida" && c.resolvida_em && Date.now() - Date.parse(c.resolvida_em) > horas * 3_600_000) {
       Object.assign(mud, { setor: null, responsavel: null, triada_em: null, menu_enviado_em: null, menu_respondido_em: null, menu_tentativas: 0 });
+      if (c.ari_ativa_em !== undefined) mud.ari_ativa_em = null;
     }
     await eventoAtendimento({ conversa_id: c.id, acao: "reabrir", texto: "O cliente voltou a escrever." });
   }
@@ -240,9 +246,20 @@ export async function entradaAtendimento(p: {
     return true;
   }
 
-  // 3. menu automático
+  // 3. conversa com a Ari (consulta de imóveis) até alguém da equipe assumir
+  if (c.ari_ativa_em) {
+    await conversaComAri(c, p, menu, false);
+    return true;
+  }
+
+  // 4. menu automático
   if (!menu?.ativo || !opcoes.some((o) => o.ativo) || c.menu_respondido_em) return true;
   const aberto = c.menu_enviado_em && Date.now() - Date.parse(c.menu_enviado_em) < menu.expira_minutos * 60_000;
+  // primeira mensagem que já é uma busca clara de imóvel: a Ari responde, sem menu
+  if (!aberto && !c.menu_enviado_em && buscaClaraDeImovel(p.texto) && await ariLigada(menu)) {
+    await conversaComAri(c, p, menu, true);
+    return true;
+  }
   if (!aberto) {
     await admin.from("atendimento_conversas").update({ menu_enviado_em: agora, menu_tentativas: 0 }).eq("id", c.id);
     await eventoAtendimento({ conversa_id: c.id, acao: "menu", texto: "Menu automático enviado." });
@@ -258,6 +275,15 @@ export async function entradaAtendimento(p: {
     const texto = variaveis(base, c.nome, setor) + (fora && aviso ? `\n\n${aviso}` : "");
     await enviarDoRobo(c, texto, p.canal);
   };
+  if (escolha?.acao === "ari" && await ariLigada(menu)) {
+    await conversaComAri(c, p, menu, true, escolha.confirmacao || "Me conte o que você procura: tipo, cidade, tamanho e faixa de valor. Para falar com um corretor, responda *0*.");
+    return true;
+  }
+  // com o menu aberto, uma busca clara em vez do número também vai para a Ari
+  if (!escolha && buscaClaraDeImovel(p.texto) && opcoes.some((o) => o.ativo && o.acao === "ari") && await ariLigada(menu)) {
+    await conversaComAri(c, p, menu, true);
+    return true;
+  }
   if (escolha) {
     const etiquetas = escolha.etiqueta && !c.etiquetas.includes(escolha.etiqueta) ? [...c.etiquetas, escolha.etiqueta] : c.etiquetas;
     await admin.from("atendimento_conversas").update({ menu_respondido_em: agora, etiquetas }).eq("id", c.id);
@@ -281,6 +307,61 @@ export async function entradaAtendimento(p: {
   await admin.from("atendimento_conversas").update({ menu_tentativas: tentativas }).eq("id", c.id);
   await enviarDoRobo(c, textoDoMenu(menu, opcoes, c.nome, menu.nao_entendi), p.canal);
   return true;
+}
+
+/**
+ * Conversa com a Ari (0170). `entrando`: marca o início (menu respondido) e,
+ * com `boasVindas`, só apresenta a Ari sem chamar a IA. A resposta roda depois
+ * do 200 do webhook (after), porque a IA leva alguns segundos.
+ */
+async function conversaComAri(c: Conversa, p: { texto: string; mensagemId: string; canal?: string }, menu: Menu | null, entrando: boolean, boasVindas?: string) {
+  const admin = supabaseAdmin();
+  const agora = new Date().toISOString();
+  const enviar = (texto: string) => enviarDoRobo(c, texto, p.canal);
+  if (entrando) {
+    const etiquetas = c.etiquetas.includes("busca-imoveis") ? c.etiquetas : [...c.etiquetas, "busca-imoveis"];
+    const { error } = await admin.from("atendimento_conversas").update({ ari_ativa_em: agora, menu_respondido_em: agora, etiquetas }).eq("id", c.id);
+    if (error) { console.error("atendimento: ari", error.message); return; }
+    Object.assign(c, { ari_ativa_em: agora, menu_respondido_em: agora, etiquetas });
+    await eventoAtendimento({ conversa_id: c.id, acao: "automatica", texto: "Ari (IA) começou a atender: consulta de imóveis." });
+    if (boasVindas) { await enviar(variaveis(boasVindas, c.nome)); return; }
+  } else if (pedeHumano(p.texto)) {
+    await passarParaEquipe(c, p, menu, "O cliente pediu para falar com um corretor.");
+    return;
+  }
+  after(async () => {
+    const r = await responderComAri(c, p.texto, p.mensagemId, enviar, p.canal, menu?.ari_limite_dia ?? 40)
+      .catch(() => "falha" as const);
+    if (r === "limite") await passarParaEquipe(c, p, menu, "Limite diário de respostas da Ari atingido.");
+    else if (r === "falha") await passarParaEquipe(c, p, menu, "A Ari não conseguiu responder.");
+  });
+}
+
+/** Sai da Ari para o Comercial; com imóvel de interesse, cria o lead (rodízio). */
+async function passarParaEquipe(c: Conversa, p: { texto: string; canal?: string }, menu: Menu | null, motivo: string) {
+  const admin = supabaseAdmin();
+  await admin.from("atendimento_conversas").update({ ari_ativa_em: null }).eq("id", c.id);
+  c.ari_ativa_em = null;
+  const codigo = codigoNoTexto(p.texto) ?? c.ari_ultimo_imovel ?? null;
+  let lead: { id: string; codigo: string; responsavel: string | null } | null = null;
+  if (codigo && !c.opportunity_id && !contatoSocial(c.telefone)) {
+    const { data, error } = await admin.rpc("fn_crm_lead_manual", {
+      p_autor: null, p_codigo_imovel: codigo, p_nome: c.nome || "Cliente do WhatsApp", p_telefone: "+" + c.telefone, p_email: null,
+      p_mensagem: `Conversa com a Ari (WhatsApp). Último pedido: ${p.texto.slice(0, 400)}`, p_origem: "whatsapp", p_temperatura: null,
+      p_etiquetas: c.etiquetas, p_responsavel: null, p_rodizio: true,
+    });
+    if (error) console.error("atendimento: lead da Ari", error.message);
+    else lead = data as { id: string; codigo: string; responsavel: string | null };
+  }
+  if (lead) {
+    await admin.from("atendimento_conversas").update({ opportunity_id: lead.id }).eq("id", c.id);
+    await admin.from("whatsapp_mensagens").update({ opportunity_id: lead.id }).eq("conversa_id", c.id);
+    c.opportunity_id = lead.id;
+    await eventoAtendimento({ conversa_id: c.id, acao: "lead", para_setor: "comercial", para_user: lead.responsavel, texto: `Lead criado pela Ari na negociação ${lead.codigo} (rodízio), imóvel ${codigo}.` });
+  }
+  await encaminhar(c, "comercial", lead?.responsavel ?? null, "automatica", `${motivo}${codigo ? ` Imóvel de interesse: ${codigo}.` : ""}`, null);
+  const fora = !(await dentroDoExpediente()) && menu?.fora_expediente ? `\n\n${menu.fora_expediente}` : "";
+  await enviarDoRobo(c, `Certo! Vou te passar para um corretor da ARINI${codigo ? ` sobre o imóvel *${codigo}*` : ""}. Ele continua a conversa por aqui.${fora}`, p.canal);
 }
 
 /**

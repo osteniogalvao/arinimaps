@@ -178,6 +178,23 @@ export async function enviarDocumentoWhatsapp(telefone: string, link: string, no
   return String(j?.messages?.[0]?.id ?? "");
 }
 
+/** WhatsApp: imagem por link público com legenda (cards de imóvel da Ari), dentro das 24 h. */
+export async function enviarImagemWhatsapp(telefone: string, link: string, legenda: string, canal?: string) {
+  if (viaEvolution()) return naEvolution(() => evolutionMidia(telefone, { tipo: "image", midia: link, mimetype: /\.png$/i.test(link) ? "image/png" : "image/jpeg", legenda }, canal));
+  const phoneId = canal || process.env.WHATSAPP_PHONE_ID;
+  if (!whatsappConfigurado() || !phoneId) throw new MetaErro("WhatsApp não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_ID).");
+  const r = await fetch(`${GRAPH}/${phoneId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", to: telefone, type: "image", image: { link, caption: legenda.slice(0, 1000) } }),
+    signal: AbortSignal.timeout(20_000),
+  }).catch(() => null);
+  if (!r) throw new MetaErro("O WhatsApp não respondeu a tempo.");
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new MetaErro(j?.error?.message ?? `O WhatsApp recusou (HTTP ${r.status}).`);
+  return String(j?.messages?.[0]?.id ?? "");
+}
+
 /** O modelo aprovado usa um parâmetro de corpo {{1}} para o link público do imóvel. */
 export async function modeloFiltroWhatsapp(finalidade: "filtro" | "monitoramento" = "filtro") {
   const id = finalidade === "monitoramento" ? process.env.WHATSAPP_MONITORAMENTO_TEMPLATE_ID : process.env.WHATSAPP_FILTRO_TEMPLATE_ID;

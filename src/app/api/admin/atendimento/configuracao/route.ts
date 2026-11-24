@@ -8,8 +8,8 @@ import { validarHorario, type HorarioSetor } from "@/lib/atendimento-horario";
 
 /**
  * Configuração do Atendimento (Diretoria):
- *   { acao: "menu", ativo, saudacao, confirmacao, nao_entendi, fora_expediente, max_tentativas, setor_escape, expira_minutos, reenviar_apos_horas }
- *   { acao: "opcao", id?, chave, rotulo, setor, responsavel?, etiqueta?, confirmacao?, ordem, ativo }
+ *   { acao: "menu", ativo, saudacao, confirmacao, nao_entendi, fora_expediente, max_tentativas, setor_escape, expira_minutos, reenviar_apos_horas, ari_ativo?, ari_limite_dia? }
+ *   { acao: "opcao", id?, chave, rotulo, setor, responsavel?, etiqueta?, confirmacao?, ordem, ativo, acao_opcao? ("setor" | "ari", 0170) }
  *   { acao: "remover_opcao", id }
  *   { acao: "resposta", id?, atalho, titulo, texto, setor? } · { acao: "remover_resposta", id }
  *   { acao: "recepcao", user_id, ativo }
@@ -46,7 +46,10 @@ export async function POST(request: Request) {
       case "menu": {
         const saudacao = txt(b.saudacao, 1000);
         if (!saudacao) throw new Erro("Escreva a saudação do menu.");
+        // Ari no WhatsApp (0170): só grava quando a tela manda (antes da migration ela não manda)
+        const ari = typeof b.ari_ativo === "boolean" ? { ari_ativo: b.ari_ativo, ari_limite_dia: int(b.ari_limite_dia, 1, 500, 40) } : {};
         conferir(await admin.from("atendimento_menu").update({
+          ...ari,
           ativo: b.ativo !== false, saudacao, confirmacao: txt(b.confirmacao, 1000) || "Seu atendimento foi encaminhado para {{setor}}.",
           nao_entendi: txt(b.nao_entendi, 500) || "Não entendi. Responda só com o número:", fora_expediente: txt(b.fora_expediente, 1000),
           max_tentativas: int(b.max_tentativas, 1, 5, 2), setor_escape: setorOuNulo(b.setor_escape),
@@ -63,7 +66,9 @@ export async function POST(request: Request) {
         const linha = {
           chave, rotulo, setor: setorOuNulo(b.setor), responsavel, etiqueta: txt(b.etiqueta, 30).toLowerCase() || null,
           confirmacao: txt(b.confirmacao, 1000) || null, ordem: int(b.ordem, 0, 99, 0), ativo: b.ativo !== false,
+          ...(b.acao_opcao === "ari" || b.acao_opcao === "setor" ? { acao: b.acao_opcao } : {}),
         };
+        if (linha.acao === "ari") { linha.setor = null; linha.responsavel = null; }
         conferir(b.id && UUID.test(String(b.id))
           ? await admin.from("atendimento_menu_opcoes").update(linha).eq("id", String(b.id))
           : await admin.from("atendimento_menu_opcoes").insert(linha));
