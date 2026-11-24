@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { unstable_cache } from "next/cache";
 import {
-  ArrowRight, BadgeDollarSign, Database, Eye, Grid3x3, House, MapPin, MapPinned, Ruler, Search, TrendingUp,
+  ArrowRight, BadgeCheck, BadgeDollarSign, Database, Eye, Grid3x3, House, MapPin, MapPinned, Ruler, Search, Timer, TrendingUp,
 } from "lucide-react";
 import CartaoRotativo, { type Quadro } from "@/components/landing/CartaoRotativo";
 import SiteHeader from "@/components/SiteHeader";
@@ -23,6 +23,9 @@ import { CENTRO_REGIAO } from "@/lib/map/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { lerConfiguracoes, numero, texto } from "@/lib/settings";
 import { formatBRL, formatArea } from "@/lib/format";
+import { listarVendidos, numerosVendas, MIN_VENDAS_NUMEROS, ATRASO_MS } from "@/lib/vendidos";
+import CartaoVendido, { LINK_ANUNCIE, TEXTO_ANUNCIE } from "@/components/vendidos/CartaoVendido";
+import CarrosselVendidos from "@/components/vendidos/CarrosselVendidos";
 
 /**
  * Página inicial = site institucional: apresenta a ferramenta e a empresa e
@@ -139,11 +142,14 @@ const numerosCache = unstable_cache(async () => {
     // visualizações das páginas de imóvel nos últimos 30 dias e nos 30 anteriores
     admin.from("property_events").select("id,properties!inner(demonstracao)", { count: "exact", head: true }).eq("properties.demonstracao",false).eq("tipo", "visualizacao").gte("created_at", ha30),
     admin.from("property_events").select("id,properties!inner(demonstracao)", { count: "exact", head: true }).eq("properties.demonstracao",false).eq("tipo", "visualizacao").gte("created_at", ha60).lt("created_at", ha30),
-    admin.from("sales").select("valor_final,properties!inner(demonstracao)").eq("properties.demonstracao", false),
+    // vendas com pelo menos um dia (sem expor a venda de ontem); a soma só aparece com vendas suficientes
+    admin.from("sales").select("valor_final,properties!inner(demonstracao)").eq("properties.demonstracao", false)
+      .lt("data_venda", new Date(Date.now() - ATRASO_MS).toISOString().slice(0, 10)),
   ]);
   // a contagem principal falhou: não guarda zeros no cache
   if (mun.error) throw new Error(mun.error.message);
-  const somaVendas = (vendas.data ?? []).reduce((s, v) => s + (Number((v as { valor_final: number | null }).valor_final) || 0), 0);
+  const qtdVendas = (vendas.data ?? []).length;
+  const somaVendas = qtdVendas < MIN_VENDAS_NUMEROS ? 0 : (vendas.data ?? []).reduce((s, v) => s + (Number((v as { valor_final: number | null }).valor_final) || 0), 0);
   return {
     municipios: mun.count ?? 0,
     plantas: plantas.count ?? 0,
@@ -212,8 +218,8 @@ const mil = (v: number) => v.toLocaleString("pt-BR");
 const pct = (v: number) => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
 
 export default async function Home() {
-  const [imoveis, cfg, n, municipios, baratos] = await Promise.all([
-    destaques(), lerConfiguracoes(), numeros(), municipiosAtendidos(), oportunidades(),
+  const [imoveis, cfg, n, municipios, baratos, vendidos, nv] = await Promise.all([
+    destaques(), lerConfiguracoes(), numeros(), municipiosAtendidos(), oportunidades(), listarVendidos(10), numerosVendas(),
   ]);
   // 2º cartão: cartografia urbana e rural do próprio sistema, nos municípios atendidos
   const sedes = municipios.length ? municipios : [{ nome: "Iturama", lng: CENTRO_REGIAO[0], lat: CENTRO_REGIAO[1] }];
@@ -294,17 +300,22 @@ export default async function Home() {
     },
   ];
 
-  // faixa verde (revisão de 29/10): carrossel com os números reais do sistema;
-  // número zerado não aparece
+  // faixa verde (revisão de 29/10; vendidos em 23/11): números reais do sistema,
+  // que se atualizam sozinhos (cache de 15 min). Vendidos, tempo médio e volume
+  // só aparecem quando há vendas suficientes (ver src/lib/vendidos.ts); com
+  // poucas vendas a faixa fica com o que impressiona: lotes, fontes, municípios.
+  // Número zerado não aparece.
   const crescimento = n.visitasAnterior > 0 ? Math.round(((n.visitasMes - n.visitasAnterior) / n.visitasAnterior) * 100) : 0;
   const faixa = [
-    { icone: House, valor: n.imoveis, texto: mil(n.imoveis), rotulo: "imóveis publicados" },
-    { icone: MapPinned, valor: n.municipios, texto: mil(n.municipios), rotulo: "municípios no mapa" },
+    { icone: BadgeCheck, valor: nv.vendidos, texto: mil(nv.vendidos), rotulo: "imóveis vendidos" },
+    { icone: Timer, valor: nv.mediaDias, texto: `${mil(nv.mediaDias)} dias`, rotulo: "tempo médio até a venda" },
+    { icone: MapPinned, valor: n.municipios, texto: mil(n.municipios), rotulo: "municípios atendidos" },
     { icone: Grid3x3, valor: n.lotes, texto: mil(n.lotes), rotulo: "lotes urbanos mapeados" },
     { icone: Database, valor: n.fontes, texto: mil(n.fontes), rotulo: "fontes oficiais" },
-    { icone: Eye, valor: n.visitasMes, texto: mil(n.visitasMes), rotulo: "visualizações no mês" },
+    { icone: House, valor: n.imoveis, texto: mil(n.imoveis), rotulo: "imóveis publicados" },
     { icone: BadgeDollarSign, valor: n.vendidosMi, texto: `R$ ${n.vendidosMi.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`, rotulo: "em imóveis vendidos" },
-    { icone: TrendingUp, valor: crescimento, texto: `+${crescimento}%`, rotulo: "de crescimento nas visualizações" },
+    { icone: Eye, valor: n.visitasMes >= 1000 ? n.visitasMes : 0, texto: mil(n.visitasMes), rotulo: "visualizações no mês" },
+    { icone: TrendingUp, valor: crescimento >= 10 ? crescimento : 0, texto: `+${crescimento}%`, rotulo: "de crescimento nas visualizações" },
   ].filter((f) => f.valor > 0);
 
   const porQue = [
@@ -343,6 +354,34 @@ export default async function Home() {
                     ))}
                   </ul>
                 ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ---------- vendidos pela ARINI (só aparece se houver algum) ---------- */}
+        {vendidos.length > 0 && (
+          <section id="vendidos" aria-labelledby="titulo-vendidos" className="lp-branca scroll-mt-24 py-16 md:py-24">
+            <div className="lp-container">
+              <div className="mb-10 flex flex-wrap items-end justify-between gap-6">
+                <div className="max-w-3xl">
+                  <p className="lp-eyebrow">Resultados reais</p>
+                  <h2 id="titulo-vendidos" className="lp-display mt-3 text-[2.4rem] text-texto md:text-[3.4rem]">
+                    Vendidos pela <span className="text-verde">ARINI</span>
+                  </h2>
+                </div>
+                <MaisLink href="/vendidos">Ver todos os vendidos</MaisLink>
+              </div>
+              <CarrosselVendidos total={vendidos.length}>
+                {vendidos.map((v) => (
+                  <li key={v.id} className="w-[84%] shrink-0 snap-start sm:w-[46%] lg:w-[31.5%]">
+                    <CartaoVendido v={v} />
+                  </li>
+                ))}
+              </CarrosselVendidos>
+              <div className="mt-8 flex flex-col items-start gap-3 rounded-2xl bg-superficie p-6 ring-1 ring-linha sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-lg text-texto">{TEXTO_ANUNCIE} <strong className="text-verde">Anuncie na ARINI.</strong></p>
+                <Link href={LINK_ANUNCIE} className={BTN_ACAO}>Anunciar meu imóvel <ArrowRight /></Link>
               </div>
             </div>
           </section>
