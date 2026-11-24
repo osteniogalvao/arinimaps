@@ -87,6 +87,7 @@ export default async function Atendimento({ searchParams }: PageProps<"/admin/at
       <CabecalhoPagina titulo="Atendimento" eyebrow="Central · WhatsApp" />
       <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-texto-2">
         <span>Você atua como <strong className="text-texto">{papel === "administrador" ? "administrador" : papel === "recepcao" ? "recepção" : "atendente"}</strong>.</span>
+        {triagem && <Link href="/admin/atendimento/relatorios" className="font-semibold text-verde underline-offset-4 hover:underline">Relatórios</Link>}
         {temSetor(a, "diretoria") && <Link href="/admin/atendimento/configurar" className="font-semibold text-verde underline-offset-4 hover:underline">Menu automático, respostas prontas e recepção</Link>}
         {temSetor(a, "diretoria") && <Link href="/admin/comercial/whatsapp/conexao" className="font-semibold text-verde underline-offset-4 hover:underline">Conexão do número</Link>}
       </p>
