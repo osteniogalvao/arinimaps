@@ -78,3 +78,17 @@ o interruptor do aviso e o texto é o da ARINI (`TEXTOS_MODELO` em `src/lib/meta
 - Use um chip dedicado à ARINI, com WhatsApp Business no celular, e mantenha o celular
   ligado à internet de vez em quando para a sessão não expirar.
 - A chave `EVOLUTION_API_KEY` dá controle total da Evolution: não use prefixo `NEXT_PUBLIC_`.
+
+## 6. Localização → relatório, KMZ/KML e Tour 3D conforme o plano (24/11/2026)
+
+Quem manda a localização (ou CONSULTAR CAR + código) de um WhatsApp confirmado na conta recebe:
+
+| Plano tem | Recebe |
+|---|---|
+| qualquer conta | dados do CAR + PDF simples |
+| `relatorio_territorial` | PDF completo |
+| `consulta_area` | link do Tour 3D da área (`/consulta/car/<cod>?tour=1`, abre com login) |
+| `ferramenta_exportar` | perímetro em KMZ e KML (`/api/consulta/car/<cod>/arquivo`, link assinado por 24 h) |
+
+Os arquivos vão pela Evolution sem restrição. Na Cloud API da Meta, documentos KMZ/KML podem
+ser recusados (a Meta aceita poucos tipos); o texto já leva o link da consulta.
