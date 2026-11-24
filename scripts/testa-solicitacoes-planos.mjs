@@ -30,12 +30,13 @@ const req = (metodo, body, query = "") => new Request("https://local.invalid/api
   method: metodo, headers: { "Idempotency-Key": chave, "content-type": "application/json" },
   ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 });
-function rotas(ator, fetch) {
+function rotas(ator, fetch, contratarDireto = () => assert.fail("Não deve contratar sem o aceite explícito")) {
   const admin = createClient("https://teste.invalid", "teste-local", { global: { fetch }, auth: { persistSession: false } });
   const deps = {
     "@/lib/authz": { ator: async () => ator, temSetor: (a, ...setores) => !!a?.ehArini && a.setores.some(s => setores.includes(s)) },
     "@/lib/supabase/admin": { supabaseAdmin: () => admin }, "@/lib/planos-catalogo": catalogo, "@/lib/solicitacoes-planos": status,
     "@/lib/seguranca/limite": { limitar: async () => ({ permitido: true }) },
+    "@/lib/contratacao-direta": { contratarDireto },
   };
   deps["@/lib/solicitacoes-planos-servidor"] = carregar("lib/solicitacoes-planos-servidor", deps);
   return {
@@ -94,11 +95,21 @@ test("histórico ignora o titular injetado; Financeiro pode listar com filtro", 
 const local = process.env.TEST_PLANOS_PG_URL;
 test("Postgres: privilégios, retry, auditoria única, conflito, cancelamento, conclusão e exclusão do titular", { skip: !local }, async () => {
   assert.ok(["127.0.0.1", "localhost", "[::1]"].includes(new URL(local).hostname));
-  const db = new pg.Client({ connectionString: local });
+  const servidor = new pg.Client({ connectionString: local });
+  await servidor.connect();
+  const nomeBanco = "qa_pedidos_" + randomUUID().replaceAll("-", "");
+  await servidor.query("create database " + nomeBanco);
+  const destino = new URL(local);
+  destino.pathname = "/" + nomeBanco;
+  const db = new pg.Client({ connectionString: destino.href });
   await db.connect();
   try {
     await db.query("begin");
-    await db.query(`create role anon; create role authenticated; create role service_role;
+    await db.query(`do $$ begin
+      if not exists(select from pg_roles where rolname='anon') then create role anon; end if;
+      if not exists(select from pg_roles where rolname='authenticated') then create role authenticated; end if;
+      if not exists(select from pg_roles where rolname='service_role') then create role service_role; end if;
+      end $$;
       create schema auth; create table auth.users(id uuid primary key, email text);
       create table public.profiles(user_id uuid primary key references auth.users(id) on delete cascade, ativo boolean default true, role text default 'comprador', setores text[] default '{}');
       create table public.audit_log(user_id uuid, acao text, entidade text, entidade_id uuid, dados_antes jsonb, dados_depois jsonb);`);
@@ -138,5 +149,8 @@ test("Postgres: privilégios, retry, auditoria única, conflito, cancelamento, c
     assert.equal((await one("select count(*)::int n from public.audit_log where entidade_id=$1",[p.id])).n,3);
     await db.query("delete from auth.users where id=$1", [dono]);
     assert.equal((await one("select count(*)::int n from public.solicitacoes_planos")).n,0);
-  } finally { await db.query("rollback"); await db.end(); }
+  } finally {
+    await db.query("rollback"); await db.end();
+    await servidor.query("drop database " + nomeBanco); await servidor.end();
+  }
 });

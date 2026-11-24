@@ -6,7 +6,6 @@ import { notificar } from "@/lib/notificacoes";
 import { MetaErro, whatsappConfigurado } from "@/lib/meta";
 import { canalDoContato, contatoSocial, enviarPeloCanal, mensagensSociaisConfiguradas } from "@/lib/meta-mensagens";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
-import { prazoDaEtapa, type Etapa } from "@/lib/crmSetores";
 import { setoresDe, type SetorId } from "@/lib/setores";
 import {
   canalDoContatoRotulo, contatoRotulo, eventoAtendimento, falta0156, nomeSetor, papelAtendimento, podeTriar, podeVer, SETORES_ATENDIMENTO,
@@ -138,7 +137,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/admin/atend
         const motivo = String(b.motivo ?? "").trim().slice(0, 500);
         if (c.setor && setor !== c.setor && !motivo) throw new Erro("Diga o motivo da transferência (fica no histórico).");
         const acao = !c.setor && setor ? "triagem" : !setor ? "devolver" : "transferencia";
-        await atualizar({ setor: setor || null, responsavel, triada_em: setor ? new Date().toISOString() : null, status: c.status === "resolvida" ? "aberta" : c.status });
+        await atualizar({ setor: setor || null, responsavel, triada_em: setor ? new Date().toISOString() : null,
+          ...(c.status === "resolvida" ? { status: "aberta", resolvida_em: null } : {}) });
         await eventoAtendimento({ conversa_id: c.id, acao, autor: eu, de_setor: c.setor, para_setor: setor || null, de_user: c.responsavel, para_user: responsavel, texto: motivo || null });
         if (responsavel && responsavel !== eu) {
           await notificar(responsavel, "atencao", `Atendimento ${c.codigo} encaminhado para você`, `${c.nome || contatoRotulo(c.telefone)}${motivo ? " · " + motivo : ""}`.slice(0, 200), `/admin/atendimento?conversa=${c.id}`);
@@ -203,24 +203,17 @@ export async function POST(request: Request, ctx: RouteContext<"/api/admin/atend
         return NextResponse.json({ ok: true, oportunidade: r });
       }
       case "abrir_crm": {
+        if (c.crm_item_id) throw new Erro("Esta conversa já está ligada a um item do CRM.", 409);
         const pid = String(b.pipeline_id ?? "");
         if (!UUID.test(pid)) throw new Erro("Escolha o funil.");
-        const { data: p } = await admin.from("crm_pipelines").select("id, setor, nome").eq("id", pid).maybeSingle();
-        if (!p) throw new Erro("Funil não encontrado.", 404);
-        if (!temSetor(a, p.setor as SetorId)) throw new Erro("Você não atua no setor deste funil.", 403);
-        const { data: etapas } = await admin.from("crm_etapas").select("*").eq("pipeline_id", p.id).order("ordem");
-        const primeira = (etapas as Etapa[] | null)?.[0];
-        if (!primeira) throw new Erro("O funil não tem etapas.");
-        const titulo = (String(b.titulo ?? "").trim() || `${canalDoContatoRotulo(c.telefone)} · ${c.nome || contatoRotulo(c.telefone)}`).slice(0, 200);
-        const { data: item, error } = await admin.from("crm_itens").insert({
-          pipeline_id: p.id, etapa_id: primeira.id, titulo, responsavel: c.responsavel ?? eu, criado_por: eu,
-          descricao: `Aberto pelo Atendimento (${c.codigo}). Contato: ${contatoRotulo(c.telefone)}.\nÚltima mensagem: ${c.ultimo_texto ?? ""}`.slice(0, 5000),
-          dados: contatoSocial(c.telefone) ? { contato: c.telefone, canal: canalDoContato(c.telefone), atendimento: c.codigo } : { telefone: "+" + c.telefone, atendimento: c.codigo }, prazo_etapa: prazoDaEtapa(primeira), opportunity_id: c.opportunity_id,
-        }).select("id, codigo").single();
-        if (error || !item) throw new Erro("Não foi possível criar o item no funil.", 503);
-        await admin.from("crm_item_eventos").insert({ item_id: item.id, tipo: "criado", autor: eu, texto: `Criado em "${primeira.nome}" pelo Atendimento ${c.codigo}` });
-        await atualizar({ crm_item_id: item.id });
-        await eventoAtendimento({ conversa_id: c.id, acao: "crm", autor: eu, texto: `Item ${item.codigo} aberto no funil "${p.nome}" (${nomeSetor(p.setor)}).` });
+        const { data: item, error } = await admin.rpc("fn_atendimento_abrir_crm", {
+          p_conversa: c.id, p_autor: eu, p_pipeline: pid, p_titulo: String(b.titulo ?? "").trim().slice(0, 200) || null,
+        });
+        if (error) {
+          const status = error.code === "23505" ? 409 : error.code === "42501" ? 403 : error.code === "P0002" ? 404 : error.code === "P0001" ? 400 : 503;
+          throw new Erro(status === 503 ? "Não foi possível criar o item no funil." : error.message, status);
+        }
+        if (!item) throw new Erro("Não foi possível criar o item no funil.", 503);
         return NextResponse.json({ ok: true, item });
       }
       default:

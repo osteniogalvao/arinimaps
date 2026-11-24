@@ -25,10 +25,11 @@ test("recursos efetivos respeitam perfil, atividade, validade e reserva", () => 
     const ativos = recursos(role, null, null);
     assert.ok(ativos.has("anunciar") && !ativos.has("api_dados") && !ativos.has("crm_privado") && !ativos.has("crm_setorial"));
   }
-  assert.deepEqual([...recursos("engenheiro", "engenheiro")].sort(), ["crm_privado", "crm_setorial", "mapa"]);
+  const publicos = ["camadas_oficiais", "ficha_basica", "interesse", "mapa"];
+  assert.deepEqual([...recursos("engenheiro", "engenheiro")].sort(), [...publicos, "crm_privado", "crm_setorial"].sort());
   assert.ok(!recursos("engenheiro", "engenheiro", { ...plano, recursos: ["crm_setorial"] }).has("crm_setorial"));
-  assert.deepEqual([...recursos("corretor", "corretor_imobiliaria")].sort(), ["anunciar", "crm_privado", "mapa"]);
-  assert.deepEqual([...recursos("proprietario", "produtor_rural")].sort(), ["anunciar", "mapa"]);
+  assert.deepEqual([...recursos("corretor", "corretor_imobiliaria")].sort(), [...publicos, "anunciar", "crm_privado"].sort());
+  assert.deepEqual([...recursos("proprietario", "produtor_rural")].sort(), [...publicos, "anunciar"].sort());
   assert.ok(!recursos("proprietario", "ente_publico").has("anunciar"));
   assert.ok(!recursos("proprietario", "proprietario", { ...plano, ativo: false }).has("anunciar"));
   assert.ok(!recursos("proprietario", "proprietario", plano, "2020-01-01").has("anunciar"));

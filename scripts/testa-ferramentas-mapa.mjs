@@ -21,6 +21,7 @@ const b = await puppeteer.launch({
 });
 try {
   const p = await (await b.createBrowserContext()).newPage();
+  await p.evaluateOnNewDocument(() => localStorage.setItem("arini:tour:mapa", "1"));
   await p.setViewport({ width: 1440, height: 900 });
   const erros = [];
   p.on("pageerror", (e) => erros.push(e.message));
@@ -35,7 +36,7 @@ try {
   const caixa = await canvas.boundingBox();
   const ponto = (fx, fy) => [caixa.x + caixa.width * fx, caixa.y + caixa.height * fy];
 
-  const botao = async (rotulo) => p.evaluateHandle((r) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === r), rotulo);
+  const botao = async (rotulo) => p.evaluateHandle((r) => [...document.querySelectorAll("button")].find((x) => x.getAttribute("aria-label") === r || x.textContent.trim() === r), rotulo);
   const clicarBotao = async (rotulo) => { const h = await botao(rotulo); await h.asElement().click(); await esp(400); };
   const textoResultado = () => p.evaluate(() => document.body.innerText.match(/\d[\d.,]*\s?(m|km|m²|ha|alq)\b[^\n]{0,40}/g) ?? []);
 

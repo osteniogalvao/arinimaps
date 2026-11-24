@@ -13,6 +13,7 @@ const arquivos = modulo(await readFile(new URL("../src/lib/seguranca/arquivos.ts
 const raster = (await readFile(new URL("../src/lib/cartografia/rasterUpload.ts", import.meta.url), "utf8"))
   .replace('"../seguranca/arquivos"', JSON.stringify(arquivos));
 const { lerRaster, ErroRaster } = await import(modulo(raster));
+const corpoLimitado = await import(modulo(await readFile(new URL("../src/lib/seguranca/corpo-limitado.ts", import.meta.url), "utf8")));
 const stream = (bytes) => new Blob([bytes]).stream();
 
 test("TIFF e BigTIFF em ambas as ordens de bytes, PNG e JPEG recebem extensão e MIME pelo conteúdo", async () => {
@@ -67,10 +68,11 @@ function rota(db) {
     "@/lib/geo/dxf":{converterDxf:async()=>({bbox:[0,0,1,1],centro:[0,0],zona:22,linhas:1,layersCad:[],diagnostico:{segundos:1},geojson:{type:"FeatureCollection",features:[]}})},
     "@/lib/geo/plantaPublica":{caminhoPlantaPublica:()=> "cartografia/publico/"+randomUUID()+".geojson"},
     "@/lib/geo/deslocar":{centroDe:()=>[0,0]}, "@/lib/cartografia/rasterUpload":{lerRaster,ErroRaster},
+    "@/lib/seguranca/corpo-limitado":corpoLimitado,
     "@/lib/erros":{falha:(status,codigo,error)=>Response.json({codigo,error},{status}),falhaBanco:(codigo,e)=>Response.json({codigo,error:e.message},{status:500})},
   };
   const js=ts.transpileModule(rotaFonte,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-  const exp={};compileFunction(js,["require","exports"])(id=>deps[id],exp);return exp.POST;
+  const exp={};compileFunction(js,["require","exports"])(id=>{assert.ok(Object.hasOwn(deps,id),"Dependência sem simulação: "+id);return deps[id];},exp);return exp.POST;
 }
 test("erros de upload ou da fila não confirmam publicação e limpam as cópias novas",async()=>{
   const mun=randomUUID();
@@ -110,7 +112,12 @@ test("Postgres desfaz a camada raster e mantém a versão vetorial anterior quan
   const mun=randomUUID(),antiga=randomUUID(),rasterId=randomUUID(),novo=randomUUID();
   try {
     await db.query("begin");
-    await db.query(`create role anon;create role authenticated;create role service_role;create table public.municipalities(id uuid primary key);
+    await db.query(`do $$ begin
+      if not exists(select from pg_roles where rolname='anon') then create role anon; end if;
+      if not exists(select from pg_roles where rolname='authenticated') then create role authenticated; end if;
+      if not exists(select from pg_roles where rolname='service_role') then create role service_role; end if;
+      end $$;
+      create table public.municipalities(id uuid primary key);
       create table public.cartography_layers(id uuid primary key,municipality_id uuid references public.municipalities(id),nome text,tipo text,source_path text,
         bytes bigint, tiles_path text,status text,min_zoom int,max_zoom int,opacidade_padrao numeric,diagnostico jsonb,publico_path text,publico_bytes bigint,publico_centro jsonb,
         edicoes_geometria jsonb default '[]',ajustes_locais jsonb default '[]',linhas_excluidas text[],layers_ocultos text[],pontos_controle jsonb,
