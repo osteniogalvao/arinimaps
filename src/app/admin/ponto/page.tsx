@@ -8,6 +8,9 @@ import { Secao } from "@/components/admin/Painel";
 import { aba, LISTA, LISTA_VAZIA, TABELA, TABELA_CAIXA, TBODY, TD, TH, THEAD, TR } from "@/components/admin/estilos";
 import BaterPonto from "@/components/ponto/BaterPonto";
 import PedirAjuste from "@/components/ponto/PedirAjuste";
+import DefinirPin from "@/components/ponto/DefinirPin";
+import { ator } from "@/lib/authz";
+import { podeOperarTerminal } from "@/lib/ponto-terminal";
 
 const AJUSTE_LABEL: Record<string, string> = { incluir: "Incluir marcação", desconsiderar: "Desconsiderar marcação", abono: "Abonar o dia" };
 
@@ -30,6 +33,12 @@ export default async function Ponto({ searchParams }: PageProps<"/admin/ponto">)
       .gte("marcado_em", inicio.toISOString()).lt("marcado_em", fim.toISOString()).order("marcado_em"),
     admin.from("ponto_ajustes").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
   ]);
+  // 0160: PIN do terminal (sem a migration, a tabela não existe e o bloco some)
+  const [{ data: pin, error: semTerminal }, eu] = await Promise.all([
+    admin.from("ponto_pins").select("user_id").eq("user_id", user.id).maybeSingle(),
+    ator(),
+  ]);
+  const operaTerminal = !semTerminal && !!eu && (await podeOperarTerminal(eu));
   if (error) {
     return (
       <div className="max-w-4xl space-y-6">
@@ -54,7 +63,10 @@ export default async function Ponto({ searchParams }: PageProps<"/admin/ponto">)
         subtitulo={jornada?.ativo === false || !jornada
           ? "A Diretoria ainda não definiu a sua jornada. Você pode marcar o ponto mesmo assim."
           : `Jornada de ${minutosEmHoras(jornada.carga_diaria_min)} por dia, entrada às ${String(jornada.entrada_prevista).slice(0, 5)}.`}
-        acoes={user.setores.includes("diretoria") ? <Link href="/admin/ponto/equipe" className="btn-contorno px-4 py-2.5 text-sm">Ponto da equipe</Link> : undefined} />
+        acoes={user.setores.includes("diretoria") || operaTerminal ? <>
+          {operaTerminal && <Link href="/admin/ponto/terminal" className="btn-contorno px-4 py-2.5 text-sm">Abrir terminal de ponto</Link>}
+          {user.setores.includes("diretoria") && <Link href="/admin/ponto/equipe" className="btn-contorno px-4 py-2.5 text-sm">Ponto da equipe</Link>}
+        </> : undefined} />
 
       <section className="cartao flex flex-wrap items-center justify-between gap-6 p-6">
         <div>
@@ -64,6 +76,8 @@ export default async function Ponto({ searchParams }: PageProps<"/admin/ponto">)
         </div>
         <BaterPonto userId={user.id} proxima={deHoje.length % 2 === 0 ? "entrada" : "saída"} />
       </section>
+
+      {!semTerminal && <DefinirPin temPin={!!pin} />}
 
       <Secao titulo="Espelho do mês" acao={
         <span className="flex flex-wrap gap-2">
@@ -82,7 +96,7 @@ export default async function Ponto({ searchParams }: PageProps<"/admin/ponto">)
                   <td className={TD + " whitespace-nowrap"}>{new Date(`${d.data}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })}</td>
                   <td className={TD}>
                     {d.marcacoes.map((m) => (
-                      <span key={m.id} title={`NSR ${m.nsr}`} className={"mr-2 tabular-nums " + (m.origem !== "web" ? "text-ouro" : "text-texto")}>{horaSP(m.marcado_em)}</span>
+                      <span key={m.id} title={`NSR ${m.nsr}`} className={"mr-2 tabular-nums " + (m.origem === "offline" || m.origem === "ajuste" ? "text-ouro" : "text-texto")}>{horaSP(m.marcado_em)}</span>
                     ))}
                     {d.incompleto && <Etiqueta tom="alerta">incompleto</Etiqueta>}
                     {d.abonado && <Etiqueta tom="verde">abonado</Etiqueta>}
