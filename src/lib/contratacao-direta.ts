@@ -45,7 +45,11 @@ export async function contratarDireto(titular: string, pedido: string): Promise<
       return { direta: false, liberado: true, aviso: msg };
     }
   }
-  const { data: faturas } = await db.from("faturas_cotadas").select("id").eq("assinatura", pedido).eq("numero", 0).in("status", ["nova", "emitindo"]);
-  await Promise.allSettled((faturas ?? []).map((f) => conciliarFatura(f.id)));
+  const pendente: ResultadoDireto = { direta: false, liberado: true,
+    aviso: "Seu aceite foi registrado, mas a emissão da fatura ainda está pendente. Acompanhe em Meus pedidos; não é necessário contratar novamente." };
+  const { data: faturas, error: erroFaturas } = await db.from("faturas_cotadas").select("id,status").eq("assinatura", pedido).eq("numero", 0);
+  if (erroFaturas || !faturas?.length) return pendente;
+  const emissoes = await Promise.allSettled(faturas.filter((f) => ["nova", "emitindo"].includes(f.status)).map((f) => conciliarFatura(f.id)));
+  if (emissoes.some((r) => r.status === "rejected")) return pendente;
   return { direta: true };
 }

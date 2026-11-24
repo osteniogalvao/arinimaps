@@ -62,7 +62,7 @@ test("resposta parcial HTTP 200 do Overpass conserva os pontos do imóvel", asyn
 test("uma coleta de cotações sem nenhuma fonte disponível falha para permitir nova tentativa", async (t) => {
   t.mock.method(globalThis, "fetch", async () => { throw new Error("fonte offline"); });
   const db = { query: async (sql) => {
-    if (sql.includes("count(*)")) return { rows: [{ n: 0 }] };
+    if (sql.includes("cotacoes_cepea_autorizado()")) return { rows: [{ coletou: false, tem_epagri: false, cepea_autorizado: false }] };
     assert.ok(sql.trim().startsWith("update cotacoes_series set ultimo_erro"));
     return { rows: [] };
   } };

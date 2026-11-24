@@ -145,9 +145,11 @@ export async function POST(request: Request) {
         const dados = normalizarDados(campos, (b.dados as Record<string, unknown>) ?? {});
         const falta = camposFaltando(campos, etapas, primeira.id, dados);
         if (falta.length) throw new Erro(`Preencha: ${falta.map((c) => c.rotulo).join(", ")}.`);
+        const responsavel = b.responsavel ? id(b.responsavel) : a.userId;
+        if (responsavel !== a.userId) await membroDaEquipe(responsavel);
         const linha = {
           pipeline_id: p.id, etapa_id: primeira.id, titulo, descricao: String(b.descricao ?? "").slice(0, 5000) || null,
-          responsavel: b.responsavel ? id(b.responsavel) : a.userId, dados, prazo_etapa: prazoDaEtapa(primeira), criado_por: a.userId,
+          responsavel, dados, prazo_etapa: prazoDaEtapa(primeira), criado_por: a.userId,
           property_id: b.property_id ? id(b.property_id) : null, opportunity_id: b.opportunity_id ? id(b.opportunity_id) : null,
         };
         // prioridade, prazo final e etiquetas (0148); sem a migration, grava o resto

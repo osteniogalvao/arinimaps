@@ -1,0 +1,22 @@
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import assert from 'node:assert/strict';
+import puppeteer from 'puppeteer-core';
+const env=Object.fromEntries((await readFile('.env.local','utf8')).split(/\r?\n/).map(l=>l.match(/^([A-Z0-9_]+)=(.*)$/)).filter(Boolean).map(m=>[m[1],m[2]]));
+const base=env.BASE_URL;if(new URL(base).hostname!=='127.0.0.1'||!env.NEXT_PUBLIC_SUPABASE_URL?.includes('127.0.0.1:55421'))throw Error('Somente QA');
+const out=resolve('../cofre');await mkdir(out,{recursive:true});const results=[];
+const b=await puppeteer.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+const p=await b.newPage();
+try{p.on('pageerror',e=>console.log('BROWSER '+e.message));await p.setViewport({width:1440,height:900});await p.goto(base+'/entrar',{waitUntil:'domcontentloaded',timeout:180000});console.log('Tela de entrada carregada');
+ await p.evaluate(async(s,e,pw)=>{await fetch('/api/acesso',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({senha:s})});const r=await fetch('/api/auth/entrar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:e,senha:pw})});if(!r.ok)throw Error('Login '+r.status)},env.SITE_SENHA,'proprietario.teste@arinibrasil.com.br',env.SEED_USER_PASSWORD);
+ await p.goto(base+'/painel/cofre',{waitUntil:'domcontentloaded',timeout:180000});console.log('Tela do cofre carregada');
+ const click=async text=>{console.log('Aguardando botão '+text);await p.waitForFunction(t=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===t),{timeout:90000},text);await p.evaluate(t=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===t).click(),text);console.log('Clicou '+text)};
+ const check=async(label,fn)=>{try{await fn();results.push({label,pass:true});console.log('OK '+label)}catch(e){results.push({label,pass:false,error:e.message});throw e}};
+ const name='QA Propriedade '+Date.now();
+ await check('proprietário cadastra imóvel pelo formulário',async()=>{await click('Adicionar propriedade');await p.type('input[name="nome"]',name);await p.type('input[name="municipio"]','Município sintético / MG');await p.type('input[name="area_ha"]','12.5');await click('Salvar propriedade');await p.waitForFunction(n=>[...document.querySelectorAll('article h2')].some(e=>e.textContent===n),{timeout:60000},name)});
+ await check('imóvel persiste após recarregar',async()=>{await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(n=>document.body.innerText.includes(n),{timeout:60000},name)});
+ await check('documentos exigem comprovação de vínculo',async()=>{await click('Documentos');await p.waitForFunction(()=>/comprovante|comprovar|vínculo/i.test(document.body.innerText),{timeout:30000});assert.equal(await p.$('button[type="submit"][name="Anexar documento"]'),null)});
+ await check('proprietário edita área pelo formulário',async()=>{await click('Editar');await p.$eval('input[name="area_ha"]',e=>{e.value='';e.dispatchEvent(new Event('input',{bubbles:true}))});await p.type('input[name="area_ha"]','14');await click('Salvar propriedade');await p.waitForFunction(()=>[...document.querySelectorAll('article')].some(e=>/14 ha/.test(e.innerText)),{timeout:30000})});
+ await p.screenshot({path:resolve(out,'propriedade.png'),fullPage:true});
+ await check('exclusão confirmada remove o imóvel da lista',async()=>{p.once('dialog',d=>d.accept());await click('Excluir propriedade');await p.waitForFunction(n=>![...document.querySelectorAll('article h2')].some(e=>e.textContent===n),{timeout:30000},name)});
+}catch(e){console.error(e.message);console.log('URL '+p.url());console.log(await p.evaluate(()=>document.body.innerText.slice(-3500)).catch(e=>e.message));await p.screenshot({path:resolve(out,'falha.png'),fullPage:true}).catch(()=>{});process.exitCode=1}finally{await writeFile(resolve(out,'results.json'),JSON.stringify(results,null,2));await b.close()}

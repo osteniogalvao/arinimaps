@@ -147,6 +147,7 @@ export async function PATCH(request: Request) {
   if (role) {
     if (!PAPEIS_EQUIPE.includes(role)) return NextResponse.json({ error: "Papel inválido." }, { status: 400 });
     patch.role = role;
+    if (role === "admin_central") patch.equipe_acesso = "operador";
   }
   if (typeof ativo === "boolean") patch.ativo = ativo;
   if (setores !== undefined) patch.setores = setoresValidos(setores);

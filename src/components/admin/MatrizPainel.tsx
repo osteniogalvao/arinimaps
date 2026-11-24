@@ -35,18 +35,21 @@ export function ResumoAri({ resumo, setores }: {
 }
 
 /** Fila de gargalos: vencidas de todos os setores visíveis, da mais crítica para a menos. */
-export function FilaGargalos({ itens, setores, filtro, hoje, pronto }: {
+export function FilaGargalos({ itens, setores, filtro, hoje, pronto, erroPeriodo }: {
   itens: Gargalo[];
   setores: { id: string; nome: string }[];
   filtro: FiltroGargalos;
   hoje: string;
   pronto: boolean;
+  erroPeriodo?: string | null;
 }) {
   const link = (f: Partial<FiltroGargalos>) => {
     const p = new URLSearchParams();
     const v = { ...filtro, ...f };
     if (v.setor) p.set("setor", v.setor);
     if (v.tipo) p.set("tipo", v.tipo);
+    if (v.de) p.set("de", v.de);
+    if (v.ate) p.set("ate", v.ate);
     const q = p.toString();
     return `/admin${q ? "?" + q : ""}#gargalos`;
   };
@@ -55,6 +58,15 @@ export function FilaGargalos({ itens, setores, filtro, hoje, pronto }: {
     <section id="gargalos" className="scroll-mt-24">
       <Secao titulo="Fila de gargalos">
         <div className="space-y-3">
+          <form action="/admin#gargalos" className="flex flex-wrap items-end gap-3 text-sm">
+            <input type="hidden" name="setor" value={filtro.setor} /><input type="hidden" name="tipo" value={filtro.tipo} />
+            <label className="space-y-1"><span className="block">Prazo de</span><input aria-label="Prazo de" type="date" name="de" defaultValue={filtro.de} className="rounded-lg border border-linha bg-superficie px-3 py-2" /></label>
+            <label className="space-y-1"><span className="block">Prazo até</span><input aria-label="Prazo até" type="date" name="ate" defaultValue={filtro.ate} className="rounded-lg border border-linha bg-superficie px-3 py-2" /></label>
+            <button className="btn-verde px-4 py-2">Filtrar período</button>
+            <Link href={link({ de: "", ate: "" })} className="px-2 py-2 text-verde">Limpar período</Link>
+          </form>
+          <p className="text-xs text-texto-2">O período filtra o vencimento das tarefas desta fila. As demais filas, a carga e o resumo mostram a operação atual.</p>
+          {erroPeriodo && <p role="alert" className="text-sm text-critico">{erroPeriodo}</p>}
           <div className="flex flex-wrap gap-2">
             {setores.length > 1 && (
               <>
@@ -92,11 +104,11 @@ export function FilaGargalos({ itens, setores, filtro, hoje, pronto }: {
                 {t.nivel > 0 && <span className="text-xs text-texto-2">{NIVEL_COBRANCA_LABEL[t.nivel]}</span>}
               </Link>
             ))}
-            {!itens.length && (
+            {!itens.length && !erroPeriodo && (
               <div className="flex flex-col items-center gap-2 px-5 py-8 text-center">
                 <CircleCheck className="size-6 text-verde" />
                 <p className="text-[0.95rem] text-texto-2">
-                  {pronto ? "Nada vencido aqui. Nenhum gargalo." : `Nada vencido até ${dataBR(hoje)}. A fila completa aparece depois da migration 0162.`}
+                  {pronto ? "Nenhum gargalo encontrado nos filtros selecionados." : `Não foi possível consultar a fila completa até ${dataBR(hoje)}. Tente novamente.`}
                 </p>
               </div>
             )}

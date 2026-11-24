@@ -17,7 +17,7 @@ class Erro extends Error { constructor(public msg: string, public status = 400) 
 const UUID = /^[0-9a-f-]{36}$/i;
 const SETORES_EQUIPE: SetorId[] = SETOR_IDS.filter((s) => s !== "diretoria");
 
-type Perfil = { user_id: string; nome: string | null; role: string; ativo: boolean; setores: string[] | null; setores_gestor: string[] | null; cargo: string | null };
+type Perfil = { user_id: string; nome: string | null; role: string; ativo: boolean; setores: string[] | null; setores_gestor: string[] | null; cargo: string | null; equipe_acesso?: string };
 
 function checar(r: { error: { code?: string; message: string } | null }) {
   if (!r.error) return;
@@ -29,7 +29,7 @@ function checar(r: { error: { code?: string; message: string } | null }) {
 async function perfil(userId: unknown): Promise<Perfil> {
   if (typeof userId !== "string" || !UUID.test(userId)) throw new Erro("Pessoa inválida.");
   let r = await supabaseAdmin().from("profiles")
-    .select("user_id, nome, role, ativo, setores, setores_gestor, cargo").eq("user_id", userId).maybeSingle();
+    .select("user_id, nome, role, ativo, setores, setores_gestor, cargo, equipe_acesso").eq("user_id", userId).maybeSingle();
   // sem a 0161 ainda dá para liberar/retirar setor
   if (r.error && falta0161(r.error.message)) {
     r = await supabaseAdmin().from("profiles").select("user_id, nome, role, ativo, setores").eq("user_id", userId).maybeSingle() as typeof r;
@@ -66,6 +66,16 @@ export async function POST(request: Request) {
     if (!gere.length) throw new Erro("Só a Diretoria e os gestores de setor organizam acessos.", 403);
 
     switch (String(b.acao ?? "")) {
+      case "acesso": {
+        if (!diretoria) throw new Erro("Só a Diretoria define o perfil de leitura.", 403);
+        const p = await perfil(b.user_id);
+        if (!["operador", "leitura"].includes(String(b.acesso))) throw new Erro("Perfil de acesso inválido.");
+        if (b.acesso === "leitura" && (p.role === "admin_central" || p.setores_gestor?.length)) throw new Erro("Diretoria e gestores precisam de acesso de operação. Retire a gestão antes de conceder leitura.");
+        checar(await admin.from("profiles").update({ equipe_acesso: b.acesso }).eq("user_id", p.user_id));
+        await logAudit({ user_id: a.userId, acao: "equipe_acesso_alterado", entidade: "profiles", entidade_id: p.user_id,
+          dados_antes: { equipe_acesso: p.equipe_acesso }, dados_depois: { equipe_acesso: b.acesso } });
+        break;
+      }
       // libera ou retira o acesso de UM setor (não mexe nos outros)
       case "setor": {
         const setor = setorValido(b.setor);
@@ -90,6 +100,7 @@ export async function POST(request: Request) {
         const p = await perfil(b.user_id);
         if (p.role === "admin_central") throw new Erro("A Diretoria já gere todos os setores.");
         const ligado = b.ligado === true;
+        if (ligado && p.equipe_acesso === "leitura") throw new Erro("Mude o acesso de leitura para operador antes de nomear gestor.");
         const atuais = (p.setores_gestor ?? []).filter((s) => s !== setor);
         const patch: Record<string, unknown> = { setores_gestor: ligado ? [...atuais, setor] : atuais };
         // gestor precisa atuar no setor

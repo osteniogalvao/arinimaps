@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Send } from "lucide-react";
 import { useConversa, type MsgSuporte } from "@/components/suporte/useConversa";
 import { CAMPO, Etiqueta } from "@/components/ui/Pagina";
+import Avaliacao,{type AvaliacaoSuporte} from "@/components/suporte/Avaliacao";
 
 export type Chamado = {
   id: string; codigo: string; assunto: string; status: string; created_at: string; updated_at: string;
   mensagens: MsgSuporte[];
+  avaliacao?: AvaliacaoSuporte|null;
 };
 
 const SITUACAO: Record<string, string> = {
@@ -18,7 +20,7 @@ const tomSituacao = (s: string) =>
   s === "aguardando_cliente" ? "ouro" as const : s === "resolvido" ? "verde" as const : "neutro" as const;
 
 export default function MeusChamados({ chamados }: { chamados: Chamado[] }) {
-  const [aberto, setAberto] = useState<string | null>(chamados.find((c) => c.status === "aguardando_cliente")?.id ?? null);
+  const [aberto, setAberto] = useState<string | null>(chamados.find((c) => c.status === "aguardando_cliente")?.id ?? chamados.find(c=>c.status==="resolvido"&&!c.avaliacao)?.id ?? null);
 
   if (!chamados.length) return null;
   return (
@@ -36,6 +38,7 @@ export default function MeusChamados({ chamados }: { chamados: Chamado[] }) {
               <span className="font-mono text-xs text-texto-2">{c.codigo}</span>
               <span className="min-w-40 flex-1 font-semibold text-texto">{c.assunto}</span>
               <Etiqueta tom={tomSituacao(c.status)}>{SITUACAO[c.status]}</Etiqueta>
+              {c.status==="resolvido"&&!c.avaliacao&&<span className="text-sm text-verde">Avaliar atendimento</span>}
               <ChevronDown className={"size-4 shrink-0 text-texto-2 transition " + (aberto === c.id ? "rotate-180" : "")} />
             </button>
             {aberto === c.id && <div className="px-5 pb-5"><Conversa chamado={c} /></div>}
@@ -48,7 +51,7 @@ export default function MeusChamados({ chamados }: { chamados: Chamado[] }) {
 
 /** Conversa ao vivo de um chamado: atualiza sozinha a cada 5 s enquanto aberta. */
 function Conversa({ chamado }: { chamado: Chamado }) {
-  const { mensagens, extra, adicionar } = useConversa<MsgSuporte, { status: string; atendente_online: boolean }>(
+  const { mensagens, extra, adicionar } = useConversa<MsgSuporte, { status: string; atendente_online: boolean;avaliacao:AvaliacaoSuporte|null }>(
     `/api/suporte/${chamado.id}`, chamado.mensagens,
   );
   const [texto, setTexto] = useState("");
@@ -91,6 +94,7 @@ function Conversa({ chamado }: { chamado: Chamado }) {
         ))}
         <div ref={fim} />
       </div>
+      {(status==="resolvido"||extra.avaliacao||chamado.avaliacao)&&<Avaliacao id={chamado.id} valor={extra.avaliacao??chamado.avaliacao??null}/>}
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); responder(); }}>
         <textarea required rows={3} value={texto} onChange={(e) => setTexto(e.target.value)}
           onKeyDown={(e) => {

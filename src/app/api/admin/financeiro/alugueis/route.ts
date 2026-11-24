@@ -14,6 +14,11 @@ import { logAudit } from "@/lib/audit";
  */
 const UUID = /^[0-9a-f-]{36}$/i;
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
+const dataValida = (v: unknown): v is string => {
+  if (typeof v !== "string" || !DATA.test(v)) return false;
+  const instante = Date.parse(v + "T12:00:00Z");
+  return Number.isFinite(instante) && new Date(instante).toISOString().slice(0, 10) === v;
+};
 const hoje = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 const erro = (msg: string, status = 400) => NextResponse.json({ error: msg }, { status });
 
@@ -24,7 +29,7 @@ export async function POST(request: Request) {
   const admin = supabaseAdmin();
 
   if (b.acao === "gerar") {
-    if (!UUID.test(String(b.contrato_id)) || !DATA.test(String(b.competencia))) return erro("Contrato ou mês inválido.");
+    if (!UUID.test(String(b.contrato_id)) || !dataValida(b.competencia)) return erro("Contrato ou mês inválido.");
     const { data, error } = await admin.rpc("fn_aluguel_gerar_parcela", { p_contrato: b.contrato_id, p_competencia: b.competencia });
     if (error) return erro(/fn_aluguel/.test(error.message) ? "Falta rodar a migration 0157." : "Não foi possível gerar.", 503);
     if (!data) return erro("Esse mês já tem parcela ou está fora da vigência do contrato.");
@@ -35,7 +40,8 @@ export async function POST(request: Request) {
   const { data: p, error } = await admin.from("alugueis_parcelas").select("*").eq("id", b.id).maybeSingle();
   if (error) return erro("Falta rodar a migration 0157 (Aluguéis).", 503);
   if (!p) return erro("Parcela não encontrada.", 404);
-  const data = DATA.test(String(b.data ?? "")) ? String(b.data) : hoje();
+  if (b.data != null && b.data !== "" && !dataValida(b.data)) return erro("Data inválida.");
+  const data = dataValida(b.data) ? b.data : hoje();
   const motivo = String(b.motivo ?? "").trim().slice(0, 500);
   let mud: Record<string, unknown>;
   switch (b.acao) {
@@ -43,9 +49,10 @@ export async function POST(request: Request) {
       if (!["pendente", "atrasado"].includes(p.status)) return erro("Essa parcela não está em aberto.");
       const valor = b.valor === undefined || b.valor === "" ? Number(p.valor) : Number(b.valor);
       if (!Number.isFinite(valor) || valor <= 0) return erro("Valor pago inválido.");
-      const { data: c } = await admin.from("contratos_locacao").select("taxa_administracao, dias_repasse").eq("id", p.contrato_id).single();
-      const taxa = Number(c?.taxa_administracao ?? 0);
-      const repasse = new Date(Date.parse(data + "T12:00:00Z") + Number(c?.dias_repasse ?? 0) * 86_400_000).toISOString().slice(0, 10);
+      const { data: c, error: erroContrato } = await admin.from("contratos_locacao").select("taxa_administracao, dias_repasse").eq("id", p.contrato_id).single();
+      if (erroContrato || !c) return erro("Não foi possível consultar as condições do contrato.", 503);
+      const taxa = Number(c.taxa_administracao);
+      const repasse = new Date(Date.parse(data + "T12:00:00Z") + Number(c.dias_repasse) * 86_400_000).toISOString().slice(0, 10);
       mud = { status: "pago", pago_em: data, valor_pago: valor, valor_repasse: Math.round(valor * (1 - taxa / 100) * 100) / 100, repasse_vencimento: repasse };
       break;
     }
@@ -64,6 +71,8 @@ export async function POST(request: Request) {
       mud = { repasse_status: "pendente", repasse_em: null };
       break;
     case "reter":
+      if (p.status !== "pago") return erro("Só retém depois que o inquilino pagou.");
+      if (p.repasse_status === "repassado") return erro("Desfaça o repasse antes de reter.");
       if (motivo.length < 5) return erro("Explique o motivo da retenção.");
       mud = { repasse_status: "retido", observacoes: [p.observacoes, `Repasse retido: ${motivo}`].filter(Boolean).join("\n") };
       break;
@@ -75,8 +84,9 @@ export async function POST(request: Request) {
     default:
       return erro("Ação desconhecida.");
   }
-  const { error: e2 } = await admin.from("alugueis_parcelas").update(mud).eq("id", p.id).eq("updated_at", p.updated_at);
+  const { data: salva, error: e2 } = await admin.from("alugueis_parcelas").update(mud).eq("id", p.id).eq("updated_at", p.updated_at).select("id").maybeSingle();
   if (e2) return erro("Não foi possível salvar.", 503);
+  if (!salva) return erro("A parcela foi alterada por outra pessoa. Atualize a página e tente novamente.", 409);
   await logAudit({ user_id: a!.userId, acao: "aluguel_" + b.acao, entidade: "alugueis_parcelas", entidade_id: p.id, dados_antes: p, dados_depois: mud });
   return NextResponse.json({ ok: true });
 }

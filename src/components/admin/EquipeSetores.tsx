@@ -13,6 +13,7 @@ import CampoSenha from "@/components/ui/CampoSenha";
 export type Pessoa = {
   user_id: string; nome: string; email: string; diretoria: boolean; ativo: boolean;
   setores: string[]; gestor: string[]; cargo: string | null; recepcao: boolean;
+  acesso: "operador" | "leitura";
 };
 
 const SETORES_EQUIPE = SETORES.filter((s) => s.id !== "diretoria");
@@ -175,6 +176,12 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
                         </div>
                       </div>
                       {ehGestor && <Etiqueta tom="ouro"><Crown className="size-3" /> Gestor</Etiqueta>}
+                      {p.acesso === "leitura" && <Etiqueta>Somente leitura</Etiqueta>}
+                      {diretoria && !p.gestor.length && <select aria-label={`Perfil de acesso de ${p.nome}`} value={p.acesso}
+                        disabled={ocupado} onChange={(e) => chamar({ acao: "acesso", user_id: p.user_id, acesso: e.target.value })}
+                        className="rounded-lg border border-linha bg-superficie px-2 py-1 text-xs">
+                        <option value="operador">Operador</option><option value="leitura">Somente leitura</option>
+                      </select>}
                       {p.recepcao && <Etiqueta tom="verde">Recepção</Etiqueta>}
                       {!p.ativo && <Etiqueta tom="critico">desativado</Etiqueta>}
                       {diretoria && !semMigration && p.ativo && (

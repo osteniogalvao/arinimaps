@@ -6,6 +6,7 @@ import { setoresDe, type SetorId } from "@/lib/setores";
 import { type Acesso, type Plano, type RecursoId } from "@/lib/planos";
 import { planoDaOrganizacao } from "@/lib/organizacoes-servidor";
 import { lerConfiguracoes } from "@/lib/settings";
+import { mfaObrigatoriaEquipe, somenteLeituraEquipe, type PerfilEquipe } from "@/lib/seguranca/equipe";
 
 export type Ator = {
   userId: string;
@@ -20,6 +21,7 @@ export type Ator = {
   nicho: string | null;
   /** plano + recursos já resolvidos; a equipe tem tudo pelo papel */
   acesso: Acesso;
+  somenteLeitura?: boolean;
 };
 
 /** O ator tem este recurso no plano (ou é da equipe)? */
@@ -35,15 +37,22 @@ export function temSetor(a: Ator | null | undefined, ...setores: SetorId[]) {
 /**
  * A sessão ainda não passou pelo segundo fator exigido? Mesma regra do
  * layout da Central: conta com MFA ativo e sessão em aal1 → pendente; com
- * `seguranca_mfa_equipe` ligado, membro da equipe sem MFA → pendente.
- * Sem MFA e com a exigência desligada, nada muda.
+ * Diretoria e gestores precisam de MFA mesmo sem a opção global ligada.
+ * `seguranca_mfa_equipe` estende a exigência aos demais membros da equipe.
  */
-export async function mfaPendente(supabase: Awaited<ReturnType<typeof supabaseServer>>, equipe: boolean) {
+export async function mfaPendente(supabase: Awaited<ReturnType<typeof supabaseServer>>, equipe: boolean, perfil?: PerfilEquipe) {
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") return true;
   if (equipe && aal?.nextLevel !== "aal2") {
+    if (!perfil) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return true;
+      const { data, error } = await supabaseAdmin().from("profiles").select("role, setores_gestor").eq("user_id", user.id).maybeSingle();
+      if (error || !data) return true;
+      perfil = data;
+    }
     const cfg = await lerConfiguracoes();
-    if (cfg.seguranca_mfa_equipe === true) return true;
+    if (mfaObrigatoriaEquipe(perfil, cfg.seguranca_mfa_equipe === true)) return true;
   }
   return false;
 }
@@ -55,13 +64,13 @@ export async function ator(): Promise<Ator | null> {
   if (!user) return null;
   const admin = supabaseAdmin();
   const { data: profile } = await admin.from("profiles")
-    .select("role, setores, ativo, nicho, entrada_ativa, plan_id, plan_valido_ate, plan_origem").eq("user_id", user.id).single();
+    .select("role, setores, setores_gestor, equipe_acesso, ativo, nicho, entrada_ativa, plan_id, plan_valido_ate, plan_origem").eq("user_id", user.id).single();
   if (!profile || profile.ativo === false) return null;
   const equipe = ["admin_central", "analista_arini"].includes(profile.role);
   // Segundo fator também nas APIs (testes 9.5), com a mesma regra da Central
   // (src/app/admin/layout.tsx): quem tem MFA precisa tê-lo confirmado nesta
   // sessão; se a diretoria o tornou obrigatório, equipe sem MFA não opera.
-  if (await mfaPendente(supabase, equipe)) return null;
+  if (await mfaPendente(supabase, equipe, profile)) return null;
   const [{ data: partner }, { data: owner }, { data: planoPessoal }, daOrg] = await Promise.all([
     ["corretor","imobiliaria","engenheiro","franqueado","leiloeiro"].includes(profile.role)
       ? admin.from("partners").select("id,status").eq("profile_id", user.id).eq("tipo",profile.role).maybeSingle() : Promise.resolve({ data:null }),
@@ -75,6 +84,7 @@ export async function ator(): Promise<Ator | null> {
   return {
     userId: user.id,
     role: profile.role,
+    somenteLeitura: somenteLeituraEquipe(profile),
     ehArini: ["admin_central", "analista_arini"].includes(profile.role),
     setores: ["admin_central", "analista_arini"].includes(profile.role)
       ? setoresDe(profile.role, profile.setores as string[] | null)

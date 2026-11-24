@@ -6,6 +6,7 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    files: ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     // Regras feitas para o React Compiler, que este projeto não liga
     // (next.config.ts sem reactCompiler). Sem o compilador, Date.now() num
     // Server Component ou setState num efeito de carga não quebram nada:
@@ -26,6 +27,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // não é código-fonte do site: cópias de trabalho, bibliotecas copiadas e dependências do worker
     ".claude/**",
+    "founder/**", // artefatos locais da pesquisa de compradores, fora da aplicação
+    ".impeccable/**",
     "public/vendor/**",
     "public/dev/**",
     "worker/node_modules/**",

@@ -166,7 +166,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   const origem = conferirOrigem(request);
   if (!origem.ok) return respostaOrigemNegada(origem.motivo);
   const a = await ator();
-  if (!a || !temSetor(a, "cartografia")) {
+  if (!a || a.somenteLeitura || !temSetor(a, "cartografia")) {
     return falha(403, "sem_permissao", "Restrito à equipe da Arini.", {
       solucao: "Entre com uma conta da Arini para calibrar a cartografia.",
     });

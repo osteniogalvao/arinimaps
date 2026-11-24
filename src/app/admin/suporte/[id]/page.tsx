@@ -15,14 +15,16 @@ export default async function ChamadoAdmin({ params }: PageProps<"/admin/suporte
   await exigirSetor("suporte");
   const { id } = await params;
   const admin = supabaseAdmin();
-  const [{ data: c }, { data: mensagens }, equipe] = await Promise.all([
+  const [{ data: c }, { data: mensagens }, equipe, {data:avaliacao,error:erroAvaliacao}] = await Promise.all([
     admin.from("support_tickets")
       .select("id, codigo, nome, email, telefone, categoria, assunto, status, prioridade, responsavel, user_id, created_at")
       .eq("id", id).maybeSingle(),
     admin.from("support_messages").select("id, autor_nome, da_equipe, interno, corpo, created_at").eq("ticket_id", id).order("created_at"),
     equipeAtiva(),
+    admin.from("support_avaliacoes").select("nota,comentario,created_at").eq("ticket_id",id).maybeSingle(),
   ]);
   if (!c) notFound();
+  if(erroAvaliacao)throw new Error("Não foi possível consultar a avaliação do chamado.");
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -47,6 +49,7 @@ export default async function ChamadoAdmin({ params }: PageProps<"/admin/suporte
 
       {/* 10.2: a conversa atualiza sozinha (polling de 5 s) */}
       <Conversa id={c.id} inicial={mensagens ?? []} temConta={!!c.user_id} />
+      {avaliacao&&<section className="cartao space-y-2 p-5"><h2 className="font-semibold">Avaliação do cliente: {avaliacao.nota} de 5</h2><p className="text-sm text-texto-2">{dataHoraBR(avaliacao.created_at)}</p>{avaliacao.comentario&&<p className="whitespace-pre-wrap">{avaliacao.comentario}</p>}</section>}
 
       <Atendimento
         id={c.id} situacao={c.status} prioridade={c.prioridade} responsavel={c.responsavel ?? ""}

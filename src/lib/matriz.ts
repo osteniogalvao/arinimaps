@@ -54,3 +54,14 @@ export function diasAtraso(prazo: string | null | undefined, hoje: string): numb
   const d = Math.round((Date.parse(hoje + "T12:00:00Z") - Date.parse(prazo.slice(0, 10) + "T12:00:00Z")) / 86_400_000);
   return Math.max(0, d);
 }
+
+/** Datas opcionais de vencimento. Um intervalo inválido nunca vira consulta sem filtro. */
+export function periodoGargalos(de: unknown, ate: unknown) {
+  const data = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
+    && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
+  const inicio = de === undefined || de === "" ? "" : data(de) ? de : null;
+  const fim = ate === undefined || ate === "" ? "" : data(ate) ? ate : null;
+  const erro = inicio === null || fim === null || (!!inicio && !!fim && inicio > fim)
+    ? "Informe datas válidas, com o início anterior ou igual ao fim." : null;
+  return { de: inicio ?? "", ate: fim ?? "", erro };
+}

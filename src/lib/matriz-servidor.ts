@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { SETOR_IDS, type SetorId } from "@/lib/setores";
-import { PRAZO_PADRAO, diasAtraso, type CargaSetor, type PrazoSetor } from "@/lib/matriz";
+import { PRAZO_PADRAO, diasAtraso, periodoGargalos, type CargaSetor, type PrazoSetor } from "@/lib/matriz";
 
 const ABERTAS = ["aberta", "andamento", "aguardando", "bloqueada"];
 
@@ -20,7 +20,7 @@ export type Gargalo = {
   regra: string | null;
 };
 
-export type FiltroGargalos = { setor: string; tipo: string };
+export type FiltroGargalos = { setor: string; tipo: string; de?: string; ate?: string };
 
 /** Todos os prazos por setor (padrão de cada setor, sem as exceções por tipo). */
 export async function lerPrazos(): Promise<{ linhas: PrazoSetor[]; pronto: boolean }> {
@@ -37,9 +37,11 @@ export async function lerPrazos(): Promise<{ linhas: PrazoSetor[]; pronto: boole
  */
 export async function dadosMatriz(setores: SetorId[], hoje: string, filtroBruto: FiltroGargalos) {
   const admin = supabaseAdmin();
+  const periodo = periodoGargalos(filtroBruto.de, filtroBruto.ate);
   const filtro: FiltroGargalos = {
     setor: setores.includes(filtroBruto.setor as SetorId) ? filtroBruto.setor : "",
     tipo: ["manual", "encaminhada", "automatica", "saltos"].includes(filtroBruto.tipo) ? filtroBruto.tipo : "",
+    de: periodo.de, ate: periodo.ate,
   };
   const doFiltro = filtro.setor ? [filtro.setor] : setores;
 
@@ -52,7 +54,9 @@ export async function dadosMatriz(setores: SetorId[], hoje: string, filtroBruto:
         .in("status", ABERTAS).in("setor", doFiltro);
       q = filtro.tipo === "saltos" ? q.gt("saltos", 2) : q.or(`prazo.lt.${hoje},saltos.gt.2`);
       if (filtro.tipo && filtro.tipo !== "saltos") q = q.eq("origem", filtro.tipo);
-      return q.order("prazo", { ascending: true, nullsFirst: false }).limit(60);
+      if (periodo.de) q = q.gte("prazo", periodo.de);
+      if (periodo.ate) q = q.lte("prazo", periodo.ate);
+      return q.order("nivel_cobranca", { ascending: false }).order("prazo", { ascending: true, nullsFirst: false }).limit(60);
     })(),
     admin.rpc("fn_matriz_carga"),
     admin.from("matriz_resumos").select("dia, setor, texto").order("dia", { ascending: false }).limit(SETOR_IDS.length + 1),
@@ -64,7 +68,7 @@ export async function dadosMatriz(setores: SetorId[], hoje: string, filtroBruto:
   const porSetor = new Map(prazos.linhas.filter((p) => !p.regra).map((p) => [p.setor, p]));
   const prazo = (setor: string): PrazoSetor => porSetor.get(setor) ?? { setor, regra: "", ...PRAZO_PADRAO };
 
-  const brutos = gargalosQ.error ? [] : gargalosQ.data ?? [];
+  const brutos = gargalosQ.error || periodo.erro ? [] : gargalosQ.data ?? [];
   const ids = [...new Set(brutos.map((t) => t.responsavel).filter(Boolean))] as string[];
   const { data: pessoas } = ids.length
     ? await admin.from("profiles").select("user_id, nome").in("user_id", ids)
@@ -92,6 +96,7 @@ export async function dadosMatriz(setores: SetorId[], hoje: string, filtroBruto:
   return {
     pronto: prazos.pronto && !gargalosQ.error,
     filtro,
+    erroPeriodo: periodo.erro,
     vencidas,
     prazo,
     gargalos,

@@ -29,14 +29,19 @@ export default async function AdminSuporte({ searchParams }: PageProps<"/admin/s
   else if (filtro !== "todos") q = q.eq("status", filtro);
 
   const semana = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const [{ data: chamados }, equipe, abertos, aguardando, resolvidos7, semDono, esperando] = await Promise.all([
+  const mes = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const [{ data: chamados }, equipe, abertos, aguardando, resolvidos7, semDono, esperando, avaliadas, recentes] = await Promise.all([
     q, equipeAtiva(),
     contar("support_tickets", (x) => x.in("status", ["aberto", "em_atendimento"])),
     contar("support_tickets", (x) => x.eq("status", "aguardando_cliente")),
     contar("support_tickets", (x) => x.eq("status", "resolvido").gte("resolvido_em", semana)),
     contar("support_tickets", (x) => x.is("responsavel", null).neq("status", "resolvido")),
     chamadosEsperandoEquipe(),
+    admin.rpc("suporte_avaliacoes_resumo",{p_desde:mes}),
+    admin.from("support_avaliacoes").select("ticket_id,nota,comentario,created_at").gte("created_at",mes).order("created_at",{ascending:false}).limit(10),
   ]);
+  if(avaliadas.error||recentes.error)throw new Error("Não foi possível consultar as avaliações do Suporte.");
+  const aval=avaliadas.data as {total:number;media:number|null;nota1:number;nota2:number;nota3:number;nota4:number;nota5:number};
   const novaMsg = new Set(esperando);
   const nome = new Map(equipe.map((m) => [m.user_id, m.nome]));
   const chip = "rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ";
@@ -55,6 +60,14 @@ export default async function AdminSuporte({ searchParams }: PageProps<"/admin/s
         { rotulo: "Aguardando o cliente", valor: aguardando },
         { rotulo: "Resolvidos em 7 dias", valor: resolvidos7 },
       ]} />
+
+      <section className="cartao space-y-4 p-5" aria-label="Avaliações do Suporte">
+        <h2 className="lp-display text-2xl">Avaliações do atendimento · últimos 30 dias</h2>
+        <p>{aval.total} avaliações · Média {aval.media===null?"—":Number(aval.media).toLocaleString("pt-BR")} de 5</p>
+        <p className="text-sm text-texto-2">Respostas espontâneas de titulares de chamados resolvidos. A ausência de avaliação não é uma nota zero.</p>
+        <div className="flex flex-wrap gap-4">{([1,2,3,4,5] as const).map(n=><span key={n}>{n} de 5: {aval[`nota${n}`]}</span>)}</div>
+        {!!recentes.data?.length&&<ul className="divide-y divide-linha">{recentes.data.map(r=><li key={r.ticket_id} className="py-3"><Link href={`/admin/suporte/${r.ticket_id}`} className="font-semibold text-verde">Abrir chamado · {r.nota} de 5</Link><span className="ml-3 text-sm text-texto-2">{dataHoraBR(r.created_at)}</span>{r.comentario&&<p className="mt-1 whitespace-pre-wrap">{r.comentario}</p>}</li>)}</ul>}
+      </section>
 
       <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">

@@ -4,6 +4,7 @@ import { lerConfiguracoes, numero } from "@/lib/settings";
 import { setoresDe } from "@/lib/setores";
 import AdminShell from "./AdminShell";
 import AjudaTour from "@/components/ajuda/AjudaTour";
+import { mfaObrigatoriaEquipe } from "@/lib/seguranca/equipe";
 
 const PAPEL_LABEL: Record<string, string> = {
   admin_central: "Diretoria",
@@ -26,7 +27,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     lerConfiguracoes(),
   ]);
   if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") redirect("/entrar?mfa=1");
-  if (cfg.seguranca_mfa_equipe === true && aal?.nextLevel !== "aal2") redirect("/conta/seguranca?obrigatorio=1");
+  if (mfaObrigatoriaEquipe(user, cfg.seguranca_mfa_equipe === true) && aal?.nextLevel !== "aal2") redirect("/conta/seguranca?obrigatorio=1");
 
   const horas = numero(cfg, "seguranca_sessao_equipe_horas", 12);
   const entrou = authUser?.last_sign_in_at ? new Date(authUser.last_sign_in_at).getTime() : Date.now();
@@ -40,6 +41,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
       setores={setoresDe(user.role, user.setores)}
       avatar={user.avatarUrl}
     >
+      {user.equipe_acesso === "leitura" && <p role="status" className="mb-4 rounded-xl border border-linha p-3 text-sm">Acesso de leitura: você pode consultar os seus setores. Alterações precisam de um operador ou gestor.</p>}
       {children}
       {/* tour de primeira visita + botão Ajuda (2ª etapa, item 14) */}
       <AjudaTour perfil="central" />

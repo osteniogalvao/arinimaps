@@ -23,7 +23,7 @@ export default async function EquipePorSetor() {
 
   let semMigration = false;
   let r = await admin.from("profiles")
-    .select("user_id, nome, role, ativo, setores, cargo, setores_gestor, atendimento_recepcao")
+    .select("user_id, nome, role, ativo, setores, cargo, setores_gestor, atendimento_recepcao, equipe_acesso")
     .in("role", EQUIPE).order("nome");
   if (r.error && falta0161(r.error.message)) {
     semMigration = true;
@@ -56,6 +56,7 @@ export default async function EquipePorSetor() {
     gestor: ((p.setores_gestor ?? []) as string[]),
     cargo: (p.cargo as string | null) ?? null,
     recepcao: !!p.atendimento_recepcao,
+    acesso: p.equipe_acesso === "leitura" ? "leitura" : "operador",
   }));
 
   return (

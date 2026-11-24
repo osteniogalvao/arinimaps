@@ -1,10 +1,11 @@
 "use server";
-import { exigirSetor } from "@/lib/setores-servidor";
+import { ator, temSetor } from "@/lib/authz";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
 export async function comunicar(dados: FormData, id: string, prever: boolean) {
-  const user = await exigirSetor("marketing");
+  const user = await ator();
+  if (!user || user.somenteLeitura || !temSetor(user, "marketing")) return { erro: "Acesso restrito a operadores do Marketing." };
   const titulo = String(dados.get("titulo") ?? "").trim(),
     mensagem = String(dados.get("mensagem") ?? "").trim();
   if (
@@ -22,7 +23,7 @@ export async function comunicar(dados: FormData, id: string, prever: boolean) {
     }),
   );
   const { data, error } = await supabaseAdmin().rpc("matriz_comunicar", {
-    p_ator: user.id,
+    p_ator: user.userId,
     p_id: id,
     p_titulo: titulo,
     p_mensagem: mensagem,

@@ -52,7 +52,11 @@ test("Postgres: criação, triagem, histórico imutável, isolamento, MFA, autoe
   }
   try {
     await q("begin");
-    await q(`create role anon; create role authenticated; create schema auth;
+    await q(`do $$begin
+      if not exists (select from pg_roles where rolname='anon') then create role anon; end if;
+      if not exists (select from pg_roles where rolname='authenticated') then create role authenticated; end if;
+    end$$;
+      create schema auth;
       create function auth.uid() returns uuid language sql stable as $$select (current_setting('app.uid',true))::uuid$$;
       create function auth.jwt() returns jsonb language sql stable as $$select jsonb_build_object('aal',current_setting('app.aal',true))$$;
       grant usage on schema auth to authenticated;

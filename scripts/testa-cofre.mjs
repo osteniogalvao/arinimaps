@@ -44,7 +44,7 @@ test("download privado exige titular, perfil e registro exato antes da assinatur
   assert.equal(await gateway.resolverArquivo(tit,caminho+".pdf"),null);
 });
 test("upload recusa outro titular e conteúdo disfarçado antes de gravar; PDF real vai apenas ao docs",async()=>{
-  let ator=tit,gravados=0,registro;
+  let ator=tit,gravados=0,registro,cota=null;
   const db=adminCom(async(endereco,init)=>{
     const {pathname,searchParams:p}=new URL(endereco);
     if(pathname.endsWith("/cofre_propriedades")){
@@ -60,6 +60,7 @@ test("upload recusa outro titular e conteúdo disfarçado antes de gravar; PDF r
     return new Response(null,{status:201});
   });
   const deps={"@/lib/cofre":cofre,"@/lib/authz":{ator:async()=>ator},"@/lib/supabase/admin":{supabaseAdmin:()=>db},
+    "@/lib/armazenamento":{recusaPorArmazenamento:async()=>cota},"@/lib/planos-servidor":{acessoDe:async()=>({})},
     "@/lib/imovel/verificacao":{cofreAprovado:async(u,id)=>u===dono && id===imovel},
     "@/lib/seguranca/arquivos":arquivos,"@/lib/seguranca/limite":{limitar:async()=>({permitido:true})},
     "@/lib/seguranca/link-arquivo":carregar("lib/seguranca/link-arquivo"),
@@ -69,20 +70,30 @@ test("upload recusa outro titular e conteúdo disfarçado antes de gravar; PDF r
   const req=b=>new Request("https://local.invalid/?propriedade="+imovel,{method:"POST",headers:{"X-Nome-Arquivo":"matricula.pdf"},body:b});
   ator={...tit,userId:outro};assert.equal((await POST(req("%PDF-1.7"))).status,404);
   ator=tit;assert.equal((await POST(req("<script>alert(1)</script>"))).status,400);assert.equal(gravados,0);
+  cota="Limite de armazenamento atingido";
+  assert.equal((await POST(req("%PDF-1.7\nfixture"))).status,413);assert.equal(gravados,0);
+  cota=null;
   const valido=await POST(req("%PDF-1.7\nfixture"));assert.equal(valido.status,200);
   assert.equal(gravados,1);assert.equal(registro.titular_id,dono);assert.equal(registro.propriedade_id,imovel);
 });
 
 const local=process.env.TEST_COFRE_PG_URL;
-// Exige cluster local novo (initdb). As tabelas de fixture são deliberadamente
-// criadas sem IF NOT EXISTS: recusa qualquer banco que já tenha essas tabelas.
+// Cria um banco descartável próprio. Não compartilha tabelas com outras suítes.
 test("Postgres: limite concorrente, planos vigentes, isolamento, concessão explícita e descarte de órfãos", {skip:!local}, async()=>{
   assert.ok(["127.0.0.1","localhost","[::1]"].includes(new URL(local).hostname));
-  const db=new pg.Pool({connectionString:local,max:8});
+  const servidor=new pg.Client({connectionString:local});await servidor.connect();
+  const nome="arini_cofre_"+randomUUID().replaceAll("-","");
+  await servidor.query("create database "+nome);
+  const destino=new URL(local);destino.pathname="/"+nome;
+  const db=new pg.Pool({connectionString:destino.href,max:8});
   try {
     const pre=await db.query("select to_regclass('public.profiles') is null as vazio");
     assert.equal(pre.rows[0].vazio,true,"Use um banco descartável vazio.");
-    await db.query(`create role anon; create role authenticated; create role service_role bypassrls;
+    await db.query(`do $$ begin
+      if not exists(select from pg_roles where rolname='anon') then create role anon; end if;
+      if not exists(select from pg_roles where rolname='authenticated') then create role authenticated; end if;
+      if not exists(select from pg_roles where rolname='service_role') then create role service_role bypassrls; end if;
+      end $$;
       create schema auth; create schema storage; create table auth.users(id uuid primary key,email text);
       create table public.plans(id text primary key, cotas jsonb, ativo boolean default true,escopo text default 'pessoal');
       create table public.profiles(user_id uuid primary key references auth.users(id) on delete cascade,ativo boolean default true,
@@ -142,5 +153,5 @@ test("Postgres: limite concorrente, planos vigentes, isolamento, concessão expl
     await db.query("delete from auth.users where id=$1",[dono]);
     assert.equal((await db.query("select count(*)::int n from public.cofre_documentos")).rows[0].n,0);
     apagados.length=0;await limparCofre({},db,null,storage);assert.deepEqual(apagados.toSorted(),[orfao,caminho].toSorted());
-  } finally {await db.end();}
+  } finally {await db.end();await servidor.query("drop database "+nome);await servidor.end();}
 });

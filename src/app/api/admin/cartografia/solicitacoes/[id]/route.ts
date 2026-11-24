@@ -27,7 +27,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/cart
   const origem = conferirOrigem(request);
   if (!origem.ok) return respostaOrigemNegada(origem.motivo);
   const a = await ator();
-  if (!a || !temSetor(a, "cartografia")) {
+  if (!a || a.somenteLeitura || !temSetor(a, "cartografia")) {
     await registrarTentativa({ request, userId: a?.userId, role: a?.role, recurso: "setor:cartografia", motivo: a ? "sem_setor" : "sem_sessao" });
     return falha(403, "sem_permissao", "Restrito à equipe de Cartografia da Arini.", {
       solucao: "Peça à diretoria para colocar você no setor de Cartografia.",

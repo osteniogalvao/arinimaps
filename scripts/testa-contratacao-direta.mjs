@@ -41,6 +41,7 @@ test("contratação direta libera, aceita e cria o escritório quando preciso",{
   await sql("create table assinatura_reajustes(assinatura uuid,vigencia date,aplicado_em timestamptz)");
   await sql(await readFile(new URL("../supabase/migrations/0124_troca_de_plano.sql",import.meta.url),"utf8"));
   await sql(await readFile(new URL("../supabase/migrations/0155_contratacao_direta_planos.sql",import.meta.url),"utf8"));
+  await sql(await readFile(new URL("../supabase/migrations/0164_faturamento_escritorio_corretor.sql",import.meta.url),"utf8"));
 
   async function conta(role,nicho){
    const u=randomUUID();
@@ -77,6 +78,16 @@ test("contratação direta libera, aceita e cria o escritório quando preciso",{
    assert.deepEqual(m,[{papel_org:"admin",status:"ativo",nicho_vinculo:"corretor_imobiliaria",tipo:"imobiliaria"}]);
    await aceitar(u,id);
    assert.ok((await sql("select org from assinaturas_cotadas where id=$1",[id])).rows[0].org);
+   const assinatura=(await sql("select cancelado from assinaturas_cotadas where id=$1",[id])).rows[0];
+   assert.equal(assinatura.cancelado,null,"comprar o CRM de corretor não exige cadastro de engenheiro");
+   const faturas=(await sql("select id,valor from faturas_cotadas where assinatura=$1",[id])).rows;
+   assert.equal(faturas.length,1,"o aceite deve gerar a primeira fatura do escritório");
+   assert.equal(faturas[0].valor,9700);
+   await sql("select assinatura_reservar_emissao($1)",[faturas[0].id]);
+   await sql("select assinatura_pagamento($1,$2,$3,9700,'PAYMENT_CONFIRMED')",[faturas[0].id,"pay_"+id,"cus_"+u]);
+   assert.equal((await sql("select o.plan_id from organizations o join assinaturas_cotadas s on s.org=o.id where s.id=$1",[id])).rows[0].plan_id,"corretor_essencial");
+   await sql("select assinatura_pagamento($1,$2,$3,9700,'PAYMENT_REFUNDED')",[faturas[0].id,"pay_"+id,"cus_"+u]);
+   assert.equal((await sql("select o.plan_id from organizations o join assinaturas_cotadas s on s.org=o.id where s.id=$1",[id])).rows[0].plan_id,null,"estorno revoga o plano do escritório");
   });
 
   await t.test("técnico sem cadastro profissional aprovado fica na fila da Central, sem nada criado",async()=>{
@@ -84,6 +95,16 @@ test("contratação direta libera, aceita e cria o escritório quando preciso",{
    await assert.rejects(direto(u,id),/cadastro profissional aprovado/);
    assert.equal((await sql("select status from solicitacoes_planos where id=$1",[id])).rows[0].status,"pendente");
    assert.equal((await sql("select count(*)::int n from organization_members where user_id=$1",[u])).rows[0].n,0);
+  });
+
+  await t.test("escritório técnico continua exigindo aprovação nas renovações",async()=>{
+   const u=await conta("engenheiro","engenheiro"),id=await pedido(u,"tecnico_essencial","profissional_tecnico",{base:7990});
+   await sql("insert into partners(profile_id,tipo,status) values($1,'engenheiro','aprovado')",[u]);
+   await direto(u,id);await aceitar(u,id);
+   assert.equal((await sql("select count(*)::int n from faturas_cotadas where assinatura=$1",[id])).rows[0].n,1);
+   assert.equal((await sql("select assinatura_pode_faturar(s) ok from assinaturas_cotadas s where id=$1",[id])).rows[0].ok,true);
+   await sql("update partners set status='suspenso' where profile_id=$1",[u]);
+   assert.equal((await sql("select assinatura_pode_faturar(s) ok from assinaturas_cotadas s where id=$1",[id])).rows[0].ok,false);
   });
 
   await t.test("complementos: vagas de propriedade seguem direto; outros vão para a Central",async()=>{

@@ -1,8 +1,8 @@
 import type { StyleSpecification, RasterSourceSpecification } from "maplibre-gl";
 import { urlDoTile } from "../../../public/vendor/fonte-satelite.mjs";
-import { version as versaoMapLibre } from "maplibre-gl/package.json";
+import maplibrePackage from "maplibre-gl/package.json";
 
-export const URL_MAPLIBRE = `/vendor/maplibre-gl.mjs?v=${versaoMapLibre}`;
+export const URL_MAPLIBRE = `/vendor/maplibre-gl.mjs?v=${maplibrePackage.version}`;
 
 /**
  * Cores por status no mapa (legenda fixa), na paleta do Manual v1.0: Verde
