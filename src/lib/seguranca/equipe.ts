@@ -5,13 +5,15 @@ export function somenteLeituraEquipe(p: PerfilEquipe | null | undefined) {
 }
 
 /**
- * 2FA da equipe: só obrigatório quando a Diretoria liga `seguranca_mfa_equipe`
- * em Configurações. Desligado por padrão (decisão do Stenio, 24/11/2026): a
- * Diretoria e os gestores ainda não cadastraram o autenticador.
+ * 2FA da equipe: obrigatório DESLIGADO (ordem do Stenio, 24/11/2026). A opção
+ * `seguranca_mfa_equipe` das Configurações é ignorada de propósito: se ela
+ * tivesse ficado marcada no banco, toda a equipe sem autenticador cadastrado
+ * era mandada para "ativar o segundo fator" e não entrava na Central.
+ * Quem já tem 2FA cadastrado continua confirmando o código no login (aal2).
  */
-export function mfaObrigatoriaEquipe(p: PerfilEquipe | null | undefined, exigirEquipeToda = false) {
-  if (!p || !["admin_central", "analista_arini"].includes(p.role ?? "")) return false;
-  return exigirEquipeToda;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function mfaObrigatoriaEquipe(_p?: PerfilEquipe | null, _exigirEquipeToda = false) {
+  return false;
 }
 
 /** Leitura mantém autenticação, recuperação e confirmação dos próprios avisos. */

@@ -75,7 +75,9 @@ export default function Entrar() {
     // a Central mandou de volta: a sessão existe, falta confirmar o segundo fator
     if (q.get("mfa")) { setDestino("/admin"); setModo("mfa"); }
     if (q.get("expirou")) {
-      supabaseBrowser().auth.signOut();
+      // só neste navegador: o padrão (global) derrubava a mesma conta em
+      // todos os outros computadores da equipe
+      supabaseBrowser().auth.signOut({ scope: "local" });
       setAviso("Sua sessão na Central expirou. Entre de novo.");
     }
   }, []);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
+import { consultarLimite, ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { registrarEvento } from "@/lib/seguranca/eventos";
 import { analisarEntrada, analisarFalha } from "@/lib/seguranca/alertas";
 import { vincularConvites } from "@/lib/organizacoes-servidor";
@@ -27,9 +27,13 @@ export async function POST(request: Request) {
   }
 
   const ip = ipDoPedido(request);
+  // Só a senha ERRADA conta (24/11/2026): antes cada login certo também
+  // contava, e a equipe que entra na mesma conta ou do mesmo escritório (mesmo
+  // IP) ficava bloqueada com "Muitas tentativas" sem ter errado nada.
+  const chaveIp = `login:ip:${ip}`, chaveEmail = `login:email:${email}`;
   const [porIp, porEmail] = await Promise.all([
-    limitar(`login:ip:${ip}`, 30, 600),
-    limitar(`login:email:${email}`, 8, 900),
+    consultarLimite(chaveIp, 30, 600),
+    consultarLimite(chaveEmail, 8, 900),
   ]);
   if (!porIp.permitido || !porEmail.permitido) {
     await registrarEvento(request, "login_bloqueado", { email });
@@ -39,6 +43,7 @@ export async function POST(request: Request) {
   const supabase = await supabaseServer();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
   if (error || !data.user) {
+    await Promise.all([limitar(chaveIp, 30, 600), limitar(chaveEmail, 8, 900)]);
     await registrarEvento(request, "login_falhou", { email });
     await analisarFalha(request, email); // 6.8: excesso de falhas vira alerta
     // mesma mensagem para e-mail inexistente e senha errada: não revela quem tem conta

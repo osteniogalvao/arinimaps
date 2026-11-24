@@ -7,11 +7,11 @@ import ts from "typescript";
 import { compileFunction } from "node:vm";
 import { mfaObrigatoriaEquipe, somenteLeituraEquipe, escritaLiberadaParaLeitura } from "../src/lib/seguranca/equipe.ts";
 
-test("2FA só quando a Diretoria liga a opção; leitura preserva consulta e a segurança da própria conta",()=>{
+test("2FA obrigatório desligado mesmo com a opção marcada; leitura preserva consulta e a segurança da própria conta",()=>{
   assert.equal(mfaObrigatoriaEquipe({role:"admin_central"},false),false);
   assert.equal(mfaObrigatoriaEquipe({role:"analista_arini",setores_gestor:["comercial"]},false),false);
   assert.equal(mfaObrigatoriaEquipe({role:"analista_arini"},false),false);
-  assert.equal(mfaObrigatoriaEquipe({role:"analista_arini"},true),true);
+  assert.equal(mfaObrigatoriaEquipe({role:"analista_arini"},true),false);
   assert.equal(mfaObrigatoriaEquipe({role:"comprador"},true),false);
   assert.equal(somenteLeituraEquipe({role:"analista_arini",equipe_acesso:"leitura"}),true);
   for(const caminho of ["/api/admin/crm","/api/admin/equipe","/api/oportunidades/abc","/admin/automacoes","/admin/equipe","/conta/seguranca"]){
