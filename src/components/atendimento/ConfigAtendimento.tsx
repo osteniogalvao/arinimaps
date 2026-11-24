@@ -8,8 +8,10 @@ import { nomeSetor, SETORES_ATENDIMENTO } from "@/lib/atendimento-rotulos";
 type Menu = {
   ativo: boolean; saudacao: string; confirmacao: string; nao_entendi: string; fora_expediente: string;
   max_tentativas: number; setor_escape: string | null; expira_minutos: number; reenviar_apos_horas: number;
+  // 0170 (Ari no WhatsApp): ausentes antes da migration
+  ari_ativo?: boolean; ari_limite_dia?: number;
 };
-type Opcao = { id: string; ordem: number; chave: string; rotulo: string; setor: string | null; responsavel: string | null; etiqueta: string | null; confirmacao: string | null; ativo: boolean };
+type Opcao = { id: string; ordem: number; chave: string; rotulo: string; setor: string | null; responsavel: string | null; etiqueta: string | null; confirmacao: string | null; ativo: boolean; acao?: "setor" | "ari" };
 type Resposta = { id: string; atalho: string; titulo: string; texto: string; setor: string | null };
 type Pessoa = { user_id: string; nome: string; diretoria: boolean; recepcao: boolean; setores: string[] };
 
@@ -74,6 +76,19 @@ export default function ConfigAtendimento({ menu, opcoes, respostas, equipe, pra
             <input type="number" min={1} value={m.reenviar_apos_horas} onChange={(e) => setM({ ...m, reenviar_apos_horas: Number(e.target.value) })} className={CAMPO} />
           </label>
         </div>
+        {m.ari_ativo !== undefined && (
+          <div className="space-y-2 rounded-xl border border-linha p-3">
+            <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={m.ari_ativo} onChange={(e) => setM({ ...m, ari_ativo: e.target.checked })} /> Ari no WhatsApp: consulta de imóveis pela IA</label>
+            <p className="text-xs text-texto-2">
+              Entra pela opção do menu marcada como &quot;Ari&quot; ou quando a primeira mensagem já é uma busca clara (ex.: &quot;fazenda de 100 ha em Iturama&quot;).
+              O cliente responde <strong>0</strong>, &quot;corretor&quot; ou &quot;quero visitar&quot; para ir ao Comercial (com lead no rodízio se houver imóvel de interesse).
+              A Ari para assim que alguém da equipe responde a conversa.
+            </p>
+            <label className="block max-w-xs text-xs">Respostas da Ari por cliente por dia (depois passa para o Comercial)
+              <input type="number" min={1} max={500} value={m.ari_limite_dia ?? 40} onChange={(e) => setM({ ...m, ari_limite_dia: Number(e.target.value) })} className={CAMPO} />
+            </label>
+          </div>
+        )}
         <details className="text-sm"><summary className="cursor-pointer text-texto-2">Como o cliente vê</summary>
           <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-superficie-2 p-3 font-sans">{previa}</pre>
         </details>
@@ -162,19 +177,28 @@ function LinhaOpcao({ o, equipe, ocupado, salvar }: {
 }) {
   const [v, setV] = useState(o);
   const pessoas = equipe.filter((p) => !v.setor || p.diretoria || p.setores.includes(v.setor));
+  const ari = v.acao === "ari";
   return (
-    <form className="grid items-end gap-2 rounded-xl border border-linha p-3 md:grid-cols-[60px_70px_1fr_180px_180px_120px_auto]" onSubmit={(e) => { e.preventDefault(); void salvar({ acao: "opcao", ...v }, "Opção salva."); }}>
+    <form className="grid items-end gap-2 rounded-xl border border-linha p-3 md:grid-cols-[60px_70px_1fr_180px_180px_120px_auto]" onSubmit={(e) => {
+      e.preventDefault();
+      // "acao" do corpo é o nome da operação; o que a opção faz vai em acao_opcao
+      const { acao: acaoOpcao, ...resto } = v;
+      void salvar({ ...resto, acao: "opcao", ...(acaoOpcao ? { acao_opcao: acaoOpcao } : {}) }, "Opção salva.");
+    }}>
       <label className="text-[11px]">Ordem<input type="number" value={v.ordem} onChange={(e) => setV({ ...v, ordem: Number(e.target.value) })} className={CAMPO} /></label>
       <label className="text-[11px]">Tecla<input value={v.chave} onChange={(e) => setV({ ...v, chave: e.target.value })} className={CAMPO} /></label>
       <label className="text-[11px]">Texto<input value={v.rotulo} onChange={(e) => setV({ ...v, rotulo: e.target.value })} className={CAMPO} /></label>
       <label className="text-[11px]">Setor
-        <select value={v.setor ?? ""} onChange={(e) => setV({ ...v, setor: e.target.value || null, responsavel: null })} className={CAMPO}>
+        <select value={ari ? "__ari" : v.setor ?? ""} onChange={(e) => e.target.value === "__ari"
+          ? setV({ ...v, acao: "ari", setor: null, responsavel: null })
+          : setV({ ...v, ...(v.acao !== undefined ? { acao: "setor" as const } : {}), setor: e.target.value || null, responsavel: null })} className={CAMPO}>
           <option value="">Caixa central</option>
           {SETORES_ATENDIMENTO.map((s) => <option key={s} value={s}>{nomeSetor(s)}</option>)}
+          {v.acao !== undefined && <option value="__ari">Ari (consulta de imóveis)</option>}
         </select>
       </label>
       <label className="text-[11px]">Direto para
-        <select value={v.responsavel ?? ""} onChange={(e) => setV({ ...v, responsavel: e.target.value || null })} className={CAMPO}>
+        <select disabled={ari} value={v.responsavel ?? ""} onChange={(e) => setV({ ...v, responsavel: e.target.value || null })} className={CAMPO}>
           <option value="">Fila do setor</option>
           {pessoas.map((p) => <option key={p.user_id} value={p.user_id}>{p.nome}</option>)}
         </select>
