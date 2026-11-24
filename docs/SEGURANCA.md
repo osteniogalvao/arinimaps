@@ -251,7 +251,7 @@ que muda dados ficar sem trava) — rodar a cada rota nova.
 - **Upload:** o tipo é decidido pelos primeiros bytes do arquivo
   (`conferirArquivo()`, `src/lib/seguranca/arquivos.ts`) e gravado com a
   extensão e o `Content-Type` reais — HTML/SVG renomeado não entra. Limites:
-  foto 20 MB, selfie 15 MB, documento e contrato 25 MB, vídeo 50 MB, anexo
+  foto 20 MB, selfie 15 MB, documento e contrato 25 MB, vídeo 500 MB, anexo
   cartográfico 25 MB. Caminho sempre gerado pelo servidor; vídeo sobe por URL
   de envio assinada de uso único.
 - **HTML:** texto de usuário nunca entra cru em HTML montado à mão

@@ -21,7 +21,7 @@ Medido em 07/10/2026 no projeto Supabase `qtpjryvqifcmmabebccf` (roadmap 1.9).
 | CAR | 2,7 MB por 1 000 áreas | um município rural do Pontal tem 1 500 a 2 500 áreas |
 | Planta da cidade (storage) | 2 a 20 MB | depende do CAD; a versão pública é menor |
 | Anúncio | ~8 MB | 10 fotos de 600 KB + documentos em PDF |
-| Vídeo do anúncio | até 50 MB | limite da rota de envio |
+| Vídeo do anúncio | até 500 MB (o worker reduz para 720p) | limite da rota de envio |
 | Vídeo automático (worker) | 15 a 30 MB | 1080p, 40 s |
 | Eventos e auditoria | ~0,5 KB por evento | ficha aberta, tour, consulta, login |
 
@@ -60,7 +60,7 @@ node scripts/sql.mjs "select relname, pg_size_pretty(pg_total_relation_size(c.oi
   WebP de até 2.048 px, qualidade 0,82, sem EXIF (some o GPS da foto). Medido: foto de 12 MP de
   6,3 MB → 0,21 MB em 0,5 s. 20 fotos passam de até 400 MB para ~5 MB por anúncio.
 - Vídeos **não passam pelo servidor do site**: o navegador manda direto ao armazenamento com
-  autorização de uso único (`/api/imoveis/[id]/midia`), até 50 MB e 3 por imóvel.
+  autorização de uso único (`/api/imoveis/[id]/midia`), até 500 MB e 3 por imóvel.
 - Depois do envio, o worker converte o vídeo (`worker/jobs/otimizarVideo.mjs`): MP4 H.264 720p, AAC,
   `faststart`, sem metadados, mais uma capa em JPEG. Resolve o vídeo HEVC/.mov do iPhone (não toca no
   Chrome/Android) e reduz 4–6× o peso para quem assiste. O original só é apagado depois que o
