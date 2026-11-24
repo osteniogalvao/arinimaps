@@ -13,7 +13,7 @@ async function entrar({profile={role:"proprietario",ativo:true,entrada_ativa:"pr
  const deps={"next/server":{NextResponse:{json:(body,init)=>Response.json(body,init)}},
   "@/lib/supabase/server":{supabaseServer:async()=>({auth})},
   "@/lib/supabase/admin":{supabaseAdmin:()=>({from:()=>query})},
-  "@/lib/seguranca/limite":{ipDoPedido:()=>"127.0.0.1",limitar:async()=>({permitido:true}),respostaLimite:()=>assert.fail("Sem bloqueio de limite")},
+  "@/lib/seguranca/limite":{ipDoPedido:()=>"127.0.0.1",consultarLimite:async()=>({permitido:true}),limitar:async()=>({permitido:true}),respostaLimite:()=>assert.fail("Sem bloqueio de limite")},
   "@/lib/seguranca/eventos":{registrarEvento:async(_r,name)=>events.push(name)},
   "@/lib/seguranca/alertas":{analisarEntrada:async()=>calls.push(["analisarEntrada"]),analisarFalha:async()=>calls.push(["analisarFalha"])},
   "@/lib/organizacoes-servidor":{vincularConvites:async()=>calls.push(["vincularConvites"])}};

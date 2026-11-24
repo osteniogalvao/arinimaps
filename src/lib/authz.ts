@@ -63,8 +63,11 @@ export async function ator(): Promise<Ator | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const admin = supabaseAdmin();
-  const { data: profile } = await admin.from("profiles")
-    .select("role, setores, setores_gestor, equipe_acesso, ativo, nicho, entrada_ativa, plan_id, plan_valido_ate, plan_origem").eq("user_id", user.id).single();
+  const ler = (colunas: string) => admin.from("profiles").select(colunas).eq("user_id", user.id).single();
+  let r = await ler("role, setores, setores_gestor, equipe_acesso, ativo, nicho, entrada_ativa, plan_id, plan_valido_ate, plan_origem");
+  // migration 0161/0165 ainda não rodada: segue com as colunas antigas (ver currentUser)
+  if (r.error?.code === "42703") r = await ler("role, setores, ativo, nicho, entrada_ativa, plan_id, plan_valido_ate, plan_origem");
+  const profile = r.data as unknown as { role: string; setores: string[] | null; setores_gestor?: string[] | null; equipe_acesso?: string | null; ativo: boolean | null; nicho: string | null; entrada_ativa: string | null; plan_id: string | null; plan_valido_ate: string | null; plan_origem: string | null } | null;
   if (!profile || profile.ativo === false) return null;
   const equipe = ["admin_central", "analista_arini"].includes(profile.role);
   // Segundo fator também nas APIs (testes 9.5), com a mesma regra da Central

@@ -34,12 +34,13 @@ export async function currentUser() {
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, nome, setores, setores_gestor, equipe_acesso, nicho, entrada_ativa, plan_id, plan_valido_ate, avatar_url")
-    .eq("user_id", user.id)
-    .eq("ativo", true)
-    .maybeSingle();
+  const ler = (colunas: string) => supabase.from("profiles").select(colunas)
+    .eq("user_id", user.id).eq("ativo", true).maybeSingle();
+  let r = await ler("role, nome, setores, setores_gestor, equipe_acesso, nicho, entrada_ativa, plan_id, plan_valido_ate, avatar_url");
+  // Coluna de migration ainda não rodada (0161/0165): sem ela o perfil não
+  // carregava e ninguém entrava (24/11/2026). Cai para as colunas antigas.
+  if (r.error?.code === "42703") r = await ler("role, nome, setores, nicho, entrada_ativa, plan_id, plan_valido_ate, avatar_url");
+  const profile = r.data as Record<string, unknown> | null;
   return profile
     ? {
         id: user.id, email: user.email, role: profile.role as string, nome: profile.nome as string,
