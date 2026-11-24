@@ -90,6 +90,7 @@ export const SETORES: Setor[] = [
       { href: "/admin/marketing/fluxo", rotulo: "Imóveis para divulgar", icone: "⇢" },
       { href: "/admin/marketing/comunicados", rotulo: "Comunicados da Matriz", icone: "✉" },
       { href: "/admin/marketing/divulgadores", rotulo: "Programa de divulgadores", icone: "◫" },
+      { href: "/admin/marketing/tags", rotulo: "Tags e pixels", icone: "</>" },
       { href: "/admin/ranking", rotulo: "Ranking de imóveis", icone: "★" },
       { href: "/admin/registros/publicacoes", rotulo: "Central de publicação", icone: "↗" },
       { href: "/admin/conhecimento", rotulo: "Conhecimento e IA", icone: "✎" },
@@ -101,6 +102,7 @@ export const SETORES: Setor[] = [
     itens: [
       { href: "/admin/marketing/trafego", rotulo: "Tráfego e resultados", icone: "◢" },
       { href: "/admin/registros/campanhas", rotulo: "Campanhas", icone: "◎" },
+      { href: "/admin/marketing/tags", rotulo: "Tags e pixels", icone: "</>" },
     ],
   },
   {
