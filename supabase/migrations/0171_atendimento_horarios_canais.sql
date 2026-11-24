@@ -10,7 +10,7 @@
 -- Canais novos na mesma caixa (a conversa continua única pelo "telefone"):
 --   site:<hash>  chat do site (widget)  ·  tg:<chat_id>  Telegram
 --
--- Idempotente. Depende de 0147 (fn_crm_prazo_expediente), 0156 e 0157.
+-- Idempotente. Depende de 0147 (fn_crm_prazo_expediente), 0156, 0157 e 0170 (ari_ativa_em).
 
 create table if not exists public.atendimento_setores_horario (
   setor text primary key check (setor in ('operacoes','comercial','financeiro','juridico','marketing','marketing_trafego','cartografia','suporte','seguranca','diretoria')),
@@ -85,6 +85,7 @@ begin
       and c.ultima_entrada_em is not null
       and c.ultima_entrada_em > now() - interval '3 days'
       and (c.ultima_saida_em is null or c.ultima_saida_em < c.ultima_entrada_em)
+      and not (c.ari_ativa_em is not null and c.setor is null and c.responsavel is null)
       and fn_atendimento_prazo(c.setor, c.ultima_entrada_em, coalesce(h.prazo_minutos, v_min)) < now()
     order by c.ultima_entrada_em
     limit 200

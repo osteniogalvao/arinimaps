@@ -42,7 +42,7 @@ test("SQL 0171: fn_atendimento_prazo bate com o cálculo da tela e cai no expedi
       create function fn_role() returns text language sql as $f$select 'admin_central'$f$;
       create table profiles(user_id uuid primary key);
       create table atendimento_conversas(id uuid primary key default gen_random_uuid(), codigo text, nome text, telefone text, setor text, responsavel uuid,
-        status text, ultima_entrada_em timestamptz, ultima_saida_em timestamptz, canal text not null default 'whatsapp');
+        status text, ultima_entrada_em timestamptz, ultima_saida_em timestamptz, canal text not null default 'whatsapp', ari_ativa_em timestamptz);
       create table tasks(chave text primary key, setor text, titulo text);
       create function fn_tarefa_automatica(p_chave text,p_regra text,p_setor text,p_titulo text,p_descricao text,p_resp uuid,p_prazo date,p_prio text)
         returns uuid language plpgsql as $f$begin insert into tasks values(p_chave,p_setor,p_titulo) on conflict do nothing; if found then return gen_random_uuid(); end if; return null; end$f$;`);
