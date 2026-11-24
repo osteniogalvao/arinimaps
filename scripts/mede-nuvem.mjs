@@ -24,7 +24,7 @@ const CIDADES = {
 const Z = 15;
 const CONFIG_WAYBACK = "https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json";
 
-const RELEASE_EM_USO = "20512"; // World Imagery (Wayback 2025-10-23) — ver src/lib/map/config.ts
+const RELEASE_EM_USO = "49059"; // World Imagery (Wayback 2026-04-30) — ver src/lib/map/config.ts
 const FONTES = {
   "World Imagery (atual)": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   "Clarity": "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",

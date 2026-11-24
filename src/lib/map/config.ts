@@ -47,7 +47,7 @@ export const LIMITES_MAPA_REGIONAL: [[number, number], [number, number]] = [[-80
  *
  *   World Imagery atual   = Wayback 2026-08-05 ... 44,2% de nuvem
  *   Wayback 2026-04-30 .................................. 3,5%
- *   Wayback 2025-10-23 .................................. 2,6%   ← escolhido
+ *   Wayback 2025-10-23 .................................. 2,6%   (usado até 23/11/2026)
  *   Wayback 2023-10-11 .................................. 2,9%
  *
  * Ou seja: a nuvem sobre Iturama ENTROU na atualização de agosto/2026. Trocar
@@ -67,6 +67,22 @@ export const LIMITES_MAPA_REGIONAL: [[number, number], [number, number]] = [[-80
  * cinza justamente no zoom do lote; com 17, o MapLibre amplia o último tile real
  * (overzoom).
  *
+ * TROCA PARA O RELEASE 49059 (2026-04-30), em 23/11/2026. Pedido do Stenio
+ * ("visualizar cidades e áreas rurais está muito ultrapassado e de péssima
+ * qualidade, principalmente urbano"). O 20512 mostrava fotos de ago/2023 em
+ * Iturama e Limeira e de ago/2020 em União de Minas. Data da foto (metadado da
+ * Esri) e nuvem medidas em 23/11/2026, grade 5×5 z15 em cada cidade e grade
+ * de 81 tiles z12 + 121 tiles z14 sobre a região:
+ *
+ *   release    Iturama    Limeira    União      nuvem na região
+ *   20512      ago/2023   ago/2023   ago/2020   0,0% (z14)
+ *   49059      mar/2025   ago/2023   set/2024   0,0% (z14)   ← escolhido
+ *   3692 (nov/2026, mais novo)  nov/2025 com nuvem em Iturama (53% num tile,
+ *   5 tiles z14 acima de 5%): de mai/2026 em diante todos trazem essa cena.
+ *
+ * Continua sem z18 na região: chegar mais perto que o z17 exige fonte paga.
+ * Se um tile do release em uso vier com nuvem, tileSatelite.ts tenta o 20512.
+ *
  * Para trocar de release: a lista está em
  * https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json
  * (196 releases). Meça antes de trocar — `scripts/mede-nuvem.mjs`.
@@ -83,7 +99,7 @@ export const PROVEDOR_SATELITE: ProvedorSatelite =
  * medidor de nuvem do painel (src/lib/map/nuvem.ts), que confere este mesmo
  * release sobre os municípios cadastrados.
  */
-export const SATELITE_RELEASE = "20512"; // World Imagery (Wayback 2025-10-23)
+export const SATELITE_RELEASE = "49059"; // World Imagery (Wayback 2026-04-30)
 
 export const urlTileSatelite = (
   z: number | string, x: number | string, y: number | string, release = SATELITE_RELEASE
