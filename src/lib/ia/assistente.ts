@@ -65,6 +65,8 @@ export async function responder(opcoes: {
   modelo?: string;
   consultaTerritorial?: boolean;
   titular?: string;
+  /** Regras do canal (ex.: WhatsApp), somadas depois do sistema fixo, fora do cache. */
+  instrucoesCanal?: string;
   aoEvento?: (e: EventoAssistente) => void;
   signal?: AbortSignal;
 }): Promise<RespostaAssistente> {
@@ -96,7 +98,10 @@ export async function responder(opcoes: {
       model: modelo,
       max_tokens: 16000,
       // prefixo estável (ferramentas + sistema) em cache: só a conversa muda
-      system: [{ type: "text", text: SISTEMA, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: SISTEMA, cache_control: { type: "ephemeral" } },
+        ...(opcoes.instrucoesCanal ? [{ type: "text" as const, text: opcoes.instrucoesCanal }] : []),
+      ],
       tools: ferramentasPermitidas,
       messages,
     };

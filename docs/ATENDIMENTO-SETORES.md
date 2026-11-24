@@ -45,3 +45,28 @@ conversa sem responsável já assume.
 O worker chama `fn_atendimento_regras()` a cada 10 min: conversa aberta sem
 resposta humana há mais que `atendimento_prazo_minutos` (expediente do
 rodízio) vira tarefa do setor ou do responsável, uma por conversa por dia.
+
+## Ari no WhatsApp: consulta de imóveis (migration 0170)
+
+Pedido do Carlos (24/11/2026): o cliente consulta imóveis pelo mesmo número.
+Código em `src/lib/atendimento-ari.ts`, ligado em `entradaAtendimento`.
+
+- **Entrada:** opção do menu com `acao = 'ari'` (a 0170 cria *7 - Consultar
+  imóveis à venda*) ou primeira mensagem que já é uma busca clara
+  (`buscaClaraDeImovel`: tipo de imóvel + intenção, cidade ou número; quem
+  quer vender/anunciar continua no menu). Com o menu aberto, uma busca clara
+  no lugar do número também entra na Ari.
+- **Resposta:** a Ari do site (`responder`, só a vitrine pública) com regras de
+  WhatsApp; links viram endereço completo e vão até 3 fotos de capa dos imóveis
+  citados. Roda em `after()`, depois do 200 do webhook.
+- **Saída:** "0", "corretor", "quero visitar", "tenho interesse" → Comercial.
+  Com imóvel de interesse (citado ou o último mostrado) cria o lead pelo
+  `fn_crm_lead_manual` com rodízio. Também sai no limite diário
+  (`ari_limite_dia`, padrão 40 por cliente) ou se a IA falhar. Quando alguém
+  da equipe responde, a conversa ganha responsável e a Ari para.
+- **Sem tarefa de "sem resposta"** enquanto a conversa está só com a Ari
+  (`fn_atendimento_regras` refeita na 0170).
+- Liga/desliga e limite em Atendimento › Configurar. Também respeita
+  `ia_chat_ativo` (Configurações) e precisa de `ANTHROPIC_API_KEY`.
+- Comandos rápidos (MENU, BOI, COTAÇÃO, CONSULTAR CAR, localização) continuam
+  respondidos antes, como sempre.
