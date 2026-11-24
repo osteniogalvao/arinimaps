@@ -9,6 +9,9 @@ import { CabecalhoPagina, Etiqueta, Vazio } from "@/components/ui/Pagina";
 import { LISTA, LINHA_LISTA } from "@/components/admin/estilos";
 import { STATUS_ABERTOS } from "@/lib/cartografia/solicitacoes";
 import Excecoes from "@/components/admin/Excecoes";
+import { dadosMatriz } from "@/lib/matriz-servidor";
+import { ESTADO_LABEL, estadoBloco } from "@/lib/matriz";
+import { CargaSetores, FilaGargalos, ResumoAri } from "@/components/admin/MatrizPainel";
 
 type Fila = { rotulo: string; n: number | string; href: string; urgente?: boolean };
 
@@ -19,7 +22,8 @@ type Fila = { rotulo: string; n: number | string; href: string; urgente?: boolea
  */
 export default async function Matriz({ searchParams }: PageProps<"/admin">) {
   const user = await exigirEquipe();
-  const semAcesso = (await searchParams).sem_acesso;
+  const sp = await searchParams;
+  const semAcesso = sp.sem_acesso;
   const admin = supabaseAdmin();
   const hoje = new Date().toISOString().slice(0, 10);
   const em30 = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
@@ -59,13 +63,17 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
       .eq("responsavel", user.id).in("status", ["aberta", "andamento", "aguardando", "bloqueada"])
       .order("prazo", { ascending: true, nullsFirst: false }).limit(8)
       .then(({ data }) => data ?? []),
-    admin.from("tasks").select("setor").in("status", ["aberta", "andamento", "aguardando", "bloqueada"])
+    admin.from("tasks").select("setor, prazo").in("status", ["aberta", "andamento", "aguardando", "bloqueada"])
       .then(({ data }) => {
         const m = new Map<string, number>();
         for (const t of data ?? []) m.set(t.setor, (m.get(t.setor) ?? 0) + 1);
         return m;
       }),
   ]);
+  const matriz = await dadosMatriz(user.setores, hoje, {
+    setor: typeof sp.setor === "string" ? sp.setor : "",
+    tipo: typeof sp.tipo === "string" ? sp.tipo : "",
+  });
 
   const filas: Record<SetorId, Fila[]> = {
     operacoes: [
@@ -143,15 +151,26 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
 
       {meus.length > 0 && <Excecoes userId={user.id} setores={user.setores} />}
 
+      {meus.length > 0 && <ResumoAri resumo={matriz.resumo} setores={matriz.resumoSetores} />}
+
+      {meus.length > 0 && (
+        <FilaGargalos itens={matriz.gargalos} setores={meus.map((s) => ({ id: s.id, nome: s.nome }))}
+          filtro={matriz.filtro} hoje={hoje} pronto={matriz.pronto} />
+      )}
+
+      {meus.length > 0 && <CargaSetores linhas={matriz.carga} />}
+
       {meus.length > 0 && (
         <Secao titulo="Setores">
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {meus.map((s) => {
               const tarefas = tarefasPorSetor.get(s.id) ?? 0;
+              const vencidas = matriz.vencidas.get(s.id) ?? 0;
+              const estado = estadoBloco(vencidas, matriz.prazo(s.id));
               const Icone = ICONE_SETOR[s.id];
               const temUrgente = filas[s.id].some((f) => f.urgente);
               return (
-                <div key={s.id} className={"cartao flex flex-col p-6 border-t-4 " + (temUrgente ? "border-t-ouro" : "border-t-verde/60")}>
+                <div key={s.id} className={"cartao flex flex-col p-6 border-t-4 " + (estado === "critico" ? "border-t-critico" : temUrgente || estado === "atencao" ? "border-t-ouro" : "border-t-verde/60")}>
                   <Link href={s.href} className="group flex items-start gap-4">
                     <span className={"grid size-11 shrink-0 place-items-center rounded-xl " + (temUrgente ? "bg-ouro/15 text-ouro" : "bg-verde/12 text-verde")}>
                       <Icone className="size-5" />
@@ -177,13 +196,23 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
                         </span>
                       </Link>
                     ))}
-                    {tarefas > 0 && (
-                      <Link href={`/admin/tarefas?setor=${s.id}`}
-                        className="inline-flex items-center gap-1.5 px-1 pt-1.5 text-sm font-semibold text-verde hover:underline underline-offset-4">
-                        <ListChecks className="size-4" />
-                        {tarefas} tarefa{tarefas === 1 ? "" : "s"} aberta{tarefas === 1 ? "" : "s"} no setor
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-1.5">
+                      {tarefas > 0 && (
+                        <Link href={`/admin/tarefas?setor=${s.id}`}
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold text-verde hover:underline underline-offset-4">
+                          <ListChecks className="size-4" />
+                          {tarefas} tarefa{tarefas === 1 ? "" : "s"} aberta{tarefas === 1 ? "" : "s"} no setor
+                        </Link>
+                      )}
+                      <Link href={`/admin?setor=${s.id}#gargalos`} title={`Estado: ${ESTADO_LABEL[estado]}`}
+                        className={"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold " +
+                          (estado === "critico" ? "border-critico/40 bg-critico/10 text-critico"
+                            : estado === "atencao" ? "border-ouro/45 bg-ouro/10 text-ouro"
+                            : "border-verde/30 bg-verde/10 text-verde")}>
+                        <span className={"size-2 rounded-full " + (estado === "critico" ? "bg-critico" : estado === "atencao" ? "bg-ouro" : "bg-verde")} />
+                        {vencidas} vencida{vencidas === 1 ? "" : "s"} · {ESTADO_LABEL[estado]}
                       </Link>
-                    )}
+                    </div>
                   </div>
                 </div>
               );

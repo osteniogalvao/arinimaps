@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Bot } from "lucide-react";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { exigirEquipe } from "@/lib/setores-servidor";
 import { SETORES, TAREFA_ORIGEM_LABEL, TAREFA_STATUS_LABEL, PRIORIDADE_LABEL, setorPorId, type SetorId } from "@/lib/setores";
+import { NIVEL_COBRANCA_LABEL } from "@/lib/matriz";
 import { equipeAtiva } from "@/components/admin/Painel";
 import TarefaDetalhe, { type EventoLinha } from "@/components/admin/TarefaDetalhe";
 import Conversa from "@/components/admin/Conversa";
@@ -51,6 +52,11 @@ export default async function TarefaPagina({ params }: PageProps<"/admin/tarefas
             <Etiqueta tom={t.status === "concluida" ? "verde" : t.status === "bloqueada" ? "critico" : "ouro"}>{TAREFA_STATUS_LABEL[t.status] ?? t.status}</Etiqueta>
             {t.prioridade === "alta" && <Etiqueta tom="critico">Prioridade {PRIORIDADE_LABEL.alta.toLowerCase()}</Etiqueta>}
             {t.escalonada_em && <Etiqueta tom="critico">Subiu para a Diretoria</Etiqueta>}
+            {(t.nivel_cobranca ?? 0) > 0 && !["concluida", "cancelada"].includes(t.status) && (
+              <Etiqueta tom={t.nivel_cobranca >= 3 ? "critico" : t.nivel_cobranca === 2 ? "alerta" : "ouro"}>
+                {NIVEL_COBRANCA_LABEL[t.nivel_cobranca] ?? `Cobrança nível ${t.nivel_cobranca}`}
+              </Etiqueta>
+            )}
           </div>
         } />
 
