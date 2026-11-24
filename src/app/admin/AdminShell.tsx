@@ -20,7 +20,7 @@ import {
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, LogOut, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
   Settings, Shield, ShieldCheck, UserCheck, UserRound, Users, UsersRound, Wallet, X, Bot, Shuffle, Trophy,
-  CalendarDays, Contact, Settings2, MessagesSquare, ListOrdered, Banknote, KeySquare, Workflow,
+  CalendarDays, Contact, Settings2, MessagesSquare, MessageCircle, ListOrdered, Banknote, KeySquare, Workflow,
 } from "lucide-react";
 import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
@@ -35,6 +35,7 @@ const GERAL: ItemMenu[] = [
   { href: "/admin", rotulo: "Matriz", icone: "◈" },
   { href: "/admin/eu", rotulo: "Meu painel", icone: "☺" },
   { href: "/admin/atendimento", rotulo: "Atendimento (WhatsApp)", icone: "✉" },
+  { href: "/admin/chat", rotulo: "Chat da equipe", icone: "✆" },
   { href: "/admin/tarefas", rotulo: "Tarefas", icone: "☑" },
   { href: "/admin/ponto", rotulo: "Meu ponto", icone: "◷" },
   { href: "/admin/crm", rotulo: "CRMs dos setores", icone: "⇉" },
@@ -48,6 +49,7 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin": LayoutGrid,
   "/admin/tarefas": ListChecks,
   "/admin/atendimento": MessagesSquare,
+  "/admin/chat": MessageCircle,
   "/admin/atendimento/configurar": ListOrdered,
   "/admin/eu": UserRound,
   "/admin/ponto": Clock,
