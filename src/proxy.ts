@@ -61,7 +61,12 @@ export async function proxy(request: NextRequest) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (user && !escritaLiberadaParaLeitura(pathname, request.method)) {
-      const { data: perfil, error } = await supabase.from("profiles").select("role,equipe_acesso,setores_gestor").eq("user_id", user.id).maybeSingle();
+      const lerPerfil = (colunas: string) => supabase.from("profiles").select(colunas).eq("user_id", user.id).maybeSingle();
+      let r = await lerPerfil("role,equipe_acesso,setores_gestor");
+      // sem a 0165 ainda não existe perfil de leitura: só o papel basta
+      if (r.error?.code === "42703") r = await lerPerfil("role");
+      const { error } = r;
+      const perfil = r.data as { role?: string; equipe_acesso?: string | null; setores_gestor?: string[] | null } | null;
       if (error || !perfil) return NextResponse.json({ error: "Não foi possível conferir as permissões." }, { status: 503 });
       if (somenteLeituraEquipe(perfil)) return NextResponse.json({ error: "Seu acesso é somente de leitura. Peça a alteração à Diretoria." }, { status: 403 });
       if (mfaObrigatoriaEquipe(perfil)) {
