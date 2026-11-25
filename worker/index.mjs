@@ -180,66 +180,56 @@ async function agendarLembretes() {
 // o que ficou parado (lead sem corretor ou sem contato, visita sem relatório,
 // encaminhamento sem aceite, cadastro parado). Chamada direta, sem passar pela
 // fila: é uma função SQL curta e idempotente (cada ocorrência gera uma tarefa só).
-async function rodarCentral() {
+/**
+ * Um passo da rodada: sem a migration (função inexistente) fica quieto; qualquer
+ * outro erro é registrado, mas NÃO interrompe os passos seguintes (auditoria
+ * 25/11: antes, uma falha nos aluguéis parava a cobrança da Matriz, os lembretes
+ * da agenda, os e-mails críticos e as publicações agendadas).
+ */
+async function passoCentral(nome, sql, funcao) {
   try {
-    const { rows: [r] } = await db.query(`select fn_central_automacoes() as r`);
-    // regras dos módulos (0066 em diante); sem a migration, só as da 0065
-    const m = await db.query(`select fn_central_modulos() as r`).catch((e) => {
-      if (e.code === "42883") return { rows: [] };
-      throw e;
-    });
-    const exclusividades = await db.query("select fn_vigencia_exclusividades() + fn_conferir_vigencia_documental() as total").catch(e => {
-      if (e.code === "42883") return {rows:[]};
-      throw e;
-    });
-    const divulgacao = await db.query("select divulgacao_rotinas() as total").catch(e => {
-      if (e.code === "42883" && e.message.includes("divulgacao_rotinas")) return { rows: [] };
-      throw e;
-    });
-    // atendimento por setores (0156): conversa sem resposta no prazo vira tarefa
-    const atendimento = await db.query("select fn_atendimento_regras() as total").catch(e => {
-      if (e.code === "42883" && e.message.includes("fn_atendimento_regras")) return { rows: [] };
-      throw e;
-    });
-    // aluguéis (0157): parcela do mês, atraso, repasse e contrato vencendo
-    const alugueis = await db.query("select fn_alugueis_rotina() as total").catch(e => {
-      if (e.code === "42883" && e.message.includes("fn_alugueis_rotina")) return { rows: [] };
-      throw e;
-    });
-    // Pendências com causa verificável (0166): cria/resolve tarefas, sem decisões externas.
-    await db.query("select fn_matriz_pendencias_origem()").catch(e => {
-      if (!(e.code === "42883" && e.message.includes("fn_matriz_pendencias_origem"))) throw e;
-    });
-    // Regras configuradas pela Diretoria (0168) e lembretes de reunião da agenda (0169).
-    const configuradas = await db.query("select fn_automacoes_configuradas() as r").catch(e => {
-      if (e.code === "42883" && e.message.includes("fn_automacoes_configuradas")) return { rows: [] };
-      throw e;
-    });
-    const lembretes = await db.query("select fn_agenda_lembretes() as r").catch(e => {
-      if (e.code === "42883" && e.message.includes("fn_agenda_lembretes")) return { rows: [] };
-      throw e;
-    });
-    // Matriz (0162): cobrança por níveis a cada rodada; resumo da Ari uma vez por dia (a função se controla)
-    const cobranca = await db.query("select fn_matriz_cobranca() as r").catch(e => {
-      if (e.code === "42883" && e.message.includes("fn_matriz_cobranca")) return { rows: [] };
-      throw e;
-    });
-    await db.query("select fn_matriz_resumo(false)").catch(e => {
-      if (!(e.code === "42883" && e.message.includes("fn_matriz_resumo"))) console.error("[matriz] resumo falhou:", e.message);
-    });
-    const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), ...(cobranca.rows[0]?.r ?? {}), ...(configuradas.rows[0]?.r ?? {}), ...(lembretes.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0, divulgacao: divulgacao.rows[0]?.total ?? 0, atendimento: atendimento.rows[0]?.total ?? 0, alugueis: alugueis.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
-    if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
+    return await db.query(sql);
+  } catch (e) {
+    if (!(e.code === "42883" && e.message.includes(funcao))) console.error(`[central] ${nome} falhou:`, e.message);
+    return { rows: [] };
+  }
+}
+
+async function rodarCentral() {
+  const r = (await passoCentral("automações", "select fn_central_automacoes() as r", "fn_central_automacoes")).rows[0];
+  // regras dos módulos (0066 em diante); sem a migration, só as da 0065
+  const m = await passoCentral("módulos", "select fn_central_modulos() as r", "fn_central_modulos");
+  const exclusividades = await passoCentral("exclusividades", "select fn_vigencia_exclusividades() + fn_conferir_vigencia_documental() as total", "fn_");
+  const divulgacao = await passoCentral("divulgação", "select divulgacao_rotinas() as total", "divulgacao_rotinas");
+  // atendimento por setores (0156/0171): conversa sem resposta no prazo vira tarefa
+  const atendimento = await passoCentral("atendimento", "select fn_atendimento_regras() as total", "fn_atendimento_regras");
+  // aluguéis (0157): parcela do mês, atraso, repasse e contrato vencendo
+  const alugueis = await passoCentral("aluguéis", "select fn_alugueis_rotina() as total", "fn_alugueis_rotina");
+  // Pendências com causa verificável (0166): cria/resolve tarefas, sem decisões externas.
+  await passoCentral("pendências", "select fn_matriz_pendencias_origem()", "fn_matriz_pendencias_origem");
+  // Regras configuradas pela Diretoria (0168) e lembretes de reunião da agenda (0169).
+  const configuradas = await passoCentral("regras configuradas", "select fn_automacoes_configuradas() as r", "fn_automacoes_configuradas");
+  const lembretes = await passoCentral("lembretes da agenda", "select fn_agenda_lembretes() as r", "fn_agenda_lembretes");
+  // Matriz (0162): cobrança por níveis a cada rodada; resumo da Ari uma vez por dia (a função se controla)
+  const cobranca = await passoCentral("cobrança da Matriz", "select fn_matriz_cobranca() as r", "fn_matriz_cobranca");
+  await passoCentral("resumo da Matriz", "select fn_matriz_resumo(false)", "fn_matriz_resumo");
+  const feitos = Object.entries({ ...(r?.r ?? {}), ...(m.rows[0]?.r ?? {}), ...(cobranca.rows[0]?.r ?? {}), ...(configuradas.rows[0]?.r ?? {}), ...(lembretes.rows[0]?.r ?? {}), exclusividades: exclusividades.rows[0]?.total ?? 0, divulgacao: divulgacao.rows[0]?.total ?? 0, atendimento: atendimento.rows[0]?.total ?? 0, alugueis: alugueis.rows[0]?.total ?? 0 }).filter(([, v]) => Number(v) > 0);
+  if (feitos.length) console.log("[central]", feitos.map(([k, v]) => `${k}=${v}`).join(" "));
+  try {
     await emailsCriticos();
-    // publicações agendadas que chegaram na hora (Central de publicação)
-    if (process.env.SITE_URL && process.env.SAUDE_TOKEN) {
+  } catch (e) {
+    console.error("[central] e-mails críticos falharam:", e.message);
+  }
+  // publicações agendadas que chegaram na hora (Central de publicação)
+  if (process.env.SITE_URL && process.env.SAUDE_TOKEN) {
+    try {
       const resposta = await fetch(`${process.env.SITE_URL}/api/interno/publicar`, {
         method: "POST", headers: { "x-saude-token": process.env.SAUDE_TOKEN }, signal: AbortSignal.timeout(120_000),
       });
-      if (!resposta.ok) throw new Error(`Publicações agendadas: HTTP ${resposta.status}`);
+      if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+    } catch (e) {
+      console.error("[central] publicações agendadas falharam:", e.message);
     }
-  } catch (e) {
-    // banco sem a migration 0065: fica quieto até ela rodar
-    if (e.code !== "42883" || !/fn_central_automacoes/.test(e.message)) console.error("[central] falhou:", e.message);
   }
 }
 
