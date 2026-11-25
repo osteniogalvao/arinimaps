@@ -17,6 +17,16 @@ export function validarQuadro(valor: unknown): valor is QuadroExclusividade {
   const dados = valor as Record<string, unknown>;
   return camposQuadro.every(([campo]) => {
     const item = dados[campo];
-    return typeof item === "string" && item.trim().length >= 2 && item.length <= 1500;
+    // Campos opcionais desde 25/11/2026 (áudio do Carlos): o que faltar, a Central completa
+    // na análise com o espelho da matrícula. Em branco ou com pelo menos 2 caracteres.
+    if (typeof item !== "string" || item.length > 1500) return false;
+    const limpo = item.trim();
+    return limpo.length === 0 || limpo.length >= 2;
   });
+}
+
+/** Texto do campo no termo assinado; em branco, fica registrado que a Central completa na análise. */
+export const A_COMPLETAR = "a completar pela Central na análise, com o espelho da matrícula";
+export function textoDoQuadro(valor: string | undefined) {
+  return valor?.trim() || A_COMPLETAR;
 }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { normalizarUnidade } from "@/lib/imovel/unidade";
-import { camposQuadro, validarQuadro } from "@/lib/juridico/quadro-exclusividade";
+import { camposQuadro, textoDoQuadro, validarQuadro } from "@/lib/juridico/quadro-exclusividade";
 import { clausulasDestacadas, prazoExclusividade } from "@/lib/juridico/versoes";
 import { validarDocumento } from "@/lib/br/documentos";
 import { cpfDoPerfil } from "@/lib/seguranca/cripto";
@@ -106,27 +106,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A versão dos documentos mudou. Recarregue a página e confira os termos." }, {status:409});
   }
   let titular: string | null = null;
+  let documentoAssinante = "";
   let municipio: string | null = null;
   if (vigente) {
     if (!validarQuadro(dados.quadro_exclusividade) || !Array.isArray(dados.clausulas_exclusividade) ||
       !clausulasDestacadas.every(([id]) => dados.clausulas_exclusividade.includes(id)) ||
       typeof dados.sem_interessados_anteriores !== "boolean" ||
       (!dados.sem_interessados_anteriores && (typeof dados.interessados_anteriores !== "string" || dados.interessados_anteriores.trim().length < 5 || dados.interessados_anteriores.length > 6000)) ||
-      !(Number.isFinite(dados.valor) && dados.valor > 0) || !String(dados.matricula_numero ?? "").trim() ||
-      !String(dados.matricula_cartorio ?? "").trim() || !dados.municipality_id) {
-      return NextResponse.json({ error: "Complete preço, município, matrícula e cartório, o quadro-resumo, as cláusulas destacadas e o Anexo I." }, {status:400});
+      !(Number.isFinite(dados.valor) && dados.valor > 0) || !dados.municipality_id) {
+      // matrícula, cartório e quadro-resumo ficaram opcionais (Carlos, 25/11/2026)
+      return NextResponse.json({ error: "Complete preço, município, as cláusulas destacadas e o Anexo I." }, {status:400});
     }
     const [perfil, local] = await Promise.all([
       admin.from("profiles").select("nome,cpf_cnpj,cpf_cnpj_cifrado").eq("user_id",user.id).single(),
       admin.from("municipalities").select("nome,uf").eq("id",dados.municipality_id).single(),
     ]);
     if (perfil.error || local.error) return NextResponse.json({error:"Não foi possível conferir o titular e o município."},{status:503});
-    const informado = validarDocumento(dados.quadro_exclusividade.documento);
     const cadastrado = cpfDoPerfil(perfil.data);
+    // CPF/CNPJ em branco no quadro: vale o do cadastro da conta
+    const documentoQuadro = String(dados.quadro_exclusividade.documento ?? "").trim() || cadastrado || "";
+    const informado = validarDocumento(documentoQuadro);
     if (!informado.ok || (cadastrado && cadastrado.replace(/\D/g,"") !== informado.valor)) {
       return NextResponse.json({error:"Confira o CPF ou CNPJ de quem assina pela conta no quadro-resumo e no cadastro."},{status:400});
     }
     titular = perfil.data.nome + " · " + informado.valor;
+    documentoAssinante = informado.valor;
     municipio = local.data.nome + "/" + local.data.uf;
   }
   // Leilão: só leiloeiro ou a equipe cadastram; o documento que sustenta o
@@ -156,8 +160,9 @@ export async function POST(request: Request) {
     }
   }
 
-  // comprovação de propriedade: sem matrícula não entra (a equipe Arini anexa depois)
-  if (!equipe && modalidade === "venda" && !docs.some((d) => d.tipo === "matricula")) {
+  // comprovação de propriedade: o proprietário pode enviar depois ou a equipe Arini anexa na
+  // análise (Carlos, 25/11/2026). O parceiro de rede continua enviando a matrícula com a autorização.
+  if (!equipe && modalidade === "venda" && partner_id && !docs.some((d) => d.tipo === "matricula")) {
     return NextResponse.json(
       { error: "Envie a matrícula do imóvel (ou escritura/contrato registrado) para comprovar a propriedade." },
       { status: 400 }
@@ -363,11 +368,11 @@ export async function POST(request: Request) {
       titulo: "Quadro-resumo da contratação e Anexo I",
       itens: [
         "Signatário autenticado: " + titular, "Imóvel: " + codigo + " · " + dados.titulo,
-        "Matrícula: " + matricula + " · " + dados.matricula_cartorio + " · " + municipio,
+        "Matrícula: " + textoDoQuadro(matricula) + " · " + textoDoQuadro(dados.matricula_cartorio) + " · " + municipio,
         ...(area ? ["Área declarada: " + area + (dados.tipo === "rural" ? " ha" : " m²")] : []),
-        ...camposQuadro.map(([campo, rotulo]) => rotulo + ": " + quadro[campo].trim()),
+        ...camposQuadro.map(([campo, rotulo]) => rotulo + ": " + (campo === "documento" ? documentoAssinante : textoDoQuadro(quadro[campo]))),
         "Preço mínimo: " + preco.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}),
-        "Condições de venda: " + (dados.condicoes_venda?.trim() || quadro.entrada),
+        "Condições de venda: " + (dados.condicoes_venda?.trim() || textoDoQuadro(quadro.entrada)),
         "Prazo: " + prazoExclusividade(meses) + ", de " + dataLocal + " a " + validade.toISOString().slice(0,10),
         "Comissão de 1,9% paga pelo proprietário.",
         "Cláusulas aceitas em destaque: " + clausulasDestacadas.map(([id])=>id).join(", ") + ".",
