@@ -25,10 +25,10 @@ export type Setor = {
   href: string;
   itens: ItemMenu[];
   /**
-   * Telas do dia a dia do setor: viram abas fixas no topo das telas do setor
-   * (o resto vai para "Mais"). Pedido do Carlos em 24/11/2026: o menu estava
-   * "carregado e sortido"; cada setor passa a ser um bloco com poucas abas,
-   * como no CRM da Arini Negócios Imobiliários.
+   * Telas do dia a dia do setor: aparecem primeiro, nesta ordem, na lista do
+   * setor no menu lateral (como no CRM da Arini Negócios Imobiliários, onde
+   * cada setor é uma lista simples de telas). Áudios do Carlos de 24 e
+   * 25/11/2026.
    */
   principais: string[];
 };
