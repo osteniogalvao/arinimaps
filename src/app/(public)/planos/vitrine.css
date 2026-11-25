@@ -43,7 +43,7 @@
   & .escolher { color:white; background:#bc0909; border-color:#bc0909; box-shadow:0 0 0 4px rgb(216 11 11 / 18%); }
 }
 .vitrine-card:has(:focus-visible) { outline:3px solid #b69642; outline-offset:2px; }
-.vitrine-comparativo { max-width:100%; overflow:auto; border:1px solid var(--color-linha,#dddbcf); border-radius:14px; }
+.vitrine-comparativo { position:relative; max-width:100%; overflow:auto; border:1px solid var(--color-linha,#dddbcf); border-radius:14px; }
 .vitrine-comparativo table { width:100%; border-collapse:collapse; font-size:.91rem; }
 .vitrine-comparativo td,.vitrine-comparativo th { text-align:left; padding:.7rem 1rem; border-bottom:1px solid var(--color-linha,#dddbcf); }
 .vitrine-comparativo thead { background:#124431; color:white; }
@@ -97,3 +97,57 @@
   letter-spacing:.01em;
   text-transform:uppercase;
 }
+/* Planos para proprietários (modelos do Carlos, 25/11/2026) */
+.vitrine-tipo { display:inline-flex; gap:.25rem; padding:.25rem; border:1px solid var(--linha); border-radius:999px; background:var(--superficie-2); }
+.vitrine-tipo a { padding:.55rem 1.1rem; border-radius:999px; font-weight:700; font-size:.92rem; color:var(--texto-2); min-height:40px; display:inline-flex; align-items:center; }
+.vitrine-tipo a[aria-current=page] { background:#124431; color:#f2f2ec; }
+.vitrine-rotulo { color:#998c54; font-size:.82rem; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
+.vitrine-comecar { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); gap:1rem; list-style:none; padding:0; }
+.vitrine-comecar li { display:flex; flex-direction:column; gap:.4rem; background:#fff; border:1px solid #dddbcf; border-radius:18px; padding:1.1rem 1.25rem; color:#124431; }
+.vitrine-comecar li[data-principal] { background:#124431; border-color:#124431; color:#f2f2ec; }
+.vitrine-comecar .numero { display:grid; place-items:center; width:1.8rem; height:1.8rem; border-radius:999px; border:1.5px solid currentColor; font-weight:800; font-size:.85rem; }
+.vitrine-comecar li[data-principal] .numero { background:#d9bd6f; border-color:#d9bd6f; color:#124431; }
+.vitrine-comecar .titulo { font-weight:800; font-size:1.1rem; margin-top:.3rem; }
+.vitrine-comecar .texto { font-size:.9rem; opacity:.85; line-height:1.45; flex:1; }
+.vitrine-comecar .acao { display:inline-flex; align-items:center; gap:.35rem; font-weight:700; font-size:.9rem; min-height:40px; }
+.vitrine-comecar li[data-principal] .acao { color:#ffe299; }
+.vitrine-chamada { font-size:.72rem; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:#998c54; display:flex; gap:.5rem; align-items:center; }
+.vitrine-chamada span, .vitrine-breve { font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; font-weight:800; background:#f3e6bd; color:#6b5a1d; padding:.12rem .45rem; border-radius:999px; }
+.vitrine-selo { position:absolute; top:-.75rem; left:50%; transform:translateX(-50%); background:#d9bd6f; color:#124431; font-size:.68rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; padding:.25rem .7rem; border-radius:999px; white-space:nowrap; }
+.vitrine-card[data-destaque] { border-color:#d9bd6f; box-shadow:0 0 0 1px #d9bd6f; }
+.vitrine-frase { font-weight:800; font-size:1rem; line-height:1.35; }
+.vitrine-base { font-size:.85rem; font-weight:700; margin-top:.2rem; }
+.vitrine-em-breve { background:#f7f6f0; border-style:dashed; }
+.vitrine-em-breve .valor { font-size:1.6rem; }
+.vitrine-vender { background:#0a2219; color:#f2f2ec; border-radius:24px; padding:clamp(1.4rem,4vw,3rem); display:grid; gap:1.25rem; }
+.vitrine-vender h2 { font-family:var(--fonte-planos); font-weight:700; text-transform:uppercase; font-size:clamp(2rem,4.2vw,3.4rem); line-height:1.02; color:#f2f2ec; }
+.vitrine-vender .intro { max-width:42rem; color:#dde5df; line-height:1.55; }
+.vitrine-vender .recursos { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); gap:.8rem; list-style:none; padding:0; }
+.vitrine-vender .recursos li { display:flex; flex-direction:column; gap:.3rem; background:#124431; border-radius:14px; padding:1rem 1.1rem; }
+.vitrine-vender .recursos strong { color:#ffe299; }
+.vitrine-vender .recursos span { font-size:.88rem; color:#d8e4dc; line-height:1.45; }
+.vitrine-vender .vigencia { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr)); gap:1rem; }
+.vitrine-vender .vigencia > div { background:#124431; border-radius:16px; padding:1.2rem 1.3rem; display:grid; gap:.6rem; align-content:start; line-height:1.5; }
+.vitrine-vender .vigencia .termina { background:#f7f6f0; color:#124431; }
+.vitrine-vender .termina .vitrine-sobretitulo { color:#998c54; }
+.vitrine-vender .colunas { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr)); gap:1rem; font-size:.9rem; }
+.vitrine-vender .colunas ul { list-style:none; padding:0; display:grid; gap:.35rem; margin-top:.4rem; }
+.vitrine-vender .colunas li { display:flex; gap:.4rem; align-items:flex-start; }
+.vitrine-vender .colunas li svg { flex-shrink:0; margin-top:.2rem; }
+.vitrine-btn-vermelho { justify-self:start; background:#bc0909; color:#fff; border-color:#bc0909; }
+.vitrine-etapas { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr)); gap:.8rem; list-style:none; padding:0; }
+.vitrine-etapas li { background:#fff; border:1px solid #dddbcf; border-radius:14px; padding:1rem; display:grid; gap:.3rem; align-content:start; }
+.vitrine-etapas li[data-ultima] { background:#fbf4dc; border-color:#d9bd6f; }
+.vitrine-etapas .barras { display:flex; gap:.25rem; }
+.vitrine-etapas .barras i { width:1.4rem; height:.3rem; border-radius:9px; background:#dddbcf; }
+.vitrine-etapas .barras i[data-cheia] { background:#124431; }
+.vitrine-etapas .plano { font-size:.7rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#998c54; }
+.vitrine-cuidados { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr)); gap:1rem; }
+.vitrine-cuidados .nivel { background:#124431; color:#f2f2ec; border-radius:18px; padding:1.3rem; display:grid; gap:.5rem; align-content:start; }
+.vitrine-cuidados .nivel .valor { font-family:var(--fonte-planos); font-size:3rem; font-weight:700; line-height:1; color:#ffe299; }
+.vitrine-cuidados .barra { display:block; height:.45rem; border-radius:9px; background:rgb(255 255 255 / 15%); overflow:hidden; }
+.vitrine-cuidados .barra i { display:block; height:100%; background:#d9bd6f; }
+.vitrine-comparativo tr.grupo th { background:#eef0e6; color:#124431; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; font-weight:800; }
+.vitrine-comparativo td.marca { text-align:center; color:var(--texto-2); }
+.vitrine-comparativo td.marca svg { display:inline; }
+.vitrine-comparativo thead th:not(:first-child) { text-align:center; }

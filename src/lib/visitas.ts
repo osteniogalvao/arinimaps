@@ -16,7 +16,24 @@ export type RelatorioVisita = {
   proximo_passo: string;
   resumo_proprietario: string;
   compartilhar: boolean;
+  /** O que chamou atenção e o que não chamou (placar das visitas, painel do anunciante de 25/11/2026). */
+  atrai?: string[];
+  pesa?: string[];
 };
+
+/** Opções marcadas pelo corretor. Lista fixa para o placar somar visitas iguais. */
+export const ATRAI_OPCOES = [
+  "Localização", "Acesso", "Água / nascente", "Pastagem formada", "Solo", "Benfeitorias", "Topografia",
+  "Acabamento", "Tamanho", "Iluminação e ventilação", "Vaga de garagem", "Área de lazer", "Vizinhança", "Documentação em dia",
+] as const;
+export const PESA_OPCOES = [
+  "Valor pedido", "Forma de pagamento", "Acesso", "Distância da cidade", "Estado das cercas", "Curral", "Benfeitorias",
+  "Estado de conservação", "Tamanho", "Barulho", "Condomínio ou IPTU", "Documentação",
+] as const;
+
+function marcados(v: unknown, opcoes: readonly string[]) {
+  return Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && opcoes.includes(x)))].slice(0, 8) : [];
+}
 
 export const VALOR_PERCEBIDO_LABEL: Record<RelatorioVisita["valor_percebido"], string> = {
   abaixo: "Achou o preço abaixo do que vale",
@@ -52,9 +69,11 @@ export function validarRelatorio(bruto: unknown): { relatorio: RelatorioVisita }
     proximo_passo: corta(b.proximo_passo, 600),
     resumo_proprietario: corta(b.resumo_proprietario, 1500),
     compartilhar: b.compartilhar !== false,
+    atrai: marcados(b.atrai, ATRAI_OPCOES),
+    pesa: marcados(b.pesa, PESA_OPCOES),
   };
   if (relatorio.proximo_passo.length < 3) return { erro: "Diga qual é o próximo passo com esse interessado." };
-  if (!relatorio.pontos_positivos && !relatorio.objecoes) {
+  if (!relatorio.pontos_positivos && !relatorio.objecoes && !relatorio.atrai?.length && !relatorio.pesa?.length) {
     return { erro: "Conte o que o interessado gostou ou o que o fez hesitar." };
   }
   return { relatorio };
@@ -65,6 +84,8 @@ export function relatorioParaProprietario(r: RelatorioVisita | null | undefined)
   if (!r || !r.compartilhar) return null;
   const partes = [
     `Interesse ${r.interesse}/5`,
+    r.atrai?.length && `Chamou atenção: ${r.atrai.join(", ")}`,
+    r.pesa?.length && `Não chamou atenção: ${r.pesa.join(", ")}`,
     r.pontos_positivos && `Gostou: ${r.pontos_positivos}`,
     r.objecoes && `Pontos de atenção: ${r.objecoes}`,
     r.valor_percebido !== "nao_informou" && VALOR_PERCEBIDO_LABEL[r.valor_percebido],
@@ -77,4 +98,20 @@ export function relatorioParaProprietario(r: RelatorioVisita | null | undefined)
 /** Resumo de uma linha para a Central. */
 export function resumoRelatorio(r: RelatorioVisita): string {
   return `interesse ${r.interesse}/5, chance ${PROBABILIDADE_LABEL[r.probabilidade].toLowerCase()}; próximo passo: ${r.proximo_passo}`;
+}
+
+export type RelatorioCompartilhado = { quando: string; interessado: string; relatorio: RelatorioVisita };
+
+/**
+ * Placar das visitas: em quantas visitas cada ponto foi citado e a nota de
+ * interesse de cada uma, da mais antiga à mais recente. Só relatórios compartilhados.
+ */
+export function placarDasVisitas(lista: RelatorioCompartilhado[]) {
+  const ordenada = [...lista].sort((a, b) => +new Date(a.quando) - +new Date(b.quando));
+  const conta = (campo: "atrai" | "pesa") => {
+    const m = new Map<string, number>();
+    for (const { relatorio } of ordenada) for (const t of relatorio[campo] ?? []) m.set(t, (m.get(t) ?? 0) + 1);
+    return [...m].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  };
+  return { total: ordenada.length, atrai: conta("atrai"), pesa: conta("pesa"), notas: ordenada.map((r) => r.relatorio.interesse) };
 }
