@@ -5,20 +5,21 @@ import { ator, temSetor, type Ator } from "@/lib/authz";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { registrarEventoImovel } from "@/lib/imovel/eventos";
 import { recusaPorArmazenamento } from "@/lib/armazenamento";
+import { VIDEO_MAX_MB } from "@/lib/midia/limites";
 
 /**
  * Vídeos do imóvel enviados pelo anunciante.
  *
  * O arquivo NÃO passa pelo servidor do site: a rota entrega uma autorização de
  * envio de uso único e o navegador manda o vídeo direto para o armazenamento.
- * Vídeo de 50 MB atravessando o servidor ocuparia memória e conexão à toa — e
+ * Vídeo grande atravessando o servidor ocuparia memória e conexão à toa — e
  * a VPS é pequena.
  *
- * 50 MB é o teto de arquivo do plano atual do armazenamento; cabe 1 a 2
- * minutos de vídeo de celular em 1080p. Para vídeos maiores, o plano do
- * armazenamento precisa subir.
+ * Limite de 500 MB por vídeo (pedido do Stenio, 24/11/2026). O limite de envio
+ * do Supabase Storage (Settings > Storage > Upload file size limit) precisa
+ * estar em 500 MB ou mais, senão o armazenamento recusa o arquivo.
  */
-const MAX_BYTES = 50 * 1024 * 1024;
+const MAX_BYTES = VIDEO_MAX_MB * 1024 * 1024;
 const MAX_VIDEOS = 3;
 const TIPOS: Record<string, string> = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
 
@@ -45,7 +46,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/imoveis/[id
   const tamanho = Number(b.tamanho);
   if (!Number.isFinite(tamanho) || tamanho <= 0 || tamanho > MAX_BYTES) {
     return NextResponse.json({
-      error: `O vídeo tem ${(tamanho / 1048576).toFixed(0)} MB e o limite é 50 MB. Grave em 1080p ou corte o vídeo em partes de até 1 a 2 minutos.`,
+      error: `O vídeo tem ${(tamanho / 1048576).toFixed(0)} MB e o limite é ${VIDEO_MAX_MB} MB. Grave em 1080p ou corte o vídeo em partes.`,
     }, { status: 400 });
   }
 

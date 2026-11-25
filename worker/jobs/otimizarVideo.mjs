@@ -1,6 +1,6 @@
 // Otimiza o vídeo que o anunciante enviou (08/10/2026).
 //
-// O vídeo chega como sai do celular: 1080p ou 4K, 30–60 MB, muitas vezes HEVC
+// O vídeo chega como sai do celular: 1080p ou 4K, até 500 MB, muitas vezes HEVC
 // em .mov (iPhone) — que o Chrome e o Android não tocam. Aqui ele vira MP4
 // H.264 720p, áudio AAC, "faststart" (começa a tocar antes de baixar tudo):
 // toca em qualquer aparelho e pesa 4 a 6 vezes menos para quem assiste no 4G.
@@ -9,7 +9,10 @@
 // O original só é apagado depois que o otimizado subiu e o registro foi
 // trocado; se algo falhar no meio, o anúncio continua com o vídeo original.
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
@@ -33,10 +36,13 @@ export async function otimizarVideo(payload, db) {
   const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const pasta = await mkdtemp(join(tmpdir(), "video-"));
   try {
-    const { data, error } = await supa.storage.from("media").download(m.storage_path);
-    if (error) throw new Error(`baixar original: ${error.message}`);
+    // baixa direto para o disco: vídeo de até 500 MB não cabe bem na memória do worker
+    const { data: link, error } = await supa.storage.from("media").createSignedUrl(m.storage_path, 3600);
+    if (error || !link) throw new Error(`baixar original: ${error?.message ?? "sem link"}`);
+    const resp = await fetch(link.signedUrl);
+    if (!resp.ok || !resp.body) throw new Error(`baixar original: HTTP ${resp.status}`);
     const entrada = join(pasta, "original");
-    await writeFile(entrada, Buffer.from(await data.arrayBuffer()));
+    await pipeline(Readable.fromWeb(resp.body), createWriteStream(entrada));
 
     const saida = join(pasta, "otimizado.mp4");
     await rodar([
@@ -69,7 +75,7 @@ export async function otimizarVideo(payload, db) {
 
     await db.query(`update property_media set storage_path = $2 where id = $1`, [m.id, novo]);
     await supa.storage.from("media").remove([m.storage_path]);
-    const antes = data.size, depois = (await readFile(saida)).length;
+    const antes = (await stat(entrada)).size, depois = (await readFile(saida)).length;
     console.log(`[video] ${m.id}: ${(antes / 1e6).toFixed(1)} MB → ${(depois / 1e6).toFixed(1)} MB`);
   } finally {
     await rm(pasta, { recursive: true, force: true });

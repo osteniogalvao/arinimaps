@@ -59,7 +59,7 @@ export default function VideosImovel({ propertyId, videos }: { propertyId: strin
         </label>
       )}
       <p className="text-sm text-texto-2">
-        Até 3 vídeos por imóvel, {VIDEO_MAX_MB} MB cada (MP4, MOV ou WebM) — de 1 a 2 minutos em 1080p.
+        Até 3 vídeos por imóvel, {VIDEO_MAX_MB} MB cada (MP4, MOV ou WebM).
       </p>
       {erro && <p className="text-sm text-critico">{erro}</p>}
     </div>

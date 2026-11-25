@@ -296,7 +296,7 @@ export default function NovoImovel() {
     }
     const videoGrande = videos.find((v) => v.size > VIDEO_MAX_MB * 1024 * 1024);
     if (videoGrande) {
-      setErro(`O vídeo ${videoGrande.name} passa de ${VIDEO_MAX_MB} MB. Corte ou grave em 1080p.`);
+      setErro(`O vídeo ${videoGrande.name} passa de ${VIDEO_MAX_MB} MB. Corte o vídeo ou grave em 1080p.`);
       return;
     }
     const grande = Object.values(docs).flat().find((f) => f.size > MAX_DOC);
@@ -674,7 +674,7 @@ export default function NovoImovel() {
           <p className={ajuda}>
             {videos.length
               ? `${videos.length} vídeo(s): ${videos.map((v) => `${v.name} (${(v.size / 1048576).toFixed(0)} MB)`).join(", ")}`
-              : `MP4, MOV ou WebM, até ${VIDEO_MAX_MB} MB cada — de 1 a 2 minutos em 1080p.`}
+              : `MP4, MOV ou WebM, até ${VIDEO_MAX_MB} MB cada.`}
           </p>
         </div>
 
