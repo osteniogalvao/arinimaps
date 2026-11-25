@@ -26,21 +26,35 @@ import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
 import Sino from "@/components/admin/Sino";
 import { SETORES, type ItemMenu, type SetorId } from "@/lib/setores";
+import AbasSetor from "@/components/admin/AbasSetor";
 import Avatar from "@/components/shell/Avatar";
 import { useNaoLidosSuporte } from "@/components/suporte/useNaoLidos";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
-/** Itens que todo membro da equipe tem, qualquer que seja o setor. */
+/**
+ * "Meu dia": o que todo membro da equipe usa todo dia, qualquer que seja o
+ * setor. Curto de propósito (áudio do Carlos, 24/11/2026: "muito carregado,
+ * muito sortido"). Os setores aparecem abaixo, uma linha cada; as telas de
+ * cada setor viram abas no topo da página do setor.
+ */
 const GERAL: ItemMenu[] = [
-  { href: "/admin", rotulo: "Matriz", icone: "◈" },
-  { href: "/admin/eu", rotulo: "Meu painel", icone: "☺" },
-  { href: "/admin/atendimento", rotulo: "Atendimento (WhatsApp)", icone: "✉" },
-  { href: "/admin/chat", rotulo: "Chat da equipe", icone: "✆" },
+  { href: "/admin", rotulo: "Início", icone: "◈" },
+  { href: "/admin/atendimento", rotulo: "Atendimento", icone: "✉" },
+  { href: "/admin/agenda-setores", rotulo: "Agenda compartilhada", icone: "◷" },
   { href: "/admin/tarefas", rotulo: "Tarefas", icone: "☑" },
+  { href: "/admin/chat", rotulo: "Chat da equipe", icone: "✆" },
+];
+
+/** Atalhos de uso menos frequente: ficam recolhidos em "Mais". */
+const GERAL_MAIS: ItemMenu[] = [
+  { href: "/admin/eu", rotulo: "Meu painel", icone: "☺" },
   { href: "/admin/ponto", rotulo: "Meu ponto", icone: "◷" },
-  { href: "/admin/crm", rotulo: "CRMs dos setores", icone: "⇉" },
+  { href: "/admin/crm", rotulo: "Todos os funis", icone: "⇉" },
   { href: "/admin/equipe", rotulo: "Equipe e funções", icone: "☺" },
 ];
+
+/** Página de entrada (mesa) de cada setor. */
+const mesaDoSetor = (id: SetorId) => `/admin/setor/${id}`;
 
 /**
  * Ícone de cada tela. O registro de setores (lib/setores) guarda um glifo de
@@ -55,6 +69,7 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/eu": UserRound,
   "/admin/ponto": Clock,
   "/admin/crm": Kanban,
+  "/admin/agenda-setores": CalendarDays,
   "/admin/equipe": Contact,
   "/admin/ponto/equipe": CalendarClock,
   "/admin/capacidade": Gauge,
@@ -154,18 +169,22 @@ export default function AdminShell({
     router.push("/entrar");
     router.refresh();
   }
-  // grupos recolhidos pela pessoa (o grupo da tela atual nunca some)
-  const [recolhidos, setRecolhidos] = useState<Record<string, boolean>>({});
+  // "Mais" do menu geral fica fechado até a pessoa abrir (ou estar numa dessas telas)
+  const [maisAberto, setMaisAberto] = useState(false);
   // 10.2: selo de chamados esperando a equipe (só para quem atua no Suporte)
   const naoLidos = useNaoLidosSuporte(setores.includes("suporte"));
   const selo: Record<string, number> = { "/admin/suporte": naoLidos };
   // "/admin" só fica ativo na raiz; os demais casam por prefixo
-  const ativo = (href: string) => (href === "/admin" ? caminho === "/admin" : caminho.startsWith(href));
+  const ativo = (href: string) => (href === "/admin" ? caminho === "/admin" : caminho === href || caminho.startsWith(href + "/"));
 
   // o menu mostra só os setores do membro; a trava de verdade é no servidor
+  const meusSetores = SETORES.filter((st) => setores.includes(st.id));
   const GRUPOS: Grupo[] = [
-    { id: "geral", titulo: "Geral", itens: GERAL },
-    ...SETORES.filter((st) => setores.includes(st.id)).map((st) => ({ id: st.id, titulo: st.nome, itens: st.itens })),
+    { id: "geral", titulo: "Meu dia", itens: [...GERAL, ...GERAL_MAIS] },
+    ...meusSetores.map((st) => ({
+      id: st.id, titulo: st.nome,
+      itens: [{ href: mesaDoSetor(st.id), rotulo: "Visão geral do setor", icone: st.icone }, ...st.itens],
+    })),
   ];
   // o item mais específico vence: "/admin/juridico/lgpd" não acende "/admin/juridico"
   const todos = GRUPOS.flatMap((g) => g.itens);
@@ -173,60 +192,58 @@ export default function AdminShell({
     .filter((i) => ativo(i.href))
     .sort((x, y) => y.href.length - x.href.length)[0];
   const aceso = (href: string) => maisEspecifico?.href === href;
+  // setor da tela atual: o primeiro setor do membro que tem a tela (telas
+  // compartilhadas, como Tags e pixels, ficam no primeiro da lista)
   const grupoAtual = GRUPOS.find((g) => g.itens.some((i) => i.href === maisEspecifico?.href));
+  const setorAtual = grupoAtual && grupoAtual.id !== "geral" ? meusSetores.find((st) => st.id === grupoAtual.id) ?? null : null;
 
   const titulo = maisEspecifico?.rotulo ?? "Central Arini";
-  const TituloIcone = (maisEspecifico && ICONE_ITEM[maisEspecifico.href]) || LayoutGrid;
+  const TituloIcone = (maisEspecifico && (ICONE_ITEM[maisEspecifico.href] ?? (setorAtual && aceso(mesaDoSetor(setorAtual.id)) ? ICONE_SETOR[setorAtual.id] : undefined))) || LayoutGrid;
+  const mostrarMais = maisAberto || GERAL_MAIS.some((i) => aceso(i.href));
+
+  const linkMenu = (i: ItemMenu, chave: string, Icone: LucideIcon, ligado: boolean, contagem = 0) => (
+    <Link key={chave} href={i.href} onClick={() => setAberto(false)}
+      aria-current={ligado ? "page" : undefined}
+      className={
+        "relative flex items-center gap-3 rounded-full px-3.5 py-2 text-[0.92rem] transition-colors " +
+        (ligado
+          ? "bg-texto/12 text-texto font-semibold"
+          : "text-texto-2 font-medium hover:text-texto hover:bg-texto/8")
+      }>
+      {ligado && <span className="absolute left-1.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-ouro" aria-hidden />}
+      <Icone className={"size-[18px] shrink-0 " + (ligado ? "text-ouro" : "")} />
+      <span className="truncate">{i.rotulo}</span>
+      {contagem > 0 && (
+        <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-ouro text-[#124431] text-[10px] font-bold grid place-items-center tabular-nums"
+          title="Chamados com mensagem nova do cliente">
+          {contagem > 99 ? "99+" : contagem}
+        </span>
+      )}
+    </Link>
+  );
+  const tituloBloco = (texto: string) => (
+    <p className="px-3 pt-4 pb-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-texto-2">{texto}</p>
+  );
 
   const navegacao = (
     <div className="space-y-1">
-      {GRUPOS.map((g) => {
-        const temAtivo = g.id === grupoAtual?.id;
-        const fechado = !!recolhidos[g.id] && !temAtivo;
-        const IconeGrupo = ICONE_SETOR[g.id];
-        const pendencias = g.itens.reduce((s, i) => s + (selo[i.href] ?? 0), 0);
-        return (
-          <div key={g.id} className="pb-1">
-            <button type="button" aria-expanded={!fechado}
-              onClick={() => setRecolhidos((r) => ({ ...r, [g.id]: !r[g.id] }))}
-              className={"flex w-full items-center gap-2.5 rounded-lg px-3 pt-4 pb-1.5 text-left text-[11px] font-bold uppercase tracking-[0.22em] transition-colors " +
-                (temAtivo ? "text-ouro" : "text-texto-2 hover:text-texto")}>
-              <IconeGrupo className="size-3.5 shrink-0" />
-              <span className="flex-1 truncate">{g.titulo}</span>
-              {fechado && pendencias > 0 && <span className="size-2 rounded-full bg-ouro" aria-label="Há pendências" />}
-              {fechado ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-            </button>
-            {!fechado && (
-              <div className="mt-0.5 space-y-0.5">
-                {g.itens.map((i) => {
-                  const Icone = ICONE_ITEM[i.href] ?? Circle;
-                  const ligado = aceso(i.href);
-                  return (
-                    <Link key={g.id + i.href} href={i.href} onClick={() => setAberto(false)}
-                      aria-current={ligado ? "page" : undefined}
-                      className={
-                        "relative flex items-center gap-3 rounded-full px-3.5 py-2 text-[0.92rem] transition-colors " +
-                        (ligado
-                          ? "bg-texto/12 text-texto font-semibold"
-                          : "text-texto-2 font-medium hover:text-texto hover:bg-texto/8")
-                      }>
-                      {ligado && <span className="absolute left-1.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-ouro" aria-hidden />}
-                      <Icone className={"size-[18px] shrink-0 " + (ligado ? "text-ouro" : "")} />
-                      <span className="truncate">{i.rotulo}</span>
-                      {!!selo[i.href] && (
-                        <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-ouro text-[#124431] text-[10px] font-bold grid place-items-center tabular-nums"
-                          title="Chamados com mensagem nova do cliente">
-                          {selo[i.href] > 99 ? "99+" : selo[i.href]}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {tituloBloco("Meu dia")}
+      <div className="space-y-0.5">
+        {GERAL.map((i) => linkMenu(i, "g" + i.href, ICONE_ITEM[i.href] ?? Circle, aceso(i.href)))}
+        <button type="button" aria-expanded={mostrarMais} onClick={() => setMaisAberto((v) => !v)}
+          className="flex w-full items-center gap-3 rounded-full px-3.5 py-2 text-left text-[0.92rem] font-medium text-texto-2 transition-colors hover:bg-texto/8 hover:text-texto">
+          {mostrarMais ? <ChevronDown className="size-[18px] shrink-0" /> : <ChevronRight className="size-[18px] shrink-0" />}
+          <span>{mostrarMais ? "Menos" : "Mais"}</span>
+        </button>
+        {mostrarMais && GERAL_MAIS.map((i) => linkMenu(i, "m" + i.href, ICONE_ITEM[i.href] ?? Circle, aceso(i.href)))}
+      </div>
+      {meusSetores.length > 0 && tituloBloco(meusSetores.length === 1 ? "Meu setor" : "Setores")}
+      <div className="space-y-0.5">
+        {meusSetores.map((st) => {
+          const contagem = st.itens.reduce((n, i) => n + (selo[i.href] ?? 0), 0);
+          return linkMenu({ href: mesaDoSetor(st.id), rotulo: st.nome, icone: st.icone }, "s" + st.id, ICONE_SETOR[st.id], setorAtual?.id === st.id, contagem);
+        })}
+      </div>
     </div>
   );
 
@@ -336,6 +353,14 @@ export default function AdminShell({
           </div>
         </header>
         <main className="flex-1 min-w-0">
+          {setorAtual && (
+            <AbasSetor
+              setor={setorAtual}
+              mesa={mesaDoSetor(setorAtual.id)}
+              aceso={aceso}
+              selo={selo}
+            />
+          )}
           <div className="mx-auto w-full max-w-[1280px] px-5 py-8 md:px-8 md:py-10">{children}</div>
         </main>
       </div>

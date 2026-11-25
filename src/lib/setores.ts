@@ -24,23 +24,32 @@ export type Setor = {
   /** página inicial do setor */
   href: string;
   itens: ItemMenu[];
+  /**
+   * Telas do dia a dia do setor: viram abas fixas no topo das telas do setor
+   * (o resto vai para "Mais"). Pedido do Carlos em 24/11/2026: o menu estava
+   * "carregado e sortido"; cada setor passa a ser um bloco com poucas abas,
+   * como no CRM da Arini Negócios Imobiliários.
+   */
+  principais: string[];
 };
 
 export const SETORES: Setor[] = [
   {
     id: "operacoes", nome: "Operações", icone: "▦", href: "/admin/operacoes",
+    principais: ["/admin/operacoes", "/admin/imoveis", "/admin/cadastros"],
     descricao: "Análise de anúncios, conferência de documentos e aprovação de cadastros.",
     itens: [
-      { href: "/admin/operacoes", rotulo: "Painel do setor", icone: "◫" },
+      { href: "/admin/operacoes", rotulo: "Indicadores", icone: "◫" },
       { href: "/admin/imoveis", rotulo: "Imóveis", icone: "▦" },
       { href: "/admin/cadastros", rotulo: "Cadastros", icone: "✓" },
     ],
   },
   {
     id: "comercial", nome: "Comercial", icone: "⇉", href: "/admin/comercial",
+    principais: ["/admin/funil", "/admin/leads", "/admin/agenda", "/admin/clientes"],
     descricao: "Leads, funil de negociação, visitas, propostas e parceiros.",
     itens: [
-      { href: "/admin/comercial", rotulo: "Painel do setor", icone: "◫" },
+      { href: "/admin/comercial", rotulo: "Indicadores", icone: "◫" },
       { href: "/admin/funil", rotulo: "Funil comercial", icone: "⇉" },
       { href: "/admin/empreendimentos", rotulo: "Espelho de vendas", icone: "▦" },
       { href: "/admin/leads", rotulo: "Leads", icone: "◎" },
@@ -56,9 +65,10 @@ export const SETORES: Setor[] = [
   },
   {
     id: "financeiro", nome: "Financeiro", icone: "$", href: "/admin/financeiro",
+    principais: ["/admin/financeiro", "/admin/comissoes", "/admin/mensalidades", "/admin/financeiro/caixa", "/admin/financeiro/alugueis"],
     descricao: "Comissões, mensalidades, faturas e receita por mês.",
     itens: [
-      { href: "/admin/financeiro", rotulo: "Painel do setor", icone: "◫" },
+      { href: "/admin/financeiro", rotulo: "Indicadores", icone: "◫" },
       { href: "/admin/comissoes", rotulo: "Comissões", icone: "％" },
       { href: "/admin/mensalidades", rotulo: "Mensalidades", icone: "$" },
       { href: "/admin/financeiro/caixa", rotulo: "Caixa e contas", icone: "$" },
@@ -75,18 +85,20 @@ export const SETORES: Setor[] = [
   },
   {
     id: "juridico", nome: "Jurídico", icone: "⚖", href: "/admin/juridico",
+    principais: ["/admin/juridico", "/admin/juridico/lgpd", "/admin/registros/contratos-locacao"],
     descricao: "Termos e aceites, autorizações de venda, contratos e pedidos de titulares (LGPD).",
     itens: [
-      { href: "/admin/juridico", rotulo: "Painel do setor", icone: "◫" },
+      { href: "/admin/juridico", rotulo: "Indicadores", icone: "◫" },
       { href: "/admin/juridico/lgpd", rotulo: "Pedidos LGPD", icone: "⛨" },
       { href: "/admin/registros/contratos-locacao", rotulo: "Contratos de locação", icone: "⌂" },
     ],
   },
   {
     id: "marketing", nome: "Marketing · Produção", icone: "✦", href: "/admin/marketing",
+    principais: ["/admin/marketing", "/admin/marketing/fluxo", "/admin/registros/publicacoes", "/admin/marketing/comunicados"],
     descricao: "Origem dos leads, imóveis mais procurados, materiais de divulgação e vitrine do site.",
     itens: [
-      { href: "/admin/marketing", rotulo: "Painel do setor", icone: "◫" },
+      { href: "/admin/marketing", rotulo: "Indicadores", icone: "◫" },
       { href: "/admin/marketing/fluxo", rotulo: "Imóveis para divulgar", icone: "⇢" },
       { href: "/admin/marketing/comunicados", rotulo: "Comunicados da Matriz", icone: "✉" },
       { href: "/admin/marketing/divulgadores", rotulo: "Programa de divulgadores", icone: "◫" },
@@ -98,6 +110,7 @@ export const SETORES: Setor[] = [
   },
   {
     id: "marketing_trafego", nome: "Marketing · Tráfego", icone: "◢", href: "/admin/marketing/trafego",
+    principais: ["/admin/marketing/trafego", "/admin/registros/campanhas", "/admin/marketing/tags"],
     descricao: "Planejamento de campanhas, investimento, conversão e resultados.",
     itens: [
       { href: "/admin/marketing/trafego", rotulo: "Tráfego e resultados", icone: "◢" },
@@ -107,6 +120,7 @@ export const SETORES: Setor[] = [
   },
   {
     id: "cartografia", nome: "Cartografia e dados", icone: "🗺", href: "/admin/cartografia",
+    principais: ["/admin/cartografia", "/admin/cartografia/solicitacoes", "/admin/regioes", "/admin/car"],
     descricao: "Plantas urbanas, malha do CAR, municípios e fontes oficiais.",
     itens: [
       { href: "/admin/cartografia", rotulo: "Cartografia", icone: "🗺" },
@@ -118,6 +132,7 @@ export const SETORES: Setor[] = [
   },
   {
     id: "suporte", nome: "Suporte", icone: "☏", href: "/admin/suporte",
+    principais: ["/admin/suporte"],
     descricao: "Chamados de usuários e visitantes, com histórico da conversa.",
     itens: [
       { href: "/admin/suporte", rotulo: "Chamados", icone: "☏" },
@@ -125,6 +140,7 @@ export const SETORES: Setor[] = [
   },
   {
     id: "seguranca", nome: "Segurança", icone: "⛨", href: "/admin/seguranca",
+    principais: ["/admin/seguranca", "/admin/seguranca/revisao", "/admin/auditoria"],
     descricao: "Acessos, tentativas de login, segundo fator e trilha de auditoria.",
     itens: [
       { href: "/admin/seguranca", rotulo: "Acessos e eventos", icone: "⛨" },
@@ -134,6 +150,7 @@ export const SETORES: Setor[] = [
   },
   {
     id: "diretoria", nome: "Diretoria", icone: "◈", href: "/admin/relatorios",
+    principais: ["/admin/relatorios", "/admin/usuarios", "/admin/atendimento/configurar", "/admin/automacoes"],
     descricao: "Indicadores gerais, equipe, regras comerciais e configurações do sistema.",
     itens: [
       { href: "/admin/relatorios", rotulo: "Relatórios", icone: "▤" },
