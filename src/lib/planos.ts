@@ -24,7 +24,7 @@ export type RecursoId =
   | "solicitacao_cartografica" | "calculadora_insumos" | "comparador_insumos"
   | "camadas_oficiais" | "consulta_area" | "relatorio_territorial" | "ferramenta_kml" | "ferramenta_exportar"
   | "historico_imovel" | "pre_avaliacao" | "chat_ia" | "monitoramento_territorial"
-  | "anunciar" | "painel_parceiro" | "oportunidades" | "crm_privado" | "crm_setorial"
+  | "anunciar" | "painel_parceiro" | "oportunidades" | "crm_privado" | "crm_setorial" | "crm_equipe" | "crm_auditoria"
   | "multiusuario" | "api_dados" | "territorio" | "dados_terceiros";
 
 export type Recurso = {
@@ -59,7 +59,9 @@ export const RECURSOS: Recurso[] = [
   { id: "pre_avaliacao", nome: "Pré-avaliação de valor", descricao: "Estimativa automatizada por comparáveis e aptidão territorial (aparece quando a Diretoria liga a função).", grupo: "profissional" },
   { id: "chat_ia", nome: "Assistente de IA", descricao: "Perguntas em linguagem natural sobre imóveis publicados, áreas do CAR e a base de conhecimento. Inclui a leitura de matrícula. Cota mensal nos planos gratuitos.", grupo: "consulta" },
   // anúncios
-  { id: "crm_privado", nome: "CRM privado do titular", descricao: "No painel de corretores e profissionais técnicos: contatos, triagem, próximos retornos e histórico exclusivos da conta.", grupo: "profissional" },
+  { id: "crm_privado", nome: "CRM privado do titular", descricao: "No painel de corretores e profissionais técnicos: Escritório (carteira de imóveis com código, clientes e proprietários, funil de negócios, agenda e relatórios) e Meu CRM (triagem e retornos).", grupo: "profissional" },
+  { id: "crm_equipe", nome: "Escritório com equipe", descricao: "Carteira de imóveis, funil e agenda do escritório compartilhados com os membros da organização, com responsável por registro e relatório por pessoa (planos Profissional e Premium).", grupo: "profissional" },
+  { id: "crm_auditoria", nome: "Histórico do escritório", descricao: "Trilha de quem criou, alterou, mudou de etapa ou excluiu cada registro do escritório (plano Premium).", grupo: "profissional" },
   { id: "crm_setorial", nome: "Modelos de profissão no CRM", descricao: "Profissionais técnicos com CRM privado podem classificar atendimentos por serviço e registrar os dados próprios da profissão.", grupo: "profissional" },
   { id: "anunciar", nome: "Anunciar imóvel", descricao: "Cadastrar imóvel para análise e publicação pela Matriz.", grupo: "anuncios" },
   { id: "painel_parceiro", nome: "Painel do parceiro", descricao: "Carteira de imóveis de terceiros e atendimento das oportunidades encaminhadas.", grupo: "anuncios" },
