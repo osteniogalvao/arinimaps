@@ -145,12 +145,21 @@ export default function DesenhoMapa({ onChange, inicial, onSelecionar, planta, r
         map.addLayer({
           id: "desenho-fill", type: "fill", source: "desenho",
           filter: ["==", ["geometry-type"], "Polygon"],
-          paint: { "fill-color": "#2E9E6B", "fill-opacity": 0.3 },
+          paint: { "fill-color": "#D9BD6F", "fill-opacity": 0.35 },
+        });
+        // 25/11/2026 (Stenio): o lote escolhido precisa acender como a fazenda —
+        // contorno escuro por baixo e traço dourado grosso, legível sobre a planta
+        map.addLayer({
+          id: "desenho-contorno", type: "line", source: "desenho",
+          filter: ["==", ["geometry-type"], "Polygon"],
+          layout: { "line-join": "round" },
+          paint: { "line-color": "#1A1405", "line-width": 7, "line-opacity": 0.8 },
         });
         map.addLayer({
           id: "desenho-linha", type: "line", source: "desenho",
           filter: ["any", ["==", ["geometry-type"], "Polygon"], ["==", ["geometry-type"], "LineString"]],
-          paint: { "line-color": "#D9BD6F", "line-width": 2.5 },
+          layout: { "line-join": "round" },
+          paint: { "line-color": "#F2C94C", "line-width": 4 },
         });
         map.addLayer({
           id: "desenho-vertices", type: "circle", source: "desenho",

@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   if (ids.length) {
     const { data: extras } = await admin
       .from("properties")
-      .select("id, parent_property_id, subtipo:caracteristicas->>subtipo, andar:caracteristicas->andar, unidade:caracteristicas->>unidade")
+      .select("id, parent_property_id, lote_id, lote_quadra, lote_numero, subtipo:caracteristicas->>subtipo, andar:caracteristicas->andar, unidade:caracteristicas->>unidade")
       // mesmo filtro da fn_properties_geojson (lista de ids estouraria a URL)
       .in("status", ["publicado", "em_negociacao"]);
     const paiIds = [...new Set((extras ?? []).map((e) => e.parent_property_id).filter(Boolean))] as string[];
@@ -40,6 +40,10 @@ export async function GET(request: Request) {
       if (u.subtipo) f.properties.subtipo = u.subtipo;
       if (u.andar != null) f.properties.andar = u.andar;
       if (u.unidade) f.properties.unidade = u.unidade;
+      // 25/11/2026 (Stenio): o lote da planta urbana à venda acende no mapa, com quadra e número
+      if (e.lote_id) f.properties.lote_id = e.lote_id;
+      if (e.lote_quadra) f.properties.lote_quadra = e.lote_quadra;
+      if (e.lote_numero) f.properties.lote_numero = e.lote_numero;
     }
   }
 

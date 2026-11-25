@@ -2,6 +2,7 @@ import Testemunhas from "./Testemunhas";
 import Conversa from "@/components/admin/Conversa";
 import { notFound } from "next/navigation";
 import RegimeComercial from "./RegimeComercial";
+import DadosAnunciante, { type DadosDoAnuncio } from "./DadosAnunciante";
 import { urlArquivo } from "@/lib/seguranca/link-arquivo";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { formatBRL, formatArea, STATUS_LABEL, plural } from "@/lib/format";
@@ -76,7 +77,7 @@ export default async function AnaliseImovel
     .select(`
       id, codigo, titulo, descricao, tipo, status, valor, area_declarada,
       caracteristicas, condicoes_venda, aceita_permuta, aceita_financiamento, exclusividade, motivo_correcao,
-      pendencia_tipo, created_at, car_codigo, modalidade, leilao, regime_comercial,
+      pendencia_tipo, created_at, car_codigo, modalidade, leilao, regime_comercial, lote_quadra, lote_numero,
       municipality:municipalities!properties_municipality_id_fkey(nome, uf),
       owner:owners(id, profile:profiles(nome, telefone)),
       partner:partners(id, razao_social, tipo, profile:profiles(nome, telefone))
@@ -196,6 +197,15 @@ export default async function AnaliseImovel
           <RevisaoBotoes revisaoId={revisao.id} />
         </Bloco>
       )}
+
+      {/* 25/11/2026 (Stenio): a Central vê tudo o que o anunciante cadastrou */}
+      <Bloco titulo="Informações enviadas pelo anunciante">
+        <DadosAnunciante p={p as unknown as DadosDoAnuncio}
+          responsavel={partner
+            ? { nome: partner.profile?.nome ?? partner.razao_social, telefone: partner.profile?.telefone ?? null, papel: partner.tipo }
+            : owner ? { nome: owner.profile?.nome ?? null, telefone: owner.profile?.telefone ?? null, papel: "proprietário" } : null}
+          quadro={(autorizacao?.termo_aceito as import("@/lib/juridico").Documento | null)?.secoes?.[0]?.itens ?? null} />
+      </Bloco>
 
       <Bloco titulo="Regime comercial">
         <a href="/admin/cadastros/verificacoes" className="mb-3 inline-block text-verde">Conferir vínculo de propriedade</a>
