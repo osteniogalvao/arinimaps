@@ -68,7 +68,7 @@ export async function validadeGravacao(convite: string): Promise<number> {
 export function telaDeGravacao(pathname: string, metodo: string) {
   if (metodo !== "GET" && metodo !== "HEAD") return false;
   return pathname === "/" || pathname === "/precarregar-satelite.js" || ["/vendor", "/img", "/mapa", "/imoveis", "/mercado", "/planos", "/consulta/car", "/api/consulta/car",
-    "/api/geo", "/api/tiles", "/api/sentinel", "/fonts"].some(p => pathname === p || pathname.startsWith(p + "/"));
+    "/api/geo", "/api/tiles", "/api/satelite", "/api/sentinel", "/fonts"].some(p => pathname === p || pathname.startsWith(p + "/"));
 }
 
 export async function cookieValido(valor: string | undefined, pathname = "", metodo = "") {

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import dynamicImport from "next/dynamic";
-import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, SATELITE, TILE_DETALHE, URL_MAPLIBRE, ZOOM_INICIAL_REGIONAL } from "@/lib/map/config";
+import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, SATELITE, SATELITE_GOOGLE, TILE_DETALHE, TILE_GOOGLE, URL_MAPLIBRE, ZOOM_INICIAL_REGIONAL } from "@/lib/map/config";
 import { CHAVE_PREFERENCIAS } from "@/lib/preferencias";
 import Moldura from "@/components/shell/Moldura";
 import { currentUser } from "@/lib/supabase/server";
@@ -32,8 +32,9 @@ export default async function PaginaMapa() {
     <Moldura usuario={usuario} cheia>
       <link rel="modulepreload" href={URL_MAPLIBRE} />
       <script
-        async fetchPriority="high" src="/precarregar-satelite.js?v=4"
-        data-fonte={TILE_DETALHE} data-maxzoom={SATELITE.maxzoom} data-tile-size={256}
+        async fetchPriority="high" src="/precarregar-satelite.js?v=5"
+        data-fonte={SATELITE_GOOGLE ? TILE_GOOGLE : TILE_DETALHE} data-maxzoom={SATELITE.maxzoom} data-tile-size={256}
+        data-tamanho-fixo={SATELITE_GOOGLE ? "1" : undefined}
         data-camera={JSON.stringify([...CENTRO_REGIAO, ZOOM_INICIAL_REGIONAL])}
         data-limites={JSON.stringify(LIMITES_MAPA_REGIONAL)} data-preferencias={CHAVE_PREFERENCIAS}
       />

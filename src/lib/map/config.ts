@@ -90,9 +90,19 @@ export const LIMITES_MAPA_REGIONAL: [[number, number], [number, number]] = [[-80
 const ARCGIS_KEY = process.env.NEXT_PUBLIC_ARCGIS_KEY;
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
-export type ProvedorSatelite = "esri" | "maptiler" | "wayback";
+/**
+ * GOOGLE (25/11/2026, escolha do Stenio): com NEXT_PUBLIC_SATELITE_GOOGLE=1 e
+ * GOOGLE_MAPS_TILES_KEY no servidor, o modo satélite usa só o Google, em todos
+ * os zooms, sem tile de reserva de outra fonte e sem camadas de foto por cima
+ * (termos do Google: nada de mapa do Google "com ou perto de" outro mapa).
+ * Detalhes em src/lib/map/googleTiles.ts. Desligado, tudo segue como antes.
+ */
+export const SATELITE_GOOGLE = process.env.NEXT_PUBLIC_SATELITE_GOOGLE === "1";
+export const TILE_GOOGLE = "/api/satelite/google/{z}/{x}/{y}";
+
+export type ProvedorSatelite = "google" | "esri" | "maptiler" | "wayback";
 export const PROVEDOR_SATELITE: ProvedorSatelite =
-  ARCGIS_KEY ? "esri" : MAPTILER_KEY ? "maptiler" : "wayback";
+  SATELITE_GOOGLE ? "google" : ARCGIS_KEY ? "esri" : MAPTILER_KEY ? "maptiler" : "wayback";
 
 /**
  * Release do Wayback em uso. Trocar aqui troca em todo lugar — inclusive no
@@ -148,7 +158,17 @@ export const urlTileAtivo = (z: number, x: number, y: number) => urlDoTile(z, x,
 export const TILE_SATELITE_PX =
   typeof window !== "undefined" && window.devicePixelRatio >= 2 ? 128 : 256;
 
-export const SATELITE: RasterSourceSpecification = {
+export const SATELITE: RasterSourceSpecification = SATELITE_GOOGLE ? {
+  type: "raster",
+  tiles: ["arini-satelite://google/{z}/{x}/{y}"],
+  // o Google entrega 512 px por tile (sessão highDpi): 256 px de tela já sai
+  // nítido em retina, sem o truque de 128 px que custaria 4× mais tiles
+  tileSize: 256,
+  // na região há foto até o z20 (viewport do Google, 25/11/2026)
+  maxzoom: 20,
+  // o crédito da área da tela entra junto do logo (src/lib/map/creditosGoogle.ts)
+  attribution: "Imagens © Google",
+} : {
   type: "raster",
   tiles: ["arini-satelite://tile/{z}/{x}/{y}"],
   tileSize: TILE_SATELITE_PX,
@@ -177,7 +197,7 @@ export const urlTileAlto = (z: number, x: number, y: number) =>
   `https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}?token=${ARCGIS_KEY}`;
 
 export const SATELITE_ALTO: RasterSourceSpecification | null =
-  PROVEDOR_SATELITE === "esri" && process.env.NEXT_PUBLIC_SATELITE_ALTO === "1"
+  PROVEDOR_SATELITE === "esri" && !SATELITE_GOOGLE && process.env.NEXT_PUBLIC_SATELITE_ALTO === "1"
     ? {
         type: "raster",
         tiles: ["arini-satelite://alto/{z}/{x}/{y}"],
