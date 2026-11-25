@@ -240,7 +240,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
           <span>Aceito o plano {plano.nome}, os valores e a renovação {ciclo === "anual" ? "anual" : "mensal"} apresentados. Posso cancelar a renovação quando quiser e pedir estorno em até 7 dias.</span></label>}
       </div>
       {erro && <p role="alert" className="text-alerta">{erro}</p>}
-      {ativacao && podeAtivar ? <p role="status">{ativacao} <Link href={plano.id === "corretor_teste" ? "/painel/crm" : plano.id === "tecnico_teste" ? "/painel/crm/demonstracao" : "/painel/cofre"} className="font-semibold text-verde underline">Abrir recurso</Link></p> :
+      {ativacao && podeAtivar ? <p role="status">{ativacao} <Link href={plano.id === "corretor_teste" ? "/painel/escritorio" : plano.id === "tecnico_teste" ? "/painel/crm/demonstracao" : "/painel/cofre"} className="font-semibold text-verde underline">Abrir recurso</Link></p> :
         protocolo ? <p role="status">{aviso || "Pedido registrado."} <Link className="font-semibold text-verde underline" href="/planos/solicitacoes">Acompanhar meus pedidos</Link></p> :
         autenticado && podeAtivar ? <button type="button" className="lp-btn lp-btn-verde" disabled={enviando || !cotacao} onClick={ativar}>{enviando ? "Ativando…" : plano.teste ? "Iniciar teste de 3 dias" : "Ativar cofre gratuito"} <ArrowRight /></button> :
         autenticado ? <button type="button" className="lp-btn lp-btn-verde disabled:opacity-50" disabled={!cotacao || enviando || (direto && !aceite)} onClick={enviar}>{enviando ? (direto ? "Gerando a fatura…" : "Enviando…") : direto ? "Contratar e pagar" : "Solicitar à Central"} <ArrowRight /></button> :
