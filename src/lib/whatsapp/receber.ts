@@ -6,7 +6,7 @@ import { confirmarMensagemWhatsapp, dataWhatsapp } from "@/lib/confirmacao-whats
 import { receberOptIn } from "@/lib/retomada-cadastro";
 import { notificar } from "@/lib/notificacoes";
 import { atenderPedidoConsulta, respostaConsultaWhatsapp } from "@/lib/rural/pedido-whatsapp";
-import { entradaAtendimento } from "@/lib/atendimento";
+import { entradaAtendimento, menuDoAtendimentoAtivo } from "@/lib/atendimento";
 import { pedidoAtendimento, pedidoLinhaCotacoes, respostaAtendimento } from "@/lib/rural/atendimento-whatsapp";
 
 /**
@@ -49,7 +49,12 @@ export async function processarValorWhatsapp(v: ValorWhatsapp, canal: CanalWhats
     // número só de cotações: toda mensagem recebe cotação, sem conta
     const phoneId = canal.id;
     const linhaCotacoes = canal.cotacoes;
-    const pedido = linhaCotacoes ? pedidoLinhaCotacoes(m) : pedidoAtendimento(m);
+    let pedido = linhaCotacoes ? pedidoLinhaCotacoes(m) : pedidoAtendimento(m);
+    // No número principal, "menu", "atendimento", "ajuda", "arini" e "opções" são
+    // pedido de falar com a ARINI: com o menu por setores ligado, vão para o CRM
+    // (menu dos setores) em vez do menu do autosserviço rural, que não tem saída
+    // para uma pessoa (auditoria 25/11). BOI, COTAÇÃO, SAFRA, CAR e localização seguem iguais.
+    if (pedido?.tipo === "menu" && canal.principal && !linhaCotacoes && await menuDoAtendimentoAtivo().catch(() => false)) pedido = null;
     const pedidoCar = !linhaCotacoes && m.type === "text" && respostaConsultaWhatsapp(texto);
     const dentroDaJanela = !!recebida && Date.now() - Date.parse(recebida) < 24 * 3600_000
       && (linhaCotacoes || canal.principal);

@@ -115,6 +115,18 @@ export async function lerMenu() {
   return { menu: (m.data as Menu | null) ?? null, opcoes: (o.data as Opcao[] | null) ?? [], erro: m.error?.message ?? o.error?.message };
 }
 
+/** O menu por setores está ligado e tem opção ativa? (sem a 0156: false) */
+export async function menuDoAtendimentoAtivo() {
+  const { menu, opcoes } = await lerMenu();
+  return !!menu?.ativo && opcoes.some((o) => o.ativo);
+}
+
+/** "menu", "atendimento", "ajuda", "arini", "opções", "início": o cliente quer ver as opções de novo. */
+export function pedeMenu(texto: string) {
+  const t = texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[.!?]+$/g, "").replace(/\s+/g, " ").trim();
+  return /^(menu|atendimento|ajuda|arini|opcoes|opcao|inicio)$/.test(t);
+}
+
 const variaveis = (t: string, nome: string | null, setor?: string | null) =>
   t.replaceAll("{{nome}}", nome ? `, ${nome.split(/\s+/)[0]}` : "").replaceAll("{{setor}}", nomeSetor(setor ?? null));
 
@@ -253,7 +265,16 @@ export async function entradaAtendimento(p: {
   }
 
   // 4. menu automático
-  if (!menu?.ativo || !opcoes.some((o) => o.ativo) || c.menu_respondido_em) return true;
+  if (!menu?.ativo || !opcoes.some((o) => o.ativo)) return true;
+  // na caixa central (ninguém assumiu), pedir "menu" mostra as opções de novo, sem contar tentativa
+  if (pedeMenu(p.texto)) {
+    await admin.from("atendimento_conversas").update({ menu_enviado_em: agora, menu_tentativas: 0, menu_respondido_em: null }).eq("id", c.id);
+    Object.assign(c, { menu_enviado_em: agora, menu_tentativas: 0, menu_respondido_em: null });
+    await eventoAtendimento({ conversa_id: c.id, acao: "menu", texto: "O cliente pediu o menu: opções enviadas de novo." });
+    await enviarDoRobo(c, textoDoMenu(menu, opcoes, c.nome), p.canal);
+    return true;
+  }
+  if (c.menu_respondido_em) return true;
   const aberto = c.menu_enviado_em && Date.now() - Date.parse(c.menu_enviado_em) < menu.expira_minutos * 60_000;
   // primeira mensagem que já é uma busca clara de imóvel: a Ari responde, sem menu
   if (!aberto && !c.menu_enviado_em && buscaClaraDeImovel(p.texto) && await ariLigada(menu)) {
