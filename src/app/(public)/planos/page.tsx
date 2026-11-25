@@ -18,7 +18,7 @@ import OfertasDoPerfil from "./OfertasDoPerfil";
 import ModulosDoPerfil from "./ModulosDoPerfil";
 import RolarParaPlanos from "./RolarParaPlanos";
 import { PERFIS_COM_VITRINE, type OfertaPerfil } from "@/lib/ofertas-perfis";
-import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA, type PrecoVigente } from "@/lib/planos-catalogo";
+import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA, planoNoPerfil, type PrecoVigente } from "@/lib/planos-catalogo";
 import { checkoutAtivo } from "@/lib/assinaturas-cotadas";
 import {
   COTAS, GRUPO_RECURSO_LABEL, NICHO_LABEL, PERIODICIDADE_LABEL, PERSONAS_PLANOS, RECURSOS,
@@ -68,7 +68,7 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
   const acessoLeilao = persona.id==="leiloeiro" && user ? (await supabaseAdmin().rpc("leilao_acesso",{p_ator:user.id})).data : null;
   const piloto = persona.id==="divulgador" ? await situacaoPiloto(user?.id) : null;
   const todos = (planosRaw ?? []) as (Plano & PrecoVigente)[];
-  const precos = todos.filter((p) => PLANOS_CATALOGO.some((c) => c.id === p.id && c.personaId === catalogo))
+  const precos = todos.filter((p) => PLANOS_CATALOGO.some((c) => c.id === p.id && planoNoPerfil(c, catalogo)))
     .map(({id, preco_mensal, preco_anual_centavos, primeiro_mes_centavos}) => ({id, preco_mensal, preco_anual_centavos, primeiro_mes_centavos}));
   const daPersona = persona ? planosDaPersona(persona, todos) : [];
   const planos = persona ? daPersona : todos;

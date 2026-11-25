@@ -264,6 +264,11 @@ export type PlanoCatalogo = {
   alcance?: "global";
   exigeProfissao?: boolean;
   incluiPlanoId?: PlanoCatalogoId;
+  /**
+   * Outros perfis em que o plano também aparece, com o nome exibido ali.
+   * O pedido continua registrado com o plano e o perfil de origem (áudio do Carlos, 25/11/2026).
+   */
+  tambemEm?: Partial<Record<PersonaCatalogoId, string>>;
   teste?: { dias: number; crm: "privado" | "demonstracao" | "sem_crm"; aposTeste: string[] };
   limites: LimitesCatalogo;
   /** Recursos acrescentados ao pacote indicado em incluiPlanoId. */
@@ -405,6 +410,7 @@ export const PLANOS_CATALOGO: PlanoCatalogo[] = [
   {
     id: "tecnico_consulta", personaId: "profissional_tecnico", nome: "Consulta", descricao: "Dados do território, ferramentas de mapa e relatório simples.",
     mensalCentavos: 2990, anualCentavos: 29900, origemPreco: "referencia_anexo", escopo: "conta", alcance: "global", exigeProfissao: false,
+    tambemEm: { corretor_imobiliaria: "Consulta" },
     limites: { usuarios: 1, consultasMensais: "uso_justo", creditosIaMensais: 0 },
     recursos: ["mapa_publico", "dados_territoriais", "medicao_desenho", "arquivos_geograficos", "avaliacao_mercado", "relatorios"],
     disponibilidade: "parcial", motivoDisponibilidade: "Consultas e relatórios existem. Ativação do novo pacote e política de uso justo dependem da Central.",
@@ -412,6 +418,7 @@ export const PLANOS_CATALOGO: PlanoCatalogo[] = [
   {
     id: "tecnico_essencial", personaId: "profissional_tecnico", nome: "Essencial", descricao: "Consultas e CRM padrão do profissional.",
     mensalCentavos: 7990, anualCentavos: 79900, origemPreco: "referencia_anexo", escopo: "escritorio", exigeProfissao: true,
+    tambemEm: { corretor_imobiliaria: "Básico" },
     incluiPlanoId: "tecnico_consulta", limites: { usuarios: 1, consultasMensais: "uso_justo", creditosIaMensais: 100 },
     recursos: ["crm_tecnico_padrao", "google_drive", "inteligencia_ia"],
     disponibilidade: "parcial", motivoDisponibilidade: "O plano pode liberar a triagem privada do titular. Drive, créditos e gestão de projetos por escritório ainda dependem de implantação.",
@@ -562,6 +569,17 @@ export function economiaAnualCentavos(plano: PlanoCatalogo, primeiroAno = true) 
 export type PrecoVigente = {
   id: string; preco_mensal: number; preco_anual_centavos: number | null; primeiro_mes_centavos: number | null;
 };
+/** O plano aparece no perfil, seja o de origem ou um em que também é oferecido. */
+export function planoNoPerfil(plano: PlanoCatalogo, personaId: PersonaCatalogoId | undefined) {
+  return !!personaId && (plano.personaId === personaId || !!plano.tambemEm?.[personaId]);
+}
+/** Planos exibidos no perfil, do mais barato ao mais caro, com o nome usado ali. */
+export function planosDoPerfil(personaId: PersonaCatalogoId) {
+  return PLANOS_CATALOGO.filter((p) => planoNoPerfil(p, personaId))
+    .map((p) => p.personaId === personaId ? p : { ...p, nome: p.tambemEm![personaId]! })
+    .sort((a, b) => a.mensalCentavos - b.mensalCentavos);
+}
+
 export function comPrecoVigente(plano: PlanoCatalogo, preco: PrecoVigente): PlanoCatalogo {
   return { ...plano, mensalCentavos: Math.round(Number(preco.preco_mensal) * 100),
     anualCentavos: preco.preco_anual_centavos, primeiroMesCentavos: preco.primeiro_mes_centavos ?? undefined };

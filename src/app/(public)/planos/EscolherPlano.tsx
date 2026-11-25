@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Check, MessageCircle, Minus, Plus } from "lucide-react";
 import {
   COMPLEMENTOS_CATALOGO, DISPONIBILIDADE_CATALOGO, PLANOS_CATALOGO, PROFISSOES_TECNICAS,
-  RECURSOS_CATALOGO, cotarPlano, economiaAnualCentavos, comPrecoVigente, type PrecoVigente,
+  RECURSOS_CATALOGO, cotarPlano, planosDoPerfil, economiaAnualCentavos, comPrecoVigente, type PrecoVigente,
   type CicloCatalogo, type PersonaCatalogoId, type PlanoCatalogo, type SelecaoCatalogo,
 } from "@/lib/planos-catalogo";
 import { CAMPO } from "@/components/ui/Pagina";
@@ -43,7 +43,7 @@ function limitesDoPacote({ limites }: PlanoCatalogo) {
 
 export default function EscolherPlano({ personaId, perfil, autenticado, cadastro, whatsapp, parametros, precos, pagamentoDireto = false }: Props) {
   const router = useRouter();
-  const planos = PLANOS_CATALOGO.filter((p) => p.personaId === personaId).flatMap((p) => {
+  const planos = planosDoPerfil(personaId).flatMap((p) => {
     const preco = precos.find((v) => v.id === p.id);
     return preco ? [comPrecoVigente(p, preco)] : [];
   });
@@ -61,7 +61,9 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
     }
     return valores;
   });
-  const [profissao, setProfissao] = useState(typeof parametros.profissao === "string" ? parametros.profissao.slice(0,150) : "");
+  // No perfil de corretor, o plano Básico (CRM do profissional) já vem com a profissão preenchida.
+  const [profissao, setProfissao] = useState(typeof parametros.profissao === "string" ? parametros.profissao.slice(0,150)
+    : personaId === "corretor_imobiliaria" ? "Corretor de imóveis" : "");
   const [area, setArea] = useState(typeof parametros.area === "string" ? parametros.area : "");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");

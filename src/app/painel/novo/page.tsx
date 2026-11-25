@@ -274,7 +274,8 @@ export default function NovoImovel() {
       setErro("Envie o edital, a ordem judicial ou o contrato com o comitente.");
       return;
     }
-    if (!ehEquipe && !emLeilao && !docs.matricula.length) {
+    // proprietário pode cadastrar sem a matrícula: a Arini puxa o espelho na análise (Carlos, 25/11/2026)
+    if (!ehEquipe && !emLeilao && ehParceiro && !docs.matricula.length) {
       setErro("Envie a matrícula do imóvel (ou escritura/contrato registrado) — é o que comprova a propriedade.");
       return;
     }
@@ -324,7 +325,7 @@ export default function NovoImovel() {
       },
       condicao,
       prazo_exclusividade_meses: prazoMeses,
-      quadro_exclusividade: quadro, clausulas_exclusividade: destaques,
+      quadro_exclusividade: Object.fromEntries(camposQuadro.map(([c]) => [c, quadro[c] ?? ""])), clausulas_exclusividade: destaques,
       publicacao_antecipada: antecipar,
       sem_interessados_anteriores: semInteressados, interessados_anteriores: anteriores,
       versao_aceita: ehParceiro ? (papel === "corretor" || papel === "imobiliaria"
@@ -692,22 +693,27 @@ export default function NovoImovel() {
       </Etapa>
 
       <Etapa id="documentos" numero={numero("documentos")} icone={ShieldCheck}
-        titulo={`Comprovação de propriedade${ehEquipe ? "" : " *"}`}
+        titulo={`Comprovação de propriedade${ehParceiro ? " *" : ""}`}
         subtitulo={<>Nenhum imóvel é publicado sem a Arini conferir estes documentos. Eles ficam em área privada:
           só você e a equipe da Arini veem. PDF ou foto, até 25 MB cada.</>}>
+        {/* áudio do Carlos (25/11/2026): documento opcional para o proprietário, com incentivo a enviar */}
+        {!ehParceiro && !ehEquipe && !emLeilao && <p className="rounded-xl border border-ouro/40 bg-ouro/10 p-3 text-sm leading-relaxed text-texto">
+          <strong>Tem a matrícula ou o espelho em mãos? Envie agora: isso agiliza muito a análise e a publicação do seu imóvel.</strong>{" "}
+          Se o documento estiver com o contador, a família ou no escritório, pode seguir com o cadastro. Na análise, a equipe da Arini
+          puxa o espelho da matrícula, confere e anexa, ou você envia depois.</p>}
         {/* número da matrícula (pedido do Carlos, 20/10/2026): a Matriz confere com o documento;
             o site público mostra só "matrícula conferida", nunca o número */}
         {!emLeilao && (
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className={label} htmlFor="matricula_numero">Número da matrícula</label>
-              <input required={!ehParceiro && !ehEquipe} id="matricula_numero" className={input + realce("matricula_numero")} maxLength={120} placeholder="Ex.: 45413"
+              <input required={ehParceiro} id="matricula_numero" className={input + realce("matricula_numero")} maxLength={120} placeholder="Ex.: 45413"
                 value={form.matricula_numero} onChange={(e) => setForm({ ...form, matricula_numero: e.target.value })} />
-              <p className={ajuda}>Está no topo do documento da matrícula. Se houver mais de uma, separe por vírgula.</p>
+              <p className={ajuda}>Está no topo do documento da matrícula. Se houver mais de uma, separe por vírgula. Se não souber, deixe em branco.</p>
             </div>
             <div>
               <label className={label} htmlFor="matricula_cartorio">Cartório de registro</label>
-              <input required={!ehParceiro && !ehEquipe} id="matricula_cartorio" className={input + realce("matricula_cartorio")} maxLength={200} placeholder="Ex.: Cartório de Registro de Imóveis de Iturama"
+              <input required={ehParceiro} id="matricula_cartorio" className={input + realce("matricula_cartorio")} maxLength={200} placeholder="Ex.: Cartório de Registro de Imóveis de Iturama"
                 value={form.matricula_cartorio} onChange={(e) => setForm({ ...form, matricula_cartorio: e.target.value })} />
               <p className={ajuda}>Não aparece no site: só a Arini usa, para conferir e pedir o espelho.</p>
             </div>
@@ -715,7 +721,7 @@ export default function NovoImovel() {
         )}
         {([
           ...(emLeilao ? [["edital", "Edital ou ordem judicial", "Envie este documento ou o contrato com o comitente para autorizar o anúncio.", false] as const, ["autorizacao", "Contrato com o comitente", "Autorização para realizar o leilão extrajudicial deste imóvel.", false] as const] : []),
-          ["matricula", "Matrícula atualizada do imóvel", "Ou escritura, contrato de compra e venda registrado, formal de partilha.", !ehEquipe && !emLeilao],
+          ["matricula", "Matrícula atualizada do imóvel", "Ou escritura, contrato de compra e venda registrado, formal de partilha.", ehParceiro && !emLeilao],
           ...((ehParceiro || ehEquipe) && !emLeilao ? [["autorizacao", "Termo de Exclusividade assinado pelo proprietário", "Com prazo, preço e condições compatíveis com o anúncio.", true] as const] : []),
           ...(form.tipo === "rural" ? [["ccir_itr", "CCIR e/ou ITR", "Recomendado para imóvel rural — agiliza a análise.", false] as const] : []),
           ["outro", "Outros documentos", "Procuração, certidões, documento do cônjuge…", false],
@@ -766,8 +772,9 @@ export default function NovoImovel() {
         {!ehParceiro && !ehEquipe && <fieldset className="space-y-4 rounded-xl border border-linha p-4">
           <legend className="px-2 font-semibold">Quadro-resumo e Anexo I</legend>
           <p className="text-sm">O imóvel, a matrícula, o município e o preço mínimo informados neste cadastro integram o termo. Comissão de 1,9% sobre o valor total da venda, paga pelo proprietário.</p>
+          <p className="text-sm text-texto-2">Preencha o que souber. Os campos são opcionais: o que ficar em branco, a equipe da Arini completa na análise com o espelho da matrícula. Sem o CPF ou CNPJ, vale o do seu cadastro.</p>
           {camposQuadro.map(([campo, titulo]) => <label key={campo} className="block text-sm">{titulo}
-            <textarea className={input} required maxLength={1500} minLength={2} value={quadro[campo] ?? ""}
+            <textarea className={input} maxLength={1500} minLength={2} value={quadro[campo] ?? ""}
               onChange={e=>{setQuadro({...quadro,[campo]:e.target.value}); setAceite(false);}}/>
           </label>)}
           <label className="flex gap-2 text-sm"><input type="checkbox" checked={semInteressados}

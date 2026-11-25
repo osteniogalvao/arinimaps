@@ -1,4 +1,4 @@
-import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA } from "@/lib/planos-catalogo";
+import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA, planoNoPerfil } from "@/lib/planos-catalogo";
 import { ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { numeroDaApiWhatsapp, segredoWhatsapp, telefoneWhatsapp, whatsappConfigurado } from "@/lib/meta";
 import { textoOptIn } from "@/lib/retomada-cadastro";
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     !plano ||
     b?.autorizar !== true ||
     typeof b?.perfil !== "string" ||
-    CATALOGO_POR_ENTRADA[b.perfil] !== plano.personaId
+    !planoNoPerfil(plano, CATALOGO_POR_ENTRADA[b.perfil])
   )
     return Response.json({ error: "Informe o número e confirme a autorização." }, { status: 400 });
   const numero = segredoWhatsapp() && (await numeroDaApiWhatsapp().catch(() => null));
