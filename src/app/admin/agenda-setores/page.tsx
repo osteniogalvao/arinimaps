@@ -12,6 +12,10 @@ import FormReuniao, { type Reuniao } from "@/components/admin/FormReuniao";
 
 const TZ = "America/Sao_Paulo";
 const UUID = /^[0-9a-f-]{36}$/i;
+const COR_TIPO: Record<string, string> = {
+  Reunião: "border-l-ouro", Visita: "border-l-verde", "Próximo contato": "border-l-sky-500", Tarefa: "border-l-texto-2",
+  "Prazo do CRM": "border-l-critico", Despesa: "border-l-alerta", Aluguel: "border-l-alerta",
+};
 
 /** "Hoje", "Amanhã" ou "qui., 27/11". */
 function rotuloDia(dia: string, hoje: string) {
@@ -32,7 +36,15 @@ function rotuloDia(dia: string, hoje: string) {
 export default async function AgendaSetores({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await exigirEquipe(), sp = await searchParams;
   const hoje = new Date().toLocaleDateString("en-CA", { timeZone: TZ });
-  const { de, ate } = periodoAgenda(sp.de, sp.ate, hoje);
+  // vistas como na agenda da Arini Negócios: mês e semana em grade, lista por dia
+  const vista: "lista" | "semana" | "mes" = sp.vista === "mes" ? "mes" : sp.vista === "semana" ? "semana" : "lista";
+  const base = typeof sp.data === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.data) && Number.isFinite(Date.parse(sp.data)) ? sp.data : hoje;
+  const meio = (d: string) => new Date(d + "T12:00:00-03:00");
+  const somar = (d: string, n: number) => new Date(meio(d).getTime() + n * 86_400_000).toLocaleDateString("en-CA", { timeZone: TZ });
+  const inicioGrade = vista === "mes" ? somar(base.slice(0, 8) + "01", -meio(base.slice(0, 8) + "01").getUTCDay())
+    : vista === "semana" ? somar(base, -meio(base).getUTCDay()) : null;
+  const diasGrade = vista === "mes" ? 42 : 7;
+  const { de, ate } = inicioGrade ? { de: inicioGrade, ate: somar(inicioGrade, diasGrade - 1) } : periodoAgenda(sp.de, sp.ate, hoje);
   const setores = typeof sp.setor === "string" && user.setores.includes(sp.setor as typeof user.setores[number]) ? [sp.setor] : user.setores;
   const pessoa = typeof sp.pessoa === "string" && (UUID.test(sp.pessoa) || sp.pessoa === "eu") ? (sp.pessoa === "eu" ? user.id : sp.pessoa) : "";
   const { itens: todos, falhas, limitado } = await lerAgendaSetores(setores, de, ate);
@@ -54,6 +66,9 @@ export default async function AgendaSetores({ searchParams }: { searchParams: Pr
     const ultimo = dias[dias.length - 1];
     if (ultimo?.dia === dia) ultimo.itens.push(i); else dias.push({ dia, itens: [i] });
   }
+  const navegar = (data: string) => new URLSearchParams({ vista, data, ...(setores.length === 1 ? { setor: setores[0] } : {}), ...(typeof sp.pessoa === "string" ? { pessoa: sp.pessoa } : {}) }).toString();
+  const mesAnterior = (() => { const d = meio(base.slice(0, 8) + "01"); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 10); })();
+  const mesSeguinte = (() => { const d = meio(base.slice(0, 8) + "01"); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 10); })();
   const atrasados = itens.filter((i) => i.data.slice(0, 10) < hoje).length;
 
   return <div className="max-w-5xl space-y-6">
@@ -75,8 +90,9 @@ export default async function AgendaSetores({ searchParams }: { searchParams: Pr
         <option value="">Toda a equipe</option><option value="eu">Só a minha</option>
         {membros.filter((m) => m.user_id !== user.id).map((m) => <option key={m.user_id} value={m.user_id}>{m.nome || "—"}</option>)}
       </select></label>
-      <label className="grid gap-1 text-sm">De<input type="date" name="de" defaultValue={de} className={CAMPO_COMPACTO} /></label>
-      <label className="grid gap-1 text-sm">Até<input type="date" name="ate" defaultValue={ate} className={CAMPO_COMPACTO} /></label>
+      <input type="hidden" name="vista" value={vista} />{inicioGrade && <input type="hidden" name="data" value={base} />}
+      {!inicioGrade && <><label className="grid gap-1 text-sm">De<input type="date" name="de" defaultValue={de} className={CAMPO_COMPACTO} /></label>
+      <label className="grid gap-1 text-sm">Até<input type="date" name="ate" defaultValue={ate} className={CAMPO_COMPACTO} /></label></>}
       <button className="btn-verde px-4 py-2">Ver agenda</button>
     </form>
 
@@ -89,6 +105,33 @@ export default async function AgendaSetores({ searchParams }: { searchParams: Pr
       <span>As alterações são feitas na ficha de origem.</span>
     </div>
 
+    <nav className="flex flex-wrap items-center gap-2 text-sm" aria-label="Vista da agenda">
+      {(["lista", "semana", "mes"] as const).map((v) => <Link key={v} href={`/admin/agenda-setores?${new URLSearchParams({ vista: v, data: base, ...(setores.length === 1 ? { setor: setores[0] } : {}), ...(typeof sp.pessoa === "string" ? { pessoa: sp.pessoa } : {}) })}`}
+        className={`rounded-full border px-3 py-1.5 ${vista === v ? "border-verde bg-verde/10 font-semibold" : "border-linha hover:border-verde"}`}>{v === "mes" ? "Mês" : v === "semana" ? "Semana" : "Lista"}</Link>)}
+      {inicioGrade && <>
+        <Link className="rounded-full border border-linha px-3 py-1.5" aria-label="Anterior" href={`/admin/agenda-setores?${navegar(vista === "mes" ? mesAnterior : somar(base, -7))}`}>←</Link>
+        <Link className="rounded-full border border-linha px-3 py-1.5" href={`/admin/agenda-setores?${navegar(hoje)}`}>Hoje</Link>
+        <Link className="rounded-full border border-linha px-3 py-1.5" aria-label="Próximo" href={`/admin/agenda-setores?${navegar(vista === "mes" ? mesSeguinte : somar(base, 7))}`}>→</Link>
+        <span className="ml-1 font-semibold capitalize">{vista === "mes" ? new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(meio(base.slice(0, 8) + "01")) : `${de.split("-").reverse().join("/")} a ${ate.split("-").reverse().join("/")}`}</span>
+      </>}
+    </nav>
+
+    {inicioGrade && <div className="overflow-x-auto"><div className={`grid ${vista === "mes" ? "min-w-[760px]" : "min-w-[880px]"} grid-cols-7 gap-px overflow-hidden rounded-xl border border-linha bg-linha`}>
+      {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => <div key={d} className="bg-superficie-2 px-2 py-1 text-xs font-semibold text-texto-2">{d}</div>)}
+      {Array.from({ length: diasGrade }, (_, i) => somar(de, i)).map((d) => {
+        const doDia = itens.filter((i) => i.data.slice(0, 10) === d);
+        const limite = vista === "mes" ? 4 : 50;
+        return <div key={d} className={`${vista === "mes" ? "min-h-28" : "min-h-64"} bg-superficie p-1 ${vista === "mes" && d.slice(0, 7) !== base.slice(0, 7) ? "opacity-50" : ""}`}>
+          <p className={`mb-1 inline-block rounded px-1 text-xs ${d === hoje ? "bg-verde font-bold text-white" : d < hoje ? "text-texto-2" : ""}`}>{Number(d.slice(8))}</p>
+          <div className="space-y-1">{doDia.slice(0, limite).map((i) => <Link key={`${i.tipo}:${i.id}`} href={i.href} title={`${i.tipo} · ${setorPorId(i.setor)?.nome ?? i.setor}${i.responsavel ? " · " + (nome.get(i.responsavel) ?? "") : ""}`}
+            className={`block truncate rounded border-l-4 ${COR_TIPO[i.tipo] ?? "border-l-linha-forte"} bg-superficie-2 px-1.5 py-0.5 text-xs hover:underline`}>
+            {i.hora && <span className="tabular-nums">{i.hora} </span>}{i.titulo}</Link>)}
+            {doDia.length > limite && <Link className="text-xs underline" href={`/admin/agenda-setores?${new URLSearchParams({ de: d, ate: d })}`}>+{doDia.length - limite}</Link>}</div>
+        </div>;
+      })}
+    </div></div>}
+
+    {!inicioGrade && <>
     {!dias.length && <p className="rounded-xl border border-dashed border-linha px-4 py-10 text-center text-texto-2">Nenhum compromisso encontrado para este período{pessoa ? ", pessoa" : ""} e setor.</p>}
     <div className="space-y-5">
       {dias.map(({ dia, itens: doDia }) => (
@@ -106,5 +149,6 @@ export default async function AgendaSetores({ searchParams }: { searchParams: Pr
         </section>
       ))}
     </div>
+    </>}
   </div>;
 }
