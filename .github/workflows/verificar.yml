@@ -75,7 +75,7 @@ jobs:
       - name: Testar regressões de operação e permissões
         env:
           ARINI_TESTE_CARTEIRA_DB: postgresql://postgres:teste-local@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres
-        run: node --test --test-concurrency=1 scripts/testa-alugueis-api.mjs scripts/testa-alugueis-sql.mjs scripts/testa-atendimento-api.mjs scripts/testa-atendimento-crm-sql.mjs scripts/testa-crm-setores-api.mjs scripts/testa-equipe-leitura.mjs scripts/testa-matriz-origens.mjs scripts/testa-automacoes-api.mjs scripts/testa-suporte-avaliacao.mjs scripts/testa-matriz-redistribuicao.mjs scripts/testa-atendimento-horario.mjs scripts/testa-contratacao-emissao.mjs scripts/testa-pedido-perfil.mjs scripts/testa-inicio-hidratacao.mjs scripts/testa-login-perfil.mjs
+        run: node --test --test-concurrency=1 scripts/testa-alugueis-api.mjs scripts/testa-alugueis-sql.mjs scripts/testa-atendimento-api.mjs scripts/testa-atendimento-crm-sql.mjs scripts/testa-crm-setores-api.mjs scripts/testa-equipe-leitura.mjs scripts/testa-matriz-origens.mjs scripts/testa-automacoes-api.mjs scripts/testa-suporte-avaliacao.mjs scripts/testa-matriz-redistribuicao.mjs scripts/testa-atendimento-horario.mjs scripts/testa-robo-whatsapp.mjs scripts/testa-contratacao-emissao.mjs scripts/testa-pedido-perfil.mjs scripts/testa-inicio-hidratacao.mjs scripts/testa-login-perfil.mjs
 
       - name: Lint
         run: npm run lint
