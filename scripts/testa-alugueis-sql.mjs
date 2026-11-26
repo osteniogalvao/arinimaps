@@ -13,6 +13,8 @@ test("Aluguéis: contrato, parcelas idempotentes, atraso, caixa, repasse e estor
   await servidor.query("create database " + nome);
   const dst = new URL(url); dst.pathname="/"+nome;
   const db = new pg.Pool({ connectionString:dst.href });
+  // o "drop database ... with (force)" do fim derruba conexão ociosa que o pool ainda não fechou; sem este ouvinte o erro vira exceção solta e reprova o teste (CI do PR #99, 26/11)
+  db.on("error", () => {});
   const q=(sql,args)=>db.query(sql,args), uma=async(sql,args)=>(await q(sql,args)).rows[0];
   try {
     for (const role of ["anon","authenticated","service_role"]) if (!(await q("select from pg_roles where rolname=$1",[role])).rowCount) await q("create role "+role);
