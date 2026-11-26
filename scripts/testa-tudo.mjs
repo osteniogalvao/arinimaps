@@ -35,6 +35,7 @@ async function zerarLimitesDeTeste() {
 const PASSOS = [
   ["Auditoria das rotas da API", "scripts/audita-rotas.mjs", false],
   ["Plantas DXF: folha, blocos aninhados, unidade, OCS", "scripts/testa-dxf-casos.mjs", false],
+  ["Encaixe da planta pelas ruas do OSM", "scripts/testa-encaixe-ruas.mjs", false],
   ["Fontes oficiais ao vivo", "scripts/testa-apis-rurais.mjs", false],
   ["Fumaça: todas as telas abrem com o perfil certo", "scripts/fumaca.mjs", true],
   ["Matriz por setores, tarefas, suporte, LGPD, segundo fator", "scripts/testa-matriz.mjs", true],

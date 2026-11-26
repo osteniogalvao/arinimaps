@@ -130,3 +130,44 @@ MultiLineString por camada do CAD (União de Minas: 6 objetos, 7,7 mil linhas).
 (as contas da tela, do worker e do banco dão o mesmo ponto) e
 `node scripts/testa-calibracao-parte.mjs` (cria, move, salva, confere os lotes no
 banco, remove e confere que voltaram; deixa a planta como estava).
+
+## Encaixe automático na calibração (26/11/2026)
+
+Pedido do Carlos (áudio de 25/11): o encaixe da cartografia urbana à mão estava
+demorando demais. A mesma medição acima agora **corrige** a planta, dentro da
+tela de calibração (Central › Cartografia › Calibrar):
+
+- **Encaixar planta pelas ruas** (sem peça escolhida): busca as ruas do OSM em
+  volta da planta (`/api/admin/cartografia/ruas`, Overpass com espelhos e, se
+  todos falharem, a API principal do OSM) e calcula deslocamento, giro e escala
+  de uma vez. Com uma peça escolhida, o botão vira **Encaixar peça pelas ruas** e
+  só ela anda; as vizinhas servem de referência do outro lado da rua.
+- **Encaixar peças da vista**: depois de "Separar quadras na vista" (ou de
+  desenhar o perímetro de bairros), encaixa uma a uma as peças que estão na tela.
+- O resultado entra pelo mesmo caminho dos pontos de controle: aparece na hora,
+  Ctrl+Z desfaz e nada vai ao mapa público antes de salvar. Se o encaixe não
+  melhora a medição, a planta não é mexida e a tela avisa.
+
+Como calcula (`src/lib/geo/encaixeRuas.ts`, teste em `scripts/testa-encaixe-ruas.mjs`):
+
+1. Linhas que servem: as visíveis, sem camadas de paisagismo/vegetação/texto/cota/eixo
+   e sem traço menor que 4 m (copa de árvore, símbolo). Só conta linha paralela à rua
+   (frente de lote, meio-fio, calçada).
+2. Busca grossa de deslocamento (±80 m) e, em planta com mais de 600 m, de giro
+   (±3°). A nota de cada tentativa é quantas ruas passam no meio do vão, **menos**
+   quantos trechos de rua atravessam a frente de uma quadra — sem esse desconto,
+   a planta deslocada meia quadra "encaixa" nas divisas de lote, que imitam um vão.
+3. Refino iterativo com mínimos quadrados robustos (deslocamento + giro + escala;
+   peça menor que 250 m só desloca), até três passadas.
+
+Resultado nas plantas reais (DXF da pasta `cartografia`, sem a calibração salva):
+
+| Cidade | Ruas no meio do vão | Correção calculada | Tempo (1 núcleo) |
+|---|---|---|---|
+| Iturama | 11% → 47% | 31 m, giro 0,29° | ~15 s |
+| União de Minas | 19% → 79% | 4 m | ~2 s |
+| Limeira do Oeste | 34% → 43% | 2 m (já estava no lugar) | ~10 s |
+
+Com a planta tirada do lugar de propósito (até 80 m, 1,5° e 1% de escala), União
+e Limeira voltam para o mesmo encaixe; Iturama volta de até 0,8° de giro.
+Imagens antes/depois em ARINI (projeto) `arini/encaixe-ruas-2026-11-26/`.
