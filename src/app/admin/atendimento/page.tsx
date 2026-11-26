@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CabecalhoPagina } from "@/components/ui/Pagina";
 import { CAMPO_COMPACTO } from "@/components/admin/estilos";
 import {
-  canalDoContatoRotulo, contatoRotulo, falta0156, nomeSetor, papelAtendimento, podeVer, PERFIL_LABEL, SETORES_ATENDIMENTO, STATUS_LABEL, type Conversa,
+  canalDoContatoRotulo, contatoRotulo, falta0156, naAutomatica, nomeSetor, papelAtendimento, podeVer, PERFIL_LABEL, SETORES_ATENDIMENTO, STATUS_LABEL, type Conversa,
 } from "@/lib/atendimento";
 import ConversaAtendimento from "@/components/atendimento/ConversaAtendimento";
 
@@ -34,7 +34,7 @@ export default async function Atendimento({ searchParams }: PageProps<"/admin/at
 
   // contagem das caixas (conversas em aberto que a pessoa enxerga)
   const { data: abertas, error } = await admin.from("atendimento_conversas")
-    .select("setor, responsavel, nao_lidas, status").neq("status", "resolvida").limit(5000);
+    .select("setor, responsavel, nao_lidas, status, menu_enviado_em, menu_respondido_em, ari_ativa_em").neq("status", "resolvida").limit(5000);
   if (error) {
     return (
       <div className="space-y-4">
@@ -52,12 +52,14 @@ export default async function Atendimento({ searchParams }: PageProps<"/admin/at
   };
   const caixas: { id: string; rotulo: string; total?: number; naoLidas?: number }[] = [
     { id: "minhas", rotulo: "Minhas conversas", ...conta((c) => c.responsavel === a.userId) },
-    ...(triagem ? [{ id: "central", rotulo: "Caixa central (triagem)", ...conta((c) => !c.setor) }] : []),
+    // só o que precisa de uma pessoa decidir; quem está no menu ou com a Ari fica em "Automático"
+    ...(triagem ? [{ id: "central", rotulo: "Caixa central (triagem)", ...conta((c) => !c.setor && !naAutomatica(c)) }] : []),
     ...meusSetores.map((s) => ({ id: "setor:" + s, rotulo: nomeSetor(s), ...conta((c) => c.setor === s) })),
+    ...(triagem ? [{ id: "automatico", rotulo: "Automático (menu e Ari)", ...conta((c) => naAutomatica(c)) }] : []),
     ...(triagem ? [{ id: "todas", rotulo: "Todas em aberto", ...conta(() => true) }] : []),
     { id: "resolvidas", rotulo: "Resolvidas" },
   ];
-  const padrao = triagem && conta((c) => !c.setor).total ? "central"
+  const padrao = triagem && conta((c) => !c.setor && !naAutomatica(c)).total ? "central"
     : conta((c) => c.responsavel === a.userId).total ? "minhas"
     : meusSetores[0] ? "setor:" + meusSetores[0] : "minhas";
   const caixa = typeof q.caixa === "string" && caixas.some((c) => c.id === q.caixa) ? q.caixa : padrao;
@@ -67,7 +69,7 @@ export default async function Atendimento({ searchParams }: PageProps<"/admin/at
   if (caixa === "resolvidas") consulta = consulta.eq("status", "resolvida");
   else consulta = consulta.neq("status", "resolvida");
   if (caixa === "minhas") consulta = consulta.eq("responsavel", a.userId);
-  else if (caixa === "central") consulta = consulta.is("setor", null);
+  else if (caixa === "central" || caixa === "automatico") consulta = consulta.is("setor", null).is("responsavel", null);
   else if (caixa.startsWith("setor:")) consulta = consulta.eq("setor", caixa.slice(6));
   if (busca) {
     const digitos = busca.replace(/\D/g, "");
@@ -75,7 +77,8 @@ export default async function Atendimento({ searchParams }: PageProps<"/admin/at
     consulta = digitos.length >= 4 ? consulta.ilike("telefone", `%${digitos}%`) : consulta.or(`nome.ilike.%${termo}%,codigo.ilike.%${termo}%`);
   }
   const { data: lista } = await consulta.order("ultima_mensagem_em", { ascending: false }).limit(150);
-  const conversas = ((lista ?? []) as Conversa[]).filter((c) => podeVer(a, papel, c));
+  const conversas = ((lista ?? []) as Conversa[]).filter((c) => podeVer(a, papel, c))
+    .filter((c) => caixa === "central" ? !naAutomatica(c) : caixa === "automatico" ? naAutomatica(c) : true);
   const ids = [...new Set(conversas.map((c) => c.responsavel).filter(Boolean))] as string[];
   const { data: pessoas } = ids.length ? await admin.from("profiles").select("user_id, nome").in("user_id", ids) : { data: [] };
   const nomeDe = new Map((pessoas ?? []).map((p) => [p.user_id as string, (p.nome as string) || "Sem nome"]));
@@ -124,7 +127,7 @@ export default async function Atendimento({ searchParams }: PageProps<"/admin/at
                   <span className="mt-0.5 block truncate text-sm text-texto-2">{c.ultimo_texto}</span>
                   <span className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-texto-2">
                     {canalDoContatoRotulo(c.telefone) !== "WhatsApp" && <span className="rounded-full bg-verde/15 px-2 font-semibold text-verde">{canalDoContatoRotulo(c.telefone)}</span>}
-                    <span className="rounded-full border border-linha px-2">{nomeSetor(c.setor)}</span>
+                    <span className="rounded-full border border-linha px-2">{naAutomatica(c) ? (c.ari_ativa_em ? "Com a Ari" : "No menu") : nomeSetor(c.setor)}</span>
                     {c.responsavel && <span className="rounded-full border border-linha px-2">{nomeDe.get(c.responsavel) ?? "Responsável"}</span>}
                     {c.perfil_tipo && <span className="rounded-full border border-linha px-2">{PERFIL_LABEL[c.perfil_tipo] ?? c.perfil_tipo}</span>}
                     {c.status === "pendente" && <span className="rounded-full border border-linha px-2">{STATUS_LABEL.pendente}</span>}

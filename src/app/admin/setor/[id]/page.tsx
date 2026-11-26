@@ -36,7 +36,10 @@ export default async function MesaDoSetor({ params }: PageProps<"/admin/setor/[i
   let conversas = admin.from("atendimento_conversas")
     .select("id, codigo, nome, telefone, responsavel, nao_lidas, ultimo_texto, ultima_mensagem_em")
     .neq("status", "resolvida").order("ultima_mensagem_em", { ascending: false }).limit(300);
-  conversas = diretoria ? conversas.is("setor", null) : conversas.eq("setor", id);
+  // na caixa central não entra quem está só com o robô (no menu sem escolher ou com a Ari)
+  conversas = diretoria
+    ? conversas.is("setor", null).or("responsavel.not.is.null,and(ari_ativa_em.is.null,or(menu_enviado_em.is.null,menu_respondido_em.not.is.null))")
+    : conversas.eq("setor", id);
 
   // 2. funis do setor (crm_pipelines) e, no Comercial, o funil de negociação
   const funisSetor = admin.from("crm_pipelines").select("id, nome").eq("setor", id).eq("ativo", true).order("nome");

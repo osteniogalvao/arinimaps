@@ -4,7 +4,7 @@ import { CheckCircle2, Clock, Inbox, MessageCircleWarning, Timer } from "lucide-
 import { ator } from "@/lib/authz";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CabecalhoPagina, Estatistica, Secao } from "@/components/ui/Pagina";
-import { canalDoContatoRotulo, falta0156, nomeSetor, papelAtendimento } from "@/lib/atendimento";
+import { canalDoContatoRotulo, falta0156, naAutomatica, nomeSetor, papelAtendimento } from "@/lib/atendimento";
 import { prazoNoHorario, type HorarioSetor } from "@/lib/atendimento-horario";
 
 export const metadata = { title: "Relatórios do atendimento" };
@@ -16,6 +16,7 @@ type Conv = {
   id: string; setor: string | null; responsavel: string | null; status: string; telefone: string;
   etiquetas: string[] | null; created_at: string; resolvida_em: string | null;
   ultima_entrada_em: string | null; ultima_saida_em: string | null;
+  menu_enviado_em: string | null; menu_respondido_em: string | null; ari_ativa_em: string | null;
 };
 type Msg = { conversa_id: string; direcao: "entrada" | "saida"; enviado_por: string | null; created_at: string };
 
@@ -49,7 +50,7 @@ export default async function RelatoriosAtendimento({ searchParams }: PageProps<
   const desde = inicioDoPeriodo(dias);
   const admin = supabaseAdmin();
 
-  const campos = "id, setor, responsavel, status, telefone, etiquetas, created_at, resolvida_em, ultima_entrada_em, ultima_saida_em";
+  const campos = "id, setor, responsavel, status, telefone, etiquetas, created_at, resolvida_em, ultima_entrada_em, ultima_saida_em, menu_enviado_em, menu_respondido_em, ari_ativa_em";
   const [novasR, abertasR, resolvidasR] = await Promise.all([
     admin.from("atendimento_conversas").select(campos).gte("created_at", desde).limit(10000),
     admin.from("atendimento_conversas").select(campos).neq("status", "resolvida").limit(10000),
@@ -67,7 +68,7 @@ export default async function RelatoriosAtendimento({ searchParams }: PageProps<
   const novas = (novasR.data ?? []) as Conv[];
   const abertas = (abertasR.data ?? []) as Conv[];
   const resolvidas = (resolvidasR.data ?? []) as Conv[];
-  const semResposta = abertas.filter((c) => c.ultima_entrada_em && (!c.ultima_saida_em || c.ultima_entrada_em > c.ultima_saida_em));
+  const semResposta = abertas.filter((c) => !naAutomatica(c) && c.ultima_entrada_em && (!c.ultima_saida_em || c.ultima_entrada_em > c.ultima_saida_em));
 
   // mensagens do período das conversas novas: primeira entrada x primeira resposta de alguém da equipe
   const msgs: Msg[] = [];

@@ -46,6 +46,28 @@ O worker chama `fn_atendimento_regras()` a cada 10 min: conversa aberta sem
 resposta humana há mais que `atendimento_prazo_minutos` (expediente do
 rodízio) vira tarefa do setor ou do responsável, uma por conversa por dia.
 
+## Caixa "Automático" (25/11/2026)
+
+Áudio do Stenio ao Carlos: "o CRM não vai ficar bagunçado". Quem ainda está só
+com o robô não aparece na caixa central de triagem:
+
+- recebeu o menu e ainda não escolheu opção, ou
+- está consultando imóveis com a Ari.
+
+Essas conversas ficam em **Central > Atendimento > Automático (menu e Ari)**,
+com a etiqueta "No menu" ou "Com a Ari" (`naAutomatica` em `lib/atendimento.ts`).
+Quando o cliente escolhe um setor, a conversa vai direto para a fila dele; se
+escolhe opção sem setor, erra o menu além do limite ou pede uma pessoa, cai na
+caixa central (ou no Comercial, saindo da Ari).
+
+O envio do menu também marca `ultima_saida_em`: quem recebeu o menu e sumiu não
+gera tarefa "Responder WhatsApp" nem conta como "Esperando resposta" no relatório.
+A resposta do cliente ao menu reabre o relógio, já no setor escolhido.
+
+Disparos em massa (marketing, follow-up) não saem por este número: ele só
+responde quem chama, dentro da janela de 24 h da Meta. Para campanha, outro
+número, fora deste sistema.
+
 ## Ari no WhatsApp: consulta de imóveis (migration 0170)
 
 Pedido do Carlos (24/11/2026): o cliente consulta imóveis pelo mesmo número.
