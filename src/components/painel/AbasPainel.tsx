@@ -16,6 +16,7 @@ const ABAS: { href: string; rotulo: string; icone: LucideIcon }[] = [
   { href: "/painel", rotulo: "Meus imóveis", icone: Building2 },
   { href: "/painel/cofre", rotulo: "Cofre da propriedade", icone: ShieldCheck },
   { href: "/painel/insumos", rotulo: "Calculadora de insumos", icone: Calculator },
+  { href: "/painel/escritorio", rotulo: "Escritório", icone: Building2 },
   { href: "/painel/crm", rotulo: "Meu CRM", icone: ContactRound },
   { href: "/painel/oportunidades", rotulo: "Minhas oportunidades", icone: Handshake },
   { href: "/painel/leiloes", rotulo: "CRM de leilões", icone: Building2 },
@@ -33,7 +34,7 @@ const ABAS: { href: string; rotulo: string; icone: LucideIcon }[] = [
 
 export default function AbasPainel({ territorio = false, crm = false, anunciar = false, cofre = false, insumos = false, leiloes = false }: { leiloes?: boolean; territorio?: boolean; crm?: boolean; anunciar?: boolean; cofre?: boolean; insumos?: boolean }) {
   const caminho = usePathname();
-  const acessiveis: Record<string, boolean> = { "/painel/leiloes": leiloes, "/painel/territorio": territorio, "/painel/crm": crm, "/painel/novo": anunciar, "/painel/cofre": cofre, "/painel/insumos": insumos };
+  const acessiveis: Record<string, boolean> = { "/painel/leiloes": leiloes, "/painel/territorio": territorio, "/painel/crm": crm, "/painel/escritorio": crm, "/painel/novo": anunciar, "/painel/cofre": cofre, "/painel/insumos": insumos };
   const abas = ABAS.filter(a => acessiveis[a.href] !== false);
   // a aba mais específica que casa com o caminho é a ativa (/painel não "engole" /painel/novo)
   const ativa = abas
