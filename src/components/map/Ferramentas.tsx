@@ -359,7 +359,7 @@ export default function Ferramentas({
     // Vídeo do Carlos (23/11/2026, 14h49): no computador a barra ainda tampava informação
     // (ocupava 760 px, quase a tela toda, por cima dos painéis do canto). Agora ela só tem
     // a largura dos botões, sem o título "Ferramentas", botões mais baixos e centralizada.
-    <div hidden={recolhida && !modo} className="absolute bottom-3 sm:bottom-[calc(1.25rem+var(--faixa,0px))] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-max sm:max-w-[min(92%,620px)] space-y-2">
+    <div data-barra-ferramentas hidden={recolhida && !modo} className="absolute bottom-3 sm:bottom-[calc(1.25rem+var(--faixa,0px))] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1.5rem)] sm:w-max sm:max-w-[min(92%,620px)] space-y-2">
       {bloqueio && (
         <div className={`flex items-center gap-3 px-4 py-3 text-sm ${VIDRO}`}>
           <Lock className="size-4 shrink-0 text-ouro" />

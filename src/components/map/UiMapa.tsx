@@ -206,14 +206,14 @@ export function Legenda({ car, corUrbana, extras = [], relevo = [] }: {
   if (!aberta) {
     return (
       <button type="button" onClick={() => setAberta(true)} aria-expanded={false}
-        className="absolute bottom-24 sm:bottom-[calc(9rem+var(--faixa,0px))] lg:bottom-[calc(8rem+var(--faixa,0px))] left-10 inline-flex items-center gap-1.5 rounded-full border border-linha bg-superficie/85 px-3 py-1.5 text-[11px] font-semibold text-texto-2 shadow-[0_6px_18px_-12px_rgb(0_0_0/0.8)] backdrop-blur-md transition hover:text-texto">
+        className="absolute bottom-28 sm:bottom-[calc(9rem+var(--faixa,0px))] lg:bottom-[calc(8rem+var(--faixa,0px))] left-10 inline-flex items-center gap-1.5 rounded-full border border-linha bg-superficie/85 px-3 py-1.5 text-[11px] font-semibold text-texto-2 shadow-[0_6px_18px_-12px_rgb(0_0_0/0.8)] backdrop-blur-md transition hover:text-texto">
         <ListIcon className="size-3 text-ouro" /> Legenda
       </button>
     );
   }
   return (
     // 17/11/2026 (item 16 do Carlos): legenda discreta, vidro mais leve, letra menor
-    <div className="absolute bottom-24 sm:bottom-[calc(9rem+var(--faixa,0px))] lg:bottom-[calc(8rem+var(--faixa,0px))] left-10 max-h-[45%] sm:max-h-[55%] w-52 overflow-y-auto rounded-xl border border-linha bg-superficie/85 px-3 py-2 text-[11px] leading-tight space-y-1 shadow-[0_10px_24px_-16px_rgb(0_0_0/0.8)] backdrop-blur-md">
+    <div className="absolute bottom-28 sm:bottom-[calc(9rem+var(--faixa,0px))] lg:bottom-[calc(8rem+var(--faixa,0px))] left-10 max-h-[45%] sm:max-h-[55%] w-52 overflow-y-auto rounded-xl border border-linha bg-superficie/85 px-3 py-2 text-[11px] leading-tight space-y-1 shadow-[0_10px_24px_-16px_rgb(0_0_0/0.8)] backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-texto-2">Legenda</p>
         <button type="button" onClick={() => setAberta(false)} aria-expanded aria-label="Recolher legenda" title="Recolher legenda"

@@ -2144,7 +2144,7 @@ export default function MapaRegional({
       </button>
 
       {/* ---------- mapa ---------- */}
-      <div ref={areaMapaRef} className={`relative flex-1 min-w-0 ${CAMADAS_OFICIAIS.some((c) => camadasAtivas.has(c.id)) ? ALTURA_FAIXA : ""}`}>
+      <div ref={areaMapaRef} className={`area-mapa relative flex-1 min-w-0 ${CAMADAS_OFICIAIS.some((c) => camadasAtivas.has(c.id)) ? ALTURA_FAIXA : ""}`}>
         {/* inline: o CSS do maplibre força position:relative na classe e colapsaria a altura */}
         <div ref={containerRef} style={{ position: "absolute", inset: "0 0 var(--faixa, 0px) 0" }} />
         <ResumoCamadas ativas={camadasAtivas} estado={estadoCamadas} />
