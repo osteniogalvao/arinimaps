@@ -22,7 +22,9 @@ export async function GET(request: Request) {
   try {
     const copyright = await creditosGoogle(zoom, norte, sul, leste, oeste);
     return NextResponse.json({ copyright }, { headers: { "Cache-Control": "private, max-age=600" } });
-  } catch {
-    return NextResponse.json({ copyright: "" }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  } catch (e) {
+    const motivo = e instanceof Error ? e.message.replace(/key=[^&\s]+/g, "key=***") : "";
+    console.error("[satelite-google]", motivo);
+    return NextResponse.json({ copyright: "", motivo }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }
