@@ -28,7 +28,8 @@ import "server-only";
  * 429 e o mapa fica sem foto até o dia seguinte; a base de ruas continua.
  */
 
-const CHAVE = process.env.GOOGLE_MAPS_TILES_KEY?.trim() || "";
+// tira espaços e aspas que às vezes vêm junto ao colar a variável no painel
+const CHAVE = (process.env.GOOGLE_MAPS_TILES_KEY ?? "").trim().replace(/^["']+|["']+$/g, "");
 const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "https://arinibrasil.com.br").replace(/\/+$/, "") + "/";
 const LIMITE_DIA = Number(process.env.GOOGLE_TILES_LIMITE_DIA) || 20_000;
 
@@ -46,7 +47,11 @@ async function criarSessao(): Promise<string> {
     body: JSON.stringify({ mapType: "satellite", language: "pt-BR", region: "BR", scale: "scaleFactor2x", highDpi: true }),
     signal: AbortSignal.timeout(8000),
   });
-  if (!resposta.ok) throw new Error(`createSession ${resposta.status}`);
+  if (!resposta.ok) {
+    // motivo do Google (ex.: API_KEY_HTTP_REFERRER_BLOCKED, SERVICE_DISABLED), sem a chave
+    const motivo = await resposta.text().then((t) => /"reason":\s*"([A-Z_]+)"/.exec(t)?.[1] ?? "").catch(() => "");
+    throw new Error(`createSession ${resposta.status} ${motivo}`.trim());
+  }
   const dados = (await resposta.json()) as { session?: string; expiry?: string };
   if (!dados.session) throw new Error("createSession sem sessão");
   // renova um dia antes de vencer

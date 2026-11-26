@@ -25,7 +25,10 @@ export async function GET(request: Request, ctx: RouteContext<"/api/satelite/goo
     const destino = await urlTileGoogle(z, x, y);
     // a sessão dura ~2 semanas; o redirecionamento pode ficar 1 h no navegador
     return NextResponse.redirect(destino, { status: 302, headers: { "Cache-Control": "private, max-age=3600" } });
-  } catch {
-    return NextResponse.json({ error: "Satélite indisponível." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  } catch (e) {
+    // o motivo (código do Google, sem a chave) ajuda a achar erro de configuração
+    const motivo = e instanceof Error ? e.message.replace(/key=[^&\s]+/g, "key=***") : "";
+    console.error("[satelite-google]", motivo);
+    return NextResponse.json({ error: "Satélite indisponível.", motivo }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }
