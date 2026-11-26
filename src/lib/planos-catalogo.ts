@@ -574,6 +574,16 @@ export function planoNoPerfil(plano: PlanoCatalogo, personaId: PersonaCatalogoId
   return !!personaId && (plano.personaId === personaId || !!plano.tambemEm?.[personaId]);
 }
 /** Planos exibidos no perfil, do mais barato ao mais caro, com o nome usado ali. */
+/**
+ * Perfis cujos planos pagos ficam "Em breve" (fora de venda) até os módulos
+ * principais existirem. Auditoria de 25/11/2026: os pagos do produtor rural
+ * vendiam painel da fazenda, pecuária, estoque e NDVI por talhão, que ainda
+ * não existem. O teste gratuito continua.
+ */
+export const PERFIS_PAGOS_EM_BREVE: PersonaCatalogoId[] = ["produtor_rural"];
+export const planoEmBreve = (p: Pick<PlanoCatalogo, "personaId" | "mensalCentavos">) =>
+  p.mensalCentavos > 0 && PERFIS_PAGOS_EM_BREVE.includes(p.personaId);
+
 export function planosDoPerfil(personaId: PersonaCatalogoId) {
   return PLANOS_CATALOGO.filter((p) => planoNoPerfil(p, personaId))
     .map((p) => p.personaId === personaId ? p : { ...p, nome: p.tambemEm![personaId]! })
