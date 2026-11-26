@@ -37,8 +37,6 @@ export default function MesaSetor({ setor, hoje, conversas, conversasErro, funis
   const rConversas = { error: conversasErro };
   const rTarefas = { error: tarefasErro };
 
-  const resto = setor.itens.filter((i) => !setor.principais.includes(i.href));
-
   return (
     <div className="space-y-8">
       <CabecalhoPagina eyebrow="Setor" titulo={setor.nome} subtitulo={setor.descricao}
@@ -169,16 +167,6 @@ export default function MesaSetor({ setor, hoje, conversas, conversasErro, funis
         </Bloco>
       </div>
 
-      {resto.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.22em] text-texto-2">Outras telas do setor</h2>
-          <div className="flex flex-wrap gap-2">
-            {resto.map((i) => (
-              <Link key={i.href} href={i.href} className="btn-contorno px-3 py-1.5 text-sm">{i.rotulo}</Link>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { ArrowRight, Check, MessageCircle, Minus, Plus } from "lucide-react";
 import {
   COMPLEMENTOS_CATALOGO, DISPONIBILIDADE_CATALOGO, PLANOS_CATALOGO, PROFISSOES_TECNICAS,
   RECURSOS_CATALOGO, cotarPlano, planosDoPerfil, economiaAnualCentavos, comPrecoVigente, type PrecoVigente,
-  type CicloCatalogo, type PersonaCatalogoId, type PlanoCatalogo, type SelecaoCatalogo,
+  planoEmBreve, type CicloCatalogo, type PersonaCatalogoId, type PlanoCatalogo, type SelecaoCatalogo,
 } from "@/lib/planos-catalogo";
 import { CAMPO } from "@/components/ui/Pagina";
 import type { CartaoProprietario } from "./proprietario-textos";
@@ -65,8 +65,8 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
   // Pacotes "Em breve" aparecem na vitrine, mas não podem ser escolhidos nem pedidos.
   const planos = vitrine.filter((p) => !emBreve.has(p.id));
   // Quem chega para comprar cai no plano em destaque ou no primeiro pago, não no teste (áudio do Carlos, 23/11/2026).
-  const inicial = planos.find((p) => p.id === parametros.pacote) ?? planos.find((p) => p.id === apresentacao?.destaque)
-    ?? planos.find((p) => p.mensalCentavos > 0 && !p.teste) ?? planos[0];
+  const inicial = planos.find((p) => p.id === parametros.pacote && !planoEmBreve(p)) ?? planos.find((p) => p.id === apresentacao?.destaque && !planoEmBreve(p))
+    ?? planos.find((p) => p.mensalCentavos > 0 && !p.teste && !planoEmBreve(p)) ?? planos.find((p) => !planoEmBreve(p)) ?? planos[0];
   const [planoId, setPlanoId] = useState(inicial.id);
   const plano = planos.find((p) => p.id === planoId)!;
   const [periodo, setPeriodo] = useState<CicloCatalogo>(parametros.ciclo === "anual" ? "anual" : "mensal");
@@ -186,7 +186,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
           return <article key={p.id} data-selecionado={p.id === planoId} className="vitrine-card gap-3"
             data-destaque={apresentacao?.destaque === p.id || undefined}
             onClick={(evento) => {
-              if (p.id !== planoId && !(evento.target as HTMLElement).closest("button,details,a")) escolher(p.id);
+              if (p.id !== planoId && !planoEmBreve(p) && !(evento.target as HTMLElement).closest("button,details,a")) escolher(p.id);
             }}>
             {apresentacao?.destaque === p.id && <span className="vitrine-selo">Mais escolhido</span>}
             {cartao && <p className="vitrine-chamada">{cartao.chamada}</p>}
@@ -209,8 +209,9 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
               <p className="text-texto-2">{p.motivoDisponibilidade}</p>
               {p.teste && <p className="mt-2">Após o teste, continua disponível o mapa de imóveis à venda.</p>}
             </details>
-            <button type="button" aria-pressed={p.id === planoId} aria-label={"Selecionar " + p.nome}
-              onClick={() => escolher(p.id)} className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : cartao?.botao ?? "Selecionar"}</button>
+            {planoEmBreve(p) ? <button type="button" disabled className="escolher opacity-60">Em breve</button>
+              : <button type="button" aria-pressed={p.id === planoId} aria-label={"Selecionar " + p.nome}
+              onClick={() => escolher(p.id)} className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : cartao?.botao ?? "Selecionar"}</button>}
           </article>;
         })}
       </div>
@@ -279,7 +280,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
       {ativacao && podeAtivar ? <p role="status">{ativacao} <Link href={plano.id === "corretor_teste" ? "/painel/crm" : plano.id === "tecnico_teste" ? "/painel/crm/demonstracao" : "/painel/cofre"} className="font-semibold text-verde underline">Abrir recurso</Link></p> :
         protocolo ? <p role="status">{aviso || "Pedido registrado."} <Link className="font-semibold text-verde underline" href="/planos/solicitacoes">Acompanhar meus pedidos</Link></p> :
         autenticado && podeAtivar ? <button type="button" className="lp-btn lp-btn-verde" disabled={enviando || !cotacao} onClick={ativar}>{enviando ? "Ativando…" : plano.teste ? "Iniciar teste de 3 dias" : "Ativar cofre gratuito"} <ArrowRight /></button> :
-        autenticado ? <button type="button" className="lp-btn lp-btn-verde disabled:opacity-50" disabled={!cotacao || enviando || (direto && !aceite)} onClick={enviar}>{enviando ? (direto ? "Gerando a fatura…" : "Enviando…") : direto ? "Contratar e pagar" : "Solicitar à Central"} <ArrowRight /></button> :
+        autenticado ? <button type="button" className="lp-btn lp-btn-verde disabled:opacity-50" disabled={!cotacao || enviando || (direto && !aceite) || planoEmBreve(plano)} onClick={enviar}>{enviando ? (direto ? "Gerando a fatura…" : "Enviando…") : direto ? "Contratar e pagar" : "Solicitar à Central"} <ArrowRight /></button> :
         <div className="flex flex-wrap gap-3"><Link className="lp-btn lp-btn-verde" href={"/entrar?volta=" + volta}>{pagamentoDireto ? "Entrar para contratar" : "Entrar para solicitar"} <ArrowRight /></Link>
           <Link className="lp-btn lp-btn-contorno" href={(plano.alcance === "global" ? "/entrar?cadastro=1&papel=consulta&nicho=consulta" : cadastro) + "&volta=" + volta}>Criar conta</Link></div>}
     </fieldset>

@@ -33,10 +33,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, Spline, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, Spline, Wand2, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
 import type { Map as MLMap, GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { sugerirParesVisuais } from "@/lib/geo/pontosVisuais";
+import { ehFalhaEncaixe, linhasParaEncaixe, caixaRobusta, type FalhaEncaixe, type Linha, type ResultadoEncaixe } from "@/lib/geo/encaixeRuas";
 import { estiloSatelite } from "@/lib/map/ortofotos";
 import {
   centroDe, ajustarPorPontos, DESLOCAMENTO_DATUM, TRANSFORM_ZERO,
@@ -249,6 +250,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   const buscaLote = useRef(0);
   const [passo, setPasso] = useState(10);
   const [buscandoPontos, setBuscandoPontos] = useState(false);
+  /** texto do andamento do encaixe automático pelas ruas; null = parado */
+  const [encaixando, setEncaixando] = useState<string | null>(null);
   const [pares, setPares] = useState<ParDeControle[]>([]);
   const [pendente, setPendente] = useState<[number, number] | null>(null);
   const [residuo, setResiduo] = useState<number | null>(null);
@@ -1686,12 +1689,32 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     });
   }
 
+  /**
+   * Leva a peça ativa (ou a planta inteira) para onde os pares mandam: os
+   * marcados à mão e os que o "Encaixar pelas ruas" calcula seguem o mesmo caminho.
+   */
+  function aplicarPares(lista: ParDeControle[]): (Transform & { residuoM: number }) | string {
+    const parte = ajustesRef.current.find(a => a.id === ativaRef.current);
+    const inv = inverter(afim(centroRef.current, tRef.current));
+    const locais = parte ? lista.map(p => ({ planta: aplicarMatrizPonto(inv, p.planta), satelite: aplicarMatrizPonto(inv, p.satelite) })) : lista;
+    const ajuste = ajustarPorPontos(locais, parte ? parte.pivo ?? centroParte(parte) : centroRef.current, parte?.t ?? tRef.current);
+    if (!ajuste) return "degenerado";
+    if (parte && (Math.abs(ajuste.offsetLesteM) > 2_000 || Math.abs(ajuste.offsetNorteM) > 2_000 ||
+      Math.abs(ajuste.rotacaoGraus) > 360 || ajuste.escala < 0.5 || ajuste.escala > 2)) {
+      return "Os pontos excedem os limites do ajuste da quadra. Confira se os pares indicam os mesmos cantos.";
+    }
+    const novo = {
+      offsetLesteM: ajuste.offsetLesteM, offsetNorteM: ajuste.offsetNorteM,
+      rotacaoGraus: ajuste.rotacaoGraus, escala: ajuste.escala,
+    };
+    if (parte) aplicarParte(() => novo); else aplicar(novo);
+    return ajuste;
+  }
+
   function aplicarPontos() {
     const parte = ajustesRef.current.find(a => a.id === ativaRef.current);
-    const inv = inverter(afim(centroRef.current, t));
-    const locais = parte ? pares.map(p => ({ planta: aplicarMatrizPonto(inv, p.planta), satelite: aplicarMatrizPonto(inv, p.satelite) })) : pares;
-    const ajuste = ajustarPorPontos(locais, parte ? parte.pivo ?? centroParte(parte) : centroRef.current, parte?.t ?? t);
-    if (!ajuste) {
+    const ajuste = aplicarPares(pares);
+    if (ajuste === "degenerado") {
       setErro({
         mensagem: "Não deu para calcular o ajuste com esses pontos.",
         motivo: "Os pontos marcados na planta estão praticamente no mesmo lugar — sem distância entre eles não há como medir giro nem escala.",
@@ -1700,19 +1723,128 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       });
       return;
     }
+    if (typeof ajuste === "string") { setMsg(ajuste); return; }
     setErro(null);
-    if (parte && (Math.abs(ajuste.offsetLesteM) > 2_000 || Math.abs(ajuste.offsetNorteM) > 2_000 ||
-      Math.abs(ajuste.rotacaoGraus) > 360 || ajuste.escala < 0.5 || ajuste.escala > 2)) {
-      setMsg("Os pontos excedem os limites do ajuste da quadra. Confira se os pares indicam os mesmos cantos."); return;
-    }
     setResiduo(ajuste.residuoM);
-    const novo = {
-      offsetLesteM: ajuste.offsetLesteM, offsetNorteM: ajuste.offsetNorteM,
-      rotacaoGraus: ajuste.rotacaoGraus, escala: ajuste.escala,
-    };
-    if (parte) aplicarParte(() => novo); else aplicar(novo);
     setPares([]); setPendente(null); pendenteRef.current = null; desenharPares([], null);
     setMsg(`Pontos aplicados em ${parte?.nome ?? "toda a planta"}. Erro médio ${ajuste.residuoM.toFixed(2)} m.`);
+  }
+
+  /** Linhas como estão na tela: a peça ativa (que vai se mexer) e o resto (referência do outro lado da rua). */
+  function linhasNaTela(idParte: string | null) {
+    const bruto = brutoRef.current;
+    if (!bruto) return null;
+    const lista = ajustesRef.current;
+    const chave = lista.map((a) => a.id).join("|");
+    if (membrosRef.current.chave !== chave || membrosRef.current.m.length !== bruto.features.length) {
+      membrosRef.current = { chave, m: calcularMembros(bruto, lista) };
+    }
+    const d = montar(bruto, centroRef.current, tRef.current, ocultosRef.current, lista, idParte, membrosRef.current.m, excluidasRef.current);
+    if (!idParte) return { movel: linhasParaEncaixe({ type: "FeatureCollection", features: [...d.resto.features, ...d.parte.features] }), fixo: [] as Linha[] };
+    const movel = linhasParaEncaixe(d.parte);
+    // só as vizinhas interessam: o resto da cidade pesaria no cálculo à toa
+    const [x0, y0, x1, y1] = caixaRobusta(movel, 0, 1);
+    const folgaX = 150 / (111_320 * Math.cos((y0 * Math.PI) / 180)), folgaY = 150 / 110_540;
+    const fixo = linhasParaEncaixe(d.resto).filter((l) => l.some((p) => p[0] > x0 - folgaX && p[0] < x1 + folgaX && p[1] > y0 - folgaY && p[1] < y1 + folgaY));
+    return { movel, fixo };
+  }
+
+  const workerEncaixeRef = useRef<Worker | null>(null);
+  useEffect(() => () => { workerEncaixeRef.current?.terminate(); workerEncaixeRef.current = null; }, []);
+  function calcularEncaixe(movel: Linha[], fixo: Linha[], ruas: Linha[], aoPassar?: (n: number) => void): Promise<ResultadoEncaixe | FalhaEncaixe> {
+    if (!workerEncaixeRef.current) workerEncaixeRef.current = new Worker(new URL("./encaixeRuas.worker.ts", import.meta.url));
+    const w = workerEncaixeRef.current;
+    return new Promise((resolve) => {
+      w.onmessage = (e: MessageEvent<{ ok?: boolean; passada?: number; resultado?: ResultadoEncaixe | FalhaEncaixe; erro?: string }>) => {
+        if (e.data.passada) { aoPassar?.(e.data.passada); return; }
+        resolve(e.data.ok && e.data.resultado ? e.data.resultado : { erro: e.data.erro ?? "O cálculo do encaixe falhou.", amostras: 0 });
+      };
+      w.onerror = () => resolve({ erro: "O navegador interrompeu o cálculo do encaixe.", amostras: 0 });
+      w.postMessage({ movel, fixo, ruas });
+    });
+  }
+
+  async function buscarRuas(linhas: Linha[]): Promise<Linha[] | null> {
+    // 1% a 99% dos vértices: moldura e linha solta longe da cidade não alargam a busca
+    const [x0, y0, x1, y1] = caixaRobusta(linhas, 0.01, 0.99);
+    const fx = 150 / (111_320 * Math.cos((y0 * Math.PI) / 180)), fy = 150 / 110_540;
+    const bbox = [x0 - fx, y0 - fy, x1 + fx, y1 + fy].map((v) => v.toFixed(5)).join(",");
+    try {
+      const r = await fetch(`/api/admin/cartografia/ruas?bbox=${bbox}`);
+      const j = await r.json().catch(() => null) as { ruas?: Linha[]; error?: string; motivo?: string; solucao?: string; codigo?: string } | null;
+      if (r.ok && j?.ruas) return j.ruas;
+      setErro({ mensagem: j?.error ?? "Não foi possível buscar as ruas do OpenStreetMap.", motivo: j?.motivo, solucao: j?.solucao, codigo: j?.codigo ?? "ruas", status: r.status });
+    } catch {
+      setErro({ mensagem: "Não foi possível buscar as ruas do OpenStreetMap.", solucao: "Confira a internet e tente de novo.", codigo: "ruas", status: 0 });
+    }
+    return null;
+  }
+
+  const descreverEncaixe = (r: ResultadoEncaixe) =>
+    `${Math.round(r.acertoAntes * 100)}% → ${Math.round(r.acertoDepois * 100)}% das ruas no meio do vão; ` +
+    `moveu ${r.deslocamentoM.toFixed(1)} m` + (r.soDeslocamento ? "" : `, girou ${r.giroGraus.toFixed(2)}° e ficou com ${(r.escala * 100).toFixed(2)}% do tamanho`);
+
+  /** "Encaixar pelas ruas": a peça ativa ou a planta inteira, sobre os eixos do OpenStreetMap. */
+  async function encaixarPelasRuasDaPlanta() {
+    if (encaixando) return;
+    const alvo = ativaRef.current;
+    const nome = ajustesRef.current.find((a) => a.id === alvo)?.nome ?? "toda a planta";
+    const linhas = linhasNaTela(alvo);
+    if (!linhas || !linhas.movel.length) { setMsg("Não há linhas visíveis para encaixar."); return; }
+    setErro(null); setEncaixando(`Buscando as ruas do OpenStreetMap…`);
+    try {
+      const ruas = await buscarRuas([...linhas.movel, ...linhas.fixo]);
+      if (!ruas) return;
+      setEncaixando(`Encaixando ${nome} em ${fmt(ruas.length)} ruas…`);
+      const r = await calcularEncaixe(linhas.movel, linhas.fixo, ruas,
+        (n) => setEncaixando(`Encaixando ${nome} em ${fmt(ruas.length)} ruas (passada ${n} de 3)…`));
+      if (ativaRef.current !== alvo) return;
+      if (ehFalhaEncaixe(r)) { setMsg(r.erro); return; }
+      const ajuste = aplicarPares(r.pares);
+      if (typeof ajuste === "string") { setMsg(ajuste === "degenerado" ? "O encaixe não conseguiu medir esta peça." : ajuste); return; }
+      setResiduo(null);
+      setMsg(`Encaixe pelas ruas aplicado em ${nome}: ${descreverEncaixe(r)}. Confira sobre o satélite; Ctrl+Z desfaz.`);
+    } finally {
+      setEncaixando(null);
+    }
+  }
+
+  /** Encaixa, uma a uma, as peças separadas que aparecem na vista (ex.: depois de "Separar quadras na vista"). */
+  async function encaixarPecasDaVista() {
+    const map = mapRef.current;
+    if (encaixando || !map) return;
+    const vista = map.getBounds(), global = afim(centroRef.current, tRef.current);
+    const pecas: AjusteLocal[] = [];
+    for (const a of ajustesRef.current) {
+      if (pecas.some((p) => mesmaPeca(p, a))) continue;
+      const centro = aplicarMatrizPonto(compor(global, matrizParte(a)), centroParte(a));
+      if (vista.contains(centro)) pecas.push(a);
+    }
+    if (!pecas.length) { setMsg("Nenhuma peça separada nesta vista. Use “Separar quadras na vista” ou desenhe o perímetro de um bairro antes."); return; }
+    const anterior = ativaRef.current;
+    setErro(null); setEncaixando("Buscando as ruas do OpenStreetMap…");
+    let feitas = 0, iguais = 0, falhas = 0;
+    try {
+      const todas = linhasNaTela(null);
+      const ruas = todas && await buscarRuas(todas.movel);
+      if (!ruas) return;
+      for (const [i, p] of pecas.entries()) {
+        setEncaixando(`Encaixando peça ${i + 1} de ${pecas.length} (${p.nome})…`);
+        ativaRef.current = p.id; setAtiva(p.id);
+        const linhas = linhasNaTela(p.id);
+        if (!linhas?.movel.length) { falhas++; continue; }
+        const r = await calcularEncaixe(linhas.movel, linhas.fixo, ruas);
+        if (ehFalhaEncaixe(r)) { if (r.jaEncaixada) iguais++; else falhas++; continue; }
+        if (typeof aplicarPares(r.pares) === "string") { falhas++; continue; }
+        feitas++;
+      }
+    } finally {
+      ativaRef.current = anterior; setAtiva(anterior);
+      redesenhar(tRef.current, ocultosRef.current);
+      setEncaixando(null);
+    }
+    setMsg(`Encaixe pelas ruas: ${feitas} peça(s) ajustada(s)` + (iguais ? `, ${iguais} já estava(m) no lugar` : "") +
+      (falhas ? `, ${falhas} sem ruas suficientes em volta (ajuste à mão)` : "") + ". Confira sobre o satélite; Ctrl+Z desfaz uma peça por vez.");
   }
 
   function sugerirPontos() {
@@ -2066,7 +2198,15 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
             <button className={chip(modo === "vertices")} onClick={() => setModo("vertices")}
               title="Selecione uma linha e arraste seus vértices"><Pencil className="size-4" /> Ajustar linha</button>
             <button className={chip(modo === "navegar")} onClick={() => setModo("navegar")}><Hand className="size-4" /> Navegar</button>
+            <button className={chip(false)} disabled={carregando || !!encaixando} onClick={encaixarPelasRuasDaPlanta}
+              title="Calcula sozinho o deslocamento, o giro e o tamanho que põem as ruas da planta em cima das ruas do mapa (OpenStreetMap). Vale para a peça selecionada ou, sem peça, para a planta inteira.">
+              <Wand2 className="size-4" /> {encaixando ? "Encaixando…" : parteAtual ? "Encaixar peça pelas ruas" : "Encaixar planta pelas ruas"}</button>
             <button className={chip(false)} disabled={carregando} onClick={separarQuadras}>Separar quadras na vista</button>
+            {ajustes.length > 0 && (
+              <button className={chip(false)} disabled={carregando || !!encaixando} onClick={encaixarPecasDaVista}
+                title="Encaixa pelas ruas, uma a uma, todas as peças separadas que aparecem na tela">
+                <Wand2 className="size-4" /> Encaixar peças da vista</button>
+            )}
             <button className={chip(modo === "pontos")} onClick={() => { setModo("pontos"); setAba("posicao"); setPainelAberto(true); }}
               title="Calibra a peça selecionada ou a planta inteira por pares de pontos"><Crosshair className="size-4" /> Pontos de controle</button>
             <button className={chip(modo === "selecao")} onClick={() => { if (modo === "parte") cancelarDesenho(); setMsg(""); setModo("selecao"); }}
@@ -2178,6 +2318,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           )}
 
           <div className="flex flex-wrap items-center gap-3 text-[13px]">
+            {encaixando && <span role="status" className="inline-flex items-center gap-1.5 font-semibold text-verde"><Wand2 className="size-4 animate-pulse" /> {encaixando}</span>}
             {/* a pendência vem antes do "salvo com sucesso": mexer na planta
                 depois de salvar não pode continuar mostrando confirmação */}
             {haMudancaNaoSalva

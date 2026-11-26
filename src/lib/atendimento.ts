@@ -55,6 +55,17 @@ export function podeVer(a: Ator, papel: PapelAtendimento, c: Pick<Conversa, "set
   return !!c.setor && a.setores.includes(c.setor as SetorId);
 }
 
+/**
+ * A conversa está só com o robô: recebeu o menu e ainda não escolheu, ou está
+ * consultando imóveis com a Ari. Ninguém da equipe precisa agir, então ela fica
+ * na caixa "Automático" e não na triagem (áudio do Stenio ao Carlos, 25/11/2026:
+ * "o CRM não vai ficar bagunçado"; só vai para uma pessoa quando escolhe um setor).
+ */
+export function naAutomatica(c: Pick<Conversa, "setor" | "responsavel" | "menu_enviado_em" | "menu_respondido_em"> & { ari_ativa_em?: string | null }) {
+  if (c.setor || c.responsavel) return false;
+  return !!c.ari_ativa_em || (!!c.menu_enviado_em && !c.menu_respondido_em);
+}
+
 /** Pode tirar da caixa central (triar) e devolver para ela. */
 export const podeTriar = (papel: PapelAtendimento) => papel !== "atendente";
 
@@ -154,6 +165,16 @@ async function enviarDoRobo(c: Pick<Conversa, "id" | "telefone">, texto: string,
   } catch (e) {
     console.error("atendimento: robô não conseguiu enviar", e instanceof Error ? e.message : e);
   }
+}
+
+/**
+ * Envia o menu. O menu é uma resposta: marca ultima_saida_em para a conversa
+ * não virar "sem resposta" (tarefa do worker, relatório) enquanto o cliente não
+ * escolhe. Quando ele escolhe, a mensagem dele reabre o relógio no setor.
+ */
+async function enviarMenu(c: Pick<Conversa, "id" | "telefone">, texto: string, canal?: string) {
+  await enviarDoRobo(c, texto, canal);
+  await supabaseAdmin().from("atendimento_conversas").update({ ultima_saida_em: new Date().toISOString() }).eq("id", c.id);
 }
 
 async function encaminhar(c: Conversa, setor: string | null, responsavel: string | null, acao: string, texto: string, autor: string | null) {
@@ -271,7 +292,7 @@ export async function entradaAtendimento(p: {
     await admin.from("atendimento_conversas").update({ menu_enviado_em: agora, menu_tentativas: 0, menu_respondido_em: null }).eq("id", c.id);
     Object.assign(c, { menu_enviado_em: agora, menu_tentativas: 0, menu_respondido_em: null });
     await eventoAtendimento({ conversa_id: c.id, acao: "menu", texto: "O cliente pediu o menu: opções enviadas de novo." });
-    await enviarDoRobo(c, textoDoMenu(menu, opcoes, c.nome), p.canal);
+    await enviarMenu(c, textoDoMenu(menu, opcoes, c.nome), p.canal);
     return true;
   }
   if (c.menu_respondido_em) return true;
@@ -284,7 +305,7 @@ export async function entradaAtendimento(p: {
   if (!aberto) {
     await admin.from("atendimento_conversas").update({ menu_enviado_em: agora, menu_tentativas: 0 }).eq("id", c.id);
     await eventoAtendimento({ conversa_id: c.id, acao: "menu", texto: "Menu automático enviado." });
-    await enviarDoRobo(c, textoDoMenu(menu, opcoes, c.nome), p.canal);
+    await enviarMenu(c, textoDoMenu(menu, opcoes, c.nome), p.canal);
     return true;
   }
   const escolha = lerEscolha(p.texto, opcoes);
@@ -326,7 +347,7 @@ export async function entradaAtendimento(p: {
     return true;
   }
   await admin.from("atendimento_conversas").update({ menu_tentativas: tentativas }).eq("id", c.id);
-  await enviarDoRobo(c, textoDoMenu(menu, opcoes, c.nome, menu.nao_entendi), p.canal);
+  await enviarMenu(c, textoDoMenu(menu, opcoes, c.nome, menu.nao_entendi), p.canal);
   return true;
 }
 

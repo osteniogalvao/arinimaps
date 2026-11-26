@@ -25,8 +25,7 @@ import {
 import { Logo } from "@/components/shell/AppShell";
 import BotaoTema from "@/components/shell/BotaoTema";
 import Sino from "@/components/admin/Sino";
-import { SETORES, type ItemMenu, type SetorId } from "@/lib/setores";
-import AbasSetor from "@/components/admin/AbasSetor";
+import { SETORES, type ItemMenu, type Setor, type SetorId } from "@/lib/setores";
 import Avatar from "@/components/shell/Avatar";
 import { useNaoLidosSuporte } from "@/components/suporte/useNaoLidos";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -52,6 +51,12 @@ const GERAL_MAIS: ItemMenu[] = [
   { href: "/admin/crm", rotulo: "Todos os funis", icone: "⇉" },
   { href: "/admin/equipe", rotulo: "Equipe e funções", icone: "☺" },
 ];
+
+/** Telas do setor na ordem de uso: as do dia a dia primeiro. */
+const ordemDoDia = (st: Setor) => {
+  const pos = (h: string) => (st.principais.includes(h) ? st.principais.indexOf(h) : 99);
+  return [...st.itens].sort((a, b) => pos(a.href) - pos(b.href));
+};
 
 /** Página de entrada (mesa) de cada setor. */
 const mesaDoSetor = (id: SetorId) => `/admin/setor/${id}`;
@@ -171,6 +176,8 @@ export default function AdminShell({
   }
   // "Mais" do menu geral fica fechado até a pessoa abrir (ou estar numa dessas telas)
   const [maisAberto, setMaisAberto] = useState(false);
+  // setores abertos à mão no menu (o setor da tela atual já vem aberto)
+  const [abertosMao, setAbertosMao] = useState<Record<string, boolean>>({});
   // 10.2: selo de chamados esperando a equipe (só para quem atua no Suporte)
   const naoLidos = useNaoLidosSuporte(setores.includes("suporte"));
   const selo: Record<string, number> = { "/admin/suporte": naoLidos };
@@ -183,7 +190,7 @@ export default function AdminShell({
     { id: "geral", titulo: "Meu dia", itens: [...GERAL, ...GERAL_MAIS] },
     ...meusSetores.map((st) => ({
       id: st.id, titulo: st.nome,
-      itens: [{ href: mesaDoSetor(st.id), rotulo: "Visão geral do setor", icone: st.icone }, ...st.itens],
+      itens: [{ href: mesaDoSetor(st.id), rotulo: "Painel do setor", icone: st.icone }, ...st.itens],
     })),
   ];
   // o item mais específico vence: "/admin/juridico/lgpd" não acende "/admin/juridico"
@@ -199,6 +206,12 @@ export default function AdminShell({
 
   const titulo = maisEspecifico?.rotulo ?? "Central Arini";
   const TituloIcone = (maisEspecifico && (ICONE_ITEM[maisEspecifico.href] ?? (setorAtual && aceso(mesaDoSetor(setorAtual.id)) ? ICONE_SETOR[setorAtual.id] : undefined))) || LayoutGrid;
+  // Menu como no CRM da Arini Negócios: as telas do setor ficam direto no
+  // menu lateral, sem abas no topo nem "Mais" (áudio do Carlos, 25/11/2026:
+  // "tá muito bagunçada a visualização, o modo operacional").
+  const setorAberto = (id: SetorId) =>
+    abertosMao[id] ?? (meusSetores.length === 1 || setorAtual?.id === id);
+  const alternarSetor = (id: SetorId) => setAbertosMao((m) => ({ ...m, [id]: !setorAberto(id) }));
   const mostrarMais = maisAberto || GERAL_MAIS.some((i) => aceso(i.href));
 
   const linkMenu = (i: ItemMenu, chave: string, Icone: LucideIcon, ligado: boolean, contagem = 0) => (
@@ -241,7 +254,33 @@ export default function AdminShell({
       <div className="space-y-0.5">
         {meusSetores.map((st) => {
           const contagem = st.itens.reduce((n, i) => n + (selo[i.href] ?? 0), 0);
-          return linkMenu({ href: mesaDoSetor(st.id), rotulo: st.nome, icone: st.icone }, "s" + st.id, ICONE_SETOR[st.id], setorAtual?.id === st.id, contagem);
+          const Icone = ICONE_SETOR[st.id];
+          const expandido = setorAberto(st.id);
+          const doSetor = setorAtual?.id === st.id;
+          return (
+            <div key={"s" + st.id}>
+              <button type="button" aria-expanded={expandido} onClick={() => alternarSetor(st.id)}
+                className={
+                  "relative flex w-full items-center gap-3 rounded-full px-3.5 py-2 text-left text-[0.92rem] transition-colors " +
+                  (doSetor ? "text-texto font-semibold" : "text-texto-2 font-medium hover:text-texto hover:bg-texto/8")
+                }>
+                <Icone className={"size-[18px] shrink-0 " + (doSetor ? "text-ouro" : "")} />
+                <span className="truncate">{st.nome}</span>
+                {contagem > 0 && !expandido && (
+                  <span className="min-w-5 h-5 px-1.5 rounded-full bg-ouro text-[#124431] text-[10px] font-bold grid place-items-center tabular-nums">
+                    {contagem > 99 ? "99+" : contagem}
+                  </span>
+                )}
+                {expandido ? <ChevronDown className="ml-auto size-4 shrink-0" /> : <ChevronRight className="ml-auto size-4 shrink-0" />}
+              </button>
+              {expandido && (
+                <div className="ml-4 mt-0.5 mb-1.5 space-y-0.5 border-l border-linha-forte/50 pl-2">
+                  {[{ href: mesaDoSetor(st.id), rotulo: "Painel do setor", icone: st.icone }, ...ordemDoDia(st)].map((i) =>
+                    linkMenu(i, st.id + i.href, ICONE_ITEM[i.href] ?? (i.href === mesaDoSetor(st.id) ? LayoutGrid : Circle), doSetor && aceso(i.href), selo[i.href] ?? 0))}
+                </div>
+              )}
+            </div>
+          );
         })}
       </div>
     </div>
@@ -353,14 +392,6 @@ export default function AdminShell({
           </div>
         </header>
         <main className="flex-1 min-w-0">
-          {setorAtual && (
-            <AbasSetor
-              setor={setorAtual}
-              mesa={mesaDoSetor(setorAtual.id)}
-              aceso={aceso}
-              selo={selo}
-            />
-          )}
           <div className="mx-auto w-full max-w-[1280px] px-5 py-8 md:px-8 md:py-10">{children}</div>
         </main>
       </div>

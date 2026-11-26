@@ -1,5 +1,5 @@
 import { ator } from "@/lib/authz";
-import { PLANOS_CATALOGO, comPrecoVigente, cotarPlano } from "@/lib/planos-catalogo";
+import { PLANOS_CATALOGO, comPrecoVigente, cotarPlano, planoEmBreve } from "@/lib/planos-catalogo";
 import { limitar, respostaLimite } from "@/lib/seguranca/limite";
 import { corpoPedido, ehUuid, erroPedido, falha, listarPedidos, mudarPedido, selecaoDoCorpo } from "@/lib/solicitacoes-planos-servidor";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -22,6 +22,7 @@ export async function POST(req: Request) {
   let cotacao: ReturnType<typeof cotarPlano>;
   const modelo = PLANOS_CATALOGO.find((p) => p.id === selecao.planoId);
   if (!modelo) return falha("Plano desconhecido.", 400);
+  if (planoEmBreve(modelo)) return falha("Este plano ainda não está à venda. Use o teste gratuito ou fale com a Central.", 409);
   // Rejeita complementos e quantidades inválidos antes de consultar o banco.
   try { cotarPlano({ ...selecao, ciclo: "mensal" }); } catch (e) {
     return falha(e instanceof Error ? e.message : "Seleção inválida.", 400);
