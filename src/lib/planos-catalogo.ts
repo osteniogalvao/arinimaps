@@ -113,18 +113,18 @@ export const RECURSOS_CATALOGO = {
   },
   crm_corretor_basico: {
     nome: "CRM com imóveis, proprietários, clientes, leads, agenda e relatórios",
-    disponibilidade: "parcial",
-    motivo: "O titular pode cadastrar contatos, conduzir atendimentos, marcar retornos e consultar o histórico em /painel/crm com o recurso liberado. Carteira de imóveis, relatórios e colaboração entre usuários ainda dependem de implantação.",
+    disponibilidade: "disponivel",
+    motivo: "Em /painel/escritorio: carteira de imóveis com código por tipo, clientes e proprietários, funil de negócios em colunas, agenda (mês, semana e lista) e relatórios. A triagem de contatos continua em /painel/crm.",
   },
   crm_corretor_gestao: {
     nome: "Captação, marketing, equipe, jurídico, financeiro, empresas, comissões e chat",
-    disponibilidade: "em_implantacao",
-    motivo: "Módulos internos existem na Central. A operação privada de cada escritório precisa de adaptação de dados e permissões.",
+    disponibilidade: "parcial",
+    motivo: "Equipe disponível: o escritório da organização é compartilhado, com responsável por registro, agenda compartilhada e desempenho por pessoa. Jurídico, financeiro, comissões e chat do escritório ainda dependem de implantação.",
   },
   crm_corretor_premium: {
     nome: "Aluguéis, ponto, auditoria e chatbot",
-    disponibilidade: "em_implantacao",
-    motivo: "Ponto e auditoria atendem a equipe interna. Locação e chatbot por imobiliária dependem de implementação e configuração.",
+    disponibilidade: "parcial",
+    motivo: "Auditoria disponível: histórico de quem criou, alterou ou excluiu cada registro do escritório. Imóveis para locação entram na carteira. Ponto e chatbot por imobiliária dependem de implementação.",
   },
   loteamentos: {
     nome: "Lançamentos, loteamentos e fichas completas",
@@ -193,8 +193,8 @@ export const RECURSOS_CATALOGO = {
   },
   crm_tecnico_padrao: {
     nome: "Clientes, serviços, projetos, agenda, prazos e propostas",
-    disponibilidade: "parcial",
-    motivo: "Contatos, triagem, retornos e histórico do titular estão em /painel/crm quando liberados no plano. Projetos, propostas e integração com agenda ainda não estão disponíveis.",
+    disponibilidade: "disponivel",
+    motivo: "Em /painel/escritorio: clientes, projetos e serviços em funil (pedido, orçamento, vistoria, proposta, contratado), agenda de prazos e vistorias e relatórios. Triagem e histórico do titular continuam em /painel/crm.",
   },
   crm_tecnico_setor: {
     nome: "CRM da profissão, dossiês, vistorias e modelos de documento",
@@ -203,8 +203,8 @@ export const RECURSOS_CATALOGO = {
   },
   crm_tecnico_completo: {
     nome: "Financeiro, honorários, contratos, equipe, ponto, marketing e auditoria",
-    disponibilidade: "em_implantacao",
-    motivo: "Os módulos internos da Central precisam ser adaptados aos dados, permissões e processos de cada escritório.",
+    disponibilidade: "parcial",
+    motivo: "Equipe e auditoria disponíveis no escritório (Profissional e Premium): carteira compartilhada, responsável por registro, agenda da equipe e histórico de alterações. Financeiro, honorários, contratos, ponto e marketing do escritório dependem de implantação.",
   },
   relatorios_marca: {
     nome: "Relatórios e documentos com a marca do profissional",

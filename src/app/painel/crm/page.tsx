@@ -53,7 +53,8 @@ export default async function MeuCrm({ searchParams }: PageProps<"/painel/crm">)
   }
   const [lista,config] = await Promise.all([listarPrivados(s.banco, s.titular, pagina),configuracaoPrivada(s.banco)]);
   return <section className="space-y-6"><div><h1 className="text-3xl font-semibold">Meu CRM</h1>
-    <p className="mt-2 text-texto-3">Sua carteira particular de contatos e atendimentos. Somente você vê os registros deste espaço.</p></div>
+    <p className="mt-2 text-texto-3">Sua carteira particular de contatos e atendimentos. Somente você vê os registros deste espaço.</p>
+    <Link className={botao + " mt-3"} href="/painel/escritorio">Abrir o Escritório: imóveis, funil, agenda e relatórios</Link></div>
     {config && <><Link className={botao} href="/painel/crm/profissoes">Serviços, documentos e pedidos por profissão</Link><ProfissaoCrm config={config} /></>}
     <details className="rounded-xl border border-linha p-4" open={!lista.itens.length && pagina === 1}>
       <summary className="cursor-pointer font-medium">Novo contato e atendimento</summary><FormularioCrm key={config?.profissao} config={config} /></details>
