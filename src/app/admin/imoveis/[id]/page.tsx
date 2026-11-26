@@ -68,7 +68,12 @@ function mediaUrl(path: string) {
 
 export default async function AnaliseImovel
 ({ params }: PageProps<"/admin/imoveis/[id]">) {
-  await exigirSetor("operacoes");
+  // A ficha é aberta pelos links do Jurídico (autorizações), do Marketing (fluxo de divulgação),
+  // do Comercial (oportunidades), da Cartografia e das tarefas. Antes só Operações entrava e os
+  // outros setores voltavam para a Matriz. A decisão (aprovar, corrigir, recusar) continua só de
+  // Operações, aqui e na API /api/admin/decisao. Auditoria de 26/11/2026.
+  const eu = await exigirSetor("operacoes", "juridico", "comercial", "marketing", "marketing_trafego", "cartografia", "suporte");
+  const decide = eu.setores.includes("operacoes");
   const { id } = await params;
   const admin = supabaseAdmin();
 
@@ -346,7 +351,7 @@ export default async function AnaliseImovel
       </Bloco>
 
       <Bloco titulo="Documentos">
-        <DocumentosImovel propertyId={p.id} podeConferir />
+        <DocumentosImovel propertyId={p.id} podeConferir={decide || eu.setores.includes("juridico")} />
       </Bloco>
 
       {/* item 29: desenhos e projetos privados do anunciante — a Central só consulta */}
@@ -357,7 +362,8 @@ export default async function AnaliseImovel
       <PainelFluxoImovel propertyId={p.id} />
 
       <Bloco titulo="Decisão" className="border-l-4 border-l-verde">
-        <DecisaoBotoes propertyId={p.id} />
+        {decide ? <DecisaoBotoes propertyId={p.id} />
+          : <p className="text-sm text-texto-2">A decisão sobre o anúncio é do setor de Operações. Para pedir um ajuste, use a conversa abaixo.</p>}
       </Bloco>
 
       <Conversa entidade="properties" id={p.id} />
