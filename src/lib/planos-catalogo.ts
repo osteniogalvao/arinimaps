@@ -58,8 +58,8 @@ export const RECURSOS_CATALOGO = {
   },
   monitoramento: {
     nome: "Monitoramento diário e alertas do imóvel",
-    disponibilidade: "em_implantacao",
-    motivo: "As fontes ambientais são consultáveis. Agendamento por propriedade, histórico de eventos e entrega dos alertas precisam ser implementados.",
+    disponibilidade: "disponivel",
+    motivo: "Em Minha conta > Monitoramento territorial: a área do cofre ou um polígono enviado é lido todo dia nas fontes INPE (focos de calor e desmatamento no Cerrado), IBAMA (embargos), INCRA (SIGEF) e INMET (avisos), com histórico de ocorrências, relatório mensal e aviso pelo WhatsApp autorizado.",
   },
   comparacao_clima: {
     nome: "Comparação de períodos, clima e precipitação",
