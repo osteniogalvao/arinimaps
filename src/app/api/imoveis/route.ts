@@ -332,6 +332,8 @@ export async function POST(request: Request) {
       leilao,
       created_by: user.id,
       ...camposDoLote(loteRef),
+      // quadra e número informados no cadastro valem sobre os lidos da planta (25/11/2026)
+      ...identDoLote(dados),
     })
     .select("id, codigo")
     .single();
@@ -502,7 +504,8 @@ export async function POST(request: Request) {
     if (docErro) docsFalharam.push(nome);
     else tiposSalvos.add(tipo);
   }
-  if ((modalidade === "venda" && ((!equipe && !tiposSalvos.has("matricula")) ||
+  // 25/11/2026 (Stenio): proprietário sem matrícula é válido; só o parceiro de rede precisa dela
+  if ((modalidade === "venda" && ((!equipe && partner_id && !tiposSalvos.has("matricula")) ||
       ((equipe || partner_id) && !tiposSalvos.has("autorizacao")))) ||
       (!equipe && modalidade === "leilao" && !tiposSalvos.has("autorizacao") && !tiposSalvos.has("edital"))) {
     // nenhum documento subiu: sem comprovação o imóvel não pode ir para análise
@@ -624,6 +627,12 @@ export async function POST(request: Request) {
     ...(unidades.length ? { unidades: criadas.length, unidades_falharam: unidades.length - criadas.length } : {}),
   });
 }
+
+const identDoLote = (dados: { lote_quadra?: unknown; lote_numero?: unknown }) => {
+  const limpo = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 20) : null);
+  const quadra = limpo(dados.lote_quadra), numero = limpo(dados.lote_numero);
+  return { ...(quadra && { lote_quadra: quadra }), ...(numero && { lote_numero: numero }) };
+};
 
 type LoteRef = { id: string; municipality_id: string | null; quadra: string | null; numero: string | null; area_m2: number };
 

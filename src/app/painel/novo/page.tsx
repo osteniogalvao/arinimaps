@@ -84,6 +84,8 @@ export default function NovoImovel() {
   const [car, setCar] = useState<{ cod: string; area_ha: number | null; municipio: string | null } | null>(null);
   const [inicial, setInicial] = useState<GeometriaEscolhida | null>(null);
   const [lote, setLote] = useState<{ id: string; area_m2: number; municipio: string | null } | null>(null);
+  // quadra e número do lote (25/11/2026, Stenio): vêm da planta quando ela diz; senão o anunciante informa
+  const [loteIdent, setLoteIdent] = useState({ quadra: "", numero: "" });
   // vários lotes selecionados no mapa: vira empreendimento + uma unidade por lote
   const [loteamento, setLoteamento] = useState<LoteDoLoteamento[] | null>(null);
 
@@ -122,6 +124,7 @@ export default function NovoImovel() {
         const g: GeometriaEscolhida = { geometry: f.geometry, fonte: "lote" };
         const p = f.properties ?? {};
         setLote({ id: p.id, area_m2: Number(p.area_m2), municipio: p.municipio ?? null });
+        setLoteIdent({ quadra: p.quadra ?? "", numero: p.numero ?? "" });
         setCar(null);
         setInicial(g);
         setGeometria(g);
@@ -335,6 +338,8 @@ export default function NovoImovel() {
       aceite_termos: aceite,
       car_codigo: geometria.fonte === "car" ? car?.cod ?? null : null,
       lote_id: geometria.fonte === "lote" ? lote?.id ?? null : null,
+      lote_quadra: form.tipo === "urbano" && !loteamento ? loteIdent.quadra.trim() || null : null,
+      lote_numero: form.tipo === "urbano" && !loteamento ? loteIdent.numero.trim() || null : null,
       // preço vai como digitado ("85.000,50"): o servidor lê no formato brasileiro
       lotes: loteamento?.map((l) => ({ id: l.id, valor: l.valor.trim() || null, matricula_numero: l.matricula.trim() || null })),
       modalidade,
@@ -620,6 +625,21 @@ export default function NovoImovel() {
               Lote da planta urbana{lote.municipio && <> de {lote.municipio}</>} · {lote.area_m2.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m² medidos na planta
             </span>
           </p>
+        )}
+        {form.tipo === "urbano" && !loteamento && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={label} htmlFor="lote_quadra">Quadra</label>
+              <input id="lote_quadra" className={input} maxLength={20} placeholder="Ex.: 12"
+                value={loteIdent.quadra} onChange={(e) => setLoteIdent({ ...loteIdent, quadra: e.target.value })} />
+            </div>
+            <div>
+              <label className={label} htmlFor="lote_numero">Número do lote</label>
+              <input id="lote_numero" className={input} maxLength={20} placeholder="Ex.: 07"
+                value={loteIdent.numero} onChange={(e) => setLoteIdent({ ...loteIdent, numero: e.target.value })} />
+            </div>
+            <p className={ajuda + " sm:col-span-2"}>Como está na matrícula ou no carnê do IPTU. Aparece no mapa sobre o lote à venda. Se não souber, deixe em branco.</p>
+          </div>
         )}
         {loteamento && (
           <p className="flex items-start gap-2 rounded-xl border border-ouro/30 bg-ouro/10 px-4 py-3 text-sm text-texto">

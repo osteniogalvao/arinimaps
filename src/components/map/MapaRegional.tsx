@@ -332,6 +332,23 @@ let hashDaSaida: { hash: string; quando: number } | null = null;
  */
 const PREFIXOS_CARTO_RURAL = ["car-", "of-", "relevo-", "areas-camadas", "busca-sigef"];
 
+/**
+ * 25/11/2026 (Stenio): na cartografia urbana o lote da planta que está à venda
+ * acende como a fazenda à venda acende sobre o CAR — preenchimento e traço
+ * dourados no próprio lote, com quadra e número para qualquer visitante. O
+ * anúncio guarda o lote de origem (`lote_id`, migration 0053), que vem em
+ * /api/geo/imoveis; o filtro é refeito sempre que a lista do mapa muda.
+ */
+const CAMADAS_LOTE_VENDA = ["lotes-venda-fill", "lotes-venda-contorno", "lotes-venda-borda"];
+function marcarLotesAVenda(map: MLMap, features: GeoJSON.Feature[]) {
+  const ids = [...new Set(features
+    .filter((f) => (f.properties as { status?: string } | null)?.status !== "vendido")
+    .map((f) => (f.properties as { lote_id?: string } | null)?.lote_id)
+    .filter((id): id is string => !!id))];
+  const filtro = ["in", ["get", "id"], ["literal", ids]];
+  for (const id of CAMADAS_LOTE_VENDA) if (map.getLayer(id)) map.setFilter(id, filtro as never);
+}
+
 /** Abaixo deste zoom o imóvel aparece como marcador; acima, pela divisa. */
 const ZOOM_MARCADOR = 12.5;
 
@@ -892,6 +909,7 @@ export default function MapaRegional({
     if (map?.getSource("imoveis")) {
       (map.getSource("imoveis") as GeoJSONSource).setData({ type: "FeatureCollection", features });
       (map.getSource("imoveis-centros") as GeoJSONSource | undefined)?.setData(centrosDe(features));
+      marcarLotesAVenda(map, features);
     }
     setLista(
       features
@@ -1158,6 +1176,24 @@ export default function MapaRegional({
           paint: { "text-color": "#D9BD6F", "text-halo-color": "rgba(10,34,25,0.92)", "text-halo-width": 1.6 },
         });
 
+        // lote da planta à venda: dourado, como a fazenda à venda (filtro em marcarLotesAVenda)
+        const nenhum = ["in", ["get", "id"], ["literal", [] as string[]]] as never;
+        map.addLayer({
+          id: "lotes-venda-fill", type: "fill", source: "lotes", "source-layer": "lotes", minzoom: LOTE_ZOOM_MIN,
+          filter: nenhum, paint: { "fill-color": "#D9BD6F", "fill-opacity": 0.38 },
+        });
+        map.addLayer({
+          id: "lotes-venda-contorno", type: "line", source: "lotes", "source-layer": "lotes", minzoom: LOTE_ZOOM_MIN,
+          filter: nenhum, layout: { "line-join": "round" },
+          paint: { "line-color": "#1A1405", "line-width": ["interpolate", ["linear"], ["zoom"], 15, 4, 17, 6, 19, 8] as never, "line-opacity": 0.85 },
+        });
+        map.addLayer({
+          id: "lotes-venda-borda", type: "line", source: "lotes", "source-layer": "lotes", minzoom: LOTE_ZOOM_MIN,
+          filter: nenhum, layout: { "line-join": "round" },
+          paint: { "line-color": "#F2C94C", "line-width": ["interpolate", ["linear"], ["zoom"], 15, 2.2, 17, 3.5, 19, 5] as never },
+        });
+        marcarLotesAVenda(map, imoveis.features ?? []);
+
         // malha do CAR: abaixo dos anúncios (quem está à venda fica por cima).
         // Com o arquivo nacional publicado (NEXT_PUBLIC_CAR_NACIONAL_URL), o
         // Brasil inteiro vem dele, pronto e servido pela CDN; sem ele, do
@@ -1252,6 +1288,23 @@ export default function MapaRegional({
         // Abaixo do zoom em que a divisa aparece, cada imóvel vira um marcador
         // no centro dele, na cor do status.
         map.addSource("imoveis-centros", { type: "geojson", data: centrosDe(imoveis.features ?? []) });
+        // quadra e número do lote à venda, para qualquer visitante (25/11/2026, Stenio):
+        // vêm do anúncio (informados no cadastro ou lidos da planta)
+        map.addLayer({
+          id: "lotes-venda-rotulo", type: "symbol", source: "imoveis-centros", minzoom: 16,
+          filter: ["any", ["has", "lote_numero"], ["has", "lote_quadra"]],
+          layout: {
+            "text-field": ["case",
+              ["all", ["has", "lote_numero"], ["has", "lote_quadra"]],
+              ["format", "Lote ", {}, ["get", "lote_numero"], {}, "\nQuadra ", { "font-scale": 0.8 }, ["get", "lote_quadra"], { "font-scale": 0.8 }],
+              ["has", "lote_numero"], ["concat", "Lote ", ["get", "lote_numero"]],
+              ["concat", "Quadra ", ["get", "lote_quadra"]]] as never,
+            "text-font": ["Open Sans Bold"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 16, 11, 19, 15],
+            "text-allow-overlap": true,
+          },
+          paint: { "text-color": "#FFE299", "text-halo-color": "rgba(10,19,16,0.95)", "text-halo-width": 1.8 },
+        });
         // Radar do manual (prancha 09): o pino é um ponto com anel Oliva em volta
         // (em tamanho pequeno vale só anel + ponto, sem as tarjas).
         map.addLayer({
