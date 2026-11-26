@@ -212,6 +212,14 @@ button:disabled,
 }
 .maplibregl-ctrl-attrib { background: color-mix(in srgb, var(--fundo) 75%, transparent) !important; }
 .maplibregl-ctrl-attrib a { color: var(--texto-2) !important; }
+/* no celular a barra de ferramentas ocupa a largura toda embaixo e cobria o logo
+   do Google, o crédito das imagens e a escala (obrigatórios pelos termos do
+   Google, conferido em 26/11/2026): os controles de baixo sobem acima da barra */
+@media (max-width: 639px) {
+  .area-mapa:has([data-barra-ferramentas]:not([hidden])) :is(.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right) {
+    bottom: 4.75rem;
+  }
+}
 
 /* ---------- botões ----------
    Em @layer components (redesign 08/10/2026): fora de camada, o
