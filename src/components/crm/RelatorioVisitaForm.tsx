@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PROBABILIDADE_LABEL, RELATORIO_VAZIO, VALOR_PERCEBIDO_LABEL, type RelatorioVisita } from "@/lib/visitas";
+import { ATRAI_OPCOES, PESA_OPCOES, PROBABILIDADE_LABEL, RELATORIO_VAZIO, VALOR_PERCEBIDO_LABEL, type RelatorioVisita } from "@/lib/visitas";
 import { CAMPO } from "@/components/ui/Pagina";
 
 /**
@@ -17,6 +17,18 @@ export default function RelatorioVisitaForm({ ocupado, onEnviar, onCancelar }: {
   const [r, setR] = useState<RelatorioVisita>(RELATORIO_VAZIO);
   const campo = CAMPO + " !py-2 text-sm";
   const set = <K extends keyof RelatorioVisita>(k: K, v: RelatorioVisita[K]) => setR({ ...r, [k]: v });
+  const alternar = (k: "atrai" | "pesa", t: string) => {
+    const atual = r[k] ?? [];
+    set(k, atual.includes(t) ? atual.filter((x) => x !== t) : [...atual, t]);
+  };
+  const chips = (k: "atrai" | "pesa", titulo: string, opcoes: readonly string[]) => <fieldset className="space-y-1.5">
+    <legend className="text-xs text-texto-2">{titulo}</legend>
+    <div className="flex flex-wrap gap-1.5">{opcoes.map((t) => {
+      const ativo = r[k]?.includes(t) ?? false;
+      return <button type="button" key={t} aria-pressed={ativo} onClick={() => alternar(k, t)}
+        className={"rounded-full border px-2.5 py-1 text-xs " + (ativo ? "border-verde bg-verde text-fundo" : "border-linha text-texto-2")}>{t}</button>;
+    })}</div>
+  </fieldset>;
 
   return (
     <form className="basis-full space-y-3 rounded-xl border border-verde/30 bg-superficie p-4"
@@ -39,6 +51,8 @@ export default function RelatorioVisitaForm({ ocupado, onEnviar, onCancelar }: {
           </select>
         </label>
       </div>
+      {chips("atrai", "O que chamou atenção (entra no placar do proprietário)", ATRAI_OPCOES)}
+      {chips("pesa", "O que não chamou atenção", PESA_OPCOES)}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs text-texto-2">O que gostou
           <textarea className={campo} rows={2} value={r.pontos_positivos} onChange={(e) => set("pontos_positivos", e.target.value)} />

@@ -4,7 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { ator, podeOperarOportunidade, temSetor } from "@/lib/authz";
 import { CONTRATO_LABEL, ETAPAS, ETAPA_LABEL, RESPONSAVEL_LABEL } from "@/lib/funil";
 import { sendEmail, ariniEmail } from "@/lib/notify";
-import { avisarVisitaAoProprietario } from "@/lib/acompanhamento/servidor";
+import { avisarPropostaAoProprietario, avisarVisitaAoProprietario } from "@/lib/acompanhamento/servidor";
 import { concluirTarefaDoEvento, marcarPrimeiroAtendimento } from "@/lib/central";
 import { relatorioParaProprietario, resumoRelatorio, validarRelatorio } from "@/lib/visitas";
 
@@ -226,6 +226,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/oportunidad
       await admin.from("proposals").update({ status: "contraproposta" })
         .eq("opportunity_id", id).eq("status", "enviada").neq("id", p.id);
       await evento(id, "anotacao", `Proposta rodada ${p.numero_rodada} (${body.autor_lado === "vendedor" ? "vendedor" : "comprador"}): R$ ${valor.toLocaleString("pt-BR")}`, a!.userId);
+      // Alerta de proposta no painel e no WhatsApp do proprietário (painel do anunciante, 25/11/2026)
+      if (body.autor_lado !== "vendedor") await avisarPropostaAoProprietario({ opportunityId: id, autorId: a!.userId, rodada: p.numero_rodada });
       await logAudit({ user_id: a!.userId, acao: "proposta_registrada", entidade: "proposals", entidade_id: p.id, opportunity_id: id, property_id: opp.property_id, dados_depois: { valor, rodada: p.numero_rodada } });
       return NextResponse.json({ ok: true });
     }

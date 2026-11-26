@@ -17,6 +17,8 @@ import FluxoDoPerfil from "./FluxoDoPerfil";
 import OfertasDoPerfil from "./OfertasDoPerfil";
 import ModulosDoPerfil from "./ModulosDoPerfil";
 import RolarParaPlanos from "./RolarParaPlanos";
+import { ComoComecar, ComparativoProprietario, MundoCresce, TrocaTipoImovel, VenderComArini } from "./PlanosProprietario";
+import { CARTOES, URBANO_PAGOS_LIBERADOS, type TipoImovel } from "./proprietario-textos";
 import { PERFIS_COM_VITRINE, type OfertaPerfil } from "@/lib/ofertas-perfis";
 import { PLANOS_CATALOGO, CATALOGO_POR_ENTRADA, planoNoPerfil, type PrecoVigente } from "@/lib/planos-catalogo";
 import { checkoutAtivo } from "@/lib/assinaturas-cotadas";
@@ -73,6 +75,22 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
   const daPersona = persona ? planosDaPersona(persona, todos) : [];
   const planos = persona ? daPersona : todos;
 
+  // Planos do proprietário com troca rural/urbano (modelos do Carlos, 25/11/2026)
+  const proprietario = persona.id === "vender" && catalogo === "proprietario";
+  const tipo: TipoImovel = sp.imovel === "urbano" ? "urbano" : "rural";
+  const linksProprietario = {
+    vender: user ? "/painel/novo" : linkCadastro(persona) + "&volta=" + encodeURIComponent("/painel/novo"),
+    gratuito: "/planos?perfil=vender&imovel=" + tipo + "&pacote=proprietario_gratuito#configuracao",
+  };
+  const urbanoEmBreve = tipo === "urbano" && !URBANO_PAGOS_LIBERADOS;
+  const apresentacaoProprietario = proprietario ? {
+    cartoes: CARTOES[tipo],
+    destaque: urbanoEmBreve ? undefined : "proprietario_inteligencia",
+    emBreve: urbanoEmBreve ? ["proprietario_monitoramento", "proprietario_inteligencia", "proprietario_completo"] : [],
+    rotuloAnual: "Anual · 2 meses grátis ou mais",
+    avisar: "/suporte?assunto=" + encodeURIComponent("Quero ser avisado: plano urbano"),
+  } : undefined;
+
   const usuario = user
     ? { nome: user.nome || "Conta", papel: user.role === "admin_central" ? "Administrador" : "Usuário" }
     : null;
@@ -88,7 +106,10 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
         <div id="planos" className="flex scroll-mt-24 flex-wrap items-end justify-between gap-4">
           <div className="vitrine-escolha">
             <h2>{apresentacao.escolha}</h2>
-            {apresentacao.resumo && <p>{apresentacao.resumo}</p>}
+            {proprietario ? <p>{tipo === "urbano"
+              ? "Imóvel urbano: comece de graça e sem compromisso. Cadastre, organize e, quando quiser vender, já está tudo pronto."
+              : "Cultive a sua propriedade: comece de graça e sem compromisso, cuide no seu ritmo e, quando quiser vender, já está tudo pronto."}</p>
+              : apresentacao.resumo && <p>{apresentacao.resumo}</p>}
           </div>
           <div className="flex flex-wrap gap-3">
             {persona && <Link href="#perfis" className="lp-btn lp-btn-contorno">Escolher outro perfil</Link>}
@@ -100,6 +121,12 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
             )}
           </div>
         </div>
+        {proprietario && <><TrocaTipoImovel tipo={tipo} /><ComoComecar tipo={tipo} links={linksProprietario} />
+          <div id="pacotes" className="scroll-mt-24">
+            {urbanoEmBreve && <div className="mb-4 max-w-3xl"><h3 className="lp-display text-2xl text-verde">Planos para imóvel urbano</h3>
+              <p className="mt-1 text-texto-2">Hoje o plano é o Gratuito. Os próximos pacotes aparecem aqui para você ver o que vem pela frente: eles chegam
+                conforme a ARINI integra as prefeituras (IPTU, ITBI e documentos municipais).</p></div>}
+          </div></>}
         {acessoLeilao && <Link href="/painel/leiloes" className="mb-5 inline-block font-semibold text-verde underline">Abrir meu CRM de leilões</Link>}
         {["instituicao","empresa","tecnico"].includes(persona.id) && <Link href="/balcao" className="mb-5 inline-block font-semibold text-verde underline">Balcão municipal · protocolar e acompanhar um pedido</Link>}
         {persona.id==="comprar" && <Link href="/conta/filtros" className="mb-5 inline-block font-semibold text-verde underline">
@@ -108,8 +135,9 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
           ...o, limites: [String(cfg.ari_pacote_comprados) + " créditos comprados", String(cfg.ari_pacote_cortesia) + " créditos de cortesia",
             "Validade de " + String(cfg.ari_validade_meses) + " meses"], detalhes: ["Pacote sem mensalidade", "Saldo liberado após a confirmação do pagamento."],
         })} autenticado={!!user} /> : catalogo && !precos.length ? <Vazio titulo="As opções deste perfil estão indisponíveis no momento." /> : persona && catalogo ? (
-          <EscolherPlano key={persona.id} precos={precos} personaId={catalogo} perfil={persona.id} cadastro={linkCadastro(persona)}
-            autenticado={!!user} whatsapp={texto(cfg, "whatsapp_central")} parametros={sp} pagamentoDireto={checkoutAtivo()} />
+          <EscolherPlano key={persona.id + (proprietario ? tipo : "")} precos={precos} personaId={catalogo} perfil={persona.id} cadastro={linkCadastro(persona)}
+            autenticado={!!user} whatsapp={texto(cfg, "whatsapp_central")} parametros={sp} pagamentoDireto={checkoutAtivo()}
+            apresentacao={apresentacaoProprietario} />
         ) : !planos.length ? (
           <Vazio icone={CreditCard} titulo="A Central prepara as opções deste perfil."
             acao={<Link href={`/suporte?assunto=${encodeURIComponent(persona.nome)}`} className="lp-btn lp-btn-verde">Consultar a Central</Link>} />
@@ -194,8 +222,16 @@ export default async function Planos({ searchParams }: PageProps<"/planos">) {
             })}
           </div>
         )}
-        <FluxoDoPerfil perfil={persona.id} />
-        <ModulosDoPerfil perfil={persona.id} />
+        {urbanoEmBreve && <p className="text-sm text-texto-2">Valores, descontos e o que entra em cada pacote serão definidos no lançamento de cada um, e
+          podem mudar. Quem se cadastra no Gratuito é avisado quando a sua cidade for integrada.</p>}
+        {proprietario ? <>
+          <VenderComArini tipo={tipo} links={linksProprietario} />
+          <MundoCresce />
+          <ComparativoProprietario tipo={tipo} />
+        </> : <>
+          <FluxoDoPerfil perfil={persona.id} />
+          <ModulosDoPerfil perfil={persona.id} />
+        </>}
       </Conteudo>
       </div>
     </Moldura>

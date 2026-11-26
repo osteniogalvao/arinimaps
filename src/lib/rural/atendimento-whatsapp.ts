@@ -137,7 +137,7 @@ function textoMenu(conta: Conta | null) {
     "• BOI (ou \"valor do boi gordo hoje\"): cotação do boi gordo com a referência dos últimos 7 e 30 dias, grátis",
     "• COTAÇÃO MILHO (ou SOJA, DÓLAR...): outras cotações",
     "• SAFRA SOJA (ou MILHO, CAFÉ...): produção, área e produtividade da safra pela CONAB",
-    "• Envie a sua LOCALIZAÇÃO (clipe › Localização) para receber o imóvel do CAR naquele ponto e o relatório em PDF",
+    "• Envie a sua LOCALIZAÇÃO (clipe › Localização) para receber o imóvel do CAR naquele ponto, o relatório em PDF e a rota de como chegar",
     "• CONSULTAR CAR seguido do código do imóvel, para receber o relatório em PDF",
     "• Nos planos com exportação, a área vem também em KMZ e KML; com consulta de área, vem o link do Tour 3D",
   ];
@@ -231,6 +231,11 @@ async function textoSafra(termo: string | null) {
   ].join("\n");
 }
 
+/** Rota até o ponto no Google Maps (abre o app no celular). */
+export function linkComoChegar(lat: number, lng: number) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
 type ImovelCar = { cod: string; area_ha: number | null; condicao: string | null; status: string | null; tipo: string | null; municipio: string | null };
 
 /** Imóvel do CAR que contém o ponto (o menor, se houver sobreposição). */
@@ -261,14 +266,17 @@ async function imovelPorCodigo(cod: string): Promise<ImovelCar | null> {
  * direto o PDF que o plano libera, sem pedir à empresa. Relatório completo para
  * planos com relatório territorial; simples para os demais.
  */
-function respostaImovel(imovel: ImovelCar | null, conta: Conta | null, origem: "ponto" | "codigo"): RespostaAtendimento {
+function respostaImovel(imovel: ImovelCar | null, conta: Conta | null, origem: "ponto" | "codigo", ponto?: { lat: number; lng: number }): RespostaAtendimento {
   const site = urlDoSite();
+  // Áudio do Carlos (25/11, 12h14): "como chegar na fazenda" junto com o ponto enviado
+  const rota = ponto ? `Como chegar (rota no Google Maps): ${linkComoChegar(ponto.lat, ponto.lng)}` : null;
   if (!imovel) {
     return { texto: [
       origem === "ponto" ? "Não encontrei imóvel rural do CAR neste ponto." : "Não encontrei este código na base do CAR.",
+      rota,
       `Abra o mapa da ARINI para conferir a área ou informar um imóvel ausente: ${site}/mapa`,
       RODAPE,
-    ].join("\n") };
+    ].filter((l): l is string => l !== null).join("\n") };
   }
   const area = imovel.area_ha == null ? null : `${formatarValor(Number(imovel.area_ha), 2)} ha`;
   const a = conta?.acesso;
@@ -284,6 +292,7 @@ function respostaImovel(imovel: ImovelCar | null, conta: Conta | null, origem: "
       ? `Segue o relatório territorial completo do seu plano (${a?.planNome ?? "ARINI"}), com as fontes oficiais.`
       : "Segue o relatório simples da área.",
     `Ficha, mapa e relatório personalizado: ${site}/consulta/car/${imovel.cod}`,
+    rota,
   ].filter((l): l is string => l !== null);
   // Áudio do Carlos (24/11, 8h05): arquivos KMZ/KML e o Tour 3D conforme o plano do contratante
   const exporta = !!a?.recursos.has("ferramenta_exportar");
@@ -324,7 +333,7 @@ export async function respostaAtendimento(pedido: PedidoAtendimento, numero: str
     const conta = await contaDoNumero(numero).catch(() => null);
     if (pedido.tipo === "menu") return { texto: textoMenu(conta) };
     if (pedido.tipo === "car") return respostaImovel(await imovelPorCodigo(pedido.cod), conta, "codigo");
-    return respostaImovel(await carNoPonto(pedido.lat, pedido.lng), conta, "ponto");
+    return respostaImovel(await carNoPonto(pedido.lat, pedido.lng), conta, "ponto", { lat: pedido.lat, lng: pedido.lng });
   } catch {
     return { texto: `Não consegui responder agora. Tente de novo em alguns minutos ou use o site: ${urlDoSite()}\n${RODAPE}` };
   }

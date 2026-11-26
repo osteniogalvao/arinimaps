@@ -23,7 +23,7 @@ const STATUS_TOM: Record<string, Tom> = {
 };
 const EM_ANALISE = ["pendente", "em_analise", "correcao"];
 
-const CAMPOS = "id, codigo, titulo, tipo, status, valor, motivo_correcao, pendencia_tipo, created_at, media:property_media(storage_path, capa, tipo), geo:property_geometries(geom)";
+const CAMPOS = "id, codigo, titulo, tipo, status, valor, motivo_correcao, pendencia_tipo, created_at, caracteristicas, media:property_media(storage_path, capa, tipo), geo:property_geometries(geom)";
 
 function mediaUrl(path: string) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`;
@@ -65,12 +65,19 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
     : [{ data: [] }, { data: [] }];
   const aguardando = statusCadastro && !["aprovado", "ativo"].includes(statusCadastro);
 
-  const meus = [...(imoveis ?? []), ...(publicados ?? [])];
+  const todos = [...(imoveis ?? []), ...(publicados ?? [])];
+  // Meus anúncios por tipo (painel do anunciante, modelos do Carlos de 25/11/2026)
+  const categoria = (p: { tipo: string; caracteristicas: unknown }) => p.tipo === "rural" ? "rural"
+    : (p.caracteristicas as { subtipo?: string } | null)?.subtipo ? "apartamento" : "casa";
+  const FILTROS: [string, string][] = [["", "Todos"], ["rural", "Rural"], ["casa", "Casa ou terreno"], ["apartamento", "Apartamento ou sala"]];
+  const filtrosUsados = FILTROS.filter(([v]) => !v || todos.some((p) => categoria(p) === v));
+  const filtro = filtrosUsados.some(([v]) => v === umParam(sp.tipo)) ? umParam(sp.tipo) : "";
+  const meus = filtro ? todos.filter((p) => categoria(p) === filtro) : todos;
 
   // Fluxograma §9: anúncios publicados com alteração aguardando a Matriz
-  const { data: revisoes } = meus.length
+  const { data: revisoes } = todos.length
     ? await supabaseAdmin().from("property_revisions").select("property_id")
-        .in("property_id", meus.map((p) => p.id)).eq("status", "pendente")
+        .in("property_id", todos.map((p) => p.id)).eq("status", "pendente")
     : { data: [] };
   const comRevisao = new Set((revisoes ?? []).map((r) => r.property_id));
 
@@ -78,8 +85,8 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
   const { count: oportunidades } = partner ? await supabase
     .from("opportunities").select("id", { count: "exact", head: true }) : { count: 0 };
 
-  const emAnalise = meus.filter((p) => EM_ANALISE.includes(p.status)).length;
-  const noAr = meus.filter((p) => ["publicado", "em_negociacao"].includes(p.status)).length;
+  const emAnalise = todos.filter((p) => EM_ANALISE.includes(p.status)).length;
+  const noAr = todos.filter((p) => ["publicado", "em_negociacao"].includes(p.status)).length;
 
   // item 28: o corretor parceiro vê as pendências com os proprietários
   const pendencias = partner?.id && ["aprovado", "ativo"].includes(partner.status)
@@ -129,6 +136,10 @@ export default async function MeusImoveis({ searchParams }: PageProps<"/painel">
         subtitulo="Acompanhe seus anúncios e o status de análise."
         acao={anunciar && <BotaoLink href="/painel/novo" seta={false}><Plus /> Anunciar imóvel</BotaoLink>}
       >
+        {filtrosUsados.length > 2 && <nav aria-label="Filtrar meus imóveis" className="mb-5 flex flex-wrap gap-2">
+          {filtrosUsados.map(([v, rotulo]) => <Link key={v} href={v ? "/painel?tipo=" + v : "/painel"} aria-current={filtro === v ? "page" : undefined}
+            className={"rounded-full border px-4 py-2 text-sm font-semibold " + (filtro === v ? "border-verde bg-verde text-fundo" : "border-linha text-texto-2 hover:text-texto")}>{rotulo}</Link>)}
+        </nav>}
         {meus.length === 0 ? (
           <Vazio
             icone={Building2}

@@ -11,12 +11,26 @@ import {
   planoEmBreve, type CicloCatalogo, type PersonaCatalogoId, type PlanoCatalogo, type SelecaoCatalogo,
 } from "@/lib/planos-catalogo";
 import { CAMPO } from "@/components/ui/Pagina";
+import type { CartaoProprietario } from "./proprietario-textos";
+
+/**
+ * Apresentação própria de um perfil (planos do proprietário, modelos do Carlos de 25/11/2026):
+ * chamada e lista de cada cartão, plano em destaque e pacotes que aparecem como "Em breve".
+ */
+export type ApresentacaoPlanos = {
+  cartoes: Partial<Record<string, CartaoProprietario>>;
+  destaque?: string;
+  emBreve?: string[];
+  rotuloAnual?: string;
+  avisar?: string;
+};
 
 const reais = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 type Parametros = Record<string, string | string[] | undefined>;
 type Props = { personaId: PersonaCatalogoId; perfil: string; autenticado: boolean; cadastro: string; whatsapp: string; parametros: Parametros; precos: PrecoVigente[];
   /** Asaas ligado: o plano pago é contratado e pago na hora (23/11/2026). */
-  pagamentoDireto?: boolean };
+  pagamentoDireto?: boolean;
+  apresentacao?: ApresentacaoPlanos };
 
 function recursosDoPacote(plano: PlanoCatalogo) {
   const recursos = new Set(plano.recursos);
@@ -41,14 +55,18 @@ function limitesDoPacote({ limites }: PlanoCatalogo) {
   return itens;
 }
 
-export default function EscolherPlano({ personaId, perfil, autenticado, cadastro, whatsapp, parametros, precos, pagamentoDireto = false }: Props) {
+export default function EscolherPlano({ personaId, perfil, autenticado, cadastro, whatsapp, parametros, precos, pagamentoDireto = false, apresentacao }: Props) {
   const router = useRouter();
-  const planos = planosDoPerfil(personaId).flatMap((p) => {
+  const vitrine = planosDoPerfil(personaId).flatMap((p) => {
     const preco = precos.find((v) => v.id === p.id);
     return preco ? [comPrecoVigente(p, preco)] : [];
   });
-  // Quem chega para comprar cai no primeiro plano pago, não no teste (áudio do Carlos, 23/11/2026).
-  const inicial = planos.find((p) => p.id === parametros.pacote) ?? planos.find((p) => p.mensalCentavos > 0 && !p.teste && !planoEmBreve(p)) ?? planos.find((p) => !planoEmBreve(p)) ?? planos[0];
+  const emBreve = new Set(apresentacao?.emBreve ?? []);
+  // Pacotes "Em breve" aparecem na vitrine, mas não podem ser escolhidos nem pedidos.
+  const planos = vitrine.filter((p) => !emBreve.has(p.id));
+  // Quem chega para comprar cai no plano em destaque ou no primeiro pago, não no teste (áudio do Carlos, 23/11/2026).
+  const inicial = planos.find((p) => p.id === parametros.pacote && !planoEmBreve(p)) ?? planos.find((p) => p.id === apresentacao?.destaque && !planoEmBreve(p))
+    ?? planos.find((p) => p.mensalCentavos > 0 && !p.teste && !planoEmBreve(p)) ?? planos.find((p) => !planoEmBreve(p)) ?? planos[0];
   const [planoId, setPlanoId] = useState(inicial.id);
   const plano = planos.find((p) => p.id === planoId)!;
   const [periodo, setPeriodo] = useState<CicloCatalogo>(parametros.ciclo === "anual" ? "anual" : "mensal");
@@ -105,6 +123,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
     });
   }
   const retorno = new URLSearchParams({ perfil, pacote: planoId, ciclo });
+  if (parametros.imovel === "urbano") retorno.set("imovel", "urbano");
   for (const item of adicionais) retorno.set("extra_" + item.id, String(item.quantidade));
   if (selecao.profissao) retorno.set("profissao", selecao.profissao);
   if (selecao.areaTotalHa) retorno.set("area", String(selecao.areaTotalHa));
@@ -142,32 +161,49 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
   return <div className="space-y-8">
     <fieldset disabled={enviando} className="space-y-5">
       <legend className="sr-only">Período do plano</legend>
-      <div className="inline-flex gap-1 rounded-full border border-linha bg-superficie-2 p-1">
+      {planos.some((p) => p.anualCentavos !== null) && <div className="inline-flex gap-1 rounded-full border border-linha bg-superficie-2 p-1">
         {(["mensal", "anual"] as const).map((valor) => <button type="button" key={valor} aria-pressed={periodo === valor}
           onClick={() => { setPeriodo(valor); setProtocolo(""); setErro(""); }}
           className={"rounded-full px-5 py-2 text-sm font-bold " + (periodo === valor ? "bg-verde text-fundo" : "text-texto-2")}>
-          {valor === "mensal" ? "Mensal" : "Anual"}
+          {valor === "mensal" ? "Mensal" : apresentacao?.rotuloAnual ?? "Anual"}
         </button>)}
-      </div>
+      </div>}
       <div className="vitrine-grade">
-        {planos.map((p) => {
+        {vitrine.map((p) => {
+          const cartao = apresentacao?.cartoes[p.id];
+          if (emBreve.has(p.id)) return <article key={p.id} className="vitrine-card vitrine-em-breve gap-3" aria-label={p.nome + ", em breve"}>
+            {cartao && <p className="vitrine-chamada">{cartao.chamada} <span>Em breve</span></p>}
+            <h3 className="lp-display text-2xl">{p.nome}</h3>
+            <p className="valor">Valor a definir</p>
+            <p className="nota">Chega com as integrações da sua cidade.</p>
+            {cartao && <CorpoCartao cartao={cartao} />}
+            {apresentacao?.avisar && <a className="escolher" href={apresentacao.avisar + encodeURIComponent(" " + p.nome)}>Quero ser avisado</a>}
+          </article>;
           const anual = periodo === "anual" && p.anualCentavos !== null;
           const preco = anual ? p.anualCentavos! : p.mensalCentavos;
           const economia = economiaAnualCentavos(p);
           const limites = limitesDoPacote(p);
           return <article key={p.id} data-selecionado={p.id === planoId} className="vitrine-card gap-3"
+            data-destaque={apresentacao?.destaque === p.id || undefined}
             onClick={(evento) => {
-              if (p.id !== planoId && !planoEmBreve(p) && !(evento.target as HTMLElement).closest("button,details")) escolher(p.id);
+              if (p.id !== planoId && !planoEmBreve(p) && !(evento.target as HTMLElement).closest("button,details,a")) escolher(p.id);
             }}>
+            {apresentacao?.destaque === p.id && <span className="vitrine-selo">Mais escolhido</span>}
+            {cartao && <p className="vitrine-chamada">{cartao.chamada}</p>}
             <h3 className="lp-display text-2xl">{p.nome}</h3>
             <p className="valor">{preco === 0 ? "Grátis" : reais(preco)}
               <small className="ml-1 text-sm font-normal">{preco ? (anual ? "/ ano" : "/ mês") : p.teste ? "por " + p.teste.dias + " dias" : ""}</small></p>
             {!anual && p.primeiroMesCentavos && <p className="text-sm font-semibold text-verde">Primeiro mês por {reais(p.primeiroMesCentavos)}</p>}
             {anual && economia != null && economia > 0 && <p className="text-sm text-verde">Economia de {reais(economia)} no primeiro ano</p>}
-            <p className="nota">{p.descricao}</p>
-            {limites.length > 0 && <p className="vitrine-limites">{limites.join(" · ")}</p>}
-            <p className="estado">{DISPONIBILIDADE_CATALOGO[p.disponibilidade]}</p>
-            <ul className="itens-vitrine">{p.recursos.slice(0, 4).map((id) => <li key={id}>{RECURSOS_CATALOGO[id].nome}</li>)}</ul>
+            {cartao ? <>
+              <p className="estado">{DISPONIBILIDADE_CATALOGO[p.disponibilidade]}</p>
+              <CorpoCartao cartao={cartao} />
+            </> : <>
+              <p className="nota">{p.descricao}</p>
+              {limites.length > 0 && <p className="vitrine-limites">{limites.join(" · ")}</p>}
+              <p className="estado">{DISPONIBILIDADE_CATALOGO[p.disponibilidade]}</p>
+              <ul className="itens-vitrine">{p.recursos.slice(0, 4).map((id) => <li key={id}>{RECURSOS_CATALOGO[id].nome}</li>)}</ul>
+            </>}
             <details className="border-t border-linha pt-2 text-sm"><summary className="cursor-pointer font-semibold">Recursos e condições</summary>
               <ul className="my-3 space-y-2">{recursosDoPacote(p).map((r) => <li key={r.nome}>{r.nome} <small className="block text-texto-2">{DISPONIBILIDADE_CATALOGO[r.disponibilidade]}</small></li>)}</ul>
               <p className="text-texto-2">{p.motivoDisponibilidade}</p>
@@ -175,7 +211,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
             </details>
             {planoEmBreve(p) ? <button type="button" disabled className="escolher opacity-60">Em breve</button>
               : <button type="button" aria-pressed={p.id === planoId} aria-label={"Selecionar " + p.nome}
-              onClick={() => escolher(p.id)} className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : "Selecionar"}</button>}
+              onClick={() => escolher(p.id)} className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : cartao?.botao ?? "Selecionar"}</button>}
           </article>;
         })}
       </div>
@@ -248,7 +284,7 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
         <div className="flex flex-wrap gap-3"><Link className="lp-btn lp-btn-verde" href={"/entrar?volta=" + volta}>{pagamentoDireto ? "Entrar para contratar" : "Entrar para solicitar"} <ArrowRight /></Link>
           <Link className="lp-btn lp-btn-contorno" href={(plano.alcance === "global" ? "/entrar?cadastro=1&papel=consulta&nicho=consulta" : cadastro) + "&volta=" + volta}>Criar conta</Link></div>}
     </fieldset>
-    <section aria-labelledby="comparar-pacotes">
+    {!apresentacao && <section aria-labelledby="comparar-pacotes">
       <h3 id="comparar-pacotes" className="lp-display mb-3 text-3xl">Compare os planos</h3>
       <div className="vitrine-comparativo" tabIndex={0} role="region" aria-label="Recursos por plano">
         <table><thead><tr><th scope="col">Recurso previsto</th>{planos.map((p) => <th scope="col" key={p.id}>{p.nome}</th>)}</tr></thead>
@@ -257,6 +293,17 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
               {recursosDoPacote(p).includes(rec) ? DISPONIBILIDADE_CATALOGO[rec.disponibilidade] : "—"}</td>)}
           </tr>)}</tbody></table>
       </div>
-    </section>
+    </section>}
   </div>;
+}
+
+function CorpoCartao({ cartao }: { cartao: CartaoProprietario }) {
+  return <>
+    <p className="vitrine-frase">{cartao.frase}</p>
+    <p className="nota">{cartao.apoio}</p>
+    {cartao.base && <p className="vitrine-base">{cartao.base}</p>}
+    <ul className="itens-vitrine">{cartao.itens.map((item) => typeof item === "string" ? <li key={item}>{item}</li>
+      : <li key={item[0]}>{item[0]} <span className="vitrine-breve">Em breve</span></li>)}</ul>
+    {cartao.nota && <p className="nota italic">{cartao.nota}</p>}
+  </>;
 }

@@ -2,6 +2,9 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendEmail, emailDoProfile } from "@/lib/notify";
 import { temSetor, type Ator } from "@/lib/authz";
+import { canalDoTitular } from "@/lib/confirmacao-whatsapp";
+import { enviarWhatsapp, telefoneWhatsapp } from "@/lib/meta";
+import type { RelatorioCompartilhado, RelatorioVisita } from "@/lib/visitas";
 import { DIAS_SEM_ATUALIZACAO, HORAS_SEM_FEEDBACK, VISITA_LABEL, dataHoraBR } from "./textos";
 
 /**
@@ -51,12 +54,42 @@ export type Destinatario = { userId: string; email: string | null; telefone: str
 export type Aviso = { assunto: string; texto: string };
 
 /**
- * ÚNICO ponto de saída dos avisos ao proprietário. Hoje: e-mail (Resend).
- * Quando houver a WhatsApp Business API, acrescente aqui o envio pelo
- * `destinatario.telefone` — quem chama não muda.
+ * ÚNICO ponto de saída dos avisos ao proprietário: e-mail e, desde 25/11/2026
+ * (painel do anunciante do Carlos), WhatsApp quando o número foi confirmado na
+ * conta. Uma falha no WhatsApp nunca impede o e-mail.
  */
 export async function enviarAvisoProprietario(destinatario: Destinatario, aviso: Aviso) {
-  await sendEmail(destinatario.email, aviso.assunto, aviso.texto);
+  await Promise.all([
+    sendEmail(destinatario.email, aviso.assunto, aviso.texto),
+    avisarNoWhatsapp(destinatario.userId, aviso).catch((e) => console.error("aviso ao proprietário no WhatsApp falhou:", e)),
+  ]);
+}
+
+async function avisarNoWhatsapp(userId: string, aviso: Aviso) {
+  const canal = await canalDoTitular(userId);
+  const telefone = canal?.verificado ? telefoneWhatsapp(canal.telefone) : null;
+  if (!telefone) return;
+  await enviarWhatsapp(telefone, `*${aviso.assunto}*\n\n${aviso.texto}`);
+}
+
+/**
+ * Proposta de comprador registrada: alerta o proprietário no painel e no WhatsApp.
+ * Os valores ficam só no painel e na conversa com a equipe. Nunca lança.
+ */
+export async function avisarPropostaAoProprietario(dados: { opportunityId: string; autorId: string; rodada: number }) {
+  try {
+    const { data: opp } = await supabaseAdmin().from("opportunities").select("property_id").eq("id", dados.opportunityId).maybeSingle();
+    if (!opp) return;
+    const d = await destinatarioDoImovel(opp.property_id);
+    if (!d || d.userId === dados.autorId) return;
+    const link = `${SITE()}/painel/imoveis/${opp.property_id}/acompanhamento#proposta`;
+    await enviarAvisoProprietario(d, {
+      assunto: `Nova proposta no seu imóvel ${d.codigo}`,
+      texto: `Chegou uma proposta${dados.rodada > 1 ? ` (rodada ${dados.rodada})` : ""} para o imóvel ${d.codigo} (${d.titulo}). A equipe ARINI precisa falar com você para tratar esta proposta.\n\nVeja no seu painel: ${link}`,
+    });
+  } catch (e) {
+    console.error("aviso de proposta ao proprietário falhou:", e);
+  }
 }
 
 /** Quem recebe os avisos do imóvel: o proprietário; sem ele, o parceiro que anunciou. */
@@ -126,6 +159,8 @@ export type Acompanhamento = {
   intermediador: Intermediador;
   oportunidadesAbertas: number;
   visitas: { agendadas: number; realizadas: number };
+  /** Relatórios que o corretor liberou ao proprietário, do mais recente ao mais antigo. */
+  relatorios: RelatorioCompartilhado[];
 };
 
 export async function carregarAcompanhamento(propertyId: string): Promise<Acompanhamento> {
@@ -140,8 +175,8 @@ export async function carregarAcompanhamento(propertyId: string): Promise<Acompa
 
   const [{ data: visitas }, { data: propostas }, acomp, { data: whats }] = await Promise.all([
     ids.length
-      ? admin.from("visits").select("id, opportunity_id, data_hora, status, feedback, updated_at").in("opportunity_id", ids).order("data_hora", { ascending: false }).limit(200)
-      : Promise.resolve({ data: [] as { id: string; opportunity_id: string; data_hora: string; status: string; feedback: string | null; updated_at: string }[] }),
+      ? admin.from("visits").select("id, opportunity_id, data_hora, status, feedback, updated_at, relatorio").in("opportunity_id", ids).order("data_hora", { ascending: false }).limit(200)
+      : Promise.resolve({ data: [] as { id: string; opportunity_id: string; data_hora: string; status: string; feedback: string | null; updated_at: string; relatorio: unknown }[] }),
     ids.length
       ? admin.from("proposals").select("id, opportunity_id, numero_rodada, autor_lado, valor, status, created_at").in("opportunity_id", ids).order("created_at", { ascending: false }).limit(100)
       : Promise.resolve({ data: [] as { id: string; opportunity_id: string; numero_rodada: number; autor_lado: string; valor: number; status: string; created_at: string }[] }),
@@ -192,6 +227,11 @@ export async function carregarAcompanhamento(propertyId: string): Promise<Acompa
       agendadas: (visitas ?? []).filter((v) => v.status === "agendada").length,
       realizadas: (visitas ?? []).filter((v) => v.status === "realizada").length,
     },
+    relatorios: (visitas ?? []).flatMap((v) => {
+      const r = v.relatorio as RelatorioVisita | null;
+      return v.status === "realizada" && r?.compartilhar
+        ? [{ quando: v.data_hora, interessado: apelido.get(v.opportunity_id) ?? "Interessado", relatorio: r }] : [];
+    }),
   };
 }
 
