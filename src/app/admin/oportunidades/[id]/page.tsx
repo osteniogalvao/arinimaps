@@ -18,7 +18,10 @@ import { Etiqueta } from "@/components/ui/Pagina";
 import PainelCrm, { type ModeloMensagem } from "@/components/crm-comercial/PainelCrm";
 
 export default async function OportunidadeAdmin({ params }: PageProps<"/admin/oportunidades/[id]">) {
-  const user = await exigirSetor("comercial");
+  // O Jurídico (contratos) e o Financeiro (comissão da venda) chegam aqui pelos links dos seus
+  // setores; antes só o Comercial entrava e os outros voltavam para a Matriz. As ações continuam
+  // travadas por setor nas rotas da API. Auditoria de 26/11/2026.
+  const user = await exigirSetor("comercial", "juridico", "financeiro");
   const { id } = await params;
   const admin = supabaseAdmin();
 
