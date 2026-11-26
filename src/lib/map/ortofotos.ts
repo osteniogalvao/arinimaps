@@ -1,5 +1,5 @@
 import type { RasterSourceSpecification, StyleSpecification, RasterLayerSpecification } from "maplibre-gl";
-import { SATELITE, SATELITE_ALTO } from "./config";
+import { SATELITE, SATELITE_ALTO, SATELITE_GOOGLE } from "./config";
 
 type Detalhe = { id: string; fonte: RasterSourceSpecification };
 type Limites = [number, number, number, number];
@@ -41,7 +41,8 @@ const fazendaLaranja: Detalhe = {
 };
 
 const configurada = fonteConfigurada();
-export const DETALHES_SATELITE: Detalhe[] = [
+// Com o Google, nenhuma foto de outra fonte vai por cima (termos do Google).
+export const DETALHES_SATELITE: Detalhe[] = SATELITE_GOOGLE ? [] : [
   ...(SATELITE_ALTO ? [{id:"satelite-alto",fonte:SATELITE_ALTO}] : []),
   fazendaLaranja, ...(configurada ? [configurada] : []),
 ];

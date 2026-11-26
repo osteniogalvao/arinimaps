@@ -11,7 +11,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useS
 import bbox from "@turf/bbox";
 import type { Map as MLMap, MapLayerMouseEvent, GeoJSONSource, Popup, StyleSpecification, VectorTileSource } from "maplibre-gl";
 import { DETALHES_SATELITE, camadaDeDetalhe } from "@/lib/map/ortofotos";
-import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, MOSAICO_MENOS_NUVENS, SATELITE, ZOOM_INICIAL_REGIONAL, ZOOM_MOSAICO_ATE } from "@/lib/map/config";
+import { CENTRO_REGIAO, LIMITES_MAPA_REGIONAL, MOSAICO_MENOS_NUVENS, SATELITE, SATELITE_GOOGLE, ZOOM_INICIAL_REGIONAL, ZOOM_MOSAICO_ATE } from "@/lib/map/config";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { useMunicipiosAtendidos } from "@/lib/map/useMunicipiosAtendidos";
 import { listaDeMunicipios, municipioAtendidoDoCar } from "@/lib/geo/atendimento";
@@ -720,6 +720,11 @@ export default function MapaRegional({
     if (map.getLayer("historico")) map.removeLayer("historico");
     if (map.getSource("historico")) map.removeSource("historico");
     const img = imagemHistoricaPorId(imagemAnoRef.current);
+    // Google: a imagem do ano SUBSTITUI o satélite, nunca fica por cima dele (termos do Google)
+    if (SATELITE_GOOGLE) {
+      map.setLayoutProperty("satelite", "visibility",
+        !(img && !compararRef.current) && baseRef.current === "satelite" ? "visible" : "none");
+    }
     if (!img || compararRef.current) return;
     const camadas = map.getStyle().layers;
     // acima também da camada de perto, senão ela cobriria a imagem do ano no zoom do lote
@@ -1049,7 +1054,8 @@ export default function MapaRegional({
         map.addSource("satelite", SATELITE);
         // 17/11/2026 (item 14 do Carlos): satélite um pouco mais saturado e contrastado, menos "lavado"
         map.addLayer({ id: "satelite", type: "raster", source: "satelite", layout: { visibility: baseRef.current === "satelite" ? "visible" : "none" },
-          paint: { "raster-saturation": 0.18, "raster-contrast": 0.08 } });
+          // com o Google, a foto vai como ele entrega (sem retoque de cor)
+          paint: SATELITE_GOOGLE ? {} : { "raster-saturation": 0.18, "raster-contrast": 0.08 } });
         map.addSource("mosaico-anual", MOSAICO_MENOS_NUVENS);
         // por cima do satélite normal e só até o z13: de perto, a foto de detalhe assume
         map.addLayer({ id: "mosaico-anual", type: "raster", source: "mosaico-anual", maxzoom: ZOOM_MOSAICO_ATE,
@@ -1571,7 +1577,8 @@ export default function MapaRegional({
     if (!map || !pronto || !map.getLayer("satelite")) return;
     // com o mosaico ligado o detalhe continua por baixo: é ele que aparece do z14 para perto
     const mostrarDetalhe = base === "satelite";
-    map.setLayoutProperty("satelite", "visibility", mostrarDetalhe ? "visible" : "none");
+    const historicoNoLugar = SATELITE_GOOGLE && !!imagemHistoricaPorId(imagemAnoRef.current) && !compararRef.current;
+    map.setLayoutProperty("satelite", "visibility", mostrarDetalhe && !historicoNoLugar ? "visible" : "none");
     if (map.getLayer("mosaico-anual")) {
       map.setLayoutProperty("mosaico-anual", "visibility", base === "satelite" && mosaicoAnual ? "visible" : "none");
     }
@@ -1926,10 +1933,11 @@ export default function MapaRegional({
   const chipsSecundarios = (
     <>
       {/* no celular o mosaico sai da barra (eram 4 linhas de chips) e vem para o Mais */}
-      <button type="button" className={`${chipBase} sm:hidden`} data-ativo={mosaicoAtivo} aria-pressed={mosaicoAtivo}
+      {/* com o Google não há nuvem a contornar, e o mosaico por cima misturaria fontes */}
+      {!SATELITE_GOOGLE && <button type="button" className={`${chipBase} sm:hidden`} data-ativo={mosaicoAtivo} aria-pressed={mosaicoAtivo}
         onClick={() => { alternarMosaico(); setPainelMapa(null); }}>
         Mosaico com menos nuvens
-      </button>
+      </button>}
       <button onClick={() => setPainelMapa("imagem")} data-ativo={buscaImagem} className={chipBase}
         title="Encontre o local por uma foto com GPS, um print de mapa, um croqui ou um documento">
         <ImageUp className="size-3.5" /> Buscar por imagem
@@ -2178,12 +2186,12 @@ export default function MapaRegional({
               <Tag className="size-3.5" /> Só à venda
             </button>
           </div>
-          <button type="button" className={`${chipBase} max-sm:hidden`} data-ativo={mosaicoAtivo}
+          {!SATELITE_GOOGLE && <button type="button" className={`${chipBase} max-sm:hidden`} data-ativo={mosaicoAtivo}
             aria-pressed={mosaicoAtivo}
             title="Mosaico Sentinel-2 sem nuvens (2016, 10 m) na visão regional. Do zoom de bairro para perto, a fotografia de detalhe normal."
             onClick={alternarMosaico}>
             Mosaico com menos nuvens
-          </button>
+          </button>}
           <button onClick={() => { setPainelMapa(camadasAbertas ? null : "camadas"); setAvisoPlano(""); }}
             aria-controls="catalogo-camadas" aria-expanded={camadasAbertas} data-ativo={camadasAbertas}
             className={`${chipBase} sm:hidden`} data-tour="camadas">

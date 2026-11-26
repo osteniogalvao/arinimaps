@@ -86,11 +86,11 @@ export const config = {
   // corpo inteiro da requisição para renovar a sessão, e planta de cidade passa
   // de 100 MB. A rota confere a sessão por conta própria (ator()) e lê o arquivo
   // em fluxo, sem nunca carregá-lo inteiro na memória.
-  // `api/tiles` e `api/geo` também ficam de fora: são dezenas de pedidos por
+  // `api/tiles`, `api/satelite` e `api/geo` também ficam de fora: são dezenas de pedidos por
   // movimento do mapa e nenhum precisa de sessão — passar cada um pelo refresh
   // do token (uma ida ao Supabase Auth) era parte da lentidão do zoom.
   matcher: [
     // O webhook autentica a Meta e mede o corpo em fluxo. O proxy copiaria o corpo antes dessa validação.
-    "/((?!api/admin/cartografia|api/webhooks/(?:whatsapp|meta-mensagens)(?:/|$)|api/tiles|api/geo|_next/static|_next/image|favicon.ico|aguardar-documento\\.js$|.*\\.(?:png|jpg|jpeg|svg|webp|pbf)).*)",
+    "/((?!api/admin/cartografia|api/webhooks/(?:whatsapp|meta-mensagens)(?:/|$)|api/tiles|api/satelite|api/geo|_next/static|_next/image|favicon.ico|aguardar-documento\\.js$|.*\\.(?:png|jpg|jpeg|svg|webp|pbf)).*)",
   ],
 };

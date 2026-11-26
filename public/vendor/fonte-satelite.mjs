@@ -29,6 +29,7 @@ export const ZOOM_PANORAMA_MAX = 6;
 
 /** @param {number} z @param {number} x @param {number} y @param {string} detalhe */
 export function urlDoTile(z, x, y, detalhe) {
-  if (z <= ZOOM_PANORAMA_MAX) return urlMosaico(z, x, y);
+  // satélite do Google: a mesma fonte em todos os zooms (sem panorama da NASA)
+  if (z <= ZOOM_PANORAMA_MAX && !detalhe.startsWith("/api/satelite/google/")) return urlMosaico(z, x, y);
   return detalhe.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
 }

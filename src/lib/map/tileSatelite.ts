@@ -1,5 +1,5 @@
 import type { AddProtocolAction } from "maplibre-gl";
-import { TILE_DETALHE, urlTileAlto, urlTileHistorico, urlTileAtivo } from "./config";
+import { TILE_DETALHE, TILE_GOOGLE, urlTileAlto, urlTileHistorico, urlTileAtivo } from "./config";
 import { urlMosaico, ZOOM_PANORAMA_MAX } from "../../../public/vendor/fonte-satelite.mjs";
 import { amostrarImagem, melhoraCobertura } from "./coberturaNuvens";
 
@@ -15,10 +15,15 @@ async function buscar(url: string, signal: AbortSignal, timeout: number) {
 const transparente = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="), c => c.charCodeAt(0));
 
 export const carregarTileSatelite: AddProtocolAction = async ({ url }, abort) => {
-  const xyz = /^arini-satelite:\/\/(tile|alto|mosaico)\/(\d+)\/(\d+)\/(\d+)$/.exec(url);
+  const xyz = /^arini-satelite:\/\/(tile|alto|mosaico|google)\/(\d+)\/(\d+)\/(\d+)$/.exec(url);
   if (!xyz) throw new Error("Endereço de tile de satélite inválido.");
   const [z, x, y] = xyz.slice(2).map(Number);
   const signal = abort.signal;
+  // Google: sem reserva de outra fonte nem troca por nuvem (termos do Google; ver googleTiles.ts)
+  if (xyz[1] === "google") {
+    const caminho = TILE_GOOGLE.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+    return buscar(new URL(caminho, location.origin).href, signal, 15000);
+  }
   if (xyz[1] === "mosaico") return buscar(urlMosaico(z, x, y), signal, 15000);
   const sobreposta = xyz[1] === "alto";
   const principal = sobreposta ? urlTileAlto(z, x, y) : urlTileAtivo(z, x, y);

@@ -17,7 +17,8 @@
  */
 
 import type * as MapLibreNS from "maplibre-gl";
-import { URL_MAPLIBRE } from "./config";
+import { SATELITE_GOOGLE, URL_MAPLIBRE } from "./config";
+import { ligarCreditosGoogle } from "./creditosGoogle";
 import { carregarTileSatelite } from "./tileSatelite";
 import { Protocol } from "pmtiles";
 import { coordenadasTileCar, recortesNoTile, recortesPublicados } from "./recortesUrbanos";
@@ -35,9 +36,29 @@ let promessa: Promise<typeof MapLibreNS> | null = null;
  * Cloudflare R2): o MapLibre lê só os pedaços da tela por Range request.
  * Registrado uma vez, junto com o carregamento do MapLibre.
  */
+let comGoogle: typeof MapLibreNS | null = null;
+
+/**
+ * Satélite do Google: todo mapa criado ganha o logo e o crédito das imagens
+ * (exigência dos termos; src/lib/map/creditosGoogle.ts). Envolver o construtor
+ * aqui cobre todos os mapas do site sem mexer em cada componente.
+ */
+function comCreditosGoogle(ml: typeof MapLibreNS): typeof MapLibreNS {
+  if (!SATELITE_GOOGLE) return ml;
+  if (comGoogle) return comGoogle;
+  class MapaComCreditos extends ml.Map {
+    constructor(opcoes: MapLibreNS.MapOptions) {
+      super(opcoes);
+      ligarCreditosGoogle(this);
+    }
+  }
+  comGoogle = { ...ml, Map: MapaComCreditos } as typeof MapLibreNS;
+  return comGoogle;
+}
+
 function registrarProtocolos(ml: typeof MapLibreNS) {
   const w = window as unknown as { __protocolosAriniRegistrados?: boolean };
-  if (w.__protocolosAriniRegistrados) return ml;
+  if (w.__protocolosAriniRegistrados) return comCreditosGoogle(ml);
   ml.addProtocol("arini-satelite", carregarTileSatelite);
   const protocolo = new Protocol({ metadata: true });
   const carregar: MapLibreNS.AddProtocolAction = protocolo.tile;
@@ -56,7 +77,7 @@ function registrarProtocolos(ml: typeof MapLibreNS) {
     return { ...resposta, data: cortarTileCar(resposta.data, z, x, y, recortes), cacheControl: "max-age=30", expires: undefined };
   });
   w.__protocolosAriniRegistrados = true;
-  return ml;
+  return comCreditosGoogle(ml);
 }
 
 export function carregarMaplibre(): Promise<typeof MapLibreNS> {
