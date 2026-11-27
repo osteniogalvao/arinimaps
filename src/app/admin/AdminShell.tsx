@@ -15,7 +15,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Kanban, CodeXml, Send, TrendingUp, Target, Clock, CalendarClock, Gauge, Search, LineChart, FileText, BookText, Truck, PieChart, ListTree,
+  Bell, Kanban, CodeXml, Send, TrendingUp, Target, Clock, CalendarClock, Gauge, Search, LineChart, FileText, BookText, Truck, PieChart, ListTree,
   BarChart3, BookOpen, Building2, ChevronDown, ChevronRight, Circle, Crown, Database, ExternalLink, Filter, Grid3x3,
   FileUp, Flag, GitCompareArrows, Handshake, Headset, History, KeyRound, Landmark, Layers, LayoutDashboard,
   LayoutGrid, ListChecks, LogOut, Map as IconeMapa, Megaphone, Menu, Package, Percent, Receipt, Scale, SearchX,
@@ -47,6 +47,7 @@ const GERAL: ItemMenu[] = [
 /** Atalhos de uso menos frequente: ficam recolhidos em "Mais". */
 const GERAL_MAIS: ItemMenu[] = [
   { href: "/admin/eu", rotulo: "Meu painel", icone: "☺" },
+  { href: "/admin/notificacoes", rotulo: "Notificações", icone: "◉" },
   { href: "/admin/ponto", rotulo: "Meu ponto", icone: "◷" },
   { href: "/admin/crm", rotulo: "Todos os funis", icone: "⇉" },
   { href: "/admin/equipe", rotulo: "Equipe e funções", icone: "☺" },
@@ -84,6 +85,7 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/chat": MessageCircle,
   "/admin/atendimento/configurar": ListOrdered,
   "/admin/eu": UserRound,
+  "/admin/notificacoes": Bell,
   "/admin/ponto": Clock,
   "/admin/crm": Kanban,
   "/admin/agenda-setores": CalendarDays,
