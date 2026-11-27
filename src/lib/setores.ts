@@ -36,23 +36,25 @@ export type Setor = {
 export const SETORES: Setor[] = [
   {
     id: "operacoes", nome: "Operações", icone: "▦", href: "/admin/operacoes",
-    principais: ["/admin/operacoes", "/admin/imoveis", "/admin/cadastros"],
+    principais: ["/admin/operacoes", "/admin/imoveis", "/admin/proprietarios", "/admin/cadastros"],
     descricao: "Análise de anúncios, conferência de documentos e aprovação de cadastros.",
     itens: [
       { href: "/admin/operacoes", rotulo: "Indicadores", icone: "◫" },
       { href: "/admin/imoveis", rotulo: "Imóveis", icone: "▦" },
+      { href: "/admin/proprietarios", rotulo: "Proprietários", icone: "☺" },
       { href: "/admin/cadastros", rotulo: "Cadastros", icone: "✓" },
     ],
   },
   {
     id: "comercial", nome: "Comercial", icone: "⇉", href: "/admin/comercial",
-    principais: ["/admin/funil", "/admin/leads", "/admin/agenda", "/admin/clientes"],
+    principais: ["/admin/funil", "/admin/leads", "/admin/consulta-imoveis", "/admin/agenda", "/admin/clientes"],
     descricao: "Leads, funil de negociação, visitas, propostas e parceiros.",
     itens: [
       { href: "/admin/comercial", rotulo: "Indicadores", icone: "◫" },
       { href: "/admin/funil", rotulo: "Funil comercial", icone: "⇉" },
       { href: "/admin/empreendimentos", rotulo: "Espelho de vendas", icone: "▦" },
       { href: "/admin/leads", rotulo: "Leads", icone: "◎" },
+      { href: "/admin/consulta-imoveis", rotulo: "Consulta de imóveis", icone: "⌕" },
       { href: "/admin/agenda", rotulo: "Agenda comercial", icone: "◷" },
       { href: "/admin/clientes", rotulo: "Carteira de clientes", icone: "☺" },
       { href: "/admin/corretores", rotulo: "Corretores e metas", icone: "◎" },
@@ -150,9 +152,10 @@ export const SETORES: Setor[] = [
   },
   {
     id: "diretoria", nome: "Diretoria", icone: "◈", href: "/admin/relatorios",
-    principais: ["/admin/relatorios", "/admin/usuarios", "/admin/atendimento/configurar", "/admin/automacoes"],
+    principais: ["/admin/aprovacoes", "/admin/relatorios", "/admin/usuarios", "/admin/atendimento/configurar", "/admin/automacoes"],
     descricao: "Indicadores gerais, equipe, regras comerciais e configurações do sistema.",
     itens: [
+      { href: "/admin/aprovacoes", rotulo: "Aprovações", icone: "✓" },
       { href: "/admin/relatorios", rotulo: "Relatórios", icone: "▤" },
       { href: "/admin/usuarios", rotulo: "Equipe e usuários", icone: "☺" },
       { href: "/admin/atendimento/configurar", rotulo: "Menu do WhatsApp e recepção", icone: "☰" },

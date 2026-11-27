@@ -6,6 +6,7 @@ import { ArrowRight, Building2, CalendarClock, Download, Filter, Mail, Phone, Pl
 import { BotaoLink, CabecalhoPagina, Etiqueta, Vazio } from "@/components/ui/Pagina";
 import { CAMPO_COMPACTO, CODIGO, LISTA, aba } from "@/components/admin/estilos";
 import { equipeAtiva } from "@/components/admin/Painel";
+import Resumo from "@/components/admin/Resumo";
 import { ORIGEM_LABEL, TEMPERATURAS, TEMPERATURA_LABEL, TEMPERATURA_TOM, soDigitos, type Temperatura } from "@/lib/crm-comercial";
 
 type Linha = {
@@ -57,9 +58,17 @@ export default async function AdminLeads({ searchParams }: PageProps<"/admin/lea
     if (etiqueta) q = q.contains("etiquetas", [etiqueta]);
     return q;
   };
-  const [r, equipe] = await Promise.all([
+  // números do topo, como no CRM da Arini Negócios (com a 0147; sem ela, zero)
+  const ABERTAS = "(fechado,pos_venda,perdido)";
+  const contar = (f: (q: ReturnType<typeof base>) => ReturnType<typeof base>) => f(base()).then((x) => (x.error ? 0 : x.count ?? 0));
+  const base = () => admin.from("oportunidades_oficiais").select("id", { count: "exact", head: true });
+  const [r, equipe, nAbertas, nMeus, nHoje, nVencidos] = await Promise.all([
     monta(`${CAMPOS}, responsavel_user_id, prazo_atendimento, primeiro_atendimento_em, temperatura, etiquetas, proxima_acao, proxima_acao_em`, true),
     equipeAtiva(),
+    contar((q) => q.not("etapa", "in", ABERTAS)),
+    contar((q) => q.eq("responsavel_user_id", user.id).not("etapa", "in", ABERTAS)),
+    contar((q) => q.lte("proxima_acao_em", agoraIso).not("etapa", "in", ABERTAS)),
+    contar((q) => q.is("primeiro_atendimento_em", null).eq("etapa", "novo_lead").lt("prazo_atendimento", agoraIso)),
   ]);
   const semCrm = !!r.error;
   const opps = (r.error ? (await monta(CAMPOS, false)).data : r.data) as unknown as Linha[] | null;
@@ -83,6 +92,13 @@ export default async function AdminLeads({ searchParams }: PageProps<"/admin/lea
           <BotaoLink href="/admin/leads/novo" seta={false}><Plus /> Novo lead</BotaoLink>
           <BotaoLink href="/admin/funil" variante="contorno" seta={false}><Filter /> Funil</BotaoLink>
         </div>} />
+
+      <Resumo itens={[
+        { rotulo: "Em aberto", valor: nAbertas, href: "/admin/leads", ativo: visao === "todos" },
+        { rotulo: "Meus leads", valor: nMeus, tom: "verde", href: "/admin/leads?meus=1", ativo: visao === "meus" },
+        { rotulo: "Ações para hoje", valor: nHoje, tom: nHoje ? "ouro" : "neutro", href: "/admin/leads?followup=1", ativo: visao === "followup" },
+        { rotulo: "Sem contato no prazo", valor: nVencidos, tom: nVencidos ? "critico" : "neutro", href: "/admin/leads?vencidos=1", ativo: visao === "vencidos" },
+      ]} />
 
       <div className="flex flex-wrap items-center gap-2">
         <Link href={`/admin/leads${qs({})}`} className={aba(visao === "todos")}>Todos</Link>
