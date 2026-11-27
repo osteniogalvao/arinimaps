@@ -82,7 +82,11 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     eu: a.userId, conversas, mensagens,
-    equipe: (equipe ?? []).filter((p) => p.user_id !== a.userId).map((p) => ({ user_id: p.user_id, nome: (p.nome as string) || "Sem nome" })),
+    equipe: (equipe ?? []).filter((p) => p.user_id !== a.userId).map((p) => ({
+      user_id: p.user_id, nome: (p.nome as string) || "Sem nome",
+      setor: p.role === "admin_central" ? "Diretoria"
+        : ((p.setores as string[] | null) ?? []).map((x) => setorPorId(x)?.nome ?? x).join(", ") || "Equipe",
+    })),
   });
 }
 

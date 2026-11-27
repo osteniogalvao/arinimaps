@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Lock, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Hand, Lock, Send } from "lucide-react";
 import { CAMPO_COMPACTO } from "@/components/admin/estilos";
 import { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL, STATUS_LABEL } from "@/lib/atendimento-rotulos";
 
@@ -97,37 +97,49 @@ export default function ConversaAtendimento({ id, voltar }: { id: string; voltar
   const pessoasDoDestino = d.equipe.filter((p) => !destino.setor || p.setores.includes(destino.setor));
 
   return (
-    <div className="cartao flex flex-col">
+    <div className="flex h-full flex-col">
       {/* cabeçalho */}
       <header className="space-y-2 border-b border-linha p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Link href={voltar} className="mb-1 inline-flex items-center gap-1 text-xs text-texto-2 lg:hidden"><ArrowLeft className="size-3" /> Conversas</Link>
-            <p className="flex items-center gap-2 text-lg font-semibold text-texto"><MessageCircle className="size-4 text-verde" />{c.nome || contatoRotulo(c.telefone)}</p>
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-verde/15 font-semibold text-verde">{(c.nome || "?").trim()[0]?.toUpperCase() ?? "?"}</span>
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-2 font-semibold text-texto">
+                  {c.nome || contatoRotulo(c.telefone)}
+                  <span className={"rounded-full px-2 py-0.5 text-[11px] font-semibold " + (c.status === "resolvida" ? "bg-superficie-2 text-texto-2" : c.status === "pendente" ? "bg-ouro/15 text-ouro" : "bg-verde/15 text-verde")}>{STATUS_LABEL[c.status] ?? c.status}</span>
+                </p>
             <p className="text-xs text-texto-2">
-              {canalDoContatoRotulo(c.telefone) === "WhatsApp" ? "+" + c.telefone : canalDoContatoRotulo(c.telefone)} · {c.codigo} · {STATUS_LABEL[c.status] ?? c.status}
+              {canalDoContatoRotulo(c.telefone)}{canalDoContatoRotulo(c.telefone) === "WhatsApp" ? " · " + c.telefone : ""} · {c.codigo}
               {c.perfil_tipo && ` · ${PERFIL_LABEL[c.perfil_tipo] ?? c.perfil_tipo}`}
               {d.perfil && ` (${d.perfil.nome}${d.perfil.email ? ", " + d.perfil.email : ""})`}
             </p>
-            <p className="mt-1 text-sm">
-              <strong>{nomeSetor(c.setor)}</strong>
-              {" · "}{c.responsavel ? `com ${nomeDe.get(c.responsavel) ?? "responsável"}` : "sem responsável (fila)"}
-              {d.oportunidade && <> · <Link className="text-verde underline" href={`/admin/oportunidades/${d.oportunidade.id}`}>Negociação {d.oportunidade.codigo}</Link></>}
-              {d.crm_item && <> · <Link className="text-verde underline" href={`/admin/crm/item/${d.crm_item.id}`}>{d.crm_item.codigo}</Link></>}
-            </p>
-            {!!c.etiquetas.length && <p className="mt-1 flex flex-wrap gap-1">{c.etiquetas.map((e) => <span key={e} className="rounded-full bg-superficie-2 px-2 text-[11px]">#{e}</span>)}</p>}
+              </div>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 text-sm">
-            {c.responsavel !== d.eu && (!naCentral || d.pode.triar) && <button disabled={ocupado} onClick={() => agir({ acao: "assumir" })} className="btn-verde px-3 py-1.5">Assumir</button>}
+            {c.responsavel !== d.eu && (!naCentral || d.pode.triar) && <button disabled={ocupado} onClick={() => agir({ acao: "assumir" })} className="btn-verde inline-flex items-center gap-1.5 px-3 py-1.5"><Hand className="size-4" /> Assumir</button>}
             {(!naCentral || d.pode.triar) && <button disabled={ocupado} onClick={() => { setPainel(painel === "transferir" ? "" : "transferir"); setDestino({ setor: "", responsavel: "", motivo: "" }); }} className="btn-contorno px-3 py-1.5">{naCentral ? "Triar" : "Transferir"}</button>}
             {c.responsavel && <button disabled={ocupado} onClick={() => agir({ acao: "devolver" })} className="btn-contorno px-3 py-1.5">Devolver à fila</button>}
             {c.status !== "pendente" && c.status !== "resolvida" && <button disabled={ocupado} onClick={() => agir({ acao: "pendente" })} className="btn-contorno px-3 py-1.5">Aguardando cliente</button>}
             {c.status === "resolvida"
               ? <button disabled={ocupado} onClick={() => agir({ acao: "reabrir" })} className="btn-contorno px-3 py-1.5">Reabrir</button>
-              : <button disabled={ocupado} onClick={() => agir({ acao: "resolver" })} className="btn-contorno px-3 py-1.5">Resolver</button>}
+              : <button disabled={ocupado} onClick={() => agir({ acao: "resolver" })} className="btn-verde inline-flex items-center gap-1.5 px-3 py-1.5"><Check className="size-4" /> Encerrar</button>}
           </div>
         </div>
+        <div className="-mx-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-y border-linha bg-superficie-2/60 px-4 py-1.5 text-xs">
+            <p className="flex flex-wrap items-center gap-1.5 text-texto-2">
+              <ChevronRight className="size-3.5" />
+              <strong className="uppercase tracking-wide text-ouro">{nomeSetor(c.setor)}</strong>
+              {" · "}{c.responsavel ? `com ${nomeDe.get(c.responsavel) ?? "responsável"}` : "sem responsável (fila)"}
+              {d.oportunidade && <> · <Link className="text-verde underline" href={`/admin/oportunidades/${d.oportunidade.id}`}>Negociação {d.oportunidade.codigo}</Link></>}
+              {d.crm_item && <> · <Link className="text-verde underline" href={`/admin/crm/item/${d.crm_item.id}`}>{d.crm_item.codigo}</Link></>}
+            </p>
+            {c.etiquetas.map((e) => <span key={e} className="rounded-full bg-superficie px-2 text-[11px]">#{e}</span>)}
+                  </div>
         <div className="flex flex-wrap gap-3 text-xs font-semibold text-verde">
+          <span className="sr-only">Mais ações</span>
           <button onClick={() => { setPainel(painel === "etiquetas" ? "" : "etiquetas"); setEtiquetas(c.etiquetas.join(", ")); }}>Etiquetas</button>
           {d.pode.lead && !c.opportunity_id && <button onClick={() => setPainel(painel === "lead" ? "" : "lead")}>Criar lead no Comercial</button>}
           {!!d.pipelines.length && !c.crm_item_id && <button onClick={() => { setPainel(painel === "crm" ? "" : "crm"); setCrm({ pipeline: d.pipelines[0].id, titulo: "" }); }}>Abrir no CRM de {nomeSetor(c.setor)}</button>}
@@ -199,15 +211,15 @@ export default function ConversaAtendimento({ id, voltar }: { id: string; voltar
       </header>
 
       {/* mensagens + histórico */}
-      <div className="max-h-[60vh] min-h-[320px] space-y-2 overflow-y-auto p-4">
+      <div className="max-h-[62vh] min-h-[360px] flex-1 space-y-2 overflow-y-auto bg-superficie-2/50 p-4">
         {linha.map((i) => i.t === "m" ? (
-          <div key={"m" + i.v.id} className={"max-w-[80%] rounded-xl px-3 py-2 text-sm " + (i.v.direcao === "saida" ? "ml-auto bg-verde/12" : "mr-auto bg-superficie-2")}>
-            <p className="whitespace-pre-wrap text-texto">{i.v.texto}</p>
-            <p className="mt-0.5 text-[11px] text-texto-2">
+          <div key={"m" + i.v.id} className={"max-w-[80%] rounded-xl px-3 py-2 text-sm " + (i.v.direcao === "saida" ? "ml-auto rounded-br-sm bg-verde text-white" : "mr-auto rounded-bl-sm border border-linha bg-superficie text-texto")}>
+            <p className="whitespace-pre-wrap">{i.v.texto}</p>
+            <p className={"mt-0.5 text-[11px] " + (i.v.direcao === "saida" ? "text-right text-white/75" : "text-texto-2")}>
               {hora(i.v.created_at)}
               {i.v.direcao === "saida" && ` · ${i.v.enviado_por ? nomeDe.get(i.v.enviado_por) ?? "equipe" : "robô"}`}
               {i.v.direcao === "saida" && i.v.status && ` · ${i.v.status === "read" ? "lida" : i.v.status === "delivered" ? "entregue" : i.v.status === "failed" ? "falhou" : "enviada"}`}
-              {i.v.erro && <span className="text-critico"> · {i.v.erro}</span>}
+              {i.v.erro && <span className="font-semibold text-ouro"> · {i.v.erro}</span>}
             </p>
           </div>
         ) : i.v.acao === "nota" ? (
@@ -243,14 +255,17 @@ export default function ConversaAtendimento({ id, voltar }: { id: string; voltar
             ))}
           </ul>
         )}
+        <div className="flex gap-1 text-xs font-semibold">
+          <button type="button" onClick={() => setNota(false)} className={"rounded-md px-2.5 py-1 " + (!nota ? "bg-verde text-white" : "text-texto-2 hover:bg-superficie-2")}>Responder</button>
+          <button type="button" onClick={() => setNota(true)} className={"inline-flex items-center gap-1 rounded-md px-2.5 py-1 " + (nota ? "bg-ouro/20 text-texto" : "text-texto-2 hover:bg-superficie-2")}><Lock className="size-3" /> Nota interna</button>
+        </div>
         <div className="flex gap-2">
           <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={2}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
-            placeholder={nota ? "Nota interna (o cliente não vê)…" : d.configurado ? `Responder pelo ${canalDoContatoRotulo(c.telefone)}… (digite / para respostas prontas)` : `${canalDoContatoRotulo(c.telefone)} não configurado: só notas internas`}
+            placeholder={nota ? "Nota interna (o cliente não vê)…" : d.configurado ? "Escreva uma resposta… (Enter envia · Shift+Enter quebra linha · / respostas rápidas)" : `${canalDoContatoRotulo(c.telefone)} não configurado: só notas internas`}
             className={CAMPO_COMPACTO + " flex-1 resize-y " + (nota ? "border-ouro" : "")} />
-          <button disabled={ocupado || (!nota && !d.configurado)} aria-label="Enviar" className="btn-verde self-end px-3 py-2 disabled:opacity-60"><Send className="size-4" /></button>
+          <button disabled={ocupado || (!nota && !d.configurado)} className="btn-verde inline-flex items-center gap-1.5 self-end px-4 py-2 text-sm disabled:opacity-60"><Send className="size-4" /> Enviar</button>
         </div>
-        <label className="flex items-center gap-2 text-xs text-texto-2"><input type="checkbox" checked={nota} onChange={(e) => setNota(e.target.checked)} /> Nota interna (só a equipe vê)</label>
         {erro && <p className="text-xs text-critico" role="alert">{erro}</p>}
       </form>
     </div>
