@@ -56,6 +56,16 @@ const erroMaximo = (plantaMetros, r) => {
   plantaMetros.forEach((l, i) => l.forEach((p, j) => { const q = T(p), o = quadras[i][j]; pior = Math.max(pior, Math.hypot(q[0] - o[0], q[1] - o[1])); }));
   return pior;
 };
+// igual ao erroMaximo, para um pedaço da planta: compara com as linhas originais dele
+const erroMaximoDe = (plantaMetros, originais, r) => {
+  const [a, b] = [r.pares[0], r.pares[2]].map((p) => [m(p.planta), m(p.satelite)]);
+  const dz = [b[0][0] - a[0][0], b[0][1] - a[0][1]], dZ = [b[1][0] - a[1][0], b[1][1] - a[1][1]], den = dz[0] ** 2 + dz[1] ** 2;
+  const k = [(dZ[0] * dz[0] + dZ[1] * dz[1]) / den, (dZ[1] * dz[0] - dZ[0] * dz[1]) / den];
+  const T = ([x, y]) => { const rx = x - a[0][0], ry = y - a[0][1]; return [a[1][0] + k[0] * rx - k[1] * ry, a[1][1] + k[1] * rx + k[0] * ry]; };
+  let pior = 0;
+  plantaMetros.forEach((l, i) => l.forEach((p, j) => { const q = T(p), o = originais[i][j]; pior = Math.max(pior, Math.hypot(q[0] - o[0], q[1] - o[1])); }));
+  return pior;
+};
 const rodar = (dx, dy, graus, esc) => {
   const metros = mover(quadras, dx, dy, graus, esc);
   const r = encaixarPelasRuas(metros.map((l) => l.map(g)), [], ruas);
@@ -88,9 +98,30 @@ const rodar = (dx, dy, graus, esc) => {
   const errada = mover(movel, 4, -3);
   const r = encaixarPelasRuas(errada.map((l) => l.map(g)), fixo.map((l) => l.map(g)), ruas);
   assert.ok(!ehFalhaEncaixe(r), `quadra: ${r.erro}`);
-  assert.ok(r.soDeslocamento);
+  assert.ok(Math.abs(r.escala - 1) < 0.01, `quadra só deslocada mudou de tamanho: ${r.escala}`);
+  assert.ok(Math.abs(r.giroGraus) < 1e-9, "quadra pequena não gira");
   const d = [m(r.pares[0].satelite)[0] - m(r.pares[0].planta)[0], m(r.pares[0].satelite)[1] - m(r.pares[0].planta)[1]];
   assert.ok(Math.hypot(d[0] + 4, d[1] - 3) < 0.8, `quadra deslocada ${d.map((v) => v.toFixed(2))}`);
+}
+// 4b. quadra com o desenho certo e o tamanho errado (áudio do Carlos, 26/11):
+// cresce ou encolhe por igual até as frentes caírem no meio das ruas
+for (const esc of [1.06, 0.95]) {
+  const alvo = 4 * NY + 6;
+  const movel = quadras.filter((_, i) => Math.floor(i / 5) === alvo);
+  const fixo = quadras.filter((_, i) => Math.floor(i / 5) !== alvo);
+  const errada = mover(movel, 2, 1, 0, esc);
+  const r = encaixarPelasRuas(errada.map((l) => l.map(g)), fixo.map((l) => l.map(g)), ruas);
+  assert.ok(!ehFalhaEncaixe(r), `quadra ${esc}: ${r.erro}`);
+  assert.ok(Math.abs(r.escala * esc - 1) < 0.012, `quadra ${esc}: escala ${r.escala.toFixed(4)}`);
+  assert.ok(erroMaximoDe(errada, movel, r) < 1, `quadra ${esc}: erro ${erroMaximoDe(errada, movel, r).toFixed(2)} m`);
+}
+// 4c. com a opção de só deslocar, a quadra pequena não muda de tamanho
+{
+  const alvo = 4 * NY + 6;
+  const movel = quadras.filter((_, i) => Math.floor(i / 5) === alvo);
+  const fixo = quadras.filter((_, i) => Math.floor(i / 5) !== alvo);
+  const r = encaixarPelasRuas(mover(movel, 2, 1, 0, 1.06).map((l) => l.map(g)), fixo.map((l) => l.map(g)), ruas, { semEscalaPequena: true });
+  assert.ok(ehFalhaEncaixe(r) || (r.soDeslocamento && r.escala === 1), "semEscalaPequena mudou o tamanho");
 }
 // 5. árvores e eixo de rua do CAD ficam fora da medição
 {
@@ -115,4 +146,13 @@ const rodar = (dx, dy, graus, esc) => {
     <way id="10"><nd ref="2"/><nd ref="3"/><tag k="waterway" v="river"/></way></osm>`;
   assert.deepEqual(ruasDoXmlOsm(xml), [[[-50.1, -19.7], [-50.11, -19.71]]]);
 }
-console.log("encaixe pelas ruas: 7 casos ok");
+// 8. limpeza: o círculo de raio e o risco no pasto são soltos; nenhuma quadra é
+{
+  const { linhasSoltas, camadasNaoCadastro } = await jiti.import("../src/lib/geo/limpezaPlanta.ts");
+  const circulo = Array.from({ length: 73 }, (_, i) => g([800 + 3000 * Math.cos(i * Math.PI / 36), 500 + 3000 * Math.sin(i * Math.PI / 36)]));
+  const risco = [g([-900, -900]), g([-1500, -1400])];
+  const itens = [...quadras.map((l, i) => ({ chave: "q" + i, coords: l.map(g) })), { chave: "circ", coords: circulo }, { chave: "risco", coords: risco }];
+  assert.deepEqual(linhasSoltas(itens).sort(), ["circ", "risco"]);
+  assert.deepEqual(camadasNaoCadastro(["0", "QUADRAS", "LT_LOTE", "Defpoints", "VEGET_I", "AZIMUTE", "GRID", "PDF_LOTES"]), ["Defpoints", "VEGET_I", "AZIMUTE", "GRID"]);
+}
+console.log("encaixe pelas ruas e limpeza: 11 casos ok");

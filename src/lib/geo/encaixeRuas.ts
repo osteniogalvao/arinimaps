@@ -51,7 +51,7 @@ export type ResultadoEncaixe = {
   deslocamentoM: number;
   giroGraus: number;
   escala: number;
-  /** a peça é pequena demais para medir giro/escala: só deslocou */
+  /** só deslocou (peça pequena sem ajuste de tamanho) */
   soDeslocamento: boolean;
 };
 
@@ -66,6 +66,8 @@ export type OpcoesEncaixe = {
   semGiroGrosso?: boolean;
   /** giros (graus) experimentados na busca grossa das plantas grandes */
   girosGrossos?: number[];
+  /** peça pequena (< 250 m) só desloca, sem ajustar o tamanho */
+  semEscalaPequena?: boolean;
 };
 
 const PASSO_AMOSTRA_M = 15;
@@ -264,15 +266,18 @@ function resolver(A: number[][], b: number[]): number[] | null {
  * Correção pequena δ(x) = t + θ·⊥(x − c) + σ·(x − c), resolvida por mínimos
  * quadrados de f·n·δ(m) = −o, com uma rodada de corte de discrepantes.
  */
-function ajustarPasso(ms: Medida[], c: Ponto, completo: boolean) {
+type ModoAjuste = "desloca" | "escala" | "completo";
+function ajustarPasso(ms: Medida[], c: Ponto, modo: ModoAjuste) {
   const linha = (m: Medida) => {
     const rx = m.mx - c[0], ry = m.my - c[1];
     // n·⊥(r) com ⊥(r) = (−ry, rx), normalizado por 100 m para o sistema ficar bem condicionado
     const base = [m.f * m.nx, m.f * m.ny];
-    return completo ? [...base, (m.f * (-m.nx * ry + m.ny * rx)) / 100, (m.f * (m.nx * rx + m.ny * ry)) / 100] : base;
+    const esc = (m.f * (m.nx * rx + m.ny * ry)) / 100;
+    if (modo === "escala") return [...base, esc];
+    return modo === "completo" ? [...base, (m.f * (-m.nx * ry + m.ny * rx)) / 100, esc] : base;
   };
   const resolve = (lista: Medida[]) => {
-    const k = completo ? 4 : 2;
+    const k = modo === "completo" ? 4 : modo === "escala" ? 3 : 2;
     const A = Array.from({ length: k }, () => new Array(k).fill(0)), b = new Array(k).fill(0);
     for (const m of lista) {
       const l = linha(m);
@@ -292,7 +297,8 @@ function ajustarPasso(ms: Medida[], c: Ponto, completo: boolean) {
   const boas = ms.filter((m) => Math.abs(res(m, x!)) <= Math.max(1.5, 2.5 * sigma));
   if (boas.length >= 6) x = resolve(boas) ?? x;
   return {
-    tx: x[0], ty: x[1], th: completo ? x[2] / 100 : 0, sg: completo ? x[3] / 100 : 0,
+    tx: x[0], ty: x[1], th: modo === "completo" ? x[2] / 100 : 0,
+    sg: modo === "completo" ? x[3] / 100 : modo === "escala" ? x[2] / 100 : 0,
     boas: boas.length,
   };
 }
@@ -342,7 +348,9 @@ export function encaixarPelasRuas(movel: Linha[], fixo: Linha[], ruas: Linha[], 
   }
 
   // ponto de giro: o meio das ruas medidas (a moldura e as linhas soltas longe da cidade não puxam o giro)
-  const c: Ponto = [amostras.reduce((s, a) => s + a.px, 0) / amostras.length, amostras.reduce((s, a) => s + a.py, 0) / amostras.length];
+  // (na peça pequena o giro é o próprio centro dela: a escala cresce por igual para os quatro lados)
+  const c: Ponto = extensao < 250 ? [(ex0 + ex1) / 2, (ey0 + ey1) / 2]
+    : [amostras.reduce((s, a) => s + a.px, 0) / amostras.length, amostras.reduce((s, a) => s + a.py, 0) / amostras.length];
   const fixoIdx = segsFixo.length ? new Indice(segsFixo) : null;
   const marcas = { m: new Uint32Array(segsMovel.length), f: new Uint32Array(segsFixo.length), volta: 0 };
   let movelIdx = new Indice(segsMovel);
@@ -419,8 +427,12 @@ export function encaixarPelasRuas(movel: Linha[], fixo: Linha[], ruas: Linha[], 
   }
   if (melhor.giro !== giroAtual) girar(melhor.giro);
   // ---- 2. refino: deslocamento + giro + escala ----
-  // peça pequena (uma quadra) não mede giro e escala com confiança
+  // peça pequena (uma quadra) não mede giro com confiança, mas mede o tamanho:
+  // áudio do Carlos (26/11/2026) — "tem umas que o desenho está certo, só que o
+  // tamanho não se enquadra"; a quadra cresce ou encolhe por igual, sem girar,
+  // até as frentes caírem no meio das ruas dos quatro lados
   const completo = extensao >= 250;
+  const modoPeca: ModoAjuste = completo ? "completo" : opcoes.semEscalaPequena ? "desloca" : "escala";
   const r0 = (melhor.giro * Math.PI) / 180;
   let sim: Sim = { a: Math.cos(r0), b: Math.sin(r0), tx: melhor.dx, ty: melhor.dy };
   // nota fina de um encaixe: ruas que passam a até ~2 m do meio do vão
@@ -442,7 +454,7 @@ export function encaixarPelasRuas(movel: Linha[], fixo: Linha[], ruas: Linha[], 
     const n = notaFina(ms);
     if (n > melhorNota) { melhorNota = n; melhorSim = sim; melhorMs = ms; }
     if (ms.length < 8) break;
-    const d = ajustarPasso(ms, c, completo && ms.length >= 30);
+    const d = ajustarPasso(ms, c, modoPeca === "completo" ? (ms.length >= 30 ? "completo" : "desloca") : modoPeca === "escala" && ms.length >= 12 ? "escala" : "desloca");
     if (!d) break;
     sim = compor(sim, d);
     if (Math.hypot(d.tx, d.ty) < 0.03 && Math.abs(d.th) < 1e-5 && Math.abs(d.sg) < 1e-5) {
@@ -481,7 +493,7 @@ export function encaixarPelasRuas(movel: Linha[], fixo: Linha[], ruas: Linha[], 
     deslocamentoM: Math.hypot(sim.tx, sim.ty),
     giroGraus,
     escala,
-    soDeslocamento: !completo,
+    soDeslocamento: !completo && Math.abs(escala - 1) < 1e-4,
   };
 }
 

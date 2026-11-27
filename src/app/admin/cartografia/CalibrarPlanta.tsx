@@ -33,10 +33,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, Spline, Wand2, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, Spline, Wand2, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, Maximize2, Minimize2, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
 import type { Map as MLMap, GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { sugerirParesVisuais } from "@/lib/geo/pontosVisuais";
+import { camadasNaoCadastro, linhasSoltas, type LinhaChave } from "@/lib/geo/limpezaPlanta";
 import { ehFalhaEncaixe, linhasParaEncaixe, caixaRobusta, type FalhaEncaixe, type Linha, type ResultadoEncaixe } from "@/lib/geo/encaixeRuas";
 import { estiloSatelite } from "@/lib/map/ortofotos";
 import {
@@ -273,6 +274,18 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   // painel de baixo recolhido = mais mapa (pedido do Carlos: "tela de edição maior")
   // começa recolhido: o mapa é a ferramenta; o painel abre por "Posição" ou "Camadas do CAD"
   const [painelAberto, setPainelAberto] = useState(false);
+  /* Vídeo do Carlos (26/11/2026): num notebook o mapa ficava numa faixa de
+     meia tela, espremido entre cabeçalho, três linhas de botões e o painel.
+     "Mapa grande" esconde o cabeçalho, põe os botões numa linha só (rola para
+     o lado) e recolhe o painel. Liga sozinho em telas baixas. */
+  const [mapaGrande, setMapaGrande] = useState(() => {
+    try { const v = localStorage.getItem("arini:calibrar:mapaGrande"); if (v) return v === "1"; } catch { /* sem storage */ }
+    return typeof window !== "undefined" && window.innerHeight < 900;
+  });
+  function mudarMapaGrande(v: boolean) {
+    setMapaGrande(v); if (v) setPainelAberto(false);
+    try { localStorage.setItem("arini:calibrar:mapaGrande", v ? "1" : "0"); } catch { /* sem storage */ }
+  }
   // a calibração só abre por clique, no navegador: ler a preferência já na criação do estado é seguro
   const [autoSalvar, setAutoSalvar] = useState(() => {
     try { return localStorage.getItem(CHAVE_AUTOSALVAR) !== "0"; } catch { return true; }
@@ -1000,7 +1013,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   useEffect(() => { redesenhar(tRef.current, ocultosRef.current); }, [ativa, redesenhar]);
   // o mapa ganha (ou devolve) a altura do painel de baixo
   const temSelecao = selecao.size > 0;
-  useEffect(() => { mapRef.current?.resize(); }, [painelAberto, modo, temSelecao, erro, ajustes.length]);
+  useEffect(() => { mapRef.current?.resize(); }, [painelAberto, modo, temSelecao, erro, ajustes.length, mapaGrande]);
   useEffect(() => { desenharLinhaSelecionada(modo === "vertices" ? linhaSelecionada : null); }, [linhaSelecionada, modo, carregando, desenharLinhaSelecionada]);
 
   /** Contorno da peça ativa com vértices e pontos do meio (modo "Editar perímetro"). */
@@ -1901,9 +1914,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     map.triggerRepaint();
   }
 
-  function separarQuadras() {
+  /** Separa as quadras inteiras da vista. Devolve quantas separou (−1 = parou com aviso). */
+  function separarQuadras(paraEncaixar = false): number {
     const bruto = brutoRef.current, mapa = mapRef.current;
-    if (!bruto || !mapa) return;
+    if (!bruto || !mapa) return 0;
     const vista = mapa.getBounds(), global = afim(centroRef.current, tRef.current);
     const candidatos = detectarBlocosCad(bruto, ocultos, excluidas, p => vista.contains(aplicarMatrizPonto(global, p)));
     const novas: AjusteLocal[] = [];
@@ -1911,15 +1925,32 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     for (const c of candidatos) {
       if (c.area.length > 300 || [...atuais, ...novas].some(a => partesSobrepostas(a, c))) continue;
       if (atuais.length + novas.length >= 100) {
-        setMsg("A planta comporta 100 partes. Aproxime o mapa para separar apenas as quadras do trecho desejado."); return;
+        setMsg("A planta comporta 100 partes. Aproxime o mapa para separar apenas as quadras do trecho desejado."); return -1;
       }
       novas.push({ id: crypto.randomUUID(), nomeCad: c.nomeCad,
         nome: `${c.nomeCad} · ${atuais.length + novas.length + 1}`.slice(0, 60), area: c.area, t: { ...TRANSFORM_ZERO } });
     }
-    if (!novas.length) { setMsg("Nenhuma quadra inteira disponível nesta vista. Enquadre as quadras ou delimite uma peça pelo perímetro."); return; }
+    if (!novas.length) {
+      if (!paraEncaixar) setMsg("Nenhuma quadra inteira disponível nesta vista. Enquadre as quadras ou delimite uma peça pelo perímetro.");
+      return 0;
+    }
     definir(tRef.current, [...atuais, ...novas]);
+    if (paraEncaixar) return novas.length;
     selecionarParte(novas[0].id); setPainelAberto(true); setAba("posicao"); setModo("mover");
     setMsg(`${novas.length} quadra(s) separada(s). Selecione uma peça para ajustar sua posição.`);
+    return novas.length;
+  }
+
+  /**
+   * Áudio do Carlos (26/11/2026): "a IA enquadrar as linhas sozinha", quadra a
+   * quadra, aumentando ou diminuindo sem mudar o desenho. Um clique separa as
+   * quadras inteiras da vista e encaixa cada uma nas ruas (deslocamento e
+   * tamanho; as peças grandes também giram).
+   */
+  async function encaixarQuadraAQuadra() {
+    if (encaixando) return;
+    if (separarQuadras(true) < 0) return;
+    await encaixarPecasDaVista();
   }
 
   function selecionarDescricao(sugeridas?: Set<string>) {
@@ -1942,7 +1973,49 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     setMsg(`${fmt(selecao.size)} linha(s) encontrada(s) em toda a planta. Confira a seleção destacada antes de apagar.`);
   }
 
+  /**
+   * "Limpar com a Ari" (vídeo do Carlos, 26/11/2026): esconde as camadas que
+   * não são cadastro (pelo nome, e pela Ari quando ela responde) e seleciona as
+   * linhas soltas no vazio para o operador conferir e apagar. Nada é apagado
+   * sozinho: camada oculta volta com um clique e a seleção só some com
+   * "Apagar selecionadas".
+   */
+  async function limparComAri() {
+    const visiveis = layersCad.filter(l => !ocultos.has(l.nome)).sort((a, b) => b.linhas - a.linhas);
+    const esconder = new Set(camadasNaoCadastro(visiveis.map(l => l.nome)));
+    let avisoAri = "";
+    setConsultandoAri(true);
+    const r = await enviarJson<{ camadas: string[] }>("/api/admin/cartografia/sugerir-camadas", "POST", {
+      pedido: "Camadas que NÃO são cadastro urbano e podem ser escondidas: vegetação, paisagismo, árvores, textos, números, cotas, dimensões, hachuras, grid, carimbo, legenda, mobiliário, piso, defpoints, curvas de nível, raio ou círculo de referência. NUNCA indique camadas de quadra, lote, divisa, guia, meio-fio, calçada, rua, perímetro de loteamento ou a camada 0.",
+      camadas: visiveis.slice(0, 160).map(l => l.nome),
+    });
+    setConsultandoAri(false);
+    if (r.ok) for (const nome of r.dados.camadas ?? []) { if (nome !== "0" && visiveis.some(l => l.nome === nome)) esconder.add(nome); }
+    else avisoAri = " (a Ari não respondeu; usei só os nomes das camadas)";
+    const novosOcultos = new Set([...ocultos, ...esconder]);
+    if (esconder.size) { setOcultos(novosOcultos); redesenhar(t, novosOcultos); }
+
+    const bruto = brutoRef.current, linhas: LinhaChave[] = [];
+    bruto?.features.forEach((f, i) => {
+      const layer = String(f.properties?.layer ?? "");
+      if (novosOcultos.has(layer) || excluidas.has(String(i))) return;
+      const g = f.geometry;
+      if (g.type === "MultiLineString") g.coordinates.forEach((c, j) => { if (!excluidas.has(`${i}:${j}`)) linhas.push({ chave: `${i}:${j}`, coords: c }); });
+      else if (g.type === "LineString") linhas.push({ chave: String(i), coords: g.coordinates });
+      else if (g.type === "Polygon") linhas.push({ chave: String(i), coords: g.coordinates[0] ?? [] });
+    });
+    const soltas = new Set(linhasSoltas(linhas));
+    const nomes = [...esconder].slice(0, 6).join(", ") + (esconder.size > 6 ? "…" : "");
+    const parte1 = esconder.size ? `Escondi ${fmt(esconder.size)} camada(s) que não são cadastro (${nomes})${avisoAri}.` : `Nenhuma camada a esconder${avisoAri}.`;
+    if (soltas.size) {
+      caixasSelecaoRef.current = []; setCaixasSelecao([]);
+      selecaoRef.current = soltas; setSelecao(soltas); desenharSelecao(soltas); setModo("selecao");
+      setMsg(`${parte1} Destaquei ${fmt(soltas.size)} linha(s) soltas no vazio: confira e clique "Apagar selecionadas".`);
+    } else setMsg(`${parte1} Não achei linhas soltas no vazio.`);
+  }
+
   async function sugerirComAri() {
+    if (!descricao.trim()) return limparComAri();
     const camadas = layersCad.filter(l => !ocultos.has(l.nome))
       .sort((a, b) => b.linhas - a.linhas).slice(0, 160).map(l => l.nome);
     setConsultandoAri(true);
@@ -2130,7 +2203,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     */
     <div className="fixed inset-0 z-50 bg-black/70 flex items-stretch justify-center sm:p-2" onClick={fechar}>
       <div className="bg-superficie border border-linha sm:rounded-xl w-full h-full flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="shrink-0 px-5 py-2.5 border-b border-linha flex items-start justify-between gap-4">
+        {!mapaGrande && <div className="shrink-0 px-5 py-2.5 border-b border-linha flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-texto-2">Calibrar sobre o satélite</p>
             <p className="lp-display text-lg leading-tight text-texto">{camada.nome}</p>
@@ -2159,7 +2232,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
             </p>
           </div>
           <button onClick={fechar} aria-label="Fechar" className="grid w-9 h-9 place-items-center rounded-lg text-texto-2 hover:bg-superficie-2 hover:text-texto shrink-0"><X className="size-5" /></button>
-        </div>
+        </div>}
 
         {/*
           BARRA DE EDIÇÃO — modo, desfazer e salvar no mesmo lugar.
@@ -2191,7 +2264,11 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               </span>
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className={`flex items-center gap-2 ${mapaGrande ? "flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0" : "flex-wrap"}`}>
+            {mapaGrande && <span className="max-w-40 truncate text-sm font-semibold text-texto" title={camada.nome}>{camada.nome}</span>}
+            <button className={chip(false)} onClick={() => mudarMapaGrande(!mapaGrande)}
+              title={mapaGrande ? "Mostra o cabeçalho e as instruções" : "Esconde o cabeçalho e põe os botões numa linha só, para o mapa ocupar a tela"}>
+              {mapaGrande ? <><Minimize2 className="size-4" /> Mostrar instruções</> : <><Maximize2 className="size-4" /> Mapa grande</>}</button>
             <button className={chip(modo === "mover")} onClick={() => setModo("mover")}><Move className="size-4" /> Mover planta</button>
             <button className={chip(modo === "objeto")} onClick={() => setModo("objeto")}
               title="Clique numa peça fechada para separá-la e mover só ela"><MousePointer2 className="size-4" /> Selecionar peça</button>
@@ -2201,7 +2278,10 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
             <button className={chip(false)} disabled={carregando || !!encaixando} onClick={encaixarPelasRuasDaPlanta}
               title="Calcula sozinho o deslocamento, o giro e o tamanho que põem as ruas da planta em cima das ruas do mapa (OpenStreetMap). Vale para a peça selecionada ou, sem peça, para a planta inteira.">
               <Wand2 className="size-4" /> {encaixando ? "Encaixando…" : parteAtual ? "Encaixar peça pelas ruas" : "Encaixar planta pelas ruas"}</button>
-            <button className={chip(false)} disabled={carregando} onClick={separarQuadras}>Separar quadras na vista</button>
+            <button className={chip(false)} disabled={carregando || !!encaixando} onClick={encaixarQuadraAQuadra}
+              title="Separa sozinho as quadras inteiras que aparecem na tela e encaixa cada uma nas ruas, ajustando posição e tamanho sem mudar o desenho. Aproxime o bairro antes; Ctrl+Z desfaz uma quadra por vez.">
+              <Wand2 className="size-4" /> Encaixar quadra a quadra</button>
+            <button className={chip(false)} disabled={carregando} onClick={() => separarQuadras()}>Separar quadras na vista</button>
             {ajustes.length > 0 && (
               <button className={chip(false)} disabled={carregando || !!encaixando} onClick={encaixarPecasDaVista}
                 title="Encaixa pelas ruas, uma a uma, todas as peças separadas que aparecem na tela">
@@ -2262,6 +2342,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               <Save className="size-4" />
               {salvando ? "Salvando…" : "Salvar calibração"}
             </button>
+            {mapaGrande && <button onClick={fechar} aria-label="Fechar" className="grid w-9 h-9 place-items-center rounded-lg text-texto-2 hover:bg-superficie-2 hover:text-texto"><X className="size-5" /></button>}
           </div>
 
           {modo === "selecao" && (
@@ -2372,8 +2453,8 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
           )}
         </div>
 
-        <div className={`shrink-0 border-t border-linha ${painelAberto ? "max-h-[34vh] overflow-auto" : ""}`}>
-          <div className={`flex items-center gap-1.5 px-5 ${painelAberto ? "pt-3" : "py-2"}`}>
+        <div className={`shrink-0 border-t border-linha ${painelAberto ? (mapaGrande ? "max-h-[28vh] overflow-auto" : "max-h-[34vh] overflow-auto") : ""}`}>
+          <div className={`flex items-center gap-1.5 px-5 ${painelAberto ? "pt-3" : mapaGrande ? "py-1" : "py-2"}`}>
             <button className={chip(painelAberto && aba === "posicao")} onClick={() => { setAba("posicao"); setPainelAberto(true); }}>Posição</button>
             <button className={chip(painelAberto && aba === "camadas")} onClick={() => { setAba("camadas"); setPainelAberto(true); }}>
               Camadas do CAD {ocultos.size > 0 && `(${ocultos.size} ocultas)`}
@@ -2579,8 +2660,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
                 <label className="text-sm">Descrição no CAD<input value={descricao} onChange={e => setDescricao(e.target.value)}
                   placeholder="Apagar linhas de área verde…" className="campo block" /></label>
                 <button className="btn-contorno px-3 py-2 text-sm" disabled={!descricao.trim()} onClick={() => selecionarDescricao()}>Selecionar por descrição</button>
-                <button className="btn-contorno px-3 py-2 text-sm" disabled={!descricao.trim() || consultandoAri || !layersCad.length}
-                  onClick={sugerirComAri}>{consultandoAri ? "Consultando Ari…" : "Sugerir camadas com a Ari"}</button>
+                <button className="btn-contorno px-3 py-2 text-sm" disabled={consultandoAri || !layersCad.length}
+                  title={descricao.trim() ? "A Ari escolhe as camadas que batem com a descrição" : "Sem descrição, a Ari esconde o que não é cadastro e destaca as linhas soltas para você apagar"}
+                  onClick={sugerirComAri}>{consultandoAri ? "Consultando Ari…" : descricao.trim() ? "Sugerir camadas com a Ari" : "Limpar com a Ari"}</button>
                 {selecao.size > 0 && <button className="btn-contorno px-3 py-2 text-sm"
                   onClick={() => { if (confirm(`Apagar ${fmt(selecao.size)} linhas destacadas da planta?`)) apagarSelecionadas(); }}>Apagar {fmt(selecao.size)} linhas selecionadas</button>}
               </div>

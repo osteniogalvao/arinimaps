@@ -171,3 +171,12 @@ Resultado nas plantas reais (DXF da pasta `cartografia`, sem a calibração salv
 Com a planta tirada do lugar de propósito (até 80 m, 1,5° e 1% de escala), União
 e Limeira voltam para o mesmo encaixe; Iturama volta de até 0,8° de giro.
 Imagens antes/depois em ARINI (projeto) `arini/encaixe-ruas-2026-11-26/`.
+
+## Pedidos do Carlos de 26/11/2026 (à tarde)
+
+Áudios e vídeos transcritos em `arini/audios-2026-11-26-carlos-cartografia.md` (arquivos do projeto).
+
+- **Mapa grande.** Num notebook o mapa ficava numa faixa de meia tela. O botão "Mapa grande" esconde o cabeçalho, põe os botões numa linha só (rola para o lado) e recolhe o painel. Liga sozinho em telas com menos de 900 px de altura; a escolha fica guardada no navegador.
+- **Encaixar quadra a quadra.** Um clique separa as quadras inteiras da vista e encaixa cada uma nas ruas do OSM. Peça pequena (< 250 m) agora também ajusta o **tamanho**, por igual e sem girar ("o desenho está certo, só o tamanho não se enquadra"). Medido em 30 quadras de Iturama: o ganho de ruas no meio do vão subiu de 7,1 para 8,0 pontos somados; escalas entre 0,95 e 1,06.
+- **Limpar com a Ari.** Com a descrição vazia, o botão da aba Camadas do CAD esconde as camadas que não são cadastro (pelo nome e pela Ari) e destaca as linhas soltas no vazio (`src/lib/geo/limpezaPlanta.ts`) para o operador conferir e apagar. Iturama: 30 camadas escondidas e 18 linhas soltas (círculo de raio, perímetro, riscos no pasto) de 112 mil. Antes o botão ficava cinza com a descrição vazia, e era assim que o Carlos o via.
+- Fica para depois, se as ruas do OSM não bastarem: usar as quadras do IBGE (faces de logradouro do Censo 2022) como referência.
