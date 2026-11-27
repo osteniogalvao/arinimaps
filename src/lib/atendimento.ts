@@ -349,8 +349,13 @@ export async function entradaAtendimento(p: {
     await enviarMenu(c, textoDoMenu(menu, opcoes, c.nome), p.canal);
     return true;
   }
-  if (c.menu_respondido_em) return true;
-  const aberto = c.menu_enviado_em && Date.now() - Date.parse(c.menu_enviado_em) < menu.expira_minutos * 60_000;
+  // Já passou pelo menu e ficou na caixa central sem ninguém assumir (escolheu
+  // "falar com a equipe" ou foi passado adiante por não acertar a opção): se agora
+  // manda uma opção válida, vale a escolha. Antes o robô ficava mudo e não
+  // encaminhava (relato do Stenio, 27/11/2026).
+  const reescolha = !!c.menu_respondido_em && !!c.menu_enviado_em && !!lerEscolha(p.texto, opcoes);
+  if (c.menu_respondido_em && !reescolha) return true;
+  const aberto = reescolha || (c.menu_enviado_em && Date.now() - Date.parse(c.menu_enviado_em) < menu.expira_minutos * 60_000);
   // primeira mensagem que já é uma busca clara de imóvel: a Ari responde, sem menu
   if (!aberto && !c.menu_enviado_em && buscaClaraDeImovel(p.texto) && await ariLigada(menu)) {
     await conversaComAri(c, p, menu, true);

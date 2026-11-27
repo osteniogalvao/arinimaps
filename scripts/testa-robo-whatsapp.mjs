@@ -298,4 +298,26 @@ test("figurinha com o menu aberto não conta como opção errada; mensagem atras
   assert.equal(s2.enviados.length, 0);
 });
 
+test("caiu na caixa central sem ninguém assumir e depois escolhe uma opção: encaminha e confirma", async () => {
+  const s = montar();
+  const tel = "5534988880026";
+  await recebe(s, tel, "Oi");
+  for (const t of ["xyz", "abc", "qwe"]) await recebe(s, tel, t);
+  let c = s.tabelas.atendimento_conversas.find((x) => x.telefone === tel);
+  assert.equal(c.setor ?? null, null);
+  const antes = s.enviados.length;
+  c = await recebe(s, tel, "3");
+  assert.equal(c.setor, "financeiro");
+  assert.equal(s.enviados.length, antes + 1, "confirma ao cliente");
+  assert.match(s.enviados.at(-1).texto, /Financeiro/);
+  const s2 = montar();
+  await recebe(s2, "5534988880027", "Oi");
+  await recebe(s2, "5534988880027", "0");
+  assert.equal((await recebe(s2, "5534988880027", "2")).setor, "operacoes");
+  // texto comum depois disso não reabre o menu nem responde (fica para a equipe)
+  const n = s2.enviados.length;
+  await recebe(s2, "5534988880027", "obrigado");
+  assert.equal(s2.enviados.length, n);
+});
+
 function recebe(s, tel, texto) { return s.recebe(tel, texto); }
