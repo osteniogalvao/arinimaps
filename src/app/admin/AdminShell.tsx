@@ -60,6 +60,18 @@ const ordemDoDia = (st: Setor) => {
 
 /** Página de entrada (mesa) de cada setor. */
 const mesaDoSetor = (id: SetorId) => `/admin/setor/${id}`;
+/** Equipe do setor (o grupo de cada setor; áudio do Carlos, 26/11/2026 22h02). */
+const equipeDoSetor = (id: SetorId) => `/admin/setor/${id}/equipe`;
+
+/**
+ * Telas do setor no menu, como no CRM da Arini Negócios: o painel primeiro,
+ * as telas do dia a dia e, no fim, a equipe do setor.
+ */
+const telasDoSetor = (st: Setor): ItemMenu[] => [
+  { href: mesaDoSetor(st.id), rotulo: "Painel do setor", icone: st.icone },
+  ...ordemDoDia(st),
+  ...(st.id === "diretoria" ? [] : [{ href: equipeDoSetor(st.id), rotulo: "Equipe do setor", icone: "☺" }]),
+];
 
 /**
  * Ícone de cada tela. O registro de setores (lib/setores) guarda um glifo de
@@ -190,7 +202,7 @@ export default function AdminShell({
     { id: "geral", titulo: "Meu dia", itens: [...GERAL, ...GERAL_MAIS] },
     ...meusSetores.map((st) => ({
       id: st.id, titulo: st.nome,
-      itens: [{ href: mesaDoSetor(st.id), rotulo: "Painel do setor", icone: st.icone }, ...st.itens],
+      itens: telasDoSetor(st),
     })),
   ];
   // o item mais específico vence: "/admin/juridico/lgpd" não acende "/admin/juridico"
@@ -213,6 +225,9 @@ export default function AdminShell({
     abertosMao[id] ?? (meusSetores.length === 1 || setorAtual?.id === id);
   const alternarSetor = (id: SetorId) => setAbertosMao((m) => ({ ...m, [id]: !setorAberto(id) }));
   const mostrarMais = maisAberto || GERAL_MAIS.some((i) => aceso(i.href));
+
+  const iconeDe = (href: string, id: SetorId): LucideIcon =>
+    ICONE_ITEM[href] ?? (href === mesaDoSetor(id) ? LayoutGrid : href === equipeDoSetor(id) ? UsersRound : Circle);
 
   const linkMenu = (i: ItemMenu, chave: string, Icone: LucideIcon, ligado: boolean, contagem = 0) => (
     <Link key={chave} href={i.href} onClick={() => setAberto(false)}
@@ -250,9 +265,17 @@ export default function AdminShell({
         </button>
         {mostrarMais && GERAL_MAIS.map((i) => linkMenu(i, "m" + i.href, ICONE_ITEM[i.href] ?? Circle, aceso(i.href)))}
       </div>
-      {meusSetores.length > 0 && tituloBloco(meusSetores.length === 1 ? "Meu setor" : "Setores")}
+      {/* um setor só: lista simples das telas, como no CRM da Arini Negócios */}
+      {meusSetores.length === 1 && (<>
+        {tituloBloco(meusSetores[0].nome)}
+        <div className="space-y-0.5">
+          {telasDoSetor(meusSetores[0]).map((i) =>
+            linkMenu(i, "u" + i.href, iconeDe(i.href, meusSetores[0].id), aceso(i.href), selo[i.href] ?? 0))}
+        </div>
+      </>)}
+      {meusSetores.length > 1 && tituloBloco("Setores")}
       <div className="space-y-0.5">
-        {meusSetores.map((st) => {
+        {meusSetores.length > 1 && meusSetores.map((st) => {
           const contagem = st.itens.reduce((n, i) => n + (selo[i.href] ?? 0), 0);
           const Icone = ICONE_SETOR[st.id];
           const expandido = setorAberto(st.id);
@@ -275,8 +298,8 @@ export default function AdminShell({
               </button>
               {expandido && (
                 <div className="ml-4 mt-0.5 mb-1.5 space-y-0.5 border-l border-linha-forte/50 pl-2">
-                  {[{ href: mesaDoSetor(st.id), rotulo: "Painel do setor", icone: st.icone }, ...ordemDoDia(st)].map((i) =>
-                    linkMenu(i, st.id + i.href, ICONE_ITEM[i.href] ?? (i.href === mesaDoSetor(st.id) ? LayoutGrid : Circle), doSetor && aceso(i.href), selo[i.href] ?? 0))}
+                  {telasDoSetor(st).map((i) =>
+                    linkMenu(i, st.id + i.href, iconeDe(i.href, st.id), doSetor && aceso(i.href), selo[i.href] ?? 0))}
                 </div>
               )}
             </div>

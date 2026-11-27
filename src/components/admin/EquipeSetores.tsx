@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Crown, Plus, UserMinus, X } from "lucide-react";
+import { Copy, Crown, Link2, Plus, UserMinus, X } from "lucide-react";
 import { enviarJson } from "@/lib/api/enviar";
 import { SETORES } from "@/lib/setores";
 import { SENHA_MIN } from "@/lib/seguranca/senha";
@@ -42,15 +42,49 @@ function Funcao({ p, pode, salvar }: { p: Pessoa; pode: boolean; salvar: (cargo:
   );
 }
 
-export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigration }: {
+/**
+ * Link de primeiro acesso, para mandar à pessoa (WhatsApp ou e-mail). Mostrado
+ * uma vez, logo depois do convite ou de "Gerar link".
+ */
+function LinkGerado({ link, nome, aoFechar }: { link: string; nome: string; aoFechar: () => void }) {
+  const [copiado, setCopiado] = useState(false);
+  const texto = `Olá, ${nome}! Este é o seu acesso à Central ARINI. Abra o link, crie a sua senha e entre com o seu e-mail (vale por 1 hora): ${link}`;
+  return (
+    <div className="cartao border-verde/40 p-5 space-y-3" role="status">
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-semibold text-texto">Link de acesso de {nome}</p>
+        <button type="button" aria-label="Fechar" onClick={aoFechar} className="text-texto-2 hover:text-texto"><X className="size-4" /></button>
+      </div>
+      <p className="text-sm text-texto-2">Mande para a pessoa. Ela abre, cria a própria senha e entra só nos setores dela. Vale por 1 hora e só funciona uma vez; se vencer, gere outro.</p>
+      <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label="Link de acesso"
+        className="w-full rounded-lg border border-linha-forte bg-superficie-2 px-3 py-2 font-mono text-xs text-texto" />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="btn-verde inline-flex items-center gap-2 px-4 py-2 text-sm"
+          onClick={async () => { await navigator.clipboard?.writeText(link).catch(() => undefined); setCopiado(true); }}>
+          <Copy className="size-4" /> {copiado ? "Copiado" : "Copiar link"}
+        </button>
+        <a className="btn-contorno inline-flex items-center gap-2 px-4 py-2 text-sm" target="_blank" rel="noreferrer"
+          href={`https://wa.me/?text=${encodeURIComponent(texto)}`}>Enviar pelo WhatsApp</a>
+      </div>
+    </div>
+  );
+}
+
+export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigration, setorUnico }: {
   pessoas: Pessoa[]; souEu: string; diretoria: boolean; gere: string[]; semMigration: boolean;
+  /** equipe de um setor só (dentro do bloco do setor) */
+  setorUnico?: string;
 }) {
   const router = useRouter();
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState("");
   const [msg, setMsg] = useState("");
   const [criando, setCriando] = useState(false);
-  const vazio = { nome: "", email: "", senha: "", cargo: "", setores: gere.length === 1 ? [gere[0]] : [] as string[] };
+  const vazio = { nome: "", email: "", senha: "", cargo: "",
+    setores: setorUnico && gere.includes(setorUnico) ? [setorUnico] : gere.length === 1 ? [gere[0]] : [] as string[] };
+  // convite: por link (a pessoa cria a senha) ou com senha provisória
+  const [modo, setModo] = useState<"link" | "senha">("link");
+  const [linkGerado, setLinkGerado] = useState<{ link: string; nome: string } | null>(null);
   const [form, setForm] = useState(vazio);
   const [adicionar, setAdicionar] = useState<Record<string, string>>({});
 
@@ -59,15 +93,18 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
   const semSetor = equipe.filter((p) => p.ativo && !p.setores.length);
   const organiza = diretoria || gere.length > 0;
 
-  async function chamar(body: Record<string, unknown>, ok?: string) {
+  async function chamar(body: Record<string, unknown>, ok?: string, nomeLink?: string) {
     setOcupado(true); setErro(""); setMsg("");
-    const r = await enviarJson("/api/admin/equipe", "POST", body);
+    const r = await enviarJson<{ link?: string }>("/api/admin/equipe", "POST", body);
     setOcupado(false);
     if (!r.ok) { setErro([r.erro.mensagem, r.erro.motivo].filter(Boolean).join(" — ")); return false; }
     if (ok) setMsg(ok);
+    if (r.dados?.link) setLinkGerado({ link: r.dados.link, nome: nomeLink ?? "a pessoa" });
     router.refresh();
     return true;
   }
+  // num setor só, a tela mostra apenas ele (e quem ainda não tem setor)
+  const setoresVisiveis = setorUnico ? SETORES_EQUIPE.filter((s) => s.id === setorUnico) : SETORES_EQUIPE;
 
   const podeFuncao = (p: Pessoa) => !semMigration && (diretoria || (!p.diretoria && p.setores.some((s) => gere.includes(s))));
 
@@ -75,7 +112,7 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
     <div className="space-y-8">
       <datalist id="funcoes-sugeridas">{CARGOS_SUGERIDOS.map((c) => <option key={c} value={c} />)}</datalist>
 
-      {organiza && (
+      {(setorUnico ? gere.includes(setorUnico) : organiza) && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-texto-2">
             {diretoria ? "Você organiza todos os setores." : <>Você é gestor de: <strong className="text-texto">{gere.map((s) => SETORES.find((x) => x.id === s)?.nome).join(", ")}</strong>.</>}
@@ -83,29 +120,40 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
           <button onClick={() => { setCriando(!criando); setForm(vazio); }}
             className={(criando ? "btn-contorno" : "btn-verde") + " inline-flex items-center gap-2 px-5 py-3 text-sm"}>
             {criando ? <X className="size-4" /> : <Plus className="size-4" />}
-            {criando ? "Cancelar" : "Novo acesso"}
+            {criando ? "Cancelar" : setorUnico ? "Adicionar pessoa" : "Novo acesso"}
           </button>
         </div>
       )}
 
       {criando && (
         <div className="cartao p-6 space-y-5">
-          <p className="lp-display text-lg text-texto">Novo acesso da equipe</p>
+          <p className="lp-display text-lg text-texto">{setorUnico ? "Adicionar pessoa ao setor" : "Novo acesso da equipe"}</p>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Como a pessoa vai entrar">
+            {([["link", "Por link (a pessoa cria a senha)"], ["senha", "Com senha provisória"]] as const).map(([v, r]) => (
+              <button key={v} type="button" role="radio" aria-checked={modo === v} onClick={() => setModo(v)}
+                className={"rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors " +
+                  (modo === v ? "border-verde bg-verde/10 text-verde" : "border-linha-forte text-texto-2 hover:text-texto")}>
+                {r}
+              </button>
+            ))}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block"><span className={ROTULO}>Nome completo</span>
               <input className={CAMPO} value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></label>
             <label className="block"><span className={ROTULO}>E-mail de acesso</span>
               <input className={CAMPO} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
-            <label className="block"><span className={ROTULO}>Senha provisória</span>
-              <CampoSenha className={CAMPO} autoComplete="new-password" placeholder={`Mínimo ${SENHA_MIN} caracteres, letras e números`}
-                value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} /></label>
+            {modo === "senha" && (
+              <label className="block"><span className={ROTULO}>Senha provisória</span>
+                <CampoSenha className={CAMPO} autoComplete="new-password" placeholder={`Mínimo ${SENHA_MIN} caracteres, letras e números`}
+                  value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} /></label>
+            )}
             {!semMigration && (
               <label className="block"><span className={ROTULO}>Função</span>
                 <input className={CAMPO} list="funcoes-sugeridas" maxLength={CARGO_MAX} placeholder="Ex.: Corretor, Recepcionista"
                   value={form.cargo} onChange={(e) => setForm({ ...form, cargo: e.target.value })} /></label>
             )}
           </div>
-          <div>
+          {!setorUnico && <div>
             <p className={ROTULO}>Setores que a pessoa acessa</p>
             <div className="flex flex-wrap gap-2">
               {SETORES_EQUIPE.filter((s) => gere.includes(s.id)).map((s) => {
@@ -120,22 +168,25 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
                 );
               })}
             </div>
-          </div>
+          </div>}
+          {modo === "link" && <p className="text-sm text-texto-2">A pessoa recebe um link por e-mail para criar a própria senha. O link também aparece aqui, para mandar pelo WhatsApp.</p>}
           <button disabled={ocupado} className="btn-ouro px-6 py-3 disabled:opacity-50"
             onClick={async () => {
-              if (await chamar({ acao: "criar", ...form }, `Acesso criado para ${form.email}. Passe a senha provisória à pessoa.`)) {
-                setCriando(false); setForm(vazio);
-              }
+              const ok = modo === "link"
+                ? await chamar({ acao: "convidar", ...form, senha: undefined }, `${form.nome || "Pessoa"} foi adicionada. Mande o link abaixo.`, form.nome)
+                : await chamar({ acao: "criar", ...form }, `Acesso criado para ${form.email}. Passe a senha provisória à pessoa.`);
+              if (ok) { setCriando(false); setForm(vazio); }
             }}>
-            Criar acesso
+            {modo === "link" ? "Adicionar e gerar link" : "Criar acesso"}
           </button>
         </div>
       )}
 
       {erro && <p role="alert" className="rounded-xl border border-critico/40 bg-critico/10 px-4 py-3 text-sm font-semibold text-critico">{erro}</p>}
       {msg && <p className="rounded-xl border border-verde/30 bg-verde/10 px-4 py-3 text-sm font-semibold text-verde">{msg}</p>}
+      {linkGerado && <LinkGerado link={linkGerado.link} nome={linkGerado.nome} aoFechar={() => setLinkGerado(null)} />}
 
-      {organiza && semSetor.length > 0 && (
+      {organiza && !setorUnico && semSetor.length > 0 && (
         <div className="cartao border-alerta/40 p-5">
           <p className="font-semibold text-texto">Sem setor ({semSetor.length})</p>
           <p className="mt-1 text-sm text-texto-2">Essas pessoas entram na Central mas não enxergam nenhum setor. Libere um setor abaixo.</p>
@@ -143,8 +194,8 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        {SETORES_EQUIPE.map((s) => {
+      <div className={setorUnico ? "grid gap-5" : "grid gap-5 lg:grid-cols-2"}>
+        {setoresVisiveis.map((s) => {
           const membros = equipe.filter((p) => p.setores.includes(s.id));
           const gestores = membros.filter((p) => p.gestor.includes(s.id));
           const organizaEste = gere.includes(s.id);
@@ -191,6 +242,13 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
                           {ehGestor ? "Tirar de gestor" : "Tornar gestor"}
                         </button>
                       )}
+                      {organizaEste && p.ativo && p.user_id !== souEu && (
+                        <button type="button" disabled={ocupado} title="Gerar um link para a pessoa criar ou trocar a senha"
+                          onClick={() => chamar({ acao: "link", user_id: p.user_id }, undefined, p.nome)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-linha px-2.5 py-1.5 text-xs font-semibold text-texto-2 hover:border-verde/50 hover:text-verde disabled:opacity-50">
+                          <Link2 className="size-3.5" /> Gerar link
+                        </button>
+                      )}
                       {organizaEste && (diretoria || p.user_id !== souEu) && (
                         <button type="button" disabled={ocupado} title={`Retirar o acesso ao setor ${s.nome}`}
                           onClick={() => chamar({ acao: "setor", user_id: p.user_id, setor: s.id, ligado: false }, `${p.nome} saiu de ${s.nome}.`)}
@@ -227,7 +285,7 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
           );
         })}
 
-        <section className="cartao overflow-hidden" aria-label="Diretoria">
+        {!setorUnico && <section className="cartao overflow-hidden" aria-label="Diretoria">
           <header className="border-b border-linha px-5 py-4">
             <h2 className="lp-display text-xl text-texto">Diretoria</h2>
             <p className="mt-1 text-sm text-texto-2">Entra em todos os setores e organiza a equipe inteira.</p>
@@ -246,7 +304,7 @@ export default function EquipeSetores({ pessoas, souEu, diretoria, gere, semMigr
               </li>
             ))}
           </ul>
-        </section>
+        </section>}
       </div>
     </div>
   );

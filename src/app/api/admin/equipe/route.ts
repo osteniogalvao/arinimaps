@@ -5,6 +5,8 @@ import { ator, temSetor, type Ator } from "@/lib/authz";
 import { SETOR_IDS, setorPorId, type SetorId } from "@/lib/setores";
 import { validarSenha } from "@/lib/seguranca/senha";
 import { falta0161, limparCargo } from "@/lib/equipe";
+import { sendEmail } from "@/lib/notify";
+import { randomBytes } from "node:crypto";
 
 /**
  * Funções e acessos por setor (migration 0161; áudios do Carlos, 23/11/2026
@@ -54,6 +56,30 @@ const setorValido = (v: unknown): SetorId => {
   if (!SETORES_EQUIPE.includes(s)) throw new Erro("Setor inválido.");
   return s;
 };
+
+/**
+ * Link de primeiro acesso (pedido do Carlos, 26/11/2026 22h02: "adicionar a
+ * pessoa por link, pelo e-mail, e ela tira uma senha para acessar"). É o
+ * mesmo link de uso único da recuperação de senha: a pessoa abre, cria a
+ * própria senha e entra só nos setores que recebeu. Vale por 1 hora; o gestor
+ * gera outro quando precisar.
+ */
+async function linkDeAcesso(request: Request, email: string) {
+  const { data, error } = await supabaseAdmin().auth.admin.generateLink({ type: "recovery", email });
+  const token = data?.properties?.hashed_token;
+  if (error || !token) throw new Erro("Não foi possível gerar o link de acesso. Tente de novo.", 503);
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin;
+  return `${site}/redefinir-senha?token_hash=${token}`;
+}
+
+async function enviarConvite(email: string, nome: string, setores: SetorId[], link: string) {
+  const nomes = setores.map((s) => setorPorId(s)?.nome).filter(Boolean).join(", ");
+  await sendEmail(email, "Seu acesso à Central ARINI",
+    `Olá, ${nome}.\n\nVocê foi adicionado à equipe da ARINI (${nomes}).\n\n` +
+    "Abra o link abaixo para criar a sua senha. Ele vale por 1 hora e só funciona uma vez; " +
+    "se vencer, peça um novo ao gestor do setor:\n\n" + link + "\n\n" +
+    "Depois, entre sempre pelo site com o seu e-mail e a senha que você criou.").catch(() => undefined);
+}
 
 export async function POST(request: Request) {
   try {
@@ -122,11 +148,15 @@ export async function POST(request: Request) {
         break;
       }
       // login novo da equipe, só nos setores que o ator gere
-      case "criar": {
+      case "criar":
+      case "convidar": {
+        const porLink = b.acao === "convidar";
         const nome = String(b.nome ?? "").trim().slice(0, 120);
         const email = String(b.email ?? "").trim().toLowerCase();
-        const senha = String(b.senha ?? "");
-        if (!nome || !email || !senha) throw new Erro("Preencha nome, e-mail e senha.");
+        // no convite a pessoa cria a própria senha pelo link; até lá a conta
+        // fica com uma senha aleatória que ninguém conhece
+        const senha = porLink ? `${randomBytes(18).toString("base64url")}a1` : String(b.senha ?? "");
+        if (!nome || !email || !senha) throw new Erro(porLink ? "Preencha nome e e-mail." : "Preencha nome, e-mail e senha.");
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Erro("E-mail inválido.");
         const erroSenha = validarSenha(senha);
         if (erroSenha) throw new Erro(erroSenha);
@@ -139,6 +169,7 @@ export async function POST(request: Request) {
 
         const { data, error } = await admin.auth.admin.createUser({
           email, password: senha, email_confirm: true, user_metadata: { nome, role: "analista_arini" },
+          ...(porLink ? { app_metadata: { primeiro_acesso: true } } : {}),
         });
         if (error) throw new Erro(/already/i.test(error.message) ? "Já existe conta com este e-mail." : error.message);
         const r = await admin.from("profiles").update({ role: "analista_arini", nome, setores, cargo })
@@ -154,8 +185,30 @@ export async function POST(request: Request) {
           }
         }
         await logAudit({ user_id: a.userId, acao: "usuario_equipe_criado", entidade: "profiles", entidade_id: data.user.id,
-          dados_depois: { email, role: "analista_arini", setores, cargo, por: diretoria ? "diretoria" : "gestor" } });
-        return NextResponse.json({ ok: true, user_id: data.user.id });
+          dados_depois: { email, role: "analista_arini", setores, cargo, por: diretoria ? "diretoria" : "gestor", convite: porLink } });
+        if (!porLink) return NextResponse.json({ ok: true, user_id: data.user.id });
+        const link = await linkDeAcesso(request, email);
+        await enviarConvite(email, nome, setores, link);
+        return NextResponse.json({ ok: true, user_id: data.user.id, link });
+      }
+      // link novo de acesso para quem já está num setor que o ator gere
+      case "link": {
+        const p = await perfil(b.user_id);
+        if (p.role === "admin_central" && !diretoria) throw new Erro("Só a Diretoria gera link para a Diretoria.", 403);
+        if (!diretoria && !(p.setores ?? []).some((s) => gere.includes(s as SetorId))) {
+          throw new Erro("Você só gera link para quem trabalha num setor que você gere.", 403);
+        }
+        const { data: u } = await admin.auth.admin.getUserById(p.user_id);
+        const email = u.user?.email;
+        if (!email) throw new Erro("Essa pessoa não tem e-mail cadastrado.");
+        // o link troca a senha: depois que a pessoa criou a senha, só a Diretoria
+        // gera (senão um gestor poderia assumir a conta de quem atua em outro setor)
+        if (u.user?.app_metadata?.primeiro_acesso !== true && !diretoria) {
+          throw new Erro("Essa pessoa já criou a senha. Se esqueceu, ela usa \"Esqueci minha senha\" na tela de entrar.", 403);
+        }
+        const link = await linkDeAcesso(request, email);
+        await logAudit({ user_id: a.userId, acao: "equipe_link_acesso", entidade: "profiles", entidade_id: p.user_id, dados_depois: { email } });
+        return NextResponse.json({ ok: true, link });
       }
       default:
         throw new Erro("Ação desconhecida.");

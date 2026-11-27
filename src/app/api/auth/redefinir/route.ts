@@ -1,3 +1,4 @@
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { registrarEvento } from "@/lib/seguranca/eventos";
@@ -60,6 +61,9 @@ export async function POST(request: Request) {
   await registrarEvento(request, senhaAtual !== null ? "senha_alterada" : "senha_redefinida", {
     userId: user.id, email: user.email, detalhe: etapa?.ok && etapa.equipe ? { equipe: true, via: etapa.via } : undefined,
   });
-  if (etapa?.ok && etapa.equipe) await avisarRecuperacaoEquipe(request, user, etapa);
+  if (etapa?.ok && etapa.equipe && etapa.via === "convite") {
+    // senha criada: o próximo link já é recuperação comum, com a etapa extra
+    await supabaseAdmin().auth.admin.updateUserById(user.id, { app_metadata: { primeiro_acesso: null } }).catch(() => undefined);
+  } else if (etapa?.ok && etapa.equipe) await avisarRecuperacaoEquipe(request, user, etapa);
   return NextResponse.json({ ok: true });
 }

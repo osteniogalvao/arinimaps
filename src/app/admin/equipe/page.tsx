@@ -1,14 +1,10 @@
 import Link from "next/link";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { exigirEquipe } from "@/lib/setores-servidor";
-import { SETORES } from "@/lib/setores";
-import { falta0161 } from "@/lib/equipe";
+import { lerEquipe } from "@/lib/equipe-servidor";
 import { CabecalhoPagina } from "@/components/ui/Pagina";
-import EquipeSetores, { type Pessoa } from "@/components/admin/EquipeSetores";
+import EquipeSetores from "@/components/admin/EquipeSetores";
 
 export const metadata = { title: "Equipe e funções" };
-
-const EQUIPE = ["admin_central", "analista_arini"];
 
 /**
  * Funções e acessos por setor (migration 0161; áudios do Carlos, 23/11/2026
@@ -18,46 +14,7 @@ const EQUIPE = ["admin_central", "analista_arini"];
  */
 export default async function EquipePorSetor() {
   const user = await exigirEquipe();
-  const admin = supabaseAdmin();
-  const diretoria = user.role === "admin_central";
-
-  let semMigration = false;
-  let r = await admin.from("profiles")
-    .select("user_id, nome, role, ativo, setores, cargo, setores_gestor, atendimento_recepcao, equipe_acesso")
-    .in("role", EQUIPE).order("nome");
-  if (r.error && falta0161(r.error.message)) {
-    semMigration = true;
-    // antes da 0161: mesma tela, sem função nem gestor
-    r = await admin.from("profiles").select("user_id, nome, role, ativo, setores").in("role", EQUIPE).order("nome") as typeof r;
-  }
-  if (r.error) throw new Error("Falha ao carregar a equipe.");
-
-  const linhas = (r.data ?? []) as Record<string, unknown>[];
-  const eu = linhas.find((p) => p.user_id === user.id);
-  const gere = diretoria
-    ? SETORES.filter((s) => s.id !== "diretoria").map((s) => s.id)
-    : ((eu?.setores_gestor ?? []) as string[]).filter((s) => user.setores.includes(s as never));
-  const organiza = diretoria || gere.length > 0;
-
-  // e-mail só para quem organiza (mora no Auth, não em profiles)
-  const emails = new Map<string, string>();
-  if (organiza) {
-    await Promise.all(linhas.map((p) => admin.auth.admin.getUserById(String(p.user_id))
-      .then(({ data }) => { emails.set(String(p.user_id), data.user?.email ?? ""); }).catch(() => undefined)));
-  }
-
-  const pessoas: Pessoa[] = linhas.map((p) => ({
-    user_id: String(p.user_id),
-    nome: (p.nome as string) || "Sem nome",
-    email: emails.get(String(p.user_id)) ?? "",
-    diretoria: p.role === "admin_central",
-    ativo: p.ativo !== false,
-    setores: ((p.setores ?? []) as string[]).filter((s) => s !== "diretoria"),
-    gestor: ((p.setores_gestor ?? []) as string[]),
-    cargo: (p.cargo as string | null) ?? null,
-    recepcao: !!p.atendimento_recepcao,
-    acesso: p.equipe_acesso === "leitura" ? "leitura" : "operador",
-  }));
+  const { pessoas, gere, diretoria, semMigration } = await lerEquipe(user);
 
   return (
     <div className="mx-auto max-w-[1280px] space-y-8">
