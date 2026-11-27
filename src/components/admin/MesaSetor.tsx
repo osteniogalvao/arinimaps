@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarDays, CalendarPlus, Kanban, ListChecks, MessagesSquare } from "lucide-react";
+import { ArrowRight, CalendarDays, CalendarPlus, Kanban, ListChecks, MessagesSquare, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Setor, SetorId } from "@/lib/setores";
 import type { CompromissoSetor } from "@/lib/agenda-setores";
@@ -47,6 +47,11 @@ export default function MesaSetor({ setor, hoje, conversas, conversasErro, funis
           <Link href={`/admin/agenda-setores?setor=${id}&agendar=1#reuniao`} className="btn-contorno inline-flex items-center gap-2 px-4 py-2 text-sm">
             <CalendarPlus className="size-4" /> Agendar
           </Link>
+          {!diretoria && (
+            <Link href={`/admin/setor/${id}/equipe`} className="btn-contorno inline-flex items-center gap-2 px-4 py-2 text-sm">
+              <Users className="size-4" /> Equipe do setor
+            </Link>
+          )}
         </>} />
 
       {/* o caminho do trabalho, na ordem em que ele acontece */}

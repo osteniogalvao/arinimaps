@@ -48,7 +48,7 @@ export async function sessaoPorSenha(supabase: SupabaseClient) {
 
 export type Etapa =
   | { ok: true; equipe: false }
-  | { ok: true; equipe: true; via: "mfa" | "codigo_email"; papel: string; nome: string }
+  | { ok: true; equipe: true; via: "mfa" | "codigo_email" | "convite"; papel: string; nome: string }
   | { ok: false; resposta: NextResponse };
 
 /** Confere a etapa extra da recuperação. Para contas fora da equipe, passa direto. */
@@ -60,6 +60,12 @@ export async function segundaEtapaRecuperacao(
   if (erroPerfil || !perfil) return { ok: false, resposta: NextResponse.json({ error: "Não foi possível verificar o perfil da conta. Tente novamente." }, { status: 503 }) };
   if (!PAPEIS_EQUIPE.includes(perfil.role)) return { ok: true, equipe: false };
   const base = { ok: true as const, equipe: true as const, papel: perfil.role as string, nome: (perfil.nome as string) ?? "" };
+
+  // 0) primeiro acesso de quem foi adicionado por um gestor (link de
+  // convite): a pessoa ainda não tem senha nem segundo fator, então o link de
+  // uso único já é a prova. A marca fica no app_metadata (só o servidor grava)
+  // e sai assim que a senha é criada.
+  if (user.app_metadata?.primeiro_acesso === true) return { ...base, via: "convite" };
 
   // 1) conta com segundo fator: exige a sessão confirmada pelo aplicativo
   const { data: aal, error: erroAal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
