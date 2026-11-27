@@ -83,9 +83,13 @@ export async function GET(request: Request): Promise<Response> {
   let lista = await municipiosIbge();
   // IBGE fora do ar: a tabela ibge_municipios do banco responde a busca (18/11/2026)
   if (!lista) {
-    const termo = (url.searchParams.get("q") ?? "").trim().slice(0, 80).replace(/[%_,()]/g, " ");
+    // as duas formas do termo passam pela mesma limpeza: vírgula e parênteses
+    // dentro de .or() viram filtros novos do PostgREST (auditoria 27/11/2026)
+    const limpa = (s: string) => s.replace(/[%_,()*.:]/g, " ").trim();
+    const termo = limpa((url.searchParams.get("q") ?? "").slice(0, 80));
+    const qLimpo = limpa(q);
     const { data } = await supabaseAdmin().from("ibge_municipios").select("cod_ibge, nome, uf")
-      .or(`nome.ilike.%${termo}%,nome.ilike.%${q}%`).limit(40);
+      .or(`nome.ilike.%${termo}%,nome.ilike.%${qLimpo}%`).limit(40);
     lista = (data ?? []).map((m) => ({ cod_ibge: Number(m.cod_ibge), nome: String(m.nome), uf: String(m.uf) }));
     if (!lista.length) return NextResponse.json({ municipios: [], error: "O IBGE não respondeu agora." }, { status: 502 });
   }
