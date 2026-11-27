@@ -494,7 +494,12 @@ export default function MapaRegional({
     if (!carEscolhido.current) setCarAtivo(prefs.camada_car);
   }, [prefsCarregadas, prefs.mapa_base, prefs.camada_car]);
   const [carSel, setCarSel] = useState<CarProps | null>(null);
-  const codigoSelecionado = carSel?.cod;
+  // Áudio do Carlos (27/11/2026, 13h14): no campo, pelo celular, fechar a
+  // ficha no X apagava o contorno e a área sumia no meio das vizinhas verdes.
+  // Agora o X fecha só a ficha: a área continua marcada até tocar em outra
+  // (ou num ponto fora do CAR, ou desligar a camada).
+  const [carFechado, setCarFechado] = useState<string | null>(null);
+  const codigoSelecionado = carSel?.cod ?? carFechado;
   useEffect(() => {
     if (!codigoSelecionado || !pronto || !mapaPronto?.getSource("car")) return;
     const alvo = { source: "car", sourceLayer: "car", id: codigoSelecionado };
@@ -529,11 +534,15 @@ export default function MapaRegional({
   // onde foi o último clique: o cartão "Neste ponto" oferece compartilhar esse ponto
   const [pontoClicado, setPontoClicado] = useState<{ lng: number; lat: number; zoom: number } | null>(null);
   const [extrasPonto, setExtrasPonto] = useState<ExtrasNoPonto | null>(null);
+  const fecharCartaoCar = () => {
+    setCarFechado(carSel?.cod ?? null); setCarSel(null);
+    setNoPonto([]); setExtrasPonto(null);
+  };
   const alternarSoVenda = useCallback((ligar: boolean) => {
     soVendaRef.current = ligar;
     setSoVenda(ligar);
     // cartões da cartografia rural fecham junto com ela
-    if (ligar) { setCarSel(null); setNoPonto([]); setExtrasPonto(null); }
+    if (ligar) { setCarSel(null); setCarFechado(null); setNoPonto([]); setExtrasPonto(null); }
     try { localStorage.setItem("arini:mapa-so-venda", ligar ? "1" : "0"); } catch { /* sem armazenamento */ }
   }, []);
   // pressão longa / botão direito em qualquer ponto: cartão mínimo "Neste ponto" (QA 09/11)
@@ -1410,7 +1419,7 @@ export default function MapaRegional({
           const emAnuncio = map.queryRenderedFeatures(e.point, { layers: ["imoveis-fill", "imoveis-ponto"].filter((l) => map.getLayer(l)) });
           if (emAnuncio.length) return;
           const f = e.features?.[0];
-          if (f) setCarSel(f.properties as unknown as CarProps);
+          if (f) { setCarFechado(null); setCarSel(f.properties as unknown as CarProps); }
         });
         map.on("mousemove", "car-fill", (e: MapLayerMouseEvent) => {
           const cod = String(e.features?.[0]?.properties?.cod ?? "");
@@ -1503,9 +1512,9 @@ export default function MapaRegional({
           const noCar = carLocal || (!!map.getLayer("car-fill") && map.getLayoutProperty("car-fill", "visibility") !== "none"
             && map.queryRenderedFeatures(e.point, { layers: ["car-fill"] }).length > 0);
           if (carLocal && !map.queryRenderedFeatures(e.point, { layers: ["imoveis-fill", "imoveis-ponto"] }).length) {
-            setCarSel(carLocal.properties as unknown as CarProps);
+            setCarFechado(null); setCarSel(carLocal.properties as unknown as CarProps);
           }
-          if (!noCar) setCarSel(null);
+          if (!noCar) { setCarSel(null); setCarFechado(null); }
           // o cartão do clique abre no mesmo canto do painel de camadas: o painel cede a vez
           setPainelMapa(null);
           setAvisoPlano("");
@@ -1635,7 +1644,7 @@ export default function MapaRegional({
     if (!map || !pronto || !map.getLayer("car-fill")) return;
     for (const id of ["car-fill", "car-linha", "car-selecao"]) map.setLayoutProperty(id, "visibility", carAtivo && !soVenda ? "visible" : "none");
     if (carVisivel && !soVenda) { conferirZoomCar(); garantirCarSobDemanda(); }
-    else { setCarSel(null); setCarAviso(""); }
+    else { setCarSel(null); setCarFechado(null); setCarAviso(""); }
   }, [carAtivo, carVisivel, soVenda, pronto, conferirZoomCar, garantirCarSobDemanda]);
 
   // "Só à venda": esconde toda camada rural, inclusive as que forem ligadas
@@ -1785,6 +1794,7 @@ export default function MapaRegional({
     const [oeste, sul, leste, norte] = bbox(f.geometry);
     mapRef.current?.fitBounds([[oeste, sul], [leste, norte]], { padding: 80, duration: 1200 });
     setCarAtivo(true);
+    setCarFechado(null);
     setCarSel({
       cod, area_ha: f.properties?.area_ha ?? null, condicao: f.properties?.condicao ?? null,
       status: f.properties?.status ?? null, tipo: f.properties?.tipo ?? null, municipio: f.properties?.municipio ?? null,
@@ -1873,7 +1883,7 @@ export default function MapaRegional({
     ativo: () => !desenhandoRef.current && !variosRef.current,
     aoPressionar: (p) => {
       // o cartão mínimo ocupa o mesmo canto: os outros cartões cedem a vez
-      setCarSel(null); setNoPonto([]); setPainelMapa(null);
+      setCarSel(null); setCarFechado(null); setNoPonto([]); setPainelMapa(null);
       if (loteSel) { setLoteSel(null); mapRef.current?.removeFeatureState({ source: "lotes", sourceLayer: "lotes" }); }
       setPontoLivre(p);
     },
@@ -2298,8 +2308,8 @@ export default function MapaRegional({
         )}
 
         {!painelMapa && !avisoPlano && !selecionado && <>
-        {carSel && !podeTerceiros && <CartaoCarBloqueado key={carSel.cod} car={carSel} logado={logado} onFechar={() => { setCarSel(null); setNoPonto([]); setExtrasPonto(null); }} />}
-        {carSel && podeTerceiros && <CartaoCar key={carSel.cod} car={carSel} mapa={mapaPronto} podeAmbiente={liberado("camadas_oficiais")} oficiais={noPonto} extras={extrasPonto} onFechar={() => { setCarSel(null); setNoPonto([]); setExtrasPonto(null); }} />}
+        {carSel && !podeTerceiros && <CartaoCarBloqueado key={carSel.cod} car={carSel} logado={logado} onFechar={fecharCartaoCar} />}
+        {carSel && podeTerceiros && <CartaoCar key={carSel.cod} car={carSel} mapa={mapaPronto} podeAmbiente={liberado("camadas_oficiais")} oficiais={noPonto} extras={extrasPonto} onFechar={fecharCartaoCar} />}
         {!carSel && (noPonto.length > 0 || temExtras(extrasPonto)) && !loteSel && <CartaoOficiais itens={noPonto} extras={extrasPonto} ponto={pontoClicado} onFechar={() => { setNoPonto([]); setExtrasPonto(null); }} />}
         {pontoLivre && !carSel && !loteSel && !varios && noPonto.length === 0 && (
           <CartaoPonto ponto={pontoLivre} onFechar={() => setPontoLivre(null)} />

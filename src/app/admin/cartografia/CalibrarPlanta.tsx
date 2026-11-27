@@ -1777,9 +1777,9 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     });
   }
 
-  async function buscarRuas(linhas: Linha[]): Promise<Linha[] | null> {
+  async function buscarRuas(linhas: Linha[], pIni = 0.01, pFim = 0.99): Promise<Linha[] | null> {
     // 1% a 99% dos vértices: moldura e linha solta longe da cidade não alargam a busca
-    const [x0, y0, x1, y1] = caixaRobusta(linhas, 0.01, 0.99);
+    const [x0, y0, x1, y1] = caixaRobusta(linhas, pIni, pFim);
     const fx = 150 / (111_320 * Math.cos((y0 * Math.PI) / 180)), fy = 150 / 110_540;
     const bbox = [x0 - fx, y0 - fy, x1 + fx, y1 + fy].map((v) => v.toFixed(5)).join(",");
     try {
@@ -1838,13 +1838,22 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     setErro(null); setEncaixando("Buscando as ruas do OpenStreetMap…");
     let feitas = 0, iguais = 0, falhas = 0;
     try {
-      const todas = linhasNaTela(null);
-      const ruas = todas && await buscarRuas(todas.movel);
+      // Áudio do Carlos (27/11/2026, 12h47): "encaixar peças da vista não está
+      // funcionando". As ruas eram buscadas para a planta INTEIRA: numa cidade
+      // grande o retângulo passava do limite do OpenStreetMap (ou demorava
+      // demais) e nada se mexia; e o corte de 1% nas pontas deixava sem ruas as
+      // peças da beirada. Agora a busca cobre só as peças da tela e as vizinhas,
+      // como no "Encaixar peça pelas ruas", que funciona.
+      const porPeca = new Map(pecas.map((p) => [p.id, linhasNaTela(p.id)]));
+      const daVista = [...porPeca.values()].flatMap((l) => l ? [...l.movel, ...l.fixo] : []);
+      if (!daVista.length) { setMsg("As peças desta vista não têm linhas visíveis para encaixar."); return; }
+      const ruas = await buscarRuas(daVista, 0, 1);
       if (!ruas) return;
       for (const [i, p] of pecas.entries()) {
         setEncaixando(`Encaixando peça ${i + 1} de ${pecas.length} (${p.nome})…`);
         ativaRef.current = p.id; setAtiva(p.id);
-        const linhas = linhasNaTela(p.id);
+        // a peça anterior já se mexeu: a vizinhança desta é lida de novo
+        const linhas = i === 0 ? porPeca.get(p.id) : linhasNaTela(p.id);
         if (!linhas?.movel.length) { falhas++; continue; }
         const r = await calcularEncaixe(linhas.movel, linhas.fixo, ruas);
         if (ehFalhaEncaixe(r)) { if (r.jaEncaixada) iguais++; else falhas++; continue; }
