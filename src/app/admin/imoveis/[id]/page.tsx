@@ -1,4 +1,6 @@
 import Testemunhas from "./Testemunhas";
+import FichaSetores, { type Observacao } from "./FichaSetores";
+import { SETORES } from "@/lib/setores";
 import Conversa from "@/components/admin/Conversa";
 import { notFound } from "next/navigation";
 import RegimeComercial from "./RegimeComercial";
@@ -153,6 +155,19 @@ export default async function AnaliseImovel
       ? Math.abs(geo.area_m2 - areaDeclaradaM2) / areaDeclaradaM2
       : null;
 
+  // 0176: captador, placa e observações dos setores (como no CRM da Arini Negócios)
+  const [rFicha, rObs, rEquipe] = await Promise.all([
+    admin.from("properties").select("captador_user_id, placa_status").eq("id", p.id).maybeSingle(),
+    admin.from("imovel_observacoes").select("id, setor, texto, created_at, autor").eq("property_id", p.id).order("created_at", { ascending: false }).limit(100),
+    admin.from("profiles").select("user_id, nome").in("role", ["admin_central", "analista_arini"]).eq("ativo", true).order("nome"),
+  ]);
+  const fichaSemMigration = !!(rFicha.error || rObs.error);
+  const nomeEquipe = new Map((rEquipe.data ?? []).map((x) => [x.user_id as string, (x.nome as string) || "Equipe"]));
+  const observacoes: Observacao[] = (rObs.data ?? []).map((o) => ({
+    id: o.id as string, setor: o.setor as string, texto: o.texto as string, created_at: o.created_at as string,
+    autor: (o.autor && nomeEquipe.get(o.autor as string)) || "Equipe",
+  }));
+
   const tomStatus = ["publicado", "aprovado", "em_negociacao"].includes(p.status) ? "verde"
     : ["pendente", "em_analise"].includes(p.status) ? "ouro"
     : p.status === "correcao" ? "alerta" : p.status === "reprovado" ? "critico" : "neutro";
@@ -210,6 +225,13 @@ export default async function AnaliseImovel
             ? { nome: partner.profile?.nome ?? partner.razao_social, telefone: partner.profile?.telefone ?? null, papel: partner.tipo }
             : owner ? { nome: owner.profile?.nome ?? null, telefone: owner.profile?.telefone ?? null, papel: "proprietário" } : null}
           quadro={(autorizacao?.termo_aceito as import("@/lib/juridico").Documento | null)?.secoes?.[0]?.itens ?? null} />
+      </Bloco>
+
+      <Bloco titulo="Captação e observações dos setores">
+        <FichaSetores id={p.id} captador={(rFicha.data?.captador_user_id as string | null) ?? null} placa={(rFicha.data?.placa_status as string) ?? "nao_colocada"}
+          equipe={(rEquipe.data ?? []).map((x) => ({ user_id: x.user_id as string, nome: (x.nome as string) || "Sem nome" }))}
+          observacoes={observacoes} meusSetores={eu.setores} nomesSetor={Object.fromEntries(SETORES.map((st) => [st.id, st.nome]))}
+          editaCaptacao={eu.setores.includes("operacoes") || eu.setores.includes("comercial")} semMigration={fichaSemMigration} />
       </Bloco>
 
       <Bloco titulo="Regime comercial">
