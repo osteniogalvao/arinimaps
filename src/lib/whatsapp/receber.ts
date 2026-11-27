@@ -39,6 +39,9 @@ export async function processarValorWhatsapp(v: ValorWhatsapp, canal: CanalWhats
     if(gravadas.some(r=>r.error))return false;
   }
   for (const m of v.messages ?? []) {
+    // reação, aviso do sistema e tipo sem suporte não foram escritos pelo cliente:
+    // não abrem conversa nem contam como resposta do menu (print do Stenio, 27/11)
+    if (["reaction", "system", "unsupported", "ephemeral", "errors"].includes(m.type)) continue;
     const texto = m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title
       ?? (m.type === "location" && m.location ? `[localização ${m.location.latitude},${m.location.longitude}]` : `[${m.type}]`);
     const recebida=dataWhatsapp(m.timestamp);
@@ -84,7 +87,7 @@ export async function processarValorWhatsapp(v: ValorWhatsapp, canal: CanalWhats
     // Atendimento por setores (0156): conversa do telefone, menu automático e fila do setor.
     // Sem a migration, segue o caminho antigo (tarefa do Comercial).
     const noAtendimento = canal.principal && await entradaAtendimento({
-      telefone: m.from, nome: remetente, texto, mensagemId: gravada.id, opp, canal: phoneId,
+      telefone: m.from, nome: remetente, texto, mensagemId: gravada.id, opp, canal: phoneId, tipo: m.type, recebidaEm: recebida,
     }).catch((e) => { console.error("atendimento:", e); return false; });
     if (opp) {
       await admin.from("opportunity_events").insert({ opportunity_id: opp.id, tipo: "contato", descricao: `WhatsApp do cliente: ${texto.slice(0, 500)}` });

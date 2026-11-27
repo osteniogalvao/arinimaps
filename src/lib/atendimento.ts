@@ -110,6 +110,8 @@ async function dentroDoExpediente(agora = new Date(), horario?: HorarioSetor | n
 // ---------------------------------------------------------------------------
 // Menu automático
 // ---------------------------------------------------------------------------
+/** Mensagem mais velha que isso (fila de reconexão) não recebe menu nem Ari. */
+const ATRASO_MAXIMO_MS = 2 * 3_600_000;
 type Menu = {
   ativo: boolean; saudacao: string; confirmacao: string; nao_entendi: string; fora_expediente: string;
   max_tentativas: number; setor_escape: string | null; expira_minutos: number; reenviar_apos_horas: number;
@@ -141,8 +143,24 @@ export function pedeMenu(texto: string) {
 const variaveis = (t: string, nome: string | null, setor?: string | null) =>
   t.replaceAll("{{nome}}", nome ? `, ${nome.split(/\s+/)[0]}` : "").replaceAll("{{setor}}", nomeSetor(setor ?? null));
 
+/**
+ * Opções que o cliente vê. Duas opções ativas com o mesmo texto (ex.: "0" e "9"
+ * com "Falar com a equipe de atendimento", print do Stenio 27/11) aparecem uma
+ * vez só, a primeira pela ordem; a tecla da outra continua valendo.
+ */
+export function opcoesVisiveis<T extends Pick<Opcao, "ativo" | "rotulo">>(opcoes: T[]) {
+  const vistos = new Set<string>();
+  return opcoes.filter((o) => {
+    if (!o.ativo) return false;
+    const k = o.rotulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  });
+}
+
 function textoDoMenu(menu: Menu, opcoes: Opcao[], nome: string | null, cabecalho?: string) {
-  const linhas = opcoes.filter((o) => o.ativo).map((o) => `*${o.chave}* - ${o.rotulo}`);
+  const linhas = opcoesVisiveis(opcoes).map((o) => `*${o.chave}* - ${o.rotulo}`);
   return `${variaveis(cabecalho ?? menu.saudacao, nome)}\n\n${linhas.join("\n")}`;
 }
 
@@ -177,6 +195,31 @@ async function enviarMenu(c: Pick<Conversa, "id" | "telefone">, texto: string, c
   await supabaseAdmin().from("atendimento_conversas").update({ ultima_saida_em: new Date().toISOString() }).eq("id", c.id);
 }
 
+/**
+ * Avisa no sino quem precisa pegar a conversa que entrou sem responsável:
+ * as pessoas do setor ou, na caixa central, a recepção (sem recepção marcada,
+ * a Diretoria). Antes ninguém era avisado e o cliente ouvia "um atendente vai
+ * continuar em instantes" sem ninguém saber que ele estava esperando.
+ */
+async function avisarFila(c: Conversa, setor: string | null) {
+  try {
+    const { data } = await supabaseAdmin().from("profiles").select("user_id, role, setores, atendimento_recepcao")
+      .in("role", ["admin_central", "analista_arini"]).eq("ativo", true).limit(200);
+    const equipe = data ?? [];
+    let alvo = setor
+      ? equipe.filter((p) => p.role !== "admin_central" && ((p.setores as string[] | null) ?? []).includes(setor))
+      : equipe.filter((p) => p.atendimento_recepcao);
+    if (!alvo.length) alvo = equipe.filter((p) => p.role === "admin_central" || ((p.setores as string[] | null) ?? []).includes("diretoria"));
+    const onde = setor ? nomeSetor(setor) : "caixa central";
+    const dia = new Date().toISOString().slice(0, 10);
+    await Promise.all(alvo.slice(0, 30).map((p) => notificar(p.user_id as string, "atencao",
+      `${canalDoContatoRotulo(c.telefone)} na ${onde}: ${c.nome || contatoRotulo(c.telefone)}`,
+      (c.ultimo_texto ?? "").slice(0, 200), `/admin/atendimento?conversa=${c.id}`, `atendimento_fila:${c.id}:${setor ?? "central"}:${dia}`)));
+  } catch (e) {
+    console.error("atendimento: aviso da fila", e instanceof Error ? e.message : e);
+  }
+}
+
 async function encaminhar(c: Conversa, setor: string | null, responsavel: string | null, acao: string, texto: string, autor: string | null) {
   const mud: Record<string, unknown> = { setor, responsavel, triada_em: setor ? new Date().toISOString() : null };
   await supabaseAdmin().from("atendimento_conversas").update(mud).eq("id", c.id);
@@ -184,6 +227,8 @@ async function encaminhar(c: Conversa, setor: string | null, responsavel: string
   Object.assign(c, mud);
   if (responsavel && responsavel !== autor) {
     await notificar(responsavel, "atencao", `Atendimento ${c.codigo} com você`, `${c.nome || contatoRotulo(c.telefone)}: ${c.ultimo_texto ?? ""}`.slice(0, 200), `/admin/atendimento?conversa=${c.id}`);
+  } else if (!responsavel && !autor) {
+    await avisarFila(c, setor);
   }
 }
 
@@ -215,6 +260,8 @@ function setorDoPerfil(role: string): string | null {
 export async function entradaAtendimento(p: {
   telefone: string; nome: string; texto: string; mensagemId: string;
   opp: { id: string; codigo: string; responsavel_user_id: string | null } | null; canal?: string;
+  /** tipo da mensagem (text, audio, image, sticker…) e quando o cliente enviou */
+  tipo?: string; recebidaEm?: string | null;
 }): Promise<boolean> {
   const admin = supabaseAdmin();
   const agora = new Date().toISOString();
@@ -279,6 +326,13 @@ export async function entradaAtendimento(p: {
     return true;
   }
 
+  // mensagem que chegou atrasada (número reconectado, fila do WhatsApp): não
+  // responde menu/Ari horas depois; a conversa fica na caixa central para a equipe
+  if (p.recebidaEm && Date.now() - Date.parse(p.recebidaEm) > ATRASO_MAXIMO_MS) {
+    await eventoAtendimento({ conversa_id: c.id, acao: "menu", texto: "Mensagem chegou com atraso: sem resposta automática, fica para a equipe." });
+    return true;
+  }
+
   // 3. conversa com a Ari (consulta de imóveis) até alguém da equipe assumir
   if (c.ari_ativa_em) {
     await conversaComAri(c, p, menu, false);
@@ -295,8 +349,13 @@ export async function entradaAtendimento(p: {
     await enviarMenu(c, textoDoMenu(menu, opcoes, c.nome), p.canal);
     return true;
   }
-  if (c.menu_respondido_em) return true;
-  const aberto = c.menu_enviado_em && Date.now() - Date.parse(c.menu_enviado_em) < menu.expira_minutos * 60_000;
+  // Já passou pelo menu e ficou na caixa central sem ninguém assumir (escolheu
+  // "falar com a equipe" ou foi passado adiante por não acertar a opção): se agora
+  // manda uma opção válida, vale a escolha. Antes o robô ficava mudo e não
+  // encaminhava (relato do Stenio, 27/11/2026).
+  const reescolha = !!c.menu_respondido_em && !!c.menu_enviado_em && !!lerEscolha(p.texto, opcoes);
+  if (c.menu_respondido_em && !reescolha) return true;
+  const aberto = reescolha || (c.menu_enviado_em && Date.now() - Date.parse(c.menu_enviado_em) < menu.expira_minutos * 60_000);
   // primeira mensagem que já é uma busca clara de imóvel: a Ari responde, sem menu
   if (!aberto && !c.menu_enviado_em && buscaClaraDeImovel(p.texto) && await ariLigada(menu)) {
     await conversaComAri(c, p, menu, true);
@@ -308,6 +367,8 @@ export async function entradaAtendimento(p: {
     await enviarMenu(c, textoDoMenu(menu, opcoes, c.nome), p.canal);
     return true;
   }
+  // figurinha e tipo desconhecido com o menu aberto: não é resposta, não conta tentativa
+  if (p.tipo && ["sticker", "unknown"].includes(p.tipo)) return true;
   const escolha = lerEscolha(p.texto, opcoes);
   // horário do setor escolhido (0171); sem horário próprio, vale o expediente geral
   const confirmar = async (setor: string | null, base: string) => {
@@ -334,6 +395,7 @@ export async function entradaAtendimento(p: {
       await encaminhar(c, escolha.setor, escolha.responsavel, "menu", `Cliente escolheu "${escolha.chave} - ${escolha.rotulo}".`, null);
     } else {
       await eventoAtendimento({ conversa_id: c.id, acao: "menu", texto: `Cliente escolheu "${escolha.chave} - ${escolha.rotulo}": fica na caixa central.` });
+      await avisarFila(c, null);
     }
     await confirmar(escolha.setor, escolha.confirmacao || menu.confirmacao);
     return true;
@@ -341,9 +403,13 @@ export async function entradaAtendimento(p: {
   const tentativas = (c.menu_tentativas ?? 0) + 1;
   if (tentativas >= menu.max_tentativas) {
     await admin.from("atendimento_conversas").update({ menu_respondido_em: agora, menu_tentativas: tentativas }).eq("id", c.id);
-    if (menu.setor_escape) await encaminhar(c, menu.setor_escape, null, "menu", "Sem opção válida no menu: encaminhado ao setor de escape.", null);
-    else await eventoAtendimento({ conversa_id: c.id, acao: "menu", texto: "Sem opção válida no menu: ficou na caixa central para triagem." });
-    await confirmar(menu.setor_escape, menu.setor_escape ? menu.confirmacao : "Certo! Um atendente vai continuar a conversa por aqui em instantes.");
+    if (menu.setor_escape) await encaminhar(c, menu.setor_escape, null, "menu", `Sem opção válida no menu (última resposta: "${p.texto.slice(0, 80)}"): encaminhado ao setor de escape.`, null);
+    else {
+      await eventoAtendimento({ conversa_id: c.id, acao: "menu", texto: `Sem opção válida no menu (última resposta: "${p.texto.slice(0, 80)}"): ficou na caixa central para triagem.` });
+      await avisarFila(c, null);
+    }
+    // diz ao cliente por que foi passado adiante, em vez de um "Certo!" solto
+    await confirmar(menu.setor_escape, "Não consegui identificar a opção, então passei sua conversa para a nossa equipe. Um atendente continua por aqui assim que possível.");
     return true;
   }
   await admin.from("atendimento_conversas").update({ menu_tentativas: tentativas }).eq("id", c.id);
