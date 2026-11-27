@@ -19,8 +19,16 @@
 export const CAMADA_NAO_CADASTRO =
   /paisag|veget|jardin|arvor|árvor|forra|tronco|legend|texto|cota|dim\b|dim[-_ ]|hach|quaresm|acerola|amora|pau.?brasil|ip[eê]\b|palmeir|grama|piso|tátil|tatil|simbol|símbol|carimbo|coco|defpoints|\bgrid\b|azimute|seta|lou[cç]a|mobili/i;
 
-export function camadasNaoCadastro(nomes: string[]): string[] {
-  return nomes.filter((n) => CAMADA_NAO_CADASTRO.test(n));
+/**
+ * Linhas paralelas do arruamento (áudio do Carlos, 26/11/2026, 21h58: "ruamentos
+ * paralelos, linhas paralelas... deixar o que realmente é essencial"): guia,
+ * meio-fio, calçada, sarjeta, eixo e canteiro correm junto da frente da quadra
+ * e embolam o desenho. Para o cadastro basta a quadra e o lote.
+ */
+export const CAMADA_ARRUAMENTO = /guia|meio.?fio|cal[cç]ada|sarjeta|arruament|\beixo|canteiro|ciclovia|pista|passeio|alinhamento predial|meio fio/i;
+
+export function camadasNaoCadastro(nomes: string[], tirarArruamento = true): string[] {
+  return nomes.filter((n) => CAMADA_NAO_CADASTRO.test(n) || (tirarArruamento && CAMADA_ARRUAMENTO.test(n)));
 }
 
 export type LinhaChave = { chave: string; coords: number[][] };
