@@ -5,6 +5,8 @@ import { consultarLimite, ipDoPedido, limitar, respostaLimite } from "@/lib/segu
 import { registrarEvento } from "@/lib/seguranca/eventos";
 import { analisarEntrada, analisarFalha } from "@/lib/seguranca/alertas";
 import { vincularConvites } from "@/lib/organizacoes-servidor";
+import { acessoDe } from "@/lib/planos-servidor";
+import { COOKIE_APARELHO, entrarComAparelho } from "@/lib/seguranca/uso";
 
 /**
  * Login pelo servidor, e não direto do navegador para o Supabase, por três
@@ -75,5 +77,12 @@ export async function POST(request: Request) {
   await registrarEvento(request, "login_ok", { userId: data.user.id, email, detalhe: { mfa_pendente: precisaMfa } });
   // 5.9: convite pendente de organização para este e-mail vira vínculo (não atrasa o login)
   void vincularConvites(data.user.id, email);
-  return NextResponse.json({ ok: true, role: profile.role, entradaAtiva: profile.entrada_ativa, escolherPerfil: !profile.entrada_ativa && !["admin_central","analista_arini","franqueado"].includes(profile.role), mfa: precisaMfa });
+  // 26/11/2026 (limites por assinatura): o aparelho que entra vira o mais novo
+  // da conta; o mais antigo além do limite do plano sai na próxima conferência
+  const aparelho = crypto.randomUUID();
+  try { await entrarComAparelho(request, data.user.id, await acessoDe(data.user.id), aparelho); }
+  catch (e) { console.error("registro do aparelho falhou:", e); }
+  const resposta = NextResponse.json({ ok: true, role: profile.role, entradaAtiva: profile.entrada_ativa, escolherPerfil: !profile.entrada_ativa && !["admin_central","analista_arini","franqueado"].includes(profile.role), mfa: precisaMfa });
+  resposta.cookies.set(COOKIE_APARELHO, aparelho, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 400 * 86400 });
+  return resposta;
 }

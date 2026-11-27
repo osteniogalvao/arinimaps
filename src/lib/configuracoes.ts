@@ -186,6 +186,17 @@ export const GRUPOS: Grupo[] = [
         ajuda: "Com “Sim”, ninguém da equipe entra na Central sem o código do aplicativo autenticador. Ative o seu próprio em Minha segurança antes de ligar." },
       { chave: "seguranca_sessao_equipe_horas", rotulo: "Sessão da equipe expira em", tipo: "numero", padrao: 12, min: 1, max: 720, sufixo: "horas", somenteDiretoria: true,
         ajuda: "Depois desse tempo desde o login, a Central pede a senha de novo. Evita sessão administrativa aberta para sempre num computador." },
+      // Limites de uso (áudio do Carlos e tabela do Stenio, 26/11/2026): dois
+      // níveis — a trava contra robô vale para todos; o limite "bom" é o padrão
+      // dos planos e cada plano pode ter o seu em Admin > Planos (cotas).
+      { chave: "limite_consultas_minuto", rotulo: "Consultas por minuto (trava contra robô)", tipo: "numero", padrao: 20, min: 1, max: 600, sufixo: "por minuto", somenteDiretoria: true,
+        ajuda: "Consultas de área (CAR, SIGEF, INCRA, embargos e demais fontes) por conta. Ninguém consulta mais rápido que isso à mão; acima disso é robô. Vale para todos os planos." },
+      { chave: "limite_consultas_dia", rotulo: "Consultas por dia (padrão dos planos)", tipo: "numero", padrao: 100, min: 0, max: 100000, sufixo: "por dia", somenteDiretoria: true,
+        ajuda: "Usado quando o plano não define a cota “Consultas de área por dia”. Um técnico muito ativo faz de 10 a 30 por dia. 0 = sem limite diário." },
+      { chave: "limite_downloads_mes", rotulo: "Downloads de KML/KMZ por mês (padrão dos planos)", tipo: "numero", padrao: 300, min: 0, max: 100000, sufixo: "por mês", somenteDiretoria: true,
+        ajuda: "Usado quando o plano não define a cota “Downloads de KML/KMZ por mês”. Cerca de 10 por dia. 0 = sem limite." },
+      { chave: "limite_aparelhos", rotulo: "Aparelhos ao mesmo tempo (padrão dos planos)", tipo: "numero", padrao: 1, min: 0, max: 50, sufixo: "aparelhos", somenteDiretoria: true,
+        ajuda: "Quantos aparelhos a mesma conta usa ao mesmo tempo. Ao entrar num aparelho novo, o mais antigo sai. Usado quando o plano não define a cota “Aparelhos ao mesmo tempo”. 0 = sem limite. A equipe da Matriz não entra nesta regra." },
       // Retenção e descarte (item 6.4). Os prazos dependem da decisão 8.9 (Carlos + jurídico):
       // até lá ficam em 0 = não descartar, e a rotina só simula.
       { chave: "retencao_selfie_dias", rotulo: "Guardar a selfie do aceite por", tipo: "numero", padrao: 0, min: 0, max: 3650, sufixo: "dias", somenteDiretoria: true,

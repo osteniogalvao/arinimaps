@@ -81,6 +81,10 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
       if (!camadas.length) { setErro("Não há divisa para exportar."); return; }
 
       const base = nomeArquivo(nomeBase);
+      if (formato === "kml" || formato === "kmz" || formato === "enviar") {
+        const { liberarDownload } = await import("@/lib/geo/liberarDownload");
+        await liberarDownload(formato === "kml" ? "kml" : "kmz", "imovel");
+      }
       if (formato === "geojson") lib.baixar(lib.paraGeoJSON(camadas), `${base}.geojson`, "application/geo+json");
       else if (formato === "kml") lib.baixar(lib.paraKML(camadas, nomeBase), `${base}.kml`, "application/vnd.google-earth.kml+xml");
       else if (formato === "kmz") lib.baixar(await lib.paraKMZ(camadas, nomeBase), `${base}.kmz`, "application/vnd.google-earth.kmz");
@@ -110,8 +114,8 @@ export default function BotaoExportarSig({ nomeBase, divisa, carCodigo, classNam
       }
       if (carCodigo && !car) setErro("A divisa do CAR não pôde ser carregada; o arquivo saiu só com a divisa.");
       else setAberto(false);
-    } catch {
-      setErro("Não foi possível gerar o arquivo. Tente de novo.");
+    } catch (e) {
+      setErro(e instanceof Error && /limite|aparelho|plano/i.test(e.message) ? e.message : "Não foi possível gerar o arquivo. Tente de novo.");
     } finally {
       setGerando(null);
     }

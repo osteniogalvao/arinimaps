@@ -80,6 +80,9 @@ export default function Entrar() {
       supabaseBrowser().auth.signOut({ scope: "local" });
       setAviso("Sua sessão na Central expirou. Entre de novo.");
     }
+    if (q.get("outro_aparelho")) {
+      setAviso("Sua conta foi aberta em outro aparelho e este foi desconectado. O plano permite um aparelho por vez: entre de novo para continuar aqui.");
+    }
   }, []);
 
   const ehParceiro = papelEhParceiro(form.role);

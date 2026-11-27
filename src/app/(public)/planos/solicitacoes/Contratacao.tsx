@@ -1,6 +1,6 @@
 "use client";
 import AvisoPlanoAnual from "../AvisoPlanoAnual";
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import Pix from "./Pix";
 import CartaoRenovacao from "./CartaoRenovacao";
 import TrocaDePlano from "./TrocaDePlano";
@@ -17,6 +17,19 @@ export type HistoricoTroca = {oferta:string;assinatura:string;tipo:string;status
 export default function Contratacao({s,ativo,temPlano,trocas}:{s:OfertaAssinatura;ativo:boolean;temPlano:boolean;trocas:HistoricoTroca[]}) {
  const router=useRouter();const [agora]=useState(()=>Date.now()),[aceito,setAceito]=useState(false),[ocupado,setOcupado]=useState(false),[mensagem,setMensagem]=useState("");
  const anual=s.ciclo==="anual";
+ // 26/11/2026 (áudio do Carlos): o Pix "não aparecia" porque a fatura ainda
+ // estava em emissão e só surgia ao tocar em Atualizar. Agora a página se
+ // atualiza sozinha enquanto o Asaas emite (a cada 4 s, por até 3 min) e,
+ // com a fatura aberta, confere o pagamento a cada 15 s (por até 30 min).
+ const emEmissao=s.faturas_cotadas.some(f=>!f.operacao&&["nova","emitindo"].includes(f.status));
+ const emAberto=s.faturas_cotadas.some(f=>!f.operacao&&f.link&&["aberta","vencida"].includes(f.status));
+ useEffect(()=>{
+   if(!s.aceite||s.cancelado||(!emEmissao&&!emAberto))return;
+   const passo=emEmissao?4000:15000, limite=Date.now()+(emEmissao?180000:1800000);
+   const t=setInterval(()=>{if(Date.now()>limite)clearInterval(t);else if(document.visibilityState==="visible")router.refresh();},passo);
+   return()=>clearInterval(t);
+ },[emEmissao,emAberto,s.aceite,s.cancelado,router]);
+ const primeiraAberta=s.faturas_cotadas.slice().sort((a,b)=>a.inicio.localeCompare(b.inicio)).find(f=>!f.operacao&&f.link&&["aberta","vencida"].includes(f.status))?.id;
  async function registrar(acao:string) {
    if(acao!=="aceitar"&&!window.confirm(acao==="arrependimento"?"Cancelar a assinatura e solicitar a devolução do pagamento?":"Encerrar a renovação ao fim do período pago?"))return;
    setOcupado(true);setMensagem("");
@@ -54,7 +67,8 @@ export default function Contratacao({s,ativo,temPlano,trocas}:{s:OfertaAssinatur
    {s.faturas_cotadas.slice().sort((a,b)=>b.inicio.localeCompare(a.inicio)||b.componente.localeCompare(a.componente)).map(f=><div className="border-t pt-2" key={f.id}>
      <p>{f.componente==="troca"?"Diferença da troca de plano":f.componente==="plano"?"Plano":"Adicionais mensais"} · {data(f.inicio)} · {moeda(f.valor)} · {estados[f.status]}{f.operacao?.startsWith("estorn")&&" · Estorno solicitado"}</p>
      {f.link&&!f.operacao&&["aberta","vencida"].includes(f.status)&&<a href={f.link} className="underline" rel="noreferrer" target="_blank">Abrir fatura no Asaas</a>}
-     {f.link && !f.operacao && ["aberta","vencida"].includes(f.status) && <Pix id={f.id}/>}
+     {f.link && !f.operacao && ["aberta","vencida"].includes(f.status) && <Pix id={f.id} abrir={f.id===primeiraAberta}/>}
+     {!f.operacao && ["nova","emitindo"].includes(f.status) && <p className="text-sm text-texto-2" role="status">Gerando o Pix no Asaas… o QR Code aparece aqui em instantes.</p>}
      {f.tentativa_cartao && !f.operacao && ["aberta","vencida"].includes(f.status) && <p>Tentativa de pagamento no cartão registrada. Consulte a situação na fatura do Asaas.</p>}
      {f.link_estorno&&f.operacao&&<a href={f.link_estorno} className="underline" rel="noreferrer" target="_blank">Informar dados ao Asaas para a devolução do boleto</a>}
      {f.nfse_assinaturas?.estado==="emitida" && <p className="flex flex-wrap gap-3">

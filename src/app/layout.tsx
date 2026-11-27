@@ -5,6 +5,7 @@ import { Geist_Mono, League_Gothic, Quicksand } from "next/font/google";
 import "./globals.css";
 import { TEMA_SCRIPT } from "@/components/shell/BotaoTema";
 import TagsMarketing from "@/components/TagsMarketing";
+import VigiaAparelho from "@/components/conta/VigiaAparelho";
 import { tagsMarketingAtivas } from "@/lib/tags-marketing-servidor";
 
 // Tipografia do Manual de Identidade Visual v1.0 (out/2026):
@@ -70,6 +71,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col font-sans">
         {children}
+        <VigiaAparelho />
         {tags.length > 0 && <TagsMarketing tags={tags} />}
       </body>
     </html>

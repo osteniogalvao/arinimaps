@@ -3,8 +3,8 @@ import { CAMPO_COMPACTO } from "@/components/admin/estilos";
 
 import Image from "next/image";
 import ConfirmarWhatsapp from "@/components/conta/ConfirmarWhatsapp";
-import { useState } from "react";
-export default function Pix({ id }: { id: string }) {
+import { useEffect, useRef, useState } from "react";
+export default function Pix({ id, abrir = false }: { id: string; abrir?: boolean }) {
   const [pix, setPix] = useState<{
     codigo: string;
     imagem: string;
@@ -32,11 +32,19 @@ export default function Pix({ id }: { id: string }) {
         );
       else setPix(j);
     } catch (e) {
-      setAviso(e instanceof Error ? e.message : "Falha de conexão.");
+      setAviso((e instanceof Error ? e.message : "Falha de conexão.") + " Você também pode pagar pelo link “Abrir fatura no Asaas”.");
     } finally {
       setOcupado(false);
     }
   }
+  // a primeira fatura em aberto já mostra o QR Code e o copia e cola, sem clique
+  const aberto = useRef(false);
+  useEffect(() => {
+    if (!abrir || aberto.current) return;
+    aberto.current = true;
+    void consultar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abrir]);
   return (
     <div className="mt-2 space-y-2">
       <button
@@ -45,15 +53,15 @@ export default function Pix({ id }: { id: string }) {
         className="underline"
         onClick={() => (pix ? setPix(null) : consultar())}
       >
-        {pix ? "Ocultar Pix" : "Ver Pix copia e cola e QR Code"}
+        {pix ? "Ocultar Pix" : ocupado ? "Gerando o Pix…" : "Pagar com Pix (QR Code e copia e cola)"}
       </button>
       {pix && (
         <div className="space-y-2">
           <Image
             unoptimized
             src={"data:image/png;base64," + pix.imagem}
-            width={170}
-            height={170}
+            width={220}
+            height={220}
             alt="QR Code Pix da fatura"
           />
           <label className="block">
@@ -67,7 +75,7 @@ export default function Pix({ id }: { id: string }) {
           </label>
           <button
             type="button"
-            className="mr-4 underline"
+            className="btn-primario mr-4 px-4 py-2"
             onClick={() =>
               navigator.clipboard
                 .writeText(pix.codigo)
