@@ -499,10 +499,6 @@ export default function MapaRegional({
   // Agora o X fecha só a ficha: a área continua marcada até tocar em outra
   // (ou num ponto fora do CAR, ou desligar a camada).
   const [carFechado, setCarFechado] = useState<string | null>(null);
-  const fecharCartaoCar = () => {
-    setCarFechado(carSel?.cod ?? null); setCarSel(null);
-    setNoPonto([]); setExtrasPonto(null);
-  };
   const codigoSelecionado = carSel?.cod ?? carFechado;
   useEffect(() => {
     if (!codigoSelecionado || !pronto || !mapaPronto?.getSource("car")) return;
@@ -538,6 +534,10 @@ export default function MapaRegional({
   // onde foi o último clique: o cartão "Neste ponto" oferece compartilhar esse ponto
   const [pontoClicado, setPontoClicado] = useState<{ lng: number; lat: number; zoom: number } | null>(null);
   const [extrasPonto, setExtrasPonto] = useState<ExtrasNoPonto | null>(null);
+  const fecharCartaoCar = () => {
+    setCarFechado(carSel?.cod ?? null); setCarSel(null);
+    setNoPonto([]); setExtrasPonto(null);
+  };
   const alternarSoVenda = useCallback((ligar: boolean) => {
     soVendaRef.current = ligar;
     setSoVenda(ligar);
