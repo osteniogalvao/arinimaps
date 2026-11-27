@@ -16,11 +16,13 @@ async function entrar({profile={role:"proprietario",ativo:true,entrada_ativa:"pr
   "@/lib/seguranca/limite":{ipDoPedido:()=>"127.0.0.1",consultarLimite:async()=>({permitido:true}),limitar:async()=>({permitido:true}),respostaLimite:()=>assert.fail("Sem bloqueio de limite")},
   "@/lib/seguranca/eventos":{registrarEvento:async(_r,name)=>events.push(name)},
   "@/lib/seguranca/alertas":{analisarEntrada:async()=>calls.push(["analisarEntrada"]),analisarFalha:async()=>calls.push(["analisarFalha"])},
-  "@/lib/organizacoes-servidor":{vincularConvites:async()=>calls.push(["vincularConvites"])}};
+  "@/lib/organizacoes-servidor":{vincularConvites:async()=>calls.push(["vincularConvites"])},
+  "@/lib/planos-servidor":{acessoDe:async()=>({equipe:false,cotas:{}})},
+  "@/lib/seguranca/uso":{COOKIE_APARELHO:"arini_aparelho",entrarComAparelho:async()=>events.push("aparelho")}};
  const code=ts.transpileModule(readFileSync(new URL("../src/app/api/auth/entrar/route.ts",import.meta.url),"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const mod={};compileFunction(code,["require","exports","Response"])(id=>{assert.ok(Object.hasOwn(deps,id),id);return deps[id];},mod,Response);
  const response=await mod.POST(new Request("http://localhost/api/auth/entrar",{method:"POST",body:JSON.stringify({email:"qa@example.test",senha:"senha-sintetica"})}));
- return {status:response.status,body:await response.json(),calls,events};
+ return {status:response.status,body:await response.json(),cookie:response.headers.get("set-cookie"),calls,events};
 }
 for(const [name,options] of [["erro de leitura do perfil",{profile:null,profileError:{code:"503"}}],["perfil ausente",{profile:null}]])test(name+" não autentica como comprador",async()=>{
  const r=await entrar(options);assert.equal(r.status,503);assert.equal(r.body.ok,undefined);assert.equal(r.body.role,undefined);
@@ -33,5 +35,6 @@ test("conta desativada continua403 e encerra a sessão",async()=>{
  const r=await entrar({profile:{role:"proprietario",ativo:false}});assert.equal(r.status,403);assert.equal(r.calls[0][0],"signOut");assert.equal(r.calls.length,1);assert.deepEqual(r.events,["login_bloqueado"]);
 });
 test("perfil válido mantém papel real, registra sucesso e vincula convites",async()=>{
- const r=await entrar();assert.equal(r.status,200);assert.equal(r.body.role,"proprietario");assert.equal(r.body.ok,true);assert.deepEqual(r.events,["login_ok"]);assert.deepEqual(r.calls,[["mfa"],["analisarEntrada"],["vincularConvites"]]);
+ const r=await entrar();assert.equal(r.status,200);assert.equal(r.body.role,"proprietario");assert.equal(r.body.ok,true);assert.deepEqual(r.events,["login_ok","aparelho"]);assert.deepEqual(r.calls,[["mfa"],["analisarEntrada"],["vincularConvites"]]);
+ assert.match(r.cookie??"",/^arini_aparelho=[0-9a-f-]{36}; Path=\/;.*HttpOnly/);
 });

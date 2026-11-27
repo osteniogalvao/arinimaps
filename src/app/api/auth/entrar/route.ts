@@ -83,6 +83,6 @@ export async function POST(request: Request) {
   try { await entrarComAparelho(request, data.user.id, await acessoDe(data.user.id), aparelho); }
   catch (e) { console.error("registro do aparelho falhou:", e); }
   const resposta = NextResponse.json({ ok: true, role: profile.role, entradaAtiva: profile.entrada_ativa, escolherPerfil: !profile.entrada_ativa && !["admin_central","analista_arini","franqueado"].includes(profile.role), mfa: precisaMfa });
-  resposta.cookies.set(COOKIE_APARELHO, aparelho, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 400 * 86400 });
+  resposta.headers.append("Set-Cookie", `${COOKIE_APARELHO}=${aparelho}; Path=/; Max-Age=${400 * 86400}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
   return resposta;
 }
