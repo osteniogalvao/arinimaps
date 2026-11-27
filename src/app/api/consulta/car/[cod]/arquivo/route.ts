@@ -3,6 +3,7 @@ import { paraKML, temPoligono, type CamadaSig } from "@/lib/geo/exportarSig";
 import { limiteLeituraMapa } from "@/lib/geo/limiteMemoria";
 import { acessoAtual } from "@/lib/planos-servidor";
 import { linkWhatsappValido } from "@/lib/relatorio/link-whatsapp";
+import { exigirAparelhoAtivo, registrarDownload } from "@/lib/seguranca/uso";
 
 /**
  * Perímetro do imóvel do CAR em KMZ ou KML (áudio do Carlos, 24/11/2026 8h05:
@@ -26,6 +27,11 @@ export async function GET(request: Request, ctx: RouteContext<"/api/consulta/car
       return userId
         ? Response.json({ error: "Seu plano não inclui baixar a área em KML/KMZ." }, { status: 403 })
         : Response.json({ error: "Entre para baixar a área em KML/KMZ." }, { status: 401 });
+    }
+    // limites por assinatura (26/11/2026): cota de KML/KMZ do mês do plano
+    if (userId) {
+      const barrado = await exigirAparelhoAtivo(request, userId, acesso) ?? await registrarDownload(request, userId, acesso, formato, "car");
+      if (barrado) return barrado;
     }
   }
   const { data, error } = await consultarCar(cod);

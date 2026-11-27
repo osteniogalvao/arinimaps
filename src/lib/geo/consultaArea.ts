@@ -5,7 +5,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { currentUser } from "@/lib/supabase/server";
 import { ADAPTADORES, consultarFontes, linhaParaGravar, type Bbox, type LinhaConsulta, type ResultadoFonte } from "@/lib/rural/adaptadores";
 import { processamentoLigado } from "@/lib/sentinel/copernicus";
-import { ipDoPedido, limitar, respostaLimite } from "@/lib/seguranca/limite";
+import { ipDoPedido } from "@/lib/seguranca/limite";
+import { conferirConsultas, exigirAparelhoAtivo } from "@/lib/seguranca/uso";
 import { EsperaEsgotada, fila, inteiroDoAmbiente, type Liberar } from "@/lib/seguranca/fila";
 import {
   acessoAtual, conferirRecurso, consultasAreaNoMes, registrarTentativa, respostaNegacao,
@@ -87,8 +88,10 @@ export async function executarConsultaArea(request: Request, alvo: AlvoConsulta)
 
   // planos por nicho: a consulta de área é recurso da consulta profissional e
   // tem cota mensal por plano (a básica tem umas poucas, de degustação)
-  const { negacao } = await conferirRecurso(request, user, "consulta_area", { cota: "consultas_area_mes" });
+  const { acesso, negacao } = await conferirRecurso(request, user, "consulta_area", { cota: "consultas_area_mes" });
   if (negacao) return respostaNegacao(negacao);
+  const outroAparelho = await exigirAparelhoAtivo(request, user.id, acesso);
+  if (outroAparelho) return outroAparelho;
 
   const bbox = await alvo.bbox();
   if (!bbox) return NextResponse.json({ error: alvo.naoEncontrado, codigo: "nao_encontrado" }, { status: 404 });
@@ -135,8 +138,12 @@ export async function executarConsultaArea(request: Request, alvo: AlvoConsulta)
   }
 
   try {
-    const limite = await limitar(`consulta:${user.id}`, 20, 3600);
-    if (!limite.permitido) return respostaLimite(limite, "consulta");
+    // limites por assinatura (26/11/2026): 20 por minuto contra robô e a cota
+    // diária do plano (padrão 100). Re-tentativa de fonte que caiu não conta.
+    if (!reTentativa) {
+      const barrado = await conferirConsultas(user.id, acesso);
+      if (barrado) return barrado;
+    }
 
     await admin.from("consultas_area_log").insert({
       user_id: user.id, chave: alvo.chave, acao: reTentativa ? "reconsulta" : "consulta", ip: ipDoPedido(request),

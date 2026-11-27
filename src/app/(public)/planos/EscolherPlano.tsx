@@ -211,7 +211,12 @@ export default function EscolherPlano({ personaId, perfil, autenticado, cadastro
             </details>
             {planoEmBreve(p) ? <button type="button" disabled className="escolher opacity-60">Em breve</button>
               : <button type="button" aria-pressed={p.id === planoId} aria-label={"Selecionar " + p.nome}
-              onClick={() => escolher(p.id)} className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : cartao?.botao ?? "Selecionar"}</button>}
+              onClick={() => {
+                escolher(p.id);
+                // 26/11/2026 (áudio do Carlos): selecionou, já desce para os
+                // complementos e o botão de pagar, sem procurar rolando
+                requestAnimationFrame(() => document.getElementById("configuracao")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+              }} className="escolher">{p.id === planoId ? <><Check /> Selecionado</> : cartao?.botao ?? "Selecionar"}</button>}
           </article>;
         })}
       </div>

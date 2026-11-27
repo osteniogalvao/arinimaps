@@ -299,6 +299,10 @@ export default function Ferramentas({
       const ha = areaPoligonoM2([[...pontosArea, pontosArea[0]]]) / 10000;
       const camada = { nome: "divisa", rotulo: "Área desenhada", geometry, atributos: { area_ha: Math.round(ha * 10000) / 10000, fonte: "Área desenhada no mapa da Arini" } };
       const base = `area-${ha.toFixed(2).replace(".", "-")}ha`;
+      if (formato === "kml" || formato === "kmz" || formato === "enviar") {
+        const { liberarDownload } = await import("@/lib/geo/liberarDownload");
+        await liberarDownload(formato === "kml" ? "kml" : "kmz", "mapa");
+      }
       if (formato === "enviar") await lib.encaminhar(await lib.paraKMZ([camada], "Área desenhada"), `${base}.kmz`, "application/vnd.google-earth.kmz", `Área de ${ha.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ha (KMZ)`);
       else if (formato === "kmz") lib.baixar(await lib.paraKMZ([camada], "Área desenhada"), `${base}.kmz`, "application/vnd.google-earth.kmz");
       else if (formato === "kml") lib.baixar(lib.paraKML([camada], "Área desenhada"), `${base}.kml`, "application/vnd.google-earth.kml+xml");
@@ -310,6 +314,9 @@ export default function Ferramentas({
         const m = calcularMemorial(geometry);
         if (m) lib.baixar("\ufeff" + memorialDoc(m, { imovel: "Área desenhada no mapa", origem: "Área desenhada no mapa da Arini" }), `${base}-memorial-descritivo.doc`, "application/msword");
       }
+    } catch (e) {
+      // cota de downloads do mês ou outro aparelho na conta (limites de 26/11/2026)
+      setBloqueio(e instanceof Error ? e.message : "Não foi possível gerar o arquivo.");
     } finally {
       setBaixando(null);
     }
