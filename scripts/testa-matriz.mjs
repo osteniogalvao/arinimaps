@@ -171,9 +171,9 @@ try {
   await r.type("#mfa", totp(segredo));
   await r.evaluate(() => [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Confirmar código"))?.click());
   // com a bateria inteira rodando o servidor demora mais: espera a Central, não um tempo fixo
-  await r.waitForFunction(() => location.pathname === "/admin" || !!document.querySelector(".text-critico"), { timeout: 30000 }).catch(() => null);
+  await r.waitForFunction(() => location.pathname.startsWith("/admin") || !!document.querySelector(".text-critico"), { timeout: 30000 }).catch(() => null);
   console.log("  mensagem na tela:", await r.evaluate(() => document.querySelector(".text-critico")?.textContent ?? "(nenhuma)"));
-  ok("com o código, entra na Central", r.url().endsWith("/admin"), r.url());
+  ok("com o código, entra na Central", /\/admin(\/escolher)?$/.test(new URL(r.url()).pathname), r.url());
 
   const { data: ev } = await admin.from("auth_events").select("evento").eq("user_id", criados.usuario).order("created_at");
   ok("eventos registrados", ["login_ok", "mfa_ativado", "mfa_ok"].every((e) => ev?.some((x) => x.evento === e)), (ev ?? []).map((x) => x.evento).join(","));

@@ -29,6 +29,8 @@ import { SETORES, type ItemMenu, type Setor, type SetorId } from "@/lib/setores"
 import Avatar from "@/components/shell/Avatar";
 import { useNaoLidosSuporte } from "@/components/suporte/useNaoLidos";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { menuCrm, TELAS_CRM, type Painel } from "@/lib/paineis";
+import { ArrowLeftRight } from "lucide-react";
 
 /**
  * "Meu dia": o que todo membro da equipe usa todo dia, qualquer que seja o
@@ -148,6 +150,7 @@ const ICONE_ITEM: Record<string, LucideIcon> = {
   "/admin/usuarios": UsersRound,
   "/admin/planos": Package,
   "/admin/configuracoes": Settings,
+  "/admin/painel-crm": LayoutGrid,
 };
 
 /** Ícone do grupo (setor). */
@@ -173,8 +176,12 @@ const LINK_TOPO =
   "btn-contorno items-center gap-2 px-4 py-2 text-sm";
 
 export default function AdminShell({
-  children, userId, nome, papel, setores, avatar = null,
-}: { children: React.ReactNode; userId: string; nome: string; papel: string; setores: SetorId[]; avatar?: string | null }) {
+  children, userId, nome, papel, setores, avatar = null, painel = null,
+}: {
+  children: React.ReactNode; userId: string; nome: string; papel: string; setores: SetorId[]; avatar?: string | null;
+  /** painel escolhido ao entrar: "crm" mostra o menu do CRM; "sistema" (ou nada), o resto da Central */
+  painel?: Painel | null;
+}) {
   const caminho = usePathname();
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
@@ -202,14 +209,24 @@ export default function AdminShell({
   const ativo = (href: string) => (href === "/admin" ? caminho === "/admin" : caminho === href || caminho.startsWith(href + "/"));
 
   // o menu mostra só os setores do membro; a trava de verdade é no servidor
-  const meusSetores = SETORES.filter((st) => setores.includes(st.id));
-  const GRUPOS: Grupo[] = [
-    { id: "geral", titulo: "Meu dia", itens: [...GERAL, ...GERAL_MAIS] },
-    ...meusSetores.map((st) => ({
-      id: st.id, titulo: st.nome,
-      itens: telasDoSetor(st),
-    })),
+  const noCrm = painel === "crm";
+  // Sistema completo: as telas do CRM saem do menu (moram no painel do CRM);
+  // setor que fica sem nenhuma tela além do painel e da equipe some do menu
+  const semCrm = (itens: ItemMenu[]) => itens.filter((i) => !TELAS_CRM.has(i.href));
+  const telasSistema = (st: Setor) => telasDoSetor(st).filter((i) => !TELAS_CRM.has(i.href));
+  const meusSetores = SETORES.filter((st) => setores.includes(st.id))
+    .filter((st) => semCrm(st.itens).length > 0);
+  const menuDoCrm: ItemMenu[] = [
+    ...menuCrm(setores).map((i) => ({ href: i.href, rotulo: i.rotulo, icone: "" })),
+    // gestor de setor: a equipe do setor no lugar de "Usuários" (que é da Diretoria)
+    ...(setores.includes("diretoria") ? [] : setores.slice(0, 1).map((id) => ({ href: equipeDoSetor(id), rotulo: "Equipe do setor", icone: "" }))),
   ];
+  const GRUPOS: Grupo[] = noCrm
+    ? [{ id: "geral", titulo: "CRM Arini Brasil", itens: menuDoCrm }]
+    : [
+      { id: "geral", titulo: "Meu dia", itens: semCrm([...GERAL, ...GERAL_MAIS]) },
+      ...meusSetores.map((st) => ({ id: st.id, titulo: st.nome, itens: telasSistema(st) })),
+    ];
   // o item mais específico vence: "/admin/juridico/lgpd" não acende "/admin/juridico"
   const todos = GRUPOS.flatMap((g) => g.itens);
   const maisEspecifico = todos
@@ -258,23 +275,49 @@ export default function AdminShell({
     <p className="px-3 pt-4 pb-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-texto-2">{texto}</p>
   );
 
-  const navegacao = (
+  // botão para voltar à escolha entre o CRM e o sistema completo
+  const trocarPainel = (
+    <Link href="/admin/escolher" onClick={() => setAberto(false)}
+      className="mb-2 flex items-center gap-2 rounded-2xl border border-ouro/50 px-3.5 py-2 text-[0.85rem] font-semibold text-ouro transition-colors hover:bg-ouro/10">
+      <ArrowLeftRight className="size-4 shrink-0" />
+      <span className="min-w-0 leading-tight">
+        <span className="block truncate">{noCrm ? "CRM Arini Brasil" : "Sistema completo"}</span>
+        <span className="block text-[11px] font-medium text-texto-2">Trocar painel</span>
+      </span>
+    </Link>
+  );
+
+  // no menu do CRM cada tela tem o seu ícone (no sistema, "Indicadores" de cada setor usa o mesmo)
+  const ICONE_CRM: Record<string, LucideIcon> = {
+    "/admin/juridico": Scale, "/admin/financeiro": Wallet, "/admin/financeiro/alugueis": Landmark,
+    "/admin/marketing/fluxo": Megaphone, "/admin/consulta-imoveis": Search,
+  };
+  // Menu do CRM: lista curta e plana, como no CRM da Arini Negócios
+  const navegacaoCrm = (
+    <div className="space-y-0.5">
+      {trocarPainel}
+      {menuDoCrm.map((i) => linkMenu(i, "c" + i.href, ICONE_CRM[i.href] ?? ICONE_ITEM[i.href] ?? (i.rotulo === "Equipe do setor" ? UsersRound : Circle), aceso(i.href)))}
+    </div>
+  );
+
+  const navegacaoSistema = (
     <div className="space-y-1">
+      {trocarPainel}
       {tituloBloco("Meu dia")}
       <div className="space-y-0.5">
-        {GERAL.map((i) => linkMenu(i, "g" + i.href, ICONE_ITEM[i.href] ?? Circle, aceso(i.href)))}
+        {semCrm(GERAL).map((i) => linkMenu(i, "g" + i.href, ICONE_ITEM[i.href] ?? Circle, aceso(i.href)))}
         <button type="button" aria-expanded={mostrarMais} onClick={() => setMaisAberto((v) => !v)}
           className="flex w-full items-center gap-3 rounded-full px-3.5 py-2 text-left text-[0.92rem] font-medium text-texto-2 transition-colors hover:bg-texto/8 hover:text-texto">
           {mostrarMais ? <ChevronDown className="size-[18px] shrink-0" /> : <ChevronRight className="size-[18px] shrink-0" />}
           <span>{mostrarMais ? "Menos" : "Mais"}</span>
         </button>
-        {mostrarMais && GERAL_MAIS.map((i) => linkMenu(i, "m" + i.href, ICONE_ITEM[i.href] ?? Circle, aceso(i.href)))}
+        {mostrarMais && semCrm(GERAL_MAIS).map((i) => linkMenu(i, "m" + i.href, ICONE_ITEM[i.href] ?? Circle, aceso(i.href)))}
       </div>
       {/* um setor só: lista simples das telas, como no CRM da Arini Negócios */}
       {meusSetores.length === 1 && (<>
         {tituloBloco(meusSetores[0].nome)}
         <div className="space-y-0.5">
-          {telasDoSetor(meusSetores[0]).map((i) =>
+          {telasSistema(meusSetores[0]).map((i) =>
             linkMenu(i, "u" + i.href, iconeDe(i.href, meusSetores[0].id), aceso(i.href), selo[i.href] ?? 0))}
         </div>
       </>)}
@@ -303,7 +346,7 @@ export default function AdminShell({
               </button>
               {expandido && (
                 <div className="ml-4 mt-0.5 mb-1.5 space-y-0.5 border-l border-linha-forte/50 pl-2">
-                  {telasDoSetor(st).map((i) =>
+                  {telasSistema(st).map((i) =>
                     linkMenu(i, st.id + i.href, iconeDe(i.href, st.id), doSetor && aceso(i.href), selo[i.href] ?? 0))}
                 </div>
               )}
@@ -313,6 +356,7 @@ export default function AdminShell({
       </div>
     </div>
   );
+  const navegacao = noCrm ? navegacaoCrm : navegacaoSistema;
 
   const rodape = (
     <div className="border-t border-linha-forte/60 p-4">
@@ -345,10 +389,26 @@ export default function AdminShell({
     <Link href="/" className="flex w-full items-center gap-3 min-w-0">
       <Logo negativa />
       <span className="ml-auto rounded-full border border-ouro/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-ouro">
-        Central
+        {noCrm ? "CRM" : "Central"}
       </span>
     </Link>
   );
+
+  // tela de escolha do painel: sem menu, só a marca e a escolha
+  if (caminho === "/admin/escolher") {
+    return (
+      <div className="min-h-screen bg-fundo">
+        <header className="lp-escuro lp-malha-escura flex h-[72px] items-center gap-4 px-5 md:px-8">
+          <div className="w-56">{marca}</div>
+          <button type="button" onClick={sair} disabled={saindo}
+            className="ml-auto inline-flex items-center gap-2 text-sm font-semibold text-texto-2 hover:text-ouro">
+            <LogOut className="size-4" /> {saindo ? "Saindo…" : "Sair"}
+          </button>
+        </header>
+        <main className="mx-auto w-full max-w-[1280px] px-5 py-10 md:px-8">{children}</main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-fundo flex">
@@ -388,7 +448,7 @@ export default function AdminShell({
             </span>
             <div className="min-w-0">
               <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-texto-2 min-w-0">
-                <span className="shrink-0">Central Arini</span>
+                <span className="shrink-0">{noCrm ? "CRM Arini Brasil" : "Central Arini"}</span>
                 {grupoAtual && grupoAtual.id !== "geral" && (
                   <><ChevronRight className="size-3 shrink-0" /><span className="text-ouro truncate">{grupoAtual.titulo}</span></>
                 )}

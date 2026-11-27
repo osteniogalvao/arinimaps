@@ -90,7 +90,8 @@ export default function Entrar() {
     const carPendente = lerCarPendente();
     const anuncia = podeAnunciar(role);
     if (volta && !carPendente) return volta;
-    return role === "admin_central" || role === "analista_arini" ? "/admin"
+    // equipe: escolhe entre o CRM e o sistema completo a cada entrada (Stenio, 27/11/2026)
+    return role === "admin_central" || role === "analista_arini" ? "/admin/escolher"
       : entradaAtiva === "divulgador" ? "/divulgador"
       : carPendente && anuncia ? `/painel/novo?car=${encodeURIComponent(carPendente)}`
       : ["comprador", "consulta"].includes(role) ? "/mapa"
