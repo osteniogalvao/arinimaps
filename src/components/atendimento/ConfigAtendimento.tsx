@@ -40,7 +40,7 @@ export default function ConfigAtendimento({ menu, opcoes, respostas, equipe, pra
     return true;
   }
 
-  const previa = `${m.saudacao.replaceAll("{{nome}}", ", Maria")}\n\n${opcoes.filter((o) => o.ativo).map((o) => `*${o.chave}* - ${o.rotulo}`).join("\n")}`;
+  const previa = `${m.saudacao.replaceAll("{{nome}}", ", Maria")}\n\n${opcoes.filter((o, i, t) => o.ativo && t.findIndex((x) => x.ativo && x.rotulo.trim().toLowerCase() === o.rotulo.trim().toLowerCase()) === i).map((o) => `*${o.chave}* - ${o.rotulo}`).join("\n")}`;
 
   return (
     <div className="space-y-6">

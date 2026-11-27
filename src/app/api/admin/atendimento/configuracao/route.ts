@@ -69,6 +69,12 @@ export async function POST(request: Request) {
           ...(b.acao_opcao === "ari" || b.acao_opcao === "setor" ? { acao: b.acao_opcao } : {}),
         };
         if (linha.acao === "ari") { linha.setor = null; linha.responsavel = null; }
+        // duas opções ativas com o mesmo texto confundem o cliente (0 e 9 iguais no menu, 27/11)
+        if (linha.ativo) {
+          const { data: outras } = await admin.from("atendimento_menu_opcoes").select("id, chave, rotulo").eq("ativo", true);
+          const igual = (outras ?? []).find((o) => o.id !== b.id && String(o.rotulo).trim().toLowerCase() === rotulo.toLowerCase());
+          if (igual) throw new Erro(`A opção ${igual.chave} já tem esse texto. Mude o texto ou desative uma das duas.`, 409);
+        }
         conferir(b.id && UUID.test(String(b.id))
           ? await admin.from("atendimento_menu_opcoes").update(linha).eq("id", String(b.id))
           : await admin.from("atendimento_menu_opcoes").insert(linha));

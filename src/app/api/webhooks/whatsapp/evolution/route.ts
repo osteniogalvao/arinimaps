@@ -17,12 +17,7 @@ import { processarValorWhatsapp, type ValorWhatsapp } from "@/lib/whatsapp/receb
  */
 
 type ChaveEvolution = { id?: string; remoteJid?: string; remoteJidAlt?: string; senderPn?: string; participant?: string; fromMe?: boolean };
-type MensagemEvolution = {
-  key?: ChaveEvolution;
-  pushName?: string;
-  messageType?: string;
-  messageTimestamp?: number | string | { low?: number };
-  message?: {
+type ConteudoEvolution = {
     conversation?: string;
     extendedTextMessage?: { text?: string };
     locationMessage?: { degreesLatitude?: number; degreesLongitude?: number };
@@ -33,7 +28,14 @@ type MensagemEvolution = {
     imageMessage?: { caption?: string };
     videoMessage?: { caption?: string };
     documentMessage?: { caption?: string; fileName?: string };
-  };
+    [outro: string]: unknown;
+};
+type MensagemEvolution = {
+  key?: ChaveEvolution;
+  pushName?: string;
+  messageType?: string;
+  messageTimestamp?: number | string | { low?: number };
+  message?: ConteudoEvolution;
 };
 type AtualizacaoEvolution = { keyId?: string; messageId?: string; key?: { id?: string }; status?: string };
 
@@ -41,6 +43,40 @@ const TIPOS: Record<string, string> = {
   imageMessage: "image", videoMessage: "video", audioMessage: "audio", documentMessage: "document",
   documentWithCaptionMessage: "document", stickerMessage: "sticker", contactMessage: "contacts", reactionMessage: "reaction",
 };
+
+/**
+ * Eventos que o WhatsApp manda como "mensagem" mas que o cliente não escreveu:
+ * reação, mensagem apagada/editada (protocolMessage), troca de chaves, voto em
+ * enquete, fixar mensagem etc. Antes eles entravam no menu como "[reaction]" ou
+ * "[protocolMessage]": disparavam o menu sozinho e contavam como opção errada,
+ * até mandar a conversa para a caixa central sem o cliente ter digitado nada
+ * (print do Stenio, 27/11/2026).
+ */
+const IGNORAR = new Set([
+  "protocolMessage", "reactionMessage", "encReactionMessage", "senderKeyDistributionMessage", "messageContextInfo",
+  "pollUpdateMessage", "encEventResponseMessage", "keepInChatMessage", "pinInChatMessage", "editedMessage",
+  "deviceSentMessage", "botInvokeMessage", "callLogMesssage", "callLogMessage", "scheduledCallEditMessage",
+  "requestPhoneNumberMessage", "appStateSyncKeyShare", "appStateSyncKeyRequest", "initialSecurityNotificationSettingSync",
+  "peerDataOperationRequestMessage", "peerDataOperationRequestResponseMessage", "secretEncryptedMessage",
+]);
+/** Envelopes que só embrulham a mensagem de verdade (mensagens temporárias, visualização única, documento com legenda). */
+const ENVELOPES = ["ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension", "documentWithCaptionMessage"];
+
+function desembrulhar(m: ConteudoEvolution | undefined): ConteudoEvolution {
+  let atual: ConteudoEvolution = m ?? {};
+  for (let i = 0; i < 4; i++) {
+    const env = ENVELOPES.find((k) => (atual[k] as { message?: ConteudoEvolution } | undefined)?.message);
+    if (!env) break;
+    atual = (atual[env] as { message: ConteudoEvolution }).message;
+  }
+  return atual;
+}
+
+/** Tipo do conteúdo, ignorando campos de controle que vêm junto (messageContextInfo). */
+function tipoDoConteudo(m: ConteudoEvolution, informado?: string) {
+  if (informado && !ENVELOPES.includes(informado) && informado !== "messageContextInfo") return informado;
+  return Object.keys(m).find((k) => k !== "messageContextInfo" && m[k] != null) ?? informado ?? "";
+}
 
 function carimbo(t: MensagemEvolution["messageTimestamp"]) {
   const n = typeof t === "object" && t ? Number(t.low) : Number(t);
@@ -52,7 +88,10 @@ function traduzirMensagem(d: MensagemEvolution): { msg: NonNullable<ValorWhatsap
   if (!d?.key?.id || d.key.fromMe) return null;
   const from = telefoneDoJid(d.key);
   if (!from) return null;
-  const m = d.message ?? {};
+  const m = desembrulhar(d.message);
+  const tipoBruto = tipoDoConteudo(m, d.messageType);
+  // nada que a pessoa escreveu: não grava, não abre conversa, não mexe no menu
+  if (!tipoBruto || IGNORAR.has(tipoBruto)) return null;
   const base = { id: d.key.id, from, timestamp: carimbo(d.messageTimestamp) };
   const local = m.locationMessage ?? m.liveLocationMessage;
   let msg: NonNullable<ValorWhatsapp["messages"]>[number];
@@ -63,7 +102,7 @@ function traduzirMensagem(d: MensagemEvolution): { msg: NonNullable<ValorWhatsap
       ?? m.listResponseMessage?.title ?? m.templateButtonReplyMessage?.selectedDisplayText;
     if (typeof texto === "string" && texto.trim()) msg = { ...base, type: "text", text: { body: texto } };
     else {
-      const tipo = TIPOS[d.messageType ?? ""] ?? (d.messageType || "unknown");
+      const tipo = TIPOS[tipoBruto] ?? (tipoBruto || "unknown");
       const legenda = m.imageMessage?.caption ?? m.videoMessage?.caption ?? m.documentMessage?.caption;
       // mídia com legenda entra no CRM com o texto da legenda; o resto como [tipo], igual à Meta
       msg = legenda ? { ...base, type: tipo, text: { body: legenda } } : { ...base, type: tipo };

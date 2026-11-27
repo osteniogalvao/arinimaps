@@ -74,7 +74,11 @@ function montar({ ariLigadaNoMenu = true, respostaIa } = {}) {
   const agora = new Date().toISOString();
   const tabelas = {
     atendimento_conversas: [], whatsapp_mensagens: [], atendimento_eventos: [], atendimento_setores_horario: [],
-    profiles: [{ user_id: "dono-1", nome: "Proprietário Teste", role: "proprietario", telefone: "(34) 99999-1111" }],
+    profiles: [
+      { user_id: "dono-1", nome: "Proprietário Teste", role: "proprietario", telefone: "(34) 99999-1111" },
+      { user_id: "recepcao-1", nome: "Recepção", role: "analista_arini", ativo: true, setores: ["comercial"], atendimento_recepcao: true },
+      { user_id: "fin-1", nome: "Financeiro", role: "analista_arini", ativo: true, setores: ["financeiro"], atendimento_recepcao: false },
+    ],
     settings: [{ chave: "rodizio_expediente_inicio", valor: "00:00" }, { chave: "rodizio_expediente_fim", valor: "23:59" }, { chave: "rodizio_domingo", valor: true }],
     atendimento_menu: [{
       id: 1, ativo: true, saudacao: "Olá{{nome}}! Sou o atendimento da ARINI. Escolha uma opção:", confirmacao: "Pronto! Você foi encaminhado para {{setor}}.",
@@ -87,6 +91,8 @@ function montar({ ariLigadaNoMenu = true, respostaIa } = {}) {
       { id: "o3", ordem: 3, chave: "3", rotulo: "Financeiro", setor: "financeiro", responsavel: null, etiqueta: null, confirmacao: null, ativo: true, acao: "setor" },
       { id: "o4", ordem: 4, chave: "4", rotulo: "Jurídico", setor: "juridico", responsavel: null, etiqueta: null, confirmacao: null, ativo: true, acao: "setor" },
       { id: "o7", ordem: 7, chave: "7", rotulo: "Consultar imóveis à venda", setor: null, responsavel: null, etiqueta: null, confirmacao: null, ativo: true, acao: "ari" },
+      { id: "o0", ordem: 8, chave: "0", rotulo: "Falar com a equipe de atendimento", setor: null, responsavel: null, etiqueta: null, confirmacao: null, ativo: true, acao: "setor" },
+      { id: "o9", ordem: 9, chave: "9", rotulo: "Falar com a equipe de atendimento", setor: null, responsavel: null, etiqueta: null, confirmacao: null, ativo: true, acao: "setor" },
     ],
     properties: [], property_media: [],
   };
@@ -125,9 +131,9 @@ function montar({ ariLigadaNoMenu = true, respostaIa } = {}) {
     "@/lib/atendimento-ari": ari, "@/lib/atendimento-rotulos": rotulos, "@/lib/atendimento-horario": horario,
   });
   let n = 0;
-  async function recebe(telefone, texto, nome = "Cliente Teste") {
+  async function recebe(telefone, texto, nome = "Cliente Teste", extra = {}) {
     const { data } = await db.from("whatsapp_mensagens").insert({ telefone, direcao: "entrada", texto, recebida_em: agora }).select("id").single();
-    await atendimento.entradaAtendimento({ telefone, nome, texto, mensagemId: data.id, opp: null, canal: "principal" });
+    await atendimento.entradaAtendimento({ telefone, nome, texto, mensagemId: data.id, opp: null, canal: "principal", ...extra });
     await Promise.all(pendentes.splice(0));
     n++;
     return tabelas.atendimento_conversas.find((c) => c.telefone === telefone);
@@ -247,6 +253,49 @@ test("vender ou anunciar não vai para a Ari (vai pelo menu para Operações)", 
   const c = await recebe(s, "5534988880010", "quero vender minha fazenda");
   assert.equal(c.ari_ativa_em ?? null, null);
   assert.match(s.enviados.at(-1).texto, /\*2\* - Quero anunciar/);
+});
+
+test("opções com o mesmo texto (0 e 9) aparecem uma vez só no menu; a tecla escondida continua valendo", async () => {
+  const s = montar();
+  await recebe(s, "5534988880020", "Oi");
+  const menu = s.enviados.at(-1).texto;
+  assert.equal((menu.match(/Falar com a equipe de atendimento/g) ?? []).length, 1);
+  assert.match(menu, /\*0\* - Falar com a equipe/);
+  const c = await recebe(s, "5534988880020", "9");
+  assert.ok(c.menu_respondido_em);
+});
+
+test("\"0\" (caixa central) avisa a recepção; setor sem responsável avisa quem é do setor", async () => {
+  const s = montar();
+  await recebe(s, "5534988880021", "Oi");
+  await recebe(s, "5534988880021", "0");
+  assert.ok(s.avisos.some((a) => a[0] === "recepcao-1" && /caixa central/.test(a[2])), "recepção avisada");
+  const s2 = montar();
+  await recebe(s2, "5534988880022", "Oi");
+  await recebe(s2, "5534988880022", "3");
+  assert.ok(s2.avisos.some((a) => a[0] === "fin-1" && /Financeiro/.test(a[2])), "Financeiro avisado");
+});
+
+test("errar o menu até o limite explica ao cliente e avisa a recepção", async () => {
+  const s = montar();
+  const tel = "5534988880023";
+  await recebe(s, tel, "Oi");
+  for (const t of ["xyz", "abc", "qwe"]) await recebe(s, tel, t);
+  assert.match(s.enviados.at(-1).texto, /Não consegui identificar a opção/);
+  assert.ok(s.avisos.some((a) => a[0] === "recepcao-1"));
+});
+
+test("figurinha com o menu aberto não conta como opção errada; mensagem atrasada não recebe menu", async () => {
+  const s = montar();
+  const tel = "5534988880024";
+  await recebe(s, tel, "Oi");
+  const antes = s.enviados.length;
+  const c = await s.recebe(tel, "[sticker]", "Cliente", { tipo: "sticker" });
+  assert.equal(s.enviados.length, antes);
+  assert.equal(c.menu_tentativas ?? 0, 0);
+  const s2 = montar();
+  await s2.recebe("5534988880025", "Oi", "Cliente", { recebidaEm: new Date(Date.now() - 5 * 3_600_000).toISOString() });
+  assert.equal(s2.enviados.length, 0);
 });
 
 function recebe(s, tel, texto) { return s.recebe(tel, texto); }
