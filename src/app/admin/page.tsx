@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { COOKIE_PAINEL, painelValido } from "@/lib/paineis";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { exigirEquipe } from "@/lib/setores-servidor";
 import { SETORES, setorPorId, type SetorId } from "@/lib/setores";
@@ -23,6 +26,11 @@ type Fila = { rotulo: string; n: number | string; href: string; urgente?: boolea
 export default async function Matriz({ searchParams }: PageProps<"/admin">) {
   const user = await exigirEquipe();
   const sp = await searchParams;
+  // quem ainda não escolheu entre o CRM e o sistema completo escolhe primeiro
+  // e quem está no CRM tem o Dashboard do CRM como início
+  const painel = painelValido((await cookies()).get(COOKIE_PAINEL)?.value);
+  if (!painel && !sp.sem_acesso) redirect("/admin/escolher");
+  if (painel === "crm" && !sp.sem_acesso) redirect("/admin/painel-crm");
   const semAcesso = sp.sem_acesso;
   const admin = supabaseAdmin();
   const hoje = new Date().toISOString().slice(0, 10);

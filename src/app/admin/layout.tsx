@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { COOKIE_PAINEL, painelValido } from "@/lib/paineis";
 import { currentUser, supabaseServer } from "@/lib/supabase/server";
 import { lerConfiguracoes, numero } from "@/lib/settings";
 import { setoresDe } from "@/lib/setores";
@@ -40,6 +42,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
       papel={PAPEL_LABEL[user.role] ?? user.role}
       setores={setoresDe(user.role, user.setores)}
       avatar={user.avatarUrl}
+      painel={painelValido((await cookies()).get(COOKIE_PAINEL)?.value)}
     >
       {user.equipe_acesso === "leitura" && <p role="status" className="mb-4 rounded-xl border border-linha p-3 text-sm">Acesso de leitura: você pode consultar os seus setores. Alterações precisam de um operador ou gestor.</p>}
       {children}
