@@ -12,6 +12,7 @@ import { CabecalhoPagina, Etiqueta, Vazio } from "@/components/ui/Pagina";
 import { LISTA, LINHA_LISTA } from "@/components/admin/estilos";
 import { STATUS_ABERTOS } from "@/lib/cartografia/solicitacoes";
 import Excecoes from "@/components/admin/Excecoes";
+import MetricasSistema from "@/components/admin/MetricasSistema";
 import { dadosMatriz } from "@/lib/matriz-servidor";
 import { ESTADO_LABEL, estadoBloco } from "@/lib/matriz";
 import { CargaSetores, FilaGargalos, ResumoAri } from "@/components/admin/MatrizPainel";
@@ -128,6 +129,8 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
   };
 
   const meus = SETORES.filter((s) => user.setores.includes(s.id));
+  const verMetricas = user.setores.includes("diretoria") || user.setores.includes("seguranca");
+  const agora = Date.now();
 
   const urgentes = meus.reduce((n, s) => n + filas[s.id].filter((f) => f.urgente).length, 0);
 
@@ -171,6 +174,8 @@ export default async function Matriz({ searchParams }: PageProps<"/admin">) {
       )}
 
       {meus.length > 0 && <CargaSetores linhas={matriz.carga} />}
+
+      {verMetricas && <MetricasSistema agora={agora} />}
 
       {meus.length > 0 && (
         <Secao titulo="Setores">

@@ -7,6 +7,7 @@ import { menuCrm } from "@/lib/paineis";
 import { contar, Indicadores, Secao } from "@/components/admin/Painel";
 import { CabecalhoPagina } from "@/components/ui/Pagina";
 import { lerEmLotes } from "@/lib/supabase/lotes";
+import MetricasSistema from "@/components/admin/MetricasSistema";
 import { ArrowRight, Building2, CircleAlert, FileCheck2, TrendingUp, Users } from "lucide-react";
 
 /**
@@ -30,6 +31,7 @@ export default async function PainelCrm() {
   const inicioMes = new Date();
   inicioMes.setDate(1);
   const mes = inicioMes.toISOString().slice(0, 10);
+  const verMetricas = ["diretoria", "seguranca"].some((s) => user.setores.includes(s as never));
   const verFechamentos = ["financeiro", "comercial", "diretoria"].some((s) => user.setores.includes(s as never));
 
   const [imoveis, leads, analise, marketing, vencidas, porEtapa, vendas] = await Promise.all([
@@ -109,6 +111,8 @@ export default async function PainelCrm() {
           ))}
         </div>
       </Secao>
+
+      {verMetricas && <MetricasSistema agora={Date.now()} />}
     </div>
   );
 }
