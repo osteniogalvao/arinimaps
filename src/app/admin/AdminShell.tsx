@@ -291,6 +291,7 @@ export default function AdminShell({
   const ICONE_CRM: Record<string, LucideIcon> = {
     "/admin/juridico": Scale, "/admin/financeiro": Wallet, "/admin/financeiro/alugueis": Landmark,
     "/admin/marketing/fluxo": Megaphone, "/admin/consulta-imoveis": Search,
+    "/admin/crm-antigo": History,
   };
   // Menu do CRM: lista curta e plana, como no CRM da Arini Negócios
   const navegacaoCrm = (

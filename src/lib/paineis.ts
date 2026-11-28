@@ -55,6 +55,7 @@ export const MENU_CRM: ItemCrm[] = [
   { href: "/admin/notificacoes", rotulo: "Notificações", setores: [] },
   { href: "/admin/usuarios", rotulo: "Usuários", setores: ["diretoria"] },
   { href: "/admin/auditoria", rotulo: "Auditoria", setores: ["seguranca", "diretoria"] },
+  { href: "/admin/crm-antigo", rotulo: "CRM antigo", setores: ["operacoes", "comercial"] },
 ];
 
 /** Telas que moram no CRM: somem do menu do Sistema completo. */
