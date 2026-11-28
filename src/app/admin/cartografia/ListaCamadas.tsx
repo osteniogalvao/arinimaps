@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import CalibrarPlanta from "./CalibrarPlanta";
 import RecortesUrbanos from "./RecortesUrbanos";
-import { enviarJson, type ErroApi } from "@/lib/api/enviar";
+import { enviarArquivo, enviarJson, type ErroApi } from "@/lib/api/enviar";
 import { AvisoErro } from "@/components/ui/Aviso";
 import type { Transform, AjusteLocal, EdicaoGeometria } from "@/lib/geo/deslocar";
 import { Etiqueta, Vazio } from "@/components/ui/Pagina";
-import { Crosshair, LandPlot, Layers, Loader2, Trash2 } from "lucide-react";
+import { Crosshair, Hash, LandPlot, Layers, Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Camada = {
@@ -84,6 +84,24 @@ export default function ListaCamadas() {
     router.refresh();
   }
 
+  // Áudio do Carlos (28/11/2026): quadra, lote e área oficial vêm dos textos do DXF
+  const [textos, setTextos] = useState<{ id: string; texto: string } | null>(null);
+  async function lerTextos(c: Camada, arquivo: File | undefined) {
+    if (!arquivo) return;
+    if (!/\.dxf$/i.test(arquivo.name)) { setTextos({ id: c.id, texto: "Escolha o arquivo .dxf desta planta (no CAD: Salvar como → DXF)." }); return; }
+    setTextos({ id: c.id, texto: "Enviando o DXF… 0%" });
+    const r = await enviarArquivo<{ numeros: number; quadras_explicitas: number; letras: number; areas: number }>(
+      `/api/admin/cartografia/${c.id}/textos`, arquivo, {},
+      (pct) => setTextos({ id: c.id, texto: pct < 100 ? `Enviando o DXF… ${pct}%` : "Lendo os números do desenho…" }));
+    if (!r.ok) { setTextos(null); setErro(r.erro); return; }
+    const d = r.dados;
+    setTextos({
+      id: c.id,
+      texto: `Lidos ${fmt(d.numeros)} números, ${fmt(d.quadras_explicitas)} "Quadra X" e ${fmt(d.areas)} áreas escritas. Os lotes estão sendo refeitos pela fila com quadra, número e área do desenho (alguns minutos).`,
+    });
+    carregar();
+  }
+
   async function remover(c: Camada) {
     if (!confirm(`Remover a camada "${c.nome}" do mapa?`)) return;
     const r = await enviarJson(`/api/admin/cartografia/${c.id}`, "DELETE");
@@ -152,6 +170,7 @@ export default function ListaCamadas() {
                   </p>
                 )}
                 {reencaixe?.id === c.id && <p className="text-sm font-semibold text-verde">{reencaixe.texto}</p>}
+                {textos?.id === c.id && <p className="text-sm font-semibold text-verde">{textos.texto}</p>}
               </div>
               {/* selo de estado, não botão: sem borda e sem relevo, para não
                   disputar com as duas ações que estão ao lado */}
@@ -168,6 +187,14 @@ export default function ListaCamadas() {
                   className="btn-contorno inline-flex items-center gap-1.5 px-3.5 py-2 text-sm disabled:opacity-60">
                   <LandPlot className="size-4" /> Reencaixar anúncios
                 </button>
+              )}
+              {c.tipo === "vector" && (
+                <label title="Envie o DXF desta planta: a quadra, o número e a área escritos no desenho passam para cada lote. As linhas e a calibração não mudam."
+                  className="btn-contorno inline-flex cursor-pointer items-center gap-1.5 px-3.5 py-2 text-sm">
+                  <Hash className="size-4" /> Ler quadra, lote e área do DXF
+                  <input type="file" accept=".dxf" className="sr-only"
+                    onChange={(e) => { void lerTextos(c, e.target.files?.[0]); e.target.value = ""; }} />
+                </label>
               )}
               <button onClick={() => remover(c)} className="btn-perigo inline-flex items-center gap-1.5 px-3.5 py-2 text-sm">
                 <Trash2 className="size-4" /> Remover

@@ -30,7 +30,7 @@ import Avatar from "@/components/shell/Avatar";
 import { useNaoLidosSuporte } from "@/components/suporte/useNaoLidos";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { menuCrm, TELAS_CRM, type Painel } from "@/lib/paineis";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, Archive } from "lucide-react";
 
 /**
  * "Meu dia": o que todo membro da equipe usa todo dia, qualquer que seja o
@@ -291,7 +291,8 @@ export default function AdminShell({
   const ICONE_CRM: Record<string, LucideIcon> = {
     "/admin/juridico": Scale, "/admin/financeiro": Wallet, "/admin/financeiro/alugueis": Landmark,
     "/admin/marketing/fluxo": Megaphone, "/admin/consulta-imoveis": Search,
-    "/admin/crm-antigo": History,
+    "/admin/financeiro/imovel": Receipt, "/admin/movimentacoes": History,
+    "/admin/crm-antigo": Archive,
   };
   // Menu do CRM: lista curta e plana, como no CRM da Arini Negócios
   const navegacaoCrm = (

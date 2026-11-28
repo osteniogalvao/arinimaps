@@ -92,6 +92,8 @@ export const RECURSOS: Recurso[] = [
       { nome: "descricao", rotulo: "Descrição", tipo: "texto", obrigatorio: true },
       { nome: "valor", rotulo: "Valor", tipo: "dinheiro", obrigatorio: true, lista: true },
       { nome: "fornecedor_id", rotulo: "Fornecedor", tipo: "ref", ref: { tabela: "fornecedores", rotulo: "nome", filtroAtivo: true }, lista: true },
+      { nome: "property_id", rotulo: "Imóvel (gasto do imóvel)", tipo: "ref", ref: { tabela: "properties", rotulo: "codigo" },
+        ajuda: "Só se o gasto é de um imóvel: aparece no Financeiro do imóvel (migration 0178)." },
       { nome: "centro_custo_id", rotulo: "Centro de custo", tipo: "ref", ref: { tabela: "centros_custo", rotulo: "nome", filtroAtivo: true }, obrigatorio: true, lista: true },
       { nome: "conta_id", rotulo: "Conta", tipo: "ref", ref: { tabela: "plano_contas", rotulo: "nome", filtroAtivo: true } },
       { nome: "conta_bancaria_id", rotulo: "Paga pela conta (caixa)", tipo: "ref", ref: { tabela: "contas_bancarias", rotulo: "nome", filtroAtivo: true }, ajuda: "Vazio: conta principal." },

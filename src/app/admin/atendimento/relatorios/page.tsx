@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CheckCircle2, Clock, Inbox, MessageCircleWarning, Timer } from "lucide-react";
-import { ator } from "@/lib/authz";
+import { ator, temSetor } from "@/lib/authz";
+import NavAtendimento from "@/components/atendimento/NavAtendimento";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CabecalhoPagina, Estatistica, Secao } from "@/components/ui/Pagina";
 import { canalDoContatoRotulo, falta0156, naAutomatica, nomeSetor, papelAtendimento } from "@/lib/atendimento";
@@ -163,6 +164,7 @@ export default async function RelatoriosAtendimento({ searchParams }: PageProps<
         subtitulo="Volume, fila e tempo de resposta por setor e por pessoa. A primeira resposta conta a partir da primeira mensagem do cliente até a primeira resposta de alguém da equipe (o menu automático não conta)."
         acoes={<Link href="/admin/atendimento" className="btn-contorno px-4 py-2 text-sm">Voltar ao atendimento</Link>}
       />
+      <NavAtendimento atual="relatorios" triagem diretoria={temSetor(a, "diretoria")} />
 
       <nav aria-label="Período" className="flex flex-wrap gap-2">
         {PERIODOS.map((p) => (
