@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CAMPO_COMPACTO } from "@/components/admin/estilos";
 import { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL, STATUS_LABEL } from "@/lib/atendimento-rotulos";
 import ConversaAtendimento from "@/components/atendimento/ConversaAtendimento";
+import NavAtendimento from "@/components/atendimento/NavAtendimento";
 import type { Conversa } from "@/lib/atendimento";
 
 const FUSO = "America/Sao_Paulo";
@@ -31,15 +32,11 @@ export default function InboxAtendimento({ papel, triagem, diretoria, caixas, ca
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <h1 className="lp-display text-2xl text-texto">Atendimento</h1>
-        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-texto-2">
-          <span>Você atua como <strong className="text-texto">{papel === "administrador" ? "administrador" : papel === "recepcao" ? "recepção" : "atendente"}</strong></span>
-          {triagem && <Link href="/admin/atendimento/relatorios" className="font-semibold text-verde underline-offset-4 hover:underline">Relatórios</Link>}
-          {diretoria && <Link href="/admin/atendimento/configurar" className="font-semibold text-verde underline-offset-4 hover:underline">Configurações</Link>}
-          {diretoria && <Link href="/admin/comercial/whatsapp/conexao" className="font-semibold text-verde underline-offset-4 hover:underline">Canais</Link>}
-        </p>
+        <p className="text-sm text-texto-2">Você atua como <strong className="text-texto">{papel === "administrador" ? "administrador" : papel === "recepcao" ? "recepção" : "atendente"}</strong></p>
       </div>
+      <NavAtendimento atual="conversas" triagem={triagem} diretoria={diretoria} />
       <div className="cartao grid min-h-[78vh] overflow-hidden !p-0 lg:grid-cols-[210px_320px_minmax(0,1fr)]">
         {/* caixas */}
         <nav aria-label="Caixas" className={"border-linha bg-superficie-2/40 py-2 lg:border-r " + (aberta ? "hidden lg:block" : "")}>

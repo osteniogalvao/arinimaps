@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronRight, Hand, Lock, Send } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Hand, Lock, Send, Zap } from "lucide-react";
+import type { Macro } from "@/lib/atendimento-macros";
 import { CAMPO_COMPACTO } from "@/components/admin/estilos";
 import { canalDoContatoRotulo, contatoRotulo, nomeSetor, PERFIL_LABEL, STATUS_LABEL } from "@/lib/atendimento-rotulos";
 
@@ -80,6 +81,28 @@ export default function ConversaAtendimento({ id, voltar }: { id: string; voltar
     return d.respostas.filter((r) => r.atalho.includes(termo) || r.titulo.toLowerCase().includes(termo)).slice(0, 6);
   }, [d, texto]);
 
+  // macros (0179): carregadas uma vez; cada passo usa a mesma ação dos botões
+  const [macros, setMacros] = useState<Macro[]>([]);
+  const [menuMacros, setMenuMacros] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/admin/atendimento/macros").then((r) => r.json()).then((j) => { if (vivo) setMacros((j.macros ?? []).filter((m: Macro) => m.ativo)); }).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+  async function rodarMacro(m: Macro) {
+    if (!d) return;
+    setMenuMacros(false);
+    let etiquetasAtuais = [...d.conversa.etiquetas];
+    for (const p of m.passos) {
+      const ok = p.tipo === "mensagem" ? (d.configurado ? await agir({ acao: "responder", texto: p.texto }) : true)
+        : p.tipo === "nota" ? await agir({ acao: "nota", texto: p.texto })
+        : p.tipo === "etiqueta" ? (etiquetasAtuais.includes(p.texto) ? true : await agir({ acao: "etiquetas", etiquetas: (etiquetasAtuais = [...etiquetasAtuais, p.texto]) }))
+        : p.tipo === "transferir" ? await agir({ acao: "transferir", setor: p.setor, responsavel: "", motivo: p.motivo || `Macro: ${m.nome}` })
+        : await agir({ acao: p.tipo });
+      if (!ok) { setErro((e) => `Macro “${m.nome}” parou no passo ${m.passos.indexOf(p) + 1}. ${e}`); return; }
+    }
+  }
+
   async function agir(corpo: Record<string, unknown>) {
     setOcupado(true); setErro("");
     const r = await fetch(`/api/admin/atendimento/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }).catch(() => null);
@@ -123,6 +146,22 @@ export default function ConversaAtendimento({ id, voltar }: { id: string; voltar
             {(!naCentral || d.pode.triar) && <button disabled={ocupado} onClick={() => { setPainel(painel === "transferir" ? "" : "transferir"); setDestino({ setor: "", responsavel: "", motivo: "" }); }} className="btn-contorno px-3 py-1.5">{naCentral ? "Triar" : "Transferir"}</button>}
             {c.responsavel && <button disabled={ocupado} onClick={() => agir({ acao: "devolver" })} className="btn-contorno px-3 py-1.5">Devolver à fila</button>}
             {c.status !== "pendente" && c.status !== "resolvida" && <button disabled={ocupado} onClick={() => agir({ acao: "pendente" })} className="btn-contorno px-3 py-1.5">Aguardando cliente</button>}
+            {!!macros.length && c.status !== "resolvida" && (
+              <span className="relative">
+                <button type="button" disabled={ocupado} onClick={() => setMenuMacros(!menuMacros)} aria-expanded={menuMacros}
+                  className="btn-contorno inline-flex items-center gap-1.5 px-3 py-1.5"><Zap className="size-4 text-ouro" /> Macros</button>
+                {menuMacros && (
+                  <ul className="absolute right-0 top-full z-20 mt-1 w-64 divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie text-left shadow-lg">
+                    {macros.map((m) => (
+                      <li key={m.id}><button type="button" onClick={() => void rodarMacro(m)} className="block w-full px-3 py-2 text-left text-sm hover:bg-superficie-2">
+                        <span className="font-medium text-texto">{m.nome}</span>
+                        <span className="block text-xs text-texto-2">{m.passos.length} passo(s)</span>
+                      </button></li>
+                    ))}
+                  </ul>
+                )}
+              </span>
+            )}
             {c.status === "resolvida"
               ? <button disabled={ocupado} onClick={() => agir({ acao: "reabrir" })} className="btn-contorno px-3 py-1.5">Reabrir</button>
               : <button disabled={ocupado} onClick={() => agir({ acao: "resolver" })} className="btn-verde inline-flex items-center gap-1.5 px-3 py-1.5"><Check className="size-4" /> Encerrar</button>}

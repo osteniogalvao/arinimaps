@@ -2,6 +2,7 @@ import Link from "next/link";
 import { exigirSetor } from "@/lib/setores-servidor";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CabecalhoPagina } from "@/components/ui/Pagina";
+import NavAtendimento from "@/components/atendimento/NavAtendimento";
 import { falta0156, lerMenu } from "@/lib/atendimento";
 import { setoresDe } from "@/lib/setores";
 import ConfigAtendimento from "@/components/atendimento/ConfigAtendimento";
@@ -33,6 +34,7 @@ export default async function ConfigurarAtendimento() {
   return (
     <div className="space-y-5">
       <CabecalhoPagina titulo="Configurar atendimento" eyebrow="Diretoria" />
+      <NavAtendimento atual="configurar" triagem diretoria />
       <p className="text-sm text-texto-2">
         Um número de WhatsApp para a empresa toda. O cliente recebe o menu, escolhe o assunto e cai na fila do setor; quem já tem negociação
         aberta vai direto ao corretor, e proprietário ou parceiro reconhecido pelo telefone pula o menu. O que não for escolhido fica na caixa
