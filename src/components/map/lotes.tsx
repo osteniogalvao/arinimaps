@@ -115,18 +115,25 @@ export function CartaoLote({ lote, onFechar, onVarios, logado = false }: { lote:
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-ouro">Lote urbano</p>
           <p className="font-display text-xl font-bold leading-tight text-texto mt-1">
-            {[lote.quadra && `Quadra ${lote.quadra}`, lote.numero && `Lote ${lote.numero}`].filter(Boolean).join(" · ") || `${m2(lote.area_m2)} m²`}
+            {[lote.quadra && `Quadra ${lote.quadra}`, lote.numero && `Lote ${lote.numero}`].filter(Boolean).join(" · ") || "Lote da planta"}
           </p>
           <p className="text-xs text-texto-2 mt-1">
-            {[(lote.quadra || lote.numero) && `${m2(lote.area_m2)} m²`, lote.municipio].filter(Boolean).join(" · ")}
+            {lote.municipio}
           </p>
         </div>
         <BotaoFechar onClick={onFechar} />
       </div>
       <p className="text-xs text-texto-2">Referência para busca: Lote {lote.id.slice(0, 8)}</p>
+      {/* Áudio do Carlos (28/11/2026, 09h03): no clique, o número que salta aos
+          olhos tem de ser a ÁREA do lote; o perímetro (ex.: 64 m num lote de
+          12 × 20) era lido como metragem do terreno. */}
+      <div className="rounded-xl border border-ouro/30 bg-ouro/10 px-3.5 py-3">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ouro">Área do lote</p>
+        <p className="font-display text-2xl font-bold leading-tight text-texto tabular-nums">{m2(lote.area_m2)} m²</p>
+      </div>
       <dl className="text-sm divide-y divide-linha rounded-xl border border-linha bg-superficie-2/60 px-3.5">
         <div className="flex justify-between gap-2 py-2.5">
-          <dt className="text-texto-2">Perímetro</dt><dd className="font-semibold text-texto tabular-nums">{metros(lote.perimetro_m)} m</dd>
+          <dt className="text-texto-2">Perímetro (contorno)</dt><dd className="font-semibold text-texto tabular-nums">{metros(lote.perimetro_m)} m</dd>
         </div>
         <div className="py-2.5">
           <dt className="text-texto-2">Lados</dt>
