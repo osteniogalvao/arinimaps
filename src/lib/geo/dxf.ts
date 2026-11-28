@@ -36,8 +36,18 @@ const ZONAS: Record<number, string> = {
   24: "+proj=utm +zone=24 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
 };
 
+/**
+ * Texto curto da planta que identifica lote ou quadra, ou traz a área escrita.
+ * `k`: "q" = "QUADRA 12" explícito, "n" = número ("07", "12A"), "l" = letra ou
+ * código ("A", "F-1"), "a" = área escrita ("240,00 m²", valor em `v`).
+ * `c` está em WGS84 do desenho ORIGINAL (antes da calibração), como as linhas.
+ */
+export type TextoPlanta = { t: string; k: "q" | "n" | "l" | "a"; h: number; c: [number, number]; v?: number };
+
 export type ResultadoDxf = {
   geojson: GeoJSON.FeatureCollection;
+  /** números de quadra/lote e áreas escritas no desenho (áudio do Carlos, 28/11/2026) */
+  textos: TextoPlanta[];
   linhas: number;
   layersCad: number;
   bbox: [number, number, number, number];
@@ -74,6 +84,72 @@ export class ErroDxf extends Error {
 }
 
 type Poli = { layer: string; pts: [number, number][] };
+type TextoBruto = { s: string; x: number; y: number; h: number };
+
+/** Textos que podem ser número/quadra/área: TEXT, MTEXT e o valor de atributo de bloco. */
+const TIPOS_TEXTO = new Set(["TEXT", "MTEXT", "ATTRIB"]);
+
+/** Tira a formatação do MTEXT: {\fArial|b1;07} → "07", \P → espaço, \U+00B2 → ². */
+export const limparTextoCad = (s: string) =>
+  String(s ?? "")
+    .replace(/\\U\+00B2/gi, "²").replace(/%%178/g, "²")
+    .replace(/\\[A-Za-z][^;\\{}]*;/g, "").replace(/\\P/g, " ").replace(/[{}]/g, "")
+    .replace(/\s+/g, " ").trim();
+
+// mesma classificação de scripts/numera-lotes.mjs (medida na planta de Iturama em 07/10/2026)
+const RX_QUADRA = /^(?:QUADRA|QUAD\.?|QD\.?|Q\.?)\s*[-:]?\s*(?:N[º°O.]?\s*)?([0-9]{1,3}[A-Z]?|[A-Z]{1,2}(?:-?[0-9]{1,2})?)$/i;
+const RX_NUM = /^[0-9]{1,4}[A-Z]?$/;
+const RX_CURTO = /^(?:[0-9]{1,4}[A-Z]?|[A-Z]{1,2}(?:-?[0-9]{1,2})?|[0-9]{1,3}-[A-Z0-9]{1,2})$/;
+// "240,00 m²", "240.00m2", "ÁREA = 1.240,50 M²", "A=240,00m²"
+const RX_AREA = /^(?:[ÁA](?:REA)?\.?\s*[:=]?\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+)(?:[.,]\d{1,3})?)\s*M\s*(?:²|2)$/i;
+
+function valorArea(bruto: string): number | null {
+  let v = bruto;
+  if (/\.\d{3}(?:,|$)/.test(v) || v.includes(",")) v = v.replace(/\./g, "").replace(",", ".");
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 20 && n <= 50_000 ? n : null;
+}
+
+/**
+ * Classifica os textos do desenho (em metros, sistema do CAD) e descarta o
+ * resto: cota, nome de rua, legenda. Letra solta com outra letra igual ao lado
+ * é palavra escrita letra a letra (rua na vertical) e também sai.
+ */
+function classificarTextos(brutos: TextoBruto[]): (Omit<TextoPlanta, "c"> & { x: number; y: number })[] {
+  const out: (Omit<TextoPlanta, "c"> & { x: number; y: number })[] = [];
+  for (const b of brutos) {
+    if (!(b.h > 0) || !b.s) continue;
+    const s = b.s.toUpperCase();
+    const area = s.match(RX_AREA);
+    if (area) {
+      const v = valorArea(area[1]);
+      if (v != null) out.push({ t: s, k: "a", v, h: b.h, x: b.x, y: b.y });
+      continue;
+    }
+    const q = s.match(RX_QUADRA);
+    if (q && (/^(QUADRA|QUAD|QD)/.test(s) || /^Q[-. ]\s*[0-9]/.test(s))) out.push({ t: q[1], k: "q", h: b.h, x: b.x, y: b.y });
+    else if (RX_NUM.test(s)) out.push({ t: s, k: "n", h: b.h, x: b.x, y: b.y });
+    else if (RX_CURTO.test(s)) out.push({ t: s, k: "l", h: b.h, x: b.x, y: b.y });
+  }
+  const letras = out.filter((t) => t.k === "l" && /^[A-Z]$/.test(t.t));
+  const grade = new Map<string, typeof letras>();
+  for (const t of letras) {
+    const k = `${Math.floor(t.x / 10)}:${Math.floor(t.y / 10)}`;
+    if (!grade.has(k)) grade.set(k, []);
+    grade.get(k)!.push(t);
+  }
+  const soletradas = new Set<object>();
+  for (const t of letras) {
+    const cx = Math.floor(t.x / 10), cy = Math.floor(t.y / 10);
+    fora: for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      for (const o of grade.get(`${cx + i}:${cy + j}`) ?? []) {
+        if (o === t || Math.abs(o.h - t.h) > 0.05 * t.h) continue;
+        if (Math.hypot(o.x - t.x, o.y - t.y) < 1.6 * t.h) { soletradas.add(t); break fora; }
+      }
+    }
+  }
+  return out.filter((t) => !soletradas.has(t));
+}
 
 const arred = (n: number) => Math.round(n * 1e6) / 1e6;
 const ehUtmPlausivel = (x: number, y: number) =>
@@ -127,12 +203,17 @@ type Entidade = {
   folha: boolean;
   /** código 230 < 0: sistema de coordenadas do objeto espelhado (X invertido) */
   espelhada: boolean;
+  /** TEXT/MTEXT/ATTRIB: código 1 (final) e 3 (pedaços anteriores do MTEXT) */
+  texto: string;
+  texto3: string;
+  /** TEXT/ATTRIB com justificação (72/73/74 ≠ 0): o ponto certo é o 11/21 */
+  alinhado: boolean;
 };
 
 const novaEntidade = (tipo: string): Entidade => ({
   tipo, layer: "0", xs: [], ys: [], x2: null, y2: null,
   raio: 0, ang0: 0, ang1: 360, flags: 0, escalaX: 1, escalaY: 1, rotacao: 0, nomeBloco: null,
-  folha: false, espelhada: false,
+  folha: false, espelhada: false, texto: "", texto3: "", alinhado: false,
 });
 
 /** Tipos cujas coordenadas ficam no sistema do objeto (OCS) e espelham com extrusão Z negativa. */
@@ -145,7 +226,7 @@ const UNIDADES: { fator: number; nome: string }[] = [
   { fator: 1000, nome: "quilômetros" },
 ];
 
-type Bloco = { base: [number, number]; polis: Poli[]; insercoes: Entidade[] };
+type Bloco = { base: [number, number]; polis: Poli[]; insercoes: Entidade[]; textos: TextoBruto[] };
 type Transf = (p: [number, number]) => [number, number];
 
 /** Teto de pontos gerados pela expansão de blocos, para um bloco aninhado não estourar a memória. */
@@ -172,6 +253,7 @@ export async function converterDxf(
   const saida: Poli[] = [];
   const blocos = new Map<string, Bloco>();
   const insercoes: Entidade[] = [];
+  const textosBrutos: TextoBruto[] = [];
   let entidadesDaFolha = 0;
 
   const porTipo: Record<string, number> = {};
@@ -180,7 +262,7 @@ export async function converterDxf(
 
   let secao: string | null = null;
   let esperandoNomeSecao = false;
-  let blocoAtual: { nome: string; base: [number, number]; polis: Poli[]; insercoes: Entidade[] } | null = null;
+  let blocoAtual: { nome: string; base: [number, number]; polis: Poli[]; insercoes: Entidade[]; textos: TextoBruto[] } | null = null;
   let esperandoNomeBloco = false;
   let ent: Entidade | null = null;
   let polylineAberta: Poli | null = null;
@@ -198,6 +280,16 @@ export async function converterDxf(
     if (!ent) return;
     const e = ent;
     ent = null;
+    if (TIPOS_TEXTO.has(e.tipo)) {
+      if (e.folha && !blocoAtual) return;
+      const s = limparTextoCad(e.texto3 + e.texto);
+      const usaAlinhamento = e.tipo !== "MTEXT" && e.alinhado && e.x2 !== null && e.y2 !== null;
+      const x = usaAlinhamento ? e.x2! : e.xs[0], y = usaAlinhamento ? e.y2! : e.ys[0];
+      if (s && s.length <= 40 && Number.isFinite(x) && Number.isFinite(y)) {
+        (blocoAtual ? blocoAtual.textos : textosBrutos).push({ s, x, y, h: e.raio });
+      }
+      return;
+    }
     if (!TIPOS_GEOMETRICOS.has(e.tipo)) { ignoradasSemGeometria++; return; }
     // Carimbo, moldura e legenda desenhados na folha (paper space) têm
     // coordenada em milímetros da prancha: misturados ao terreno, puxam a
@@ -289,9 +381,9 @@ export async function converterDxf(
       if (val === "SECTION") { esperandoNomeSecao = true; continue; }
       if (val === "ENDSEC") { secao = null; blocoAtual = null; continue; }
       if (secao === "BLOCKS") {
-        if (val === "BLOCK") { esperandoNomeBloco = true; blocoAtual = { nome: "", base: [0, 0], polis: [], insercoes: [] }; continue; }
+        if (val === "BLOCK") { esperandoNomeBloco = true; blocoAtual = { nome: "", base: [0, 0], polis: [], insercoes: [], textos: [] }; continue; }
         if (val === "ENDBLK") {
-          if (blocoAtual?.nome) blocos.set(blocoAtual.nome, { base: blocoAtual.base, polis: blocoAtual.polis, insercoes: blocoAtual.insercoes });
+          if (blocoAtual?.nome) blocos.set(blocoAtual.nome, { base: blocoAtual.base, polis: blocoAtual.polis, insercoes: blocoAtual.insercoes, textos: blocoAtual.textos });
           blocoAtual = null;
           continue;
         }
@@ -315,6 +407,9 @@ export async function converterDxf(
 
     switch (cod) {
       case "8": ent.layer = val || "0"; break;
+      case "1": if (TIPOS_TEXTO.has(ent.tipo)) ent.texto = val; break;
+      case "3": if (ent.tipo === "MTEXT") ent.texto3 += val; break;
+      case "72": case "73": case "74": if (TIPOS_TEXTO.has(ent.tipo) && Number(val)) ent.alinhado = true; break;
       case "2": if (ent.tipo === "INSERT") ent.nomeBloco = val; break;
       case "10": { const v = Number(val); if (Number.isFinite(v)) ent.xs.push(v); break; }
       case "20": { const v = Number(val); if (Number.isFinite(v)) ent.ys.push(v); break; }
@@ -358,6 +453,11 @@ export async function converterDxf(
       pontosBlocos += p.pts.length;
       saida.push({ layer: p.layer, pts: p.pts.map(t) });
     }
+    if (b.textos.length) {
+      const [ox, oy] = t([0, 0]), [ux, uy] = t([1, 0]);
+      const fator = Math.hypot(ux - ox, uy - oy);
+      for (const tx of b.textos) { const [x, y] = t([tx.x, tx.y]); textosBrutos.push({ s: tx.s, x, y, h: tx.h * fator }); }
+    }
     if (b.polis.length) blocosExpandidos++;
     if (b.insercoes.length) {
       pilha.add(nome);
@@ -395,6 +495,7 @@ export async function converterDxf(
     if (u) {
       unidade = u.nome;
       for (const poli of saida) poli.pts = poli.pts.map(([x, y]) => [x * u.fator, y * u.fator]);
+      for (const tx of textosBrutos) { tx.x *= u.fator; tx.y *= u.fator; tx.h *= u.fator; }
       for (let i = 0; i < amostraX.length; i++) { amostraX[i] *= u.fator; amostraY[i] *= u.fator; }
       medX *= u.fator; medY *= u.fator;
     }
@@ -475,7 +576,17 @@ export async function converterDxf(
     );
   }
 
+  const textos: TextoPlanta[] = [];
+  for (const tx of classificarTextos(textosBrutos)) {
+    if (!plausivel([tx.x, tx.y])) continue;
+    const [lng, lat] = transformar([tx.x, tx.y]);
+    const { x: _x, y: _y, ...resto } = tx;
+    void _x; void _y;
+    textos.push({ ...resto, h: Math.round(tx.h * 1000) / 1000, c: [arred(lng), arred(lat)] });
+  }
+
   return {
+    textos,
     geojson: {
       type: "FeatureCollection",
       features: [...porLayer.entries()].map(([layer, l]) => ({

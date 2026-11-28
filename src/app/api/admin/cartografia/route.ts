@@ -9,6 +9,7 @@ import { caminhoPlantaPublica } from "@/lib/geo/plantaPublica";
 import { centroDe } from "@/lib/geo/deslocar";
 import { ErroRaster, lerRaster } from "@/lib/cartografia/rasterUpload";
 import { CorpoMuitoGrande, limitarFluxo } from "@/lib/seguranca/corpo-limitado";
+import { salvarTextosPlanta, resumoTextos } from "@/lib/cartografia/textosPlanta";
 
 // Conversão de planta de cidade leva segundos, não milissegundos.
 export const maxDuration = 300;
@@ -207,6 +208,9 @@ export async function POST(request: Request) {
       });
     }
 
+    // números de quadra/lote e áreas escritas: a fila os aplica ao gerar os lotes
+    const erroTextos = convertido.textos.length ? await salvarTextosPlanta(admin, camada.id, convertido.textos) : null;
+
     await logAudit({
       user_id: a.userId, acao: "cartografia_dxf_publicada",
       entidade: "cartography_layers", entidade_id: camada.id,
@@ -223,6 +227,7 @@ export async function POST(request: Request) {
     if (corpo.length > 8 * MB) {
       avisos.push(`A planta tem ${(corpo.length / MB).toFixed(1)} MB e pode ficar lenta no celular. Esconda as camadas de CAD que não são cadastro na tela de calibração.`);
     }
+    if (erroTextos) avisos.push(`Os números de quadra e lote do desenho não foram guardados (${erroTextos}). Use "Ler quadra, lote e área do DXF" na planta.`);
     if (d.blocosNaoResolvidos > 0) {
       avisos.push(`${d.blocosNaoResolvidos} blocos do CAD não tinham definição no arquivo e não foram desenhados.`);
     }
@@ -231,6 +236,7 @@ export async function POST(request: Request) {
       ok: true,
       id: camada.id,
       tipo: "vetorial",
+      textos: resumoTextos(convertido.textos),
       linhas: convertido.linhas,
       layers_cad: convertido.layersCad,
       zona: convertido.zona,
