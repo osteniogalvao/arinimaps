@@ -33,7 +33,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, Spline, Wand2, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, Maximize2, Minimize2, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BoxSelect, Spline, Wand2, ChevronDown, ChevronUp, Crosshair, Eraser, Hand, Hash, Maximize2, Minimize2, MousePointer2, Move, PenLine, Pencil, RotateCcw, Save, Scissors, Trash2, Undo2, X } from "lucide-react";
 import type { Map as MLMap, GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { carregarMaplibre } from "@/lib/map/maplibre";
 import { sugerirParesVisuais } from "@/lib/geo/pontosVisuais";
@@ -66,7 +66,7 @@ type Camada = {
   offset: { leste_m: number; norte_m: number };
 };
 
-type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar" | "objeto" | "vertices" | "selecao" | "lote" | "perimetro";
+type Modo = "navegar" | "mover" | "pontos" | "parte" | "apagar" | "objeto" | "vertices" | "selecao" | "lote" | "quadra" | "perimetro";
 type LinhaSelecionada = { feature: number; linha: number };
 /** O que o clique faz na linha escolhida em "Ajustar linha". */
 type FerramentaLinha = "vertices" | "dividir" | "trecho";
@@ -248,6 +248,11 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
   type LoteAlvo = { id: string; numero: string | null; quadra: string | null; area: number; versao: string; geometria: GeoJSON.Polygon; lng: number; lat: number };
   const [loteAlvo, setLoteAlvo] = useState<LoteAlvo | null>(null);
   const [excluindoLote, setExcluindoLote] = useState(false);
+  /* Áudio do Carlos (26/11/2026, 21h58): quadra sem número no mapa ganha o
+     número à mão — digita uma vez e clica nas quadras. */
+  const [numeroQuadra, setNumeroQuadra] = useState("");
+  const numeroQuadraRef = useRef(numeroQuadra); numeroQuadraRef.current = numeroQuadra;
+  const numerarQuadraRef = useRef<(lng: number, lat: number) => void>(() => {});
   const buscaLote = useRef(0);
   const [passo, setPasso] = useState(10);
   const [buscandoPontos, setBuscandoPontos] = useState(false);
@@ -881,6 +886,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
       // primeiro ponto (ou duplo clique). O MapLibre manda dois "click" antes
       // do "dblclick", então o duplo clique só fecha — o vértice já entrou.
       map.on("click", (e: MapMouseEvent) => {
+        if (modoRef.current === "quadra") { numerarQuadraRef.current(e.lngLat.lng, e.lngLat.lat); return; }
         if (modoRef.current === "lote") {
           const seq = ++buscaLote.current;
           const { lng, lat } = e.lngLat;
@@ -1986,7 +1992,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     let avisoAri = "";
     setConsultandoAri(true);
     const r = await enviarJson<{ camadas: string[] }>("/api/admin/cartografia/sugerir-camadas", "POST", {
-      pedido: "Camadas que NÃO são cadastro urbano e podem ser escondidas: vegetação, paisagismo, árvores, textos, números, cotas, dimensões, hachuras, grid, carimbo, legenda, mobiliário, piso, defpoints, curvas de nível, raio ou círculo de referência. NUNCA indique camadas de quadra, lote, divisa, guia, meio-fio, calçada, rua, perímetro de loteamento ou a camada 0.",
+      pedido: "Camadas que NÃO são quadra nem lote e podem ser escondidas: vegetação, paisagismo, árvores, textos, números, cotas, dimensões, hachuras, grid, carimbo, legenda, mobiliário, piso, defpoints, curvas de nível, raio ou círculo de referência, e as linhas paralelas do arruamento (guia, meio-fio, calçada, sarjeta, eixo, canteiro, ciclovia). NUNCA indique camadas de quadra, lote, divisa, perímetro de loteamento ou a camada 0.",
       camadas: visiveis.slice(0, 160).map(l => l.nome),
     });
     setConsultandoAri(false);
@@ -2162,6 +2168,16 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
     const id = window.setTimeout(() => { void salvarRef.current(true); }, ESPERA_AUTOSALVAR_MS);
     return () => window.clearTimeout(id);
   }, [autoSalvar, haMudancaNaoSalva, salvando, carregando, modo, pedirConfirmacao, t, ajustes, excluidas, edicoes, ocultos, opacidade, espessura]);
+  numerarQuadraRef.current = async (lng, lat) => {
+    const quadra = numeroQuadraRef.current.trim();
+    if (!quadra) { setMsg("Digite o número da quadra antes de clicar nela."); return; }
+    setMsg(`Numerando a quadra ${quadra}…`);
+    const r = await enviarJson<{ quadra: string; lotes: number }>(`/api/admin/cartografia/${camada.id}/quadra`, "POST", { lng, lat, quadra });
+    if (!r.ok) { setErro(r.erro); setMsg(""); return; }
+    setErro(null);
+    setMsg(`Quadra ${r.dados.quadra}: ${fmt(r.dados.lotes)} lote(s) numerado(s). Troque o número e clique na próxima quadra; o mapa público mostra em seguida.`);
+  };
+
   async function excluirLote() {
     if (!loteAlvo || excluindoLote) return;
     setExcluindoLote(true);
@@ -2224,6 +2240,7 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               {modo === "vertices" && linhaSelecionada && ferramentaLinha === "dividir" && "Clique no ponto da linha laranja onde ela deve ser dividida em duas."}
               {modo === "vertices" && linhaSelecionada && ferramentaLinha === "trecho" && "Clique no trecho da linha laranja que deve sumir (entre dois vértices). O resto da linha fica."}
               {modo === "selecao" && "Arraste um retângulo em volta das linhas, como num recorte de tela. Shift + arrastar soma outra área. Depois apague ou mova todas juntas."}
+              {modo === "quadra" && "Digite o número da quadra no campo da barra e clique dentro da quadra: todos os lotes dela, até a rua, recebem o número. Clicar de novo troca o número."}
               {modo === "navegar" && "Arraste para navegar no mapa. Volte para “mover planta” quando quiser ajustar."}
               {modo === "apagar" && "Clique em cima de uma linha para apagá-la do mapa (aproxime para acertar a linha certa). Ctrl+Z desfaz; nada muda no mapa público antes de salvar."}
               {modo === "pontos" && (pendente
@@ -2303,6 +2320,18 @@ export default function CalibrarPlanta({ camada, onFechar }: { camada: Camada; o
               onClick={() => { setLoteAlvo(null); setModo("lote"); setMsg("Clique dentro do lote para conferir a divisa antes de excluir."); }}>
               <Trash2 className="size-4" /> Excluir lote clicável
             </button>
+            <button className={chip(modo === "quadra")} disabled={carregando || salvando || haMudancaNaoSalva}
+              title={haMudancaNaoSalva ? "Salve a calibração antes: o número vai nos lotes da planta salva" : "Digite o número e clique dentro da quadra: todos os lotes dela recebem o número"}
+              onClick={() => { setModo("quadra"); setMsg("Digite o número da quadra e clique dentro dela no mapa."); }}>
+              <Hash className="size-4" /> Numerar quadra
+            </button>
+            {modo === "quadra" && (
+              <label className="inline-flex items-center gap-2 text-sm">
+                Quadra nº
+                <input value={numeroQuadra} onChange={(e) => setNumeroQuadra(e.target.value.slice(0, 20))} autoFocus
+                  placeholder="ex.: 5" className="campo w-24 py-1" aria-label="Número da quadra" />
+              </label>
+            )}
             {modo === "lote" && loteAlvo && (
               <div role="alert" className="flex items-center gap-2 text-sm">
                 <span>Lote {loteAlvo.numero ?? "sem número"} · {fmt(loteAlvo.area)} m². Excluir o lote destacado?</span>

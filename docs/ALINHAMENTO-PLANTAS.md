@@ -180,3 +180,8 @@ Imagens antes/depois em ARINI (projeto) `arini/encaixe-ruas-2026-11-26/`.
 - **Encaixar quadra a quadra.** Um clique separa as quadras inteiras da vista e encaixa cada uma nas ruas do OSM. Peça pequena (< 250 m) agora também ajusta o **tamanho**, por igual e sem girar ("o desenho está certo, só o tamanho não se enquadra"). Medido em 30 quadras de Iturama: o ganho de ruas no meio do vão subiu de 7,1 para 8,0 pontos somados; escalas entre 0,95 e 1,06.
 - **Limpar com a Ari.** Com a descrição vazia, o botão da aba Camadas do CAD esconde as camadas que não são cadastro (pelo nome e pela Ari) e destaca as linhas soltas no vazio (`src/lib/geo/limpezaPlanta.ts`) para o operador conferir e apagar. Iturama: 30 camadas escondidas e 18 linhas soltas (círculo de raio, perímetro, riscos no pasto) de 112 mil. Antes o botão ficava cinza com a descrição vazia, e era assim que o Carlos o via.
 - Fica para depois, se as ruas do OSM não bastarem: usar as quadras do IBGE (faces de logradouro do Censo 2022) como referência.
+
+## Numerar quadra à mão e tirar o arruamento (26/11/2026, noite)
+
+- **Numerar quadra** (migration 0174): na calibração, digite o número e clique dentro da quadra; os lotes encostados até a rua recebem o número (`fn_numerar_quadra`). A âncora fica no desenho original (`cartografia_quadras_manuais`) e `worker/jobs/gerarLotes.mjs` reaplica quando gera os lotes de novo. Teste: `scripts/testa-quadras-manuais-sql.mjs` (precisa de PostGIS; o Postgres do CI não tem, então lá ele pula).
+- **Limpar com a Ari** passa a esconder também as linhas paralelas do arruamento (guia, meio-fio, calçada, sarjeta, eixo, canteiro), pedido do Carlos de "deixar só o essencial". Continua reversível pelas caixas da aba Camadas do CAD.

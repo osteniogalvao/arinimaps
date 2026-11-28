@@ -205,6 +205,19 @@ export async function gerarLotes(payload, db) {
     await client.query(`insert into urban_lots(layer_id,municipality_id,geom,area_m2,perimetro_m,lados)
       select $1,$2,n.geom,n.area_m2,n.perimetro_m,n.lados from _novos n where not exists
       (select 1 from urban_lots u where u.layer_id=$1 and u.geom && n.geom and st_equals(n.geom,u.geom))`, [cam.id,cam.municipality_id]);
+    // número de quadra posto à mão na calibração (migration 0174): reaplica a
+    // partir da âncora no desenho original; a última âncora da quadra vence
+    const { rows: [tabQuadras] } = await client.query("select to_regclass('public.cartografia_quadras_manuais') as tabela");
+    if (tabQuadras.tabela) {
+      const { rows: ancoras } = await client.query(
+        "select quadra, lng, lat from cartografia_quadras_manuais where layer_id=$1 order by criado_em, id", [cam.id]);
+      for (const { quadra, lng, lat } of ancoras) {
+        const m = matrizDe([lng, lat]);
+        const x = m.a * lng + m.b * lat + m.xoff, y = m.d * lng + m.e * lat + m.yoff;
+        // a matriz devolve graus (como na exclusão de lote acima)
+        await client.query("select fn_numerar_quadra($1, $2, $3, $4)", [cam.id, x, y, quadra]);
+      }
+    }
     const { rows: [{ total }] } = await client.query("select count(*)::int total from urban_lots where layer_id=$1", [cam.id]);
 
     await client.query(

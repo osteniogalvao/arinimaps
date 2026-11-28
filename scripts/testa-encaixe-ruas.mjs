@@ -154,5 +154,8 @@ for (const esc of [1.06, 0.95]) {
   const itens = [...quadras.map((l, i) => ({ chave: "q" + i, coords: l.map(g) })), { chave: "circ", coords: circulo }, { chave: "risco", coords: risco }];
   assert.deepEqual(linhasSoltas(itens).sort(), ["circ", "risco"]);
   assert.deepEqual(camadasNaoCadastro(["0", "QUADRAS", "LT_LOTE", "Defpoints", "VEGET_I", "AZIMUTE", "GRID", "PDF_LOTES"]), ["Defpoints", "VEGET_I", "AZIMUTE", "GRID"]);
+  // linhas paralelas do arruamento saem também, salvo pedido em contrário
+  assert.deepEqual(camadasNaoCadastro(["QUADRAS", "GUIAS", "CALÇADA", "MEIO_FIO", "perimetro ruas", "EIXO DE RUA"]), ["GUIAS", "CALÇADA", "MEIO_FIO", "EIXO DE RUA"]);
+  assert.deepEqual(camadasNaoCadastro(["GUIAS", "CALÇADA"], false), []);
 }
 console.log("encaixe pelas ruas e limpeza: 11 casos ok");
