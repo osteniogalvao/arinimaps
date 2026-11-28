@@ -5,7 +5,7 @@ import { clausulasDestacadas, prazoExclusividade } from "@/lib/juridico/versoes"
 import { validarDocumento } from "@/lib/br/documentos";
 import { cpfDoPerfil } from "@/lib/seguranca/cripto";
 import { NextResponse } from "next/server";
-import { pointOnFeature } from "@turf/turf";
+import { booleanPointInPolygon, pointOnFeature } from "@turf/turf";
 import { listarMunicipiosAtendidos, municipioAtendidoNoPonto } from "@/lib/geo/municipiosAtendidos";
 import { ibgeDoCar, listaDeMunicipios, type MunicipioAtendido } from "@/lib/geo/atendimento";
 import { ator, temSetor } from "@/lib/authz";
@@ -257,6 +257,17 @@ export async function POST(request: Request) {
   } else if (geometria?.fonte === "car" || geometria?.fonte === "lote") {
     // "car" sem código não tem como ser conferido: vale como desenho comum
     geometriaFinal = { ...geometria, fonte: "desenho" };
+  } else if (dados.tipo === "urbano" && geometria?.geometry?.type === "Point" && !dados.parent_property_id
+    && !(dados.caracteristicas as Record<string, unknown> | undefined)?.andar
+    && !(dados.caracteristicas as Record<string, unknown> | undefined)?.unidade) {
+    // Áudio do Carlos (28/11/2026, 09h17): o imóvel urbano marcado por ponto
+    // ficava um ponto no mapa. Se o ponto cai num lote da planta, a divisa é
+    // a do lote inteiro (mesma regra de "Este lote é meu").
+    const achado = await loteNoPonto(admin, geometria.geometry.coordinates as [number, number]);
+    if (achado) {
+      geometriaFinal = { geometry: achado.geometry, fonte: "lote" };
+      loteRef = achado.properties as LoteRef;
+    }
   }
 
   // Áudio do Carlos (17/11/2026, 19h09): o anúncio só vale nos municípios
@@ -673,4 +684,22 @@ async function foraDosMunicipiosAtendidos(
     console.error("município do ponto não conferido:", e);
     return null;
   }
+}
+
+/**
+ * Lote da planta urbana que contém o ponto (o menor, se dois se sobrepõem),
+ * com a divisa e a identidade lidas do banco (fn_lote). Sem planta ali: null.
+ */
+async function loteNoPonto(admin: ReturnType<typeof supabaseAdmin>, [lng, lat]: [number, number]) {
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  const d = 0.00002; // ~2 m: o envelope só precisa tocar o lote
+  const { data, error } = await admin.rpc("fn_lotes_bbox", { p_x0: lng - d, p_y0: lat - d, p_x1: lng + d, p_y1: lat + d, p_limite: 50 });
+  if (error || !data) return null;
+  const feats = ((data as { features?: GeoJSON.Feature<GeoJSON.Polygon, { id: string; area_m2: number }>[] }).features ?? [])
+    .filter((f) => f.geometry?.type === "Polygon" && booleanPointInPolygon([lng, lat], f.geometry))
+    .sort((a, b) => Number(a.properties.area_m2) - Number(b.properties.area_m2));
+  if (!feats.length) return null;
+  const { data: lote } = await admin.rpc("fn_lote", { p_id: feats[0].properties.id });
+  const f = lote as { geometry?: GeoJSON.Polygon; properties?: unknown } | null;
+  return f?.geometry ? { geometry: f.geometry, properties: f.properties } : null;
 }

@@ -248,6 +248,15 @@ export default function DesenhoMapa({ onChange, inicial, onSelecionar, planta, r
           return;
         }
         if (modoRef.current === "ponto") {
+          // Áudio do Carlos (28/11/2026, 09h17): ponto em cima de um lote da
+          // planta vira o lote inteiro, em destaque, e não um ponto solto
+          const noLote = selecionarRef.current && map.getLayer("sel-lotes-fill")
+            ? map.queryRenderedFeatures(e.point, { layers: ["sel-lotes-fill"] })[0] : undefined;
+          if (noLote?.properties?.id) {
+            selecionarRef.current?.({ tipo: "lote", id: String(noLote.properties.id) });
+            setMsg("O ponto caiu num lote da planta: o lote inteiro foi selecionado.");
+            return;
+          }
           const geom: GeoJSON.Point = { type: "Point", coordinates: lngLat };
           setVertices([]);
           render(geom, []);
